@@ -12,20 +12,19 @@ jobs:
   create_release:
     name: Create Release
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create.outputs.upload_url }}
     steps:
-      - name: Create GitHub Release
-        id: create
-        uses: actions/create-release@v1
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Create or Update Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: megatory ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+        run: |
+          set -euo pipefail
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" --title "megatory ${GITHUB_REF_NAME}" --latest
+          else
+            gh release create "${GITHUB_REF_NAME}" --title "megatory ${GITHUB_REF_NAME}" --generate-notes --latest
+          fi
 
   build:
     name: Build ${{ matrix.os }}
@@ -56,7 +55,17 @@ jobs:
         if: matrix.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev xorg-dev
+          sudo apt-get install -y \
+            build-essential \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libgtk-3-dev \
+            xorg-dev
 
       - name: Configure CMake (Linux/macOS)
         if: matrix.os != 'Windows'
@@ -85,7 +94,6 @@ jobs:
           set -euo pipefail
           mkdir -p dist/$PACKAGE_NAME
           cp build-release/megatoy dist/$PACKAGE_NAME/
-          cp -R assets dist/$PACKAGE_NAME/assets
           cd dist
           zip -r $PACKAGE_NAME.zip $PACKAGE_NAME
 
@@ -95,9 +103,10 @@ jobs:
         run: |
           set -euo pipefail
           APP_PATH="build-release/megatoy.app"
-          RESOURCES="$APP_PATH/Contents/Resources"
-          mkdir -p "$RESOURCES"
-          cp -R assets "$RESOURCES/assets"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "App bundle not found at $APP_PATH" >&2
+            exit 1
+          fi
           mkdir -p dist
           ditto -c -k --keepParent "$APP_PATH" "dist/$PACKAGE_NAME.zip"
 
@@ -117,18 +126,21 @@ jobs:
           $staging = Join-Path 'dist' $env:PACKAGE_NAME
           New-Item -ItemType Directory -Path $staging -Force | Out-Null
           Copy-Item $appPath (Join-Path $staging 'megatoy.exe')
-          Copy-Item 'assets' (Join-Path $staging 'assets') -Recurse
           Push-Location 'dist'
           if (Test-Path ($env:PACKAGE_NAME + '.zip')) { Remove-Item ($env:PACKAGE_NAME + '.zip') }
           Compress-Archive -Path $env:PACKAGE_NAME -DestinationPath ($env:PACKAGE_NAME + '.zip')
           Pop-Location
 
-      - name: Upload release asset
-        uses: actions/upload-release-asset@v1
+      - name: Upload release asset (Linux/macOS)
+        if: matrix.os != 'Windows'
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: dist/${{ env.PACKAGE_NAME }}.zip
-          asset_name: ${{ env.PACKAGE_NAME }}.zip
-          asset_content_type: application/zip
+        run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
+
+      - name: Upload release asset (Windows)
+        if: matrix.os == 'Windows'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload $env:GITHUB_REF_NAME "dist/$env:PACKAGE_NAME.zip" --clobber
