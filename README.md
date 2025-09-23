@@ -51,7 +51,3 @@ cmake --build build-release --config Release -j$(sysctl -n hw.ncpu)
 - [libvgm](https://github.com/ValleyBell/libvgm/)
 - [YM2612 registers reference](https://plutiedev.com/ym2612-registers)
 - [Official manual](https://segaretro.org/images/e/ef/YM2612_manual.pdf)
-
-## License
-
-GPL-2.0
