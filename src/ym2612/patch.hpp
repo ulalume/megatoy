@@ -1,0 +1,110 @@
+#pragma once
+#include "types.hpp"
+#include <nlohmann/json.hpp>
+#include <string>
+
+namespace ym2612 {
+
+struct Patch {
+  std::string name = "init patch";
+  std::string category = "";
+
+  GlobalSettings global;
+  ChannelSettings channel;
+  ChannelInstrument instrument;
+};
+
+// JSON serialization helpers
+inline void to_json(nlohmann::json &j, const GlobalSettings &device) {
+  j = nlohmann::json{{"dac_enable", device.dac_enable},
+                     {"lfo_enable", device.lfo_enable},
+                     {"lfo_frequency", device.lfo_frequency}};
+}
+
+inline void from_json(const nlohmann::json &j, GlobalSettings &device) {
+  j.at("dac_enable").get_to(device.dac_enable);
+  j.at("lfo_enable").get_to(device.lfo_enable);
+  j.at("lfo_frequency").get_to(device.lfo_frequency);
+}
+
+inline void to_json(nlohmann::json &j, const ChannelSettings &channel) {
+  j = nlohmann::json{{"left_speaker", channel.left_speaker},
+                     {"right_speaker", channel.right_speaker},
+                     {"amplitude_modulation_sensitivity",
+                      channel.amplitude_modulation_sensitivity},
+                     {"frequency_modulation_sensitivity",
+                      channel.frequency_modulation_sensitivity}};
+}
+
+inline void from_json(const nlohmann::json &j, ChannelSettings &channel) {
+  j.at("left_speaker").get_to(channel.left_speaker);
+  j.at("right_speaker").get_to(channel.right_speaker);
+  j.at("amplitude_modulation_sensitivity")
+      .get_to(channel.amplitude_modulation_sensitivity);
+  j.at("frequency_modulation_sensitivity")
+      .get_to(channel.frequency_modulation_sensitivity);
+}
+
+inline void to_json(nlohmann::json &j, const OperatorSettings &op) {
+  j = nlohmann::json{
+      {"attack_rate", op.attack_rate},
+      {"decay_rate", op.decay_rate},
+      {"sustain_rate", op.sustain_rate},
+      {"release_rate", op.release_rate},
+      {"sustain_level", op.sustain_level},
+      {"total_level", op.total_level},
+      {"key_scale", op.key_scale},
+      {"multiple", op.multiple},
+      {"detune", op.detune},
+      {"ssg_type_envelope_control", op.ssg_type_envelope_control},
+      {"ssg_enable", op.ssg_enable},
+      {"amplitude_modulation_enable", op.amplitude_modulation_enable}};
+}
+
+inline void from_json(const nlohmann::json &j, OperatorSettings &op) {
+  j.at("attack_rate").get_to(op.attack_rate);
+  j.at("decay_rate").get_to(op.decay_rate);
+  j.at("sustain_rate").get_to(op.sustain_rate);
+  j.at("release_rate").get_to(op.release_rate);
+  j.at("sustain_level").get_to(op.sustain_level);
+  j.at("total_level").get_to(op.total_level);
+  j.at("key_scale").get_to(op.key_scale);
+  j.at("multiple").get_to(op.multiple);
+  j.at("detune").get_to(op.detune);
+  j.at("ssg_type_envelope_control").get_to(op.ssg_type_envelope_control);
+  j.at("ssg_enable").get_to(op.ssg_enable);
+  j.at("amplitude_modulation_enable").get_to(op.amplitude_modulation_enable);
+}
+
+inline void to_json(nlohmann::json &j, const ChannelInstrument &instrument) {
+  j = nlohmann::json{{"feedback", instrument.feedback},
+                     {"algorithm", instrument.algorithm},
+                     {"operators", instrument.operators}};
+}
+
+inline void from_json(const nlohmann::json &j, ChannelInstrument &instrument) {
+  j.at("feedback").get_to(instrument.feedback);
+  j.at("algorithm").get_to(instrument.algorithm);
+  auto ops = j.at("operators");
+  for (size_t i = 0; i < 4; ++i) {
+    ops[i].get_to(instrument.operators[i]);
+  }
+}
+
+inline void to_json(nlohmann::json &j, const Patch &patch) {
+  j = nlohmann::json{{"name", patch.name},
+                     {"category", patch.category},
+                     {"device", patch.global},
+                     {"channel", patch.channel},
+                     {"instrument", patch.instrument}};
+}
+
+inline void from_json(const nlohmann::json &j, Patch &patch) {
+  j.at("name").get_to(patch.name);
+  j.at("category").get_to(patch.category);
+  j.at("device").get_to(patch.global);
+  j.at("channel").get_to(patch.channel);
+  j.at("instrument").get_to(patch.instrument);
+}
+
+} // namespace ym2612

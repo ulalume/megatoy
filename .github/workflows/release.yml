@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create_release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create.outputs.upload_url }}
+    steps:
+      - name: Create GitHub Release
+        id: create
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: megatory ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+  build:
+    name: Build ${{ matrix.os }}
+    needs: create_release
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Linux
+            runner: ubuntu-latest
+            archive_suffix: linux-x64
+          - os: macOS
+            runner: macos-latest
+            archive_suffix: macos
+          - os: Windows
+            runner: windows-latest
+            archive_suffix: windows-x64
+    env:
+      BUILD_TYPE: Release
+      VERSION: ${{ github.ref_name }}
+      PACKAGE_NAME: megatory-${{ github.ref_name }}-${{ matrix.archive_suffix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev xorg-dev
+
+      - name: Configure CMake (Linux/macOS)
+        if: matrix.os != 'Windows'
+        shell: bash
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+
+      - name: Configure CMake (Windows)
+        if: matrix.os == 'Windows'
+        shell: pwsh
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE -G "Visual Studio 17 2022" -A x64
+
+      - name: Build (Linux/macOS)
+        if: matrix.os != 'Windows'
+        shell: bash
+        run: cmake --build build-release --config $BUILD_TYPE --parallel
+
+      - name: Build (Windows)
+        if: matrix.os == 'Windows'
+        shell: pwsh
+        run: cmake --build build-release --config $env:BUILD_TYPE --parallel
+
+      - name: Package Linux artifact
+        if: matrix.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/$PACKAGE_NAME
+          cp build-release/megatoy dist/$PACKAGE_NAME/
+          cp -R assets dist/$PACKAGE_NAME/assets
+          cd dist
+          zip -r $PACKAGE_NAME.zip $PACKAGE_NAME
+
+      - name: Package macOS artifact
+        if: matrix.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="build-release/megatoy.app"
+          RESOURCES="$APP_PATH/Contents/Resources"
+          mkdir -p "$RESOURCES"
+          cp -R assets "$RESOURCES/assets"
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP_PATH" "dist/$PACKAGE_NAME.zip"
+
+      - name: Package Windows artifact
+        if: matrix.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $appPath = Join-Path 'build-release' 'Release\megatoy.exe'
+          if (-Not (Test-Path $appPath)) {
+            $appPath = Join-Path 'build-release' 'megatoy.exe'
+          }
+          if (-Not (Test-Path $appPath)) {
+            throw "Could not locate built megatoy executable"
+          }
+          New-Item -ItemType Directory -Path 'dist' -Force | Out-Null
+          $staging = Join-Path 'dist' $env:PACKAGE_NAME
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          Copy-Item $appPath (Join-Path $staging 'megatoy.exe')
+          Copy-Item 'assets' (Join-Path $staging 'assets') -Recurse
+          Push-Location 'dist'
+          if (Test-Path ($env:PACKAGE_NAME + '.zip')) { Remove-Item ($env:PACKAGE_NAME + '.zip') }
+          Compress-Archive -Path $env:PACKAGE_NAME -DestinationPath ($env:PACKAGE_NAME + '.zip')
+          Pop-Location
+
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: dist/${{ env.PACKAGE_NAME }}.zip
+          asset_name: ${{ env.PACKAGE_NAME }}.zip
+          asset_content_type: application/zip

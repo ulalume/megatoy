@@ -1,0 +1,8 @@
+/build*
+/.cache
+/out.pcm
+/out.wav
+
+/compile_commands.json
+/imgui.ini
+/data
