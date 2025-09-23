@@ -4,6 +4,8 @@
 #include <cstring>
 #include <imgui.h>
 #include <vector>
+#include <string>
+#include <ostream>
 
 enum class Key : uint8_t {
   C = 0,
@@ -38,7 +40,21 @@ inline std::string name_key(Key key) {
 }
 
 inline std::ostream &operator<<(std::ostream &os, const Key &key) {
-  return os << name_key(key);
+    switch (key) {
+        case Key::C:        return os << "C";
+        case Key::C_SHARP:  return os << "C#";
+        case Key::D:        return os << "D";
+        case Key::D_SHARP:  return os << "D#";
+        case Key::E:        return os << "E";
+        case Key::F:        return os << "F";
+        case Key::F_SHARP:  return os << "F#";
+        case Key::G:        return os << "G";
+        case Key::G_SHARP:  return os << "G#";
+        case Key::A:        return os << "A";
+        case Key::A_SHARP:  return os << "A#";
+        case Key::B:        return os << "B";
+        default:            return os << "<unknown key>";
+    }
 }
 
 enum class Scale {

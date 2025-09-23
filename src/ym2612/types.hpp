@@ -1,7 +1,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
-
+#include "../types.hpp"
 namespace ym2612 {
 
 enum class ChannelIndex : uint8_t {
