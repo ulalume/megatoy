@@ -173,5 +173,9 @@ const std::string &AppState::current_patch_path() const {
 void AppState::update_current_patch_path(
     const std::filesystem::path &patch_path) {
   std::cout << "Updating current patch path to: " << patch_path << std::endl;
-  patch_state_.current_patch_path = patch_path;
+  if (patch_path.empty()) {
+    patch_state_.current_patch_path.clear();
+  } else {
+    patch_state_.current_patch_path = patch_path.generic_string();
+  }
 }
