@@ -72,7 +72,7 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
       bool is_current = (item.relative_path == app_state.current_patch_path());
       if (is_current) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.4f, 1.0f));
       }
       std::string name_and_format = "[" + item.format + "] " + item.name;
       if (ImGui::Selectable(name_and_format.c_str(), false)) {
@@ -189,8 +189,8 @@ void render_patch_selector(AppState &app_state) {
                                   ImVec4(0.3f, 1.0f, 0.3f, 1.0f));
           }
 
-          std::string label = "[" + entry->format + "] " + entry->name +
-                              "##" + entry->relative_path;
+          std::string label = "[" + entry->format + "] " + entry->name + "##" +
+                              entry->relative_path;
           if (ImGui::Selectable(label.c_str(), is_current)) {
             app_state.load_patch(*entry);
           }
