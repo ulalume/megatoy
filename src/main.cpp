@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
     // Midi USB update
     midi.poll(app_state);
 
-    ImGui::ShowDemoWindow();
+    // ImGui::ShowDemoWindow();
 
     ui::render_main_menu(app_state);
     // Render UI panels
