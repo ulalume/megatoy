@@ -1,8 +1,9 @@
 // midi_usb.hpp
 #pragma once
 
-#include "app_state.hpp"
 #include <memory>
+
+class AppState;
 
 class MidiInputManager {
 public:
@@ -12,7 +13,7 @@ public:
   bool init();
   void shutdown();
 
-  void poll(AppState &app_state);  // Call each frame
+  void poll(AppState &app_state); // Call each frame
 
 private:
   struct Impl;

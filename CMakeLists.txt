@@ -106,6 +106,18 @@ if(WIN32)
 endif()
 FetchContent_MakeAvailable(libvgm)
 
+# RtMidi
+FetchContent_Declare(
+  rtmidi
+  GIT_REPOSITORY https://github.com/thestk/rtmidi
+  GIT_TAG        6.0.0
+)
+set(RTMIDI_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+set(RTMIDI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(RTMIDI_TARGETNAME_UNINSTALL rtmidi_uninstall CACHE STRING "" FORCE)
+FetchContent_MakeAvailable(rtmidi)
+
 # stb single-header image loader
 FetchContent_Declare(
   stb
@@ -216,6 +228,7 @@ target_link_libraries(megatoy PRIVATE
   OpenGL::GL
   nlohmann_json::nlohmann_json
   nfd
+  rtmidi
 )
 
 target_include_directories(megatoy PRIVATE
