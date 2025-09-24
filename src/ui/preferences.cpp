@@ -43,7 +43,6 @@ void render_preferences_window(AppState &app_state) {
     ImGui::Text("Patches: %s", prefs.get_patches_directory().c_str());
     ImGui::Bullet();
     ImGui::Text("User Patches: %s", prefs.get_user_patches_directory().c_str());
-    ImGui::Text("Projects: %s", prefs.get_projects_directory().c_str());
 
     ImGui::Spacing();
 
@@ -66,5 +65,11 @@ void render_preferences_window(AppState &app_state) {
   }
   ImGui::End();
 
+  if (ui_state.open_directory_dialog) {
+    ui_state.open_directory_dialog = false;
+    if (prefs.select_data_directory()) {
+      app_state.sync_patch_directories();
+    }
+  }
 }
 } // namespace ui
