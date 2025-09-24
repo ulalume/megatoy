@@ -86,6 +86,13 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/ValleyBell/libvgm
   GIT_TAG        e9f2b023e8918b56be0d2e634b3f5aab2a589ffe
 )
+# Link statically and disable extra tools
+# on Windows to avoid 32-bit libs in MSVC builds
+set(LIBRARY_TYPE STATIC CACHE STRING "")
+set(BUILD_PLAYER OFF CACHE BOOL "")
+set(BUILD_VGM2WAV OFF CACHE BOOL "")
+set(LINK_STATIC_LIBS ON CACHE BOOL "")
+set(USE_SANITIZERS OFF CACHE BOOL "")
 FetchContent_MakeAvailable(libvgm)
 
 # stb single-header image loader
