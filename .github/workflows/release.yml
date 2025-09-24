@@ -27,26 +27,38 @@ jobs:
           fi
 
   build:
-    name: Build ${{ matrix.os }}
+    name: Build ${{ matrix.label }}
     needs: create_release
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: Linux
+          - label: Linux (x64)
+            os: Linux
             runner: ubuntu-latest
             archive_suffix: linux-x64
-          - os: macOS
-            runner: macos-latest
-            archive_suffix: macos
-          - os: Windows
+            cmake_extra_args: ""
+          - label: macOS (arm64)
+            os: macOS
+            runner: macos-14
+            archive_suffix: macos-arm64
+            cmake_extra_args: "-DCMAKE_OSX_ARCHITECTURES=arm64"
+          - label: macOS (Intel)
+            os: macOS
+            runner: macos-13
+            archive_suffix: macos-x86_64
+            cmake_extra_args: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
+          - label: Windows (x64)
+            os: Windows
             runner: windows-latest
             archive_suffix: windows-x64
+            cmake_extra_args: ""
     env:
       BUILD_TYPE: Release
       VERSION: ${{ github.ref_name }}
       PACKAGE_NAME: megatoy-${{ github.ref_name }}-${{ matrix.archive_suffix }}
+      CMAKE_EXTRA_ARGS: ${{ matrix.cmake_extra_args }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,12 +82,12 @@ jobs:
       - name: Configure CMake (Linux/macOS)
         if: matrix.os != 'Windows'
         shell: bash
-        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_EXTRA_ARGS
 
       - name: Configure CMake (Windows)
         if: matrix.os == 'Windows'
         shell: pwsh
-        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE -G "Visual Studio 17 2022" -A x64
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE -G "Visual Studio 17 2022" -A x64 $env:CMAKE_EXTRA_ARGS
 
       - name: Build (Linux/macOS)
         if: matrix.os != 'Windows'
