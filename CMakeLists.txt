@@ -208,6 +208,7 @@ target_include_directories(megatoy PRIVATE
 target_compile_definitions(megatoy PRIVATE
   VGM_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
   USE_EMBEDDED_RESOURCES
+  $<$<PLATFORM_ID:Darwin>:GL_SILENCE_DEPRECATION>
 )
 
 # Resource embedding function
