@@ -4,23 +4,28 @@
 namespace ui {
 
 inline void apply_dark_theme() {
+  ImGuiStyle &style = ImGui::GetStyle();
+  style.ScrollbarSize = 8;
+  style.ScrollbarRounding = 0;
+  style.ScrollbarPadding = 0;
+
   ImVec4 *colors = ImGui::GetStyle().Colors;
   colors[ImGuiCol_Text] = ImVec4(0.86f, 0.93f, 0.89f, 0.78f);
   colors[ImGuiCol_TextDisabled] = ImVec4(0.86f, 0.93f, 0.89f, 0.28f);
   colors[ImGuiCol_WindowBg] = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
   colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
   colors[ImGuiCol_PopupBg] = ImVec4(0.20f, 0.22f, 0.27f, 0.90f);
-  colors[ImGuiCol_Border] = ImVec4(0.11f, 0.11f, 0.13f, 0.50f);
+  colors[ImGuiCol_Border] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
   colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
   colors[ImGuiCol_FrameBg] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
   colors[ImGuiCol_FrameBgHovered] = ImVec4(0.92f, 0.18f, 0.29f, 0.78f);
   colors[ImGuiCol_FrameBgActive] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
-  colors[ImGuiCol_TitleBg] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
-  colors[ImGuiCol_TitleBgActive] = ImVec4(0.43f, 0.14f, 0.20f, 1.00f);
+  colors[ImGuiCol_TitleBg] = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
+  colors[ImGuiCol_TitleBgActive] = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
   colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.20f, 0.22f, 0.27f, 0.75f);
   colors[ImGuiCol_MenuBarBg] = ImVec4(0.20f, 0.22f, 0.27f, 0.47f);
   colors[ImGuiCol_ScrollbarBg] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
-  colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.09f, 0.15f, 0.16f, 1.00f);
+  colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
   colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.92f, 0.18f, 0.29f, 0.78f);
   colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
   colors[ImGuiCol_CheckMark] = ImVec4(0.86f, 0.93f, 0.89f, 0.78f);
@@ -43,8 +48,8 @@ inline void apply_dark_theme() {
   colors[ImGuiCol_Tab] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
   colors[ImGuiCol_TabSelected] = ImVec4(0.92f, 0.18f, 0.29f, 0.41f);
   colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.92f, 0.18f, 0.29f, 0.41f);
-  colors[ImGuiCol_TabDimmed] = ImVec4(0.07f, 0.10f, 0.15f, 0.97f);
-  colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.92f, 0.18f, 0.29f, 0.41f);
+  colors[ImGuiCol_TabDimmed] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
+  colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.31f, 0.31f, 0.35f, 1.00f);
   colors[ImGuiCol_TabDimmedSelectedOverline] =
       ImVec4(0.50f, 0.50f, 0.50f, 0.00f);
   colors[ImGuiCol_DockingPreview] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
