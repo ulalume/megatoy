@@ -1,8 +1,9 @@
 // midi_usb.hpp
 #pragma once
 
-#include "app_state.hpp"
 #include <memory>
+
+class AppState;
 
 class MidiInputManager {
 public:
