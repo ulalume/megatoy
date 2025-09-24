@@ -37,7 +37,7 @@ void render_midi_keyboard(AppState &app_state) {
   }
 
   ImGui::SetNextWindowSize(ImVec2(400, 180), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("SoftKeyboard", &ui_state.show_midi_keyboard)) {
+  if (!ImGui::Begin("Soft Keyboard", &ui_state.show_midi_keyboard)) {
     ImGui::End();
     return;
   }
