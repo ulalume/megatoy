@@ -23,9 +23,7 @@ void render_preferences_window(AppState &app_state) {
 
     // Directory selection button
     if (ImGui::Button("Select Directory...")) {
-      if (prefs.select_data_directory()) {
-        app_state.sync_patch_directories();
-      }
+      ui_state.open_directory_dialog = true;
     }
 
     ImGui::SameLine();
@@ -45,7 +43,6 @@ void render_preferences_window(AppState &app_state) {
     ImGui::Text("Patches: %s", prefs.get_patches_directory().c_str());
     ImGui::Bullet();
     ImGui::Text("User Patches: %s", prefs.get_user_patches_directory().c_str());
-    ImGui::Bullet();
     ImGui::Text("Projects: %s", prefs.get_projects_directory().c_str());
 
     ImGui::Spacing();
@@ -68,5 +65,6 @@ void render_preferences_window(AppState &app_state) {
     ImGui::Text("Preferences are automatically saved");
   }
   ImGui::End();
+
 }
 } // namespace ui

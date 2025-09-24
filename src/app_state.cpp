@@ -143,6 +143,11 @@ void AppState::configure_gui() {
   if (!gui_manager_.init("megatoy", 1000, 700)) {
     std::cerr << "Failed to initialize GUI system\n";
   }
+
+  // Native dialogs require the GUI subsystem to be active on macOS.
+  if (!preference_manager_.initialize_file_dialog()) {
+    std::cerr << "Native File Dialog unavailable; directory picker disabled\n";
+  }
 }
 
 void AppState::configure_audio_callback() {

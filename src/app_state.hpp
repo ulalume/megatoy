@@ -33,6 +33,7 @@ struct UIState {
   bool show_preferences = true;
   bool show_patch_selector = true;
   std::string patch_search_query;
+  bool open_directory_dialog = false;
 };
 
 class AppState {

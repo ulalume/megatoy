@@ -179,6 +179,7 @@ target_include_directories(megatoy PRIVATE
   ${imgui_SOURCE_DIR}/backends
   ${stb_SOURCE_DIR}
   ${CMAKE_BINARY_DIR}
+  ${CMAKE_SOURCE_DIR}/src
 )
 
 target_compile_definitions(megatoy PRIVATE

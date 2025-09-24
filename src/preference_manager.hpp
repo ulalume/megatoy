@@ -14,10 +14,12 @@ public:
   // Retrieve subdirectories
   std::filesystem::path get_user_patches_directory() const;
   std::filesystem::path get_patches_directory() const;
-  std::filesystem::path get_projects_directory() const;
 
   // Directory picker dialog
   bool select_data_directory();
+
+  // Prepare native file dialog system; safe to call multiple times
+  bool initialize_file_dialog();
 
   // Save and load preferences
   bool save_preferences();
@@ -49,4 +51,7 @@ private:
 
   // NFD initialization flag
   bool nfd_initialized;
+
+  // Ensure Native File Dialog is initialized before use
+  bool ensure_nfd_initialized();
 };
