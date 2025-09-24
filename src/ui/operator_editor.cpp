@@ -71,7 +71,10 @@ void render_operator_editor(ym2612::OperatorSettings &op, int op_num) {
 
   // Detune (0-7)
   int detune = op.detune;
-  if (ImGui::SliderInt("Detune", &detune, 0, 7)) {
+  static const char *labels[] = {
+      "0", "+1", "+2", "+3", "0", "-1", "-2", "-3",
+  };
+  if (ImGui::SliderInt("Detune", &detune, 0, 7, labels[detune])) {
     op.detune = static_cast<uint8_t>(detune);
   }
 
