@@ -48,8 +48,20 @@ jobs:
 
       - name: Configure
         run: ${{ matrix.configure }}
-        shell: ${{ matrix.shell }}
+        shell: bash
+        if: matrix.os != 'Windows'
+
+      - name: Configure (Windows)
+        if: matrix.os == 'Windows'
+        shell: pwsh
+        run: ${{ matrix.configure }}
 
       - name: Build
         run: ${{ matrix.build }}
-        shell: ${{ matrix.shell }}
+        shell: bash
+        if: matrix.os != 'Windows'
+
+      - name: Build (Windows)
+        if: matrix.os == 'Windows'
+        shell: pwsh
+        run: ${{ matrix.build }}
