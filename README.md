@@ -2,7 +2,7 @@
 
 ![Screenshot](https://raw.githubusercontent.com/ulalume/megatoy/main/docs/screenshot.png)
 
-I’m developing a **YM2612 patch editor** while learning about the chip along the way.
+A **YM2612 patch editor** for learning and experimentation with the chip.
 This project is built on **libvgm**.
 > ⚠️ This project is in a very early stage.
 
@@ -13,20 +13,19 @@ This project is built on **libvgm**.
   - `.mml` (ctrmml)
   - `.fui` (Furnace Instrument)
   - `.rym2612` (RYM2612 Iconic FM Synthesizer Preset)
-  *(Software-specific macros/effects are ignored.)*
+*(Software-specific macros/effects are ignored.)*
 
 - Save patches in a custom format.
-- Play notes using the keyboard — it’s surprisingly fun!
 
-## To Do
+- Export patches to:
+  - `.dmp`
+  - `.mml`
 
-- [x] Export in ctrmml format
-- [x] Export in dmp format
-- [ ] Support sn76489
+- Support MIDI Input
 
 ## Patches
 
-You can load patch files by placing `.dmp`, `.fui`, `.rym2612`, or `.mml` (ctrmml) files in `~/megatoys/patches/`.
+You can load patch files by placing `.dmp`, `.fui`, `.rym2612`, or `.mml` (ctrmml) files in `~/megatoy/patches/`.
 
 Recommended sources:
 
