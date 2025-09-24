@@ -106,6 +106,18 @@ if(WIN32)
 endif()
 FetchContent_MakeAvailable(libvgm)
 
+# RtMidi
+FetchContent_Declare(
+  rtmidi
+  GIT_REPOSITORY https://github.com/thestk/rtmidi
+  GIT_TAG        6.0.0
+)
+set(RTMIDI_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+set(RTMIDI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(RTMIDI_TARGETNAME_UNINSTALL rtmidi_uninstall CACHE STRING "" FORCE)
+FetchContent_MakeAvailable(rtmidi)
+
 # stb single-header image loader
 FetchContent_Declare(
   stb
@@ -188,27 +200,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     )
 endif()
 
-# RtMidi installed via Homebrew
-if(APPLE)
-  # Find the directory containing RtMidi.h
-  execute_process(
-    COMMAND find /opt/homebrew/Cellar/rtmidi -name RtMidi.h
-    OUTPUT_VARIABLE RTMIDI_HEADER_PATH
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-
-  # Extract the directory path from the full header file path
-  get_filename_component(RTMIDI_INCLUDE_DIR "${RTMIDI_HEADER_PATH}" DIRECTORY)
-
-  message(STATUS "RtMidi header found at: ${RTMIDI_HEADER_PATH}")
-  message(STATUS "RtMidi include dir set to: ${RTMIDI_INCLUDE_DIR}")
-
-  # Add the include path and link settings
-  target_include_directories(megatoy PRIVATE ${RTMIDI_INCLUDE_DIR})
-  target_link_directories(megatoy PRIVATE /opt/homebrew/lib)
-  target_link_libraries(megatoy PRIVATE rtmidi)
-endif()
-
 target_link_libraries(megatoy PRIVATE
   vgm-player vgm-audio
   imgui_lib
@@ -216,6 +207,7 @@ target_link_libraries(megatoy PRIVATE
   OpenGL::GL
   nlohmann_json::nlohmann_json
   nfd
+  rtmidi
 )
 
 target_include_directories(megatoy PRIVATE
