@@ -52,9 +52,8 @@ struct MidiInputManager::Impl {
     unsigned char status = message[0];
     int midi_note = message[1];
 
-    uint8_t octave = static_cast<uint8_t>((midi_note / 12) - 1);
-    Key key_enum = static_cast<Key>(static_cast<uint8_t>(midi_note % 12));
-    ym2612::Note noteFreq(octave, key_enum);
+    ym2612::Note noteFreq =
+        ym2612::Note::from_midi_note(static_cast<uint8_t>(midi_note));
 
     if ((status & 0xF0) == 0x90 && message[2] > 0) {
       // Note On
