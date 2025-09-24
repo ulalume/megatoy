@@ -76,7 +76,7 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui
-  GIT_TAG        v1.92.3
+  GIT_TAG        docking
 )
 FetchContent_MakeAvailable(imgui)
 
@@ -200,27 +200,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     )
 endif()
 
-# RtMidi installed via Homebrew
-if(APPLE)
-  # Find the directory containing RtMidi.h
-  execute_process(
-    COMMAND find /opt/homebrew/Cellar/rtmidi -name RtMidi.h
-    OUTPUT_VARIABLE RTMIDI_HEADER_PATH
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-
-  # Extract the directory path from the full header file path
-  get_filename_component(RTMIDI_INCLUDE_DIR "${RTMIDI_HEADER_PATH}" DIRECTORY)
-
-  message(STATUS "RtMidi header found at: ${RTMIDI_HEADER_PATH}")
-  message(STATUS "RtMidi include dir set to: ${RTMIDI_INCLUDE_DIR}")
-
-  # Add the include path and link settings
-  target_include_directories(megatoy PRIVATE ${RTMIDI_INCLUDE_DIR})
-  target_link_directories(megatoy PRIVATE /opt/homebrew/lib)
-  target_link_libraries(megatoy PRIVATE rtmidi)
-endif()
-
 target_link_libraries(megatoy PRIVATE
   vgm-player vgm-audio
   imgui_lib
@@ -230,6 +209,11 @@ target_link_libraries(megatoy PRIVATE
   nfd
   rtmidi
 )
+
+if(UNIX AND NOT APPLE)
+  find_package(X11 REQUIRED)
+  target_link_libraries(megatoy PRIVATE ${X11_LIBRARIES})
+endif()
 
 target_include_directories(megatoy PRIVATE
   ${libvgm_SOURCE_DIR}

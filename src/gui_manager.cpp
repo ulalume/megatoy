@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <imgui_internal.h>
 #include <iostream>
 
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -78,10 +79,13 @@ bool GuiManager::init(const std::string &window_title, int width, int height) {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   (void)io;
+
   io.ConfigFlags |=
       ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |=
       ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
+
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
 
   // Setup Dear ImGui style
   ImGui::StyleColorsDark();
@@ -93,6 +97,19 @@ bool GuiManager::init(const std::string &window_title, int width, int height) {
 
   initialized = true;
   return true;
+}
+
+static char *copy_string(const char s[], int size) {
+  char *s2;
+  s2 = (char *)malloc(((size + 1) * sizeof(char)));
+
+  if (s2)
+    strcpy(s2, s);
+  return (char *)s2;
+}
+
+void GuiManager::set_imgui_ini_file(const std::string &path) {
+  ImGui::GetIO().IniFilename = copy_string(path.c_str(), path.length());
 }
 
 void GuiManager::shutdown() {
@@ -128,6 +145,43 @@ void GuiManager::begin_frame() {
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+
+  ImGuiViewport *viewport = ImGui::GetMainViewport();
+  ImGuiID dockspace_id = viewport->ID;
+
+  ImGui::DockSpaceOverViewport(dockspace_id, viewport);
+
+  if (first_frame) {
+    first_frame = false;
+
+    std::cout << "First frame" << std::endl;
+
+    // default layout
+    ImGui::DockBuilderRemoveNode(dockspace_id); // clear
+    ImGui::DockBuilderAddNode(dockspace_id,
+                              ImGuiDockNodeFlags_DockSpace); // new DockSpace
+    ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+
+    ImGuiID dock_main_id = dockspace_id;
+    ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
+        dock_main_id, ImGuiDir_Left, 0.3f, nullptr, &dock_main_id);
+
+    ImGuiID dock_id_left_down;
+    dock_id_left_down = ImGui::DockBuilderSplitNode(
+        dock_id_left, ImGuiDir_Down, 0.3f, nullptr, &dock_id_left);
+
+    ImGuiID dock_id_right_down;
+    dock_id_right_down = ImGui::DockBuilderSplitNode(
+        dock_main_id, ImGuiDir_Down, 0.2f, nullptr, &dock_main_id);
+
+    ImGui::DockBuilderDockWindow("Patch Browser", dock_id_left);
+    ImGui::DockBuilderDockWindow("Keyboard Typing", dock_id_left_down);
+    ImGui::DockBuilderDockWindow("Patch Editor", dock_main_id);
+    ImGui::DockBuilderDockWindow("Soft Keyboard", dock_id_right_down);
+
+    // Finish the dockspace
+    ImGui::DockBuilderFinish(dockspace_id);
+  }
 }
 
 void GuiManager::end_frame() {

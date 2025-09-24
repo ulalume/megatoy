@@ -294,76 +294,76 @@ void render_patch_editor(AppState &app_state) {
     }
 
     // Global Settings
-    if (ImGui::CollapsingHeader("Global Register",
-                                ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::Indent();
+    //
+    ImGui::SeparatorText("Global Register");
+    if (ImGui::Checkbox("LFO Enable", &patch.global.lfo_enable)) {
+      settings_changed = true;
+    }
 
-      if (ImGui::Checkbox("LFO Enable", &patch.global.lfo_enable)) {
-        settings_changed = true;
-      }
-
-      int lfo_freq = patch.global.lfo_frequency;
-      if (ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7)) {
-        patch.global.lfo_frequency = static_cast<uint8_t>(lfo_freq);
-        settings_changed = true;
-      }
-
-      ImGui::Unindent();
+    int lfo_freq = patch.global.lfo_frequency;
+    if (ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7)) {
+      patch.global.lfo_frequency = static_cast<uint8_t>(lfo_freq);
+      settings_changed = true;
     }
 
     // Channel Settings
-    if (ImGui::CollapsingHeader("Channel Register",
-                                ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::Indent();
 
-      if (ImGui::Checkbox("Left Speaker", &patch.channel.left_speaker)) {
-        settings_changed = true;
-      }
+    ImGui::SeparatorText("Channel Register");
 
-      ImGui::SameLine();
-
-      if (ImGui::Checkbox("Right Speaker", &patch.channel.right_speaker)) {
-        settings_changed = true;
-      }
-
-      int ams = patch.channel.amplitude_modulation_sensitivity;
-      if (ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3)) {
-        patch.channel.amplitude_modulation_sensitivity =
-            static_cast<uint8_t>(ams);
-        settings_changed = true;
-      }
-
-      int fms = patch.channel.frequency_modulation_sensitivity;
-      if (ImGui::SliderInt("Frequency Modulation Sensitivity", &fms, 0, 7)) {
-        patch.channel.frequency_modulation_sensitivity =
-            static_cast<uint8_t>(fms);
-        settings_changed = true;
-      }
-
-      ImGui::Spacing();
-
-      if (const auto *preview =
-              get_algorithm_preview_texture(patch.instrument.algorithm)) {
-        ImGui::Image(preview->texture_id, preview->size);
-      }
-      // Algorithm (0-7)
-      int algorithm = patch.instrument.algorithm;
-      if (ImGui::SliderInt("Algorithm", &algorithm, 0, 7)) {
-        patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
-        settings_changed = true;
-      }
-
-      // Feedback (0-7)
-      int feedback = patch.instrument.feedback;
-      if (ImGui::SliderInt("Operator 1 Feedback", &feedback, 0, 7)) {
-        patch.instrument.feedback = static_cast<uint8_t>(feedback);
-        settings_changed = true;
-      }
-
-      ImGui::Unindent();
+    ImGui::Columns(2, "channel_columns", false);
+    ImGui::PushItemWidth(150);
+    if (ImGui::Checkbox("Left Speaker", &patch.channel.left_speaker)) {
+      settings_changed = true;
     }
 
+    ImGui::SameLine();
+
+    if (ImGui::Checkbox("Right Speaker", &patch.channel.right_speaker)) {
+      settings_changed = true;
+    }
+
+    int ams = patch.channel.amplitude_modulation_sensitivity;
+    if (ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3)) {
+      patch.channel.amplitude_modulation_sensitivity =
+          static_cast<uint8_t>(ams);
+      settings_changed = true;
+    }
+
+    int fms = patch.channel.frequency_modulation_sensitivity;
+    if (ImGui::SliderInt("Frequency Modulation Sensitivity", &fms, 0, 7)) {
+      patch.channel.frequency_modulation_sensitivity =
+          static_cast<uint8_t>(fms);
+      settings_changed = true;
+    }
+
+    ImGui::Spacing();
+
+    // Feedback (0-7)
+    int feedback = patch.instrument.feedback;
+    if (ImGui::SliderInt("Operator 1 Feedback", &feedback, 0, 7)) {
+      patch.instrument.feedback = static_cast<uint8_t>(feedback);
+      settings_changed = true;
+    }
+
+    ImGui::NextColumn();
+
+    if (const auto *preview =
+            get_algorithm_preview_texture(patch.instrument.algorithm)) {
+      ImGui::Image(preview->texture_id, preview->size);
+    }
+    // Algorithm (0-7)
+    int algorithm = patch.instrument.algorithm;
+    if (ImGui::SliderInt("Algorithm", &algorithm, 0, 7)) {
+      patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
+      settings_changed = true;
+    }
+
+    ImGui::PopItemWidth();
+
+    ImGui::Columns(1);
+
     // Operators
+    ImGui::Columns(2, "operation_columns", false);
     for (auto i = 0; i < 4; i++) {
       bool op_changed = false;
       auto op_index = static_cast<int>(ym2612::all_operator_indices[i]);
@@ -375,7 +375,10 @@ void render_patch_editor(AppState &app_state) {
                  sizeof(ym2612::OperatorSettings)) != 0) {
         settings_changed = true;
       }
+
+      ImGui::NextColumn();
     }
+    ImGui::Columns(1);
 
     // Apply settings if changed
     if (settings_changed) {

@@ -12,6 +12,7 @@ public:
   bool init(const std::string &window_title = "VGM Audio Test", int width = 800,
             int height = 600);
 
+  void set_imgui_ini_file(const std::string &path);
   // Cleanup
   void shutdown();
 
@@ -42,6 +43,8 @@ private:
   int windowed_pos_y;
   int windowed_width;
   int windowed_height;
+
+  bool first_frame = true;
 
   // Static callbacks
   static void glfw_error_callback(int error, const char *description);

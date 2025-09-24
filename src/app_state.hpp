@@ -30,7 +30,7 @@ struct UIState {
   bool show_patch_editor = true;
   bool show_audio_controls = true;
   bool show_midi_keyboard = true;
-  bool show_preferences = true;
+  bool show_preferences = false;
   bool show_patch_selector = true;
   std::string patch_search_query;
   bool open_directory_dialog = false;
@@ -86,6 +86,7 @@ public:
   bool load_patch(const patches::PatchEntry &preset_info);
 
   void sync_patch_directories();
+  void sync_imgui_ini_file();
 
   const std::string &current_patch_path() const;
   void update_current_patch_path(const std::filesystem::path &patch_path);

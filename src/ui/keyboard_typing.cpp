@@ -28,7 +28,7 @@ void render_keyboard_typing(AppState &app_state) {
   auto &input = app_state.input_state();
 
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
-  if (ImGui::Combo("Keyboard layout", &current_key_octave, key_octave_names,
+  if (ImGui::Combo("##Keyboard layout", &current_key_octave, key_octave_names,
                    IM_ARRAYSIZE(key_octave_names))) {
     input.keyboard_typing_octave = current_key_octave;
   };
