@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <sstream>
 
 #ifdef __APPLE__
 #include <cstdio>
@@ -55,23 +56,47 @@ std::string run_applescript(const std::string &script) {
 #else
 bool g_nfd_initialized = false;
 
-std::string build_filter_list(const std::vector<FileFilter> &filters) {
+struct FilterItems {
+  std::vector<std::string> labels;
+  std::vector<std::string> specs;
+  std::vector<nfdu8filteritem_t> items;
+};
+
+FilterItems build_filter_items(const std::vector<FileFilter> &filters) {
+  FilterItems storage;
   if (filters.empty()) {
-    return {};
+    return storage;
   }
 
-  std::ostringstream oss;
-  bool first_extension = true;
+  storage.labels.reserve(filters.size());
+  storage.specs.reserve(filters.size());
+  storage.items.reserve(filters.size());
+
   for (const auto &filter : filters) {
+    std::ostringstream spec_stream;
+    bool first = true;
     for (const auto &ext : filter.extensions) {
-      if (!first_extension) {
-        oss << ',';
+      if (!first) {
+        spec_stream << ',';
       }
-      first_extension = false;
-      oss << ext;
+      first = false;
+      spec_stream << ext;
     }
+
+    storage.labels.push_back(filter.label);
+    storage.specs.push_back(spec_stream.str());
+    const nfdu8char_t *name_ptr = nullptr;
+    if (!storage.labels.back().empty()) {
+      name_ptr = storage.labels.back().c_str();
+    }
+    const nfdu8char_t *spec_ptr = nullptr;
+    if (!storage.specs.back().empty()) {
+      spec_ptr = storage.specs.back().c_str();
+    }
+    storage.items.push_back({name_ptr, spec_ptr});
   }
-  return oss.str();
+
+  return storage;
 }
 #endif
 
@@ -135,14 +160,14 @@ DialogResult pick_folder(const std::filesystem::path &default_path,
     return DialogResult::Error;
   }
 
-  nfdchar_t *out_path = nullptr;
+  nfdu8char_t *out_path = nullptr;
   const std::string default_utf8 =
       default_path.empty() ? std::string() : default_path.string();
-  nfdresult_t result = NFD_PickFolder(
-      default_utf8.empty() ? nullptr : default_utf8.c_str(), &out_path);
+  nfdresult_t result = NFD_PickFolderU8(
+      &out_path, default_utf8.empty() ? nullptr : default_utf8.c_str());
   if (result == NFD_OKAY) {
     selected_path = std::filesystem::path(out_path);
-    NFD_FreePath(out_path);
+    NFD_FreePathU8(out_path);
     return DialogResult::Ok;
   }
   if (result == NFD_CANCEL) {
@@ -187,17 +212,25 @@ DialogResult save_file(const std::filesystem::path &default_dir,
     return DialogResult::Error;
   }
 
-  std::string filter_list = build_filter_list(filters);
+  FilterItems filter_items = build_filter_items(filters);
   const std::string default_utf8 =
       default_dir.empty() ? std::string() : default_dir.string();
 
-  nfdchar_t *out_path = nullptr;
-  nfdresult_t result = NFD_SaveDialog(
-      filter_list.empty() ? nullptr : filter_list.c_str(),
-      default_utf8.empty() ? nullptr : default_utf8.c_str(), &out_path);
+  const nfdu8filteritem_t *filter_ptr = nullptr;
+  nfdfiltersize_t filter_count = 0;
+  if (!filter_items.items.empty()) {
+    filter_ptr = filter_items.items.data();
+    filter_count = static_cast<nfdfiltersize_t>(filter_items.items.size());
+  }
+
+  nfdu8char_t *out_path = nullptr;
+  nfdresult_t result =
+      NFD_SaveDialogU8(&out_path, filter_ptr, filter_count,
+                       default_utf8.empty() ? nullptr : default_utf8.c_str(),
+                       default_name.empty() ? nullptr : default_name.c_str());
   if (result == NFD_OKAY) {
     selected_path = std::filesystem::path(out_path);
-    NFD_FreePath(out_path);
+    NFD_FreePathU8(out_path);
     return DialogResult::Ok;
   }
   if (result == NFD_CANCEL) {

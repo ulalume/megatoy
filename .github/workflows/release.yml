@@ -21,9 +21,9 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release edit "${GITHUB_REF_NAME}" --title "megatory ${GITHUB_REF_NAME}" --latest
+            gh release edit "${GITHUB_REF_NAME}" --title "megatoy ${GITHUB_REF_NAME}" --latest
           else
-            gh release create "${GITHUB_REF_NAME}" --title "megatory ${GITHUB_REF_NAME}" --generate-notes --latest
+            gh release create "${GITHUB_REF_NAME}" --title "megatoy ${GITHUB_REF_NAME}" --generate-notes --latest
           fi
 
   build:
@@ -46,7 +46,7 @@ jobs:
     env:
       BUILD_TYPE: Release
       VERSION: ${{ github.ref_name }}
-      PACKAGE_NAME: megatory-${{ github.ref_name }}-${{ matrix.archive_suffix }}
+      PACKAGE_NAME: megatoy-${{ github.ref_name }}-${{ matrix.archive_suffix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
