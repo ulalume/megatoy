@@ -9,18 +9,15 @@ This project is built on **libvgm**.
 ## Features
 
 - Load patches from:
-  - `.dmp` (DefleMask Preset Format)
-  - `.mml` (ctrmml)
-  - `.fui` (Furnace Instrument)
-  - `.rym2612` (RYM2612 Iconic FM Synthesizer Preset)
-*(Software-specific macros/effects are ignored.)*
-
+  - `.dmp` DefleMask Preset Format
+  - `.mml` ctrmml
+  - `.fui` Furnace Instrument
+  - `.rym2612` RYM2612 Iconic FM Synthesizer Preset
+  - *Software-specific macros/effects are ignored.*
 - Save patches in a custom format.
-
 - Export patches to:
   - `.dmp`
   - `.mml`
-
 - Support MIDI Input
 
 ## Patches
