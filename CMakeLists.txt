@@ -144,6 +144,7 @@ set(MEGATOY_SOURCES
   src/preference_manager.cpp
   src/channel_allocator.cpp
   src/resource_manager.cpp
+  src/midi_usb.cpp
   src/patches/patch_repository.cpp
   src/platform/file_dialog.cpp
   src/parsers/ctrmml_parser.cpp
@@ -185,6 +186,27 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
           -O3 -ffast-math -funroll-loops -march=native>
         $<$<CXX_COMPILER_ID:MSVC>:/O2 /fp:fast>
     )
+endif()
+
+# RtMidi installed via Homebrew
+if(APPLE)
+  # Find the directory containing RtMidi.h
+  execute_process(
+    COMMAND find /opt/homebrew/Cellar/rtmidi -name RtMidi.h
+    OUTPUT_VARIABLE RTMIDI_HEADER_PATH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+
+  # Extract the directory path from the full header file path
+  get_filename_component(RTMIDI_INCLUDE_DIR "${RTMIDI_HEADER_PATH}" DIRECTORY)
+
+  message(STATUS "RtMidi header found at: ${RTMIDI_HEADER_PATH}")
+  message(STATUS "RtMidi include dir set to: ${RTMIDI_INCLUDE_DIR}")
+
+  # Add the include path and link settings
+  target_include_directories(megatoy PRIVATE ${RTMIDI_INCLUDE_DIR})
+  target_link_directories(megatoy PRIVATE /opt/homebrew/lib)
+  target_link_libraries(megatoy PRIVATE rtmidi)
 endif()
 
 target_link_libraries(megatoy PRIVATE
