@@ -60,7 +60,7 @@ bool parse_fm_feature(const std::vector<uint8_t> &data, ym2612::Patch &result) {
     const uint8_t reg_90 = data[offset + 6];
     const uint8_t reg_94 = data[offset + 7];
 
-    op.detune = parsers::convert_detune(reg_30 >> 4);
+    op.detune = parsers::convert_detune_from_dmp_to_patch(reg_30 >> 4);
     op.multiple = reg_30 & 0x0F;
 
     op.total_level = reg_40 & 0x7F;
@@ -264,7 +264,7 @@ bool parse_old_fui(const std::vector<uint8_t> &bytes,
     op.release_rate = std::min<uint8_t>(release_rate, 15);
     op.sustain_level = std::min<uint8_t>(sustain_level, 15);
     op.total_level = std::min<uint8_t>(total_level, 127);
-    op.detune = parsers::convert_detune(detune);
+    op.detune = parsers::convert_detune_from_dmp_to_patch(detune);
     op.sustain_rate = std::min<uint8_t>(sustain_rate, 31);
     const bool ssg_enable = (ssg_env & 0x10) != 0;
     op.ssg_enable = ssg_enable;
