@@ -20,8 +20,8 @@ This project is built on **libvgm**.
 
 ## To Do
 
-- [ ] Export in ctrmml format
-- [ ] Export in dmp format
+- [x] Export in ctrmml format
+- [x] Export in dmp format
 - [ ] Support sn76489
 
 ## Patches

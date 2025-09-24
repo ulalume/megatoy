@@ -246,14 +246,10 @@ bool parse_ctrmml_file(const std::filesystem::path &file_path,
       op.detune = clamp_uint8(row[8], 0, 7);
 
       int ssg_value = row[9];
-      if (ssg_value >= 100) {
-        op.amplitude_modulation_enable = true;
-        ssg_value -= 100;
-      } else {
-        op.amplitude_modulation_enable = false;
-      }
-      op.ssg_enable = ssg_value != 0;
-      op.ssg_type_envelope_control = clamp_uint8(ssg_value, 0, 7);
+      std::cout << "SSG Value: " << ssg_value << std::endl;
+      op.amplitude_modulation_enable = ssg_value >= 100;
+      op.ssg_enable = (ssg_value & 0b1000) != 0;
+      op.ssg_type_envelope_control = ssg_value & 0b0111;
     }
 
     patch.category = "ctrmml";

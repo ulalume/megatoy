@@ -1,5 +1,6 @@
 #include "patch_editor.hpp"
 #include "../patches/patch_repository.hpp"
+#include "../platform/file_dialog.hpp"
 #include "../ym2612/patch_io.hpp"
 #include "operator_editor.hpp"
 #include "preview/algorithm_preview.hpp"
@@ -65,6 +66,9 @@ void render_patch_editor(AppState &app_state) {
   auto &patch = app_state.patch();
   auto &ui_state = app_state.ui_state();
 
+  static std::string last_export_path;
+  static std::string last_export_error;
+
   if (!ui_state.show_patch_editor) {
     return;
   }
@@ -86,6 +90,8 @@ void render_patch_editor(AppState &app_state) {
     if (!name_valid) {
       ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
       ImGui::Button("Save");
+      ImGui::SameLine();
+      ImGui::Button("Export...");
       ImGui::PopStyleVar();
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Enter a valid patch name to save");
@@ -114,6 +120,66 @@ void render_patch_editor(AppState &app_state) {
           }
         }
       }
+      ImGui::SameLine();
+      if (ImGui::Button("Export...")) {
+        ImGui::OpenPopup("Export Options");
+      }
+    }
+
+    // Export Options popup
+    if (ImGui::BeginPopup("Export Options")) {
+      const auto default_dir =
+          app_state.preference_manager().get_export_directory();
+      const std::string sanitized_name =
+          sanitize_filename(patch.name.empty() ? "patch" : patch.name);
+
+      if (ImGui::MenuItem(".mml (ctrmml)")) {
+        std::filesystem::path selected_path;
+        std::string default_filename =
+            sanitized_name.empty() ? "patch.mml" : sanitized_name + ".mml";
+        auto result = platform::file_dialog::save_file(
+            default_dir, default_filename,
+            {{"ctrmml text", {"txt"}}, {"MML", {"mml"}}}, selected_path);
+        if (result == platform::file_dialog::DialogResult::Ok) {
+          if (selected_path.extension().empty()) {
+            selected_path.replace_extension(".mml");
+          }
+          if (ym2612::export_patch_as_ctrmml(patch, selected_path)) {
+            last_export_path = selected_path.string();
+            ImGui::OpenPopup("Export Success");
+          } else {
+            last_export_error = "Failed to export to " + selected_path.string();
+            ImGui::OpenPopup("Export Error");
+          }
+        } else if (result == platform::file_dialog::DialogResult::Error) {
+          last_export_error = "Could not open save dialog.";
+          ImGui::OpenPopup("Export Error");
+        }
+      }
+      if (ImGui::MenuItem(".dmp")) {
+        std::filesystem::path selected_path;
+        std::string default_filename =
+            sanitized_name.empty() ? "patch.dmp" : sanitized_name + ".dmp";
+        auto result = platform::file_dialog::save_file(
+            default_dir, default_filename, {{"DefleMask preset", {"dmp"}}},
+            selected_path);
+        if (result == platform::file_dialog::DialogResult::Ok) {
+          if (selected_path.extension().empty()) {
+            selected_path.replace_extension(".dmp");
+          }
+          if (ym2612::export_patch_as_dmp(patch, selected_path)) {
+            last_export_path = selected_path.string();
+            ImGui::OpenPopup("Export Success");
+          } else {
+            last_export_error = "Failed to export to " + selected_path.string();
+            ImGui::OpenPopup("Export Error");
+          }
+        } else if (result == platform::file_dialog::DialogResult::Error) {
+          last_export_error = "Could not open save dialog.";
+          ImGui::OpenPopup("Export Error");
+        }
+      }
+      ImGui::EndPopup();
     }
 
     // Patch name input with filename validation
@@ -189,6 +255,28 @@ void render_patch_editor(AppState &app_state) {
         ImGui::CloseCurrentPopup();
       }
 
+      ImGui::EndPopup();
+    }
+
+    if (ImGui::BeginPopupModal("Export Success", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::Text("Export completed successfully.");
+      ImGui::TextWrapped("%s", last_export_path.c_str());
+      ImGui::Spacing();
+      if (ImGui::Button("OK", ImVec2(120, 0))) {
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
+    }
+
+    if (ImGui::BeginPopupModal("Export Error", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::Text("Export failed.");
+      ImGui::TextWrapped("%s", last_export_error.c_str());
+      ImGui::Spacing();
+      if (ImGui::Button("OK", ImVec2(120, 0))) {
+        ImGui::CloseCurrentPopup();
+      }
       ImGui::EndPopup();
     }
 

@@ -127,6 +127,7 @@ set(MEGATOY_SOURCES
   src/channel_allocator.cpp
   src/resource_manager.cpp
   src/patches/patch_repository.cpp
+  src/platform/file_dialog.cpp
   src/parsers/ctrmml_parser.cpp
   src/parsers/fui_parser.cpp
   src/parsers/rym2612_parser.cpp
