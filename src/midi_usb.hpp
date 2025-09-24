@@ -12,7 +12,7 @@ public:
   bool init();
   void shutdown();
 
-  void poll(AppState &app_state);  // Call each frame
+  void poll(AppState &app_state); // Call each frame
 
 private:
   struct Impl;

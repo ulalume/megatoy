@@ -1,10 +1,10 @@
 // midi.cpp
 #include "midi_usb.hpp"
-#include "types.hpp"
 #include "channel_allocator.hpp"
-#include "ym2612/types.hpp"
+#include "types.hpp"
 #include "ym2612/channel.hpp"
 #include "ym2612/device.hpp"
+#include "ym2612/types.hpp"
 #include <RtMidi.h>
 #include <iostream>
 #include <mutex>
@@ -26,8 +26,8 @@ struct MidiInputManager::Impl {
         return false;
       }
 
-      std::cout << "Opening MIDI input port 0: "
-                << midi_in->getPortName(0) << "\n";
+      std::cout << "Opening MIDI input port 0: " << midi_in->getPortName(0)
+                << "\n";
 
       midi_in->openPort(0);
       midi_in->ignoreTypes(false, false, false);
@@ -39,13 +39,15 @@ struct MidiInputManager::Impl {
   }
 
   void poll(AppState &app_state) {
-    if (!midi_in) return;
+    if (!midi_in)
+      return;
 
     double stamp;
     message.clear();
 
     stamp = midi_in->getMessage(&message);
-    if (message.empty()) return;
+    if (message.empty())
+      return;
 
     unsigned char status = message[0];
     int midi_note = message[1];
@@ -58,11 +60,13 @@ struct MidiInputManager::Impl {
       // Note On
       bool success = channel_allocator.note_on(noteFreq, app_state.device());
       if (!success) {
-        std::cout << "No free channels available for note " << midi_note << "\n";
+        std::cout << "No free channels available for note " << midi_note
+                  << "\n";
       } else {
         std::cout << "Note ON " << midi_note << "\n";
       }
-    } else if ((status & 0xF0) == 0x80 || ((status & 0xF0) == 0x90 && message[2] == 0)) {
+    } else if ((status & 0xF0) == 0x80 ||
+               ((status & 0xF0) == 0x90 && message[2] == 0)) {
       // Note Off
       bool success = channel_allocator.note_off(noteFreq, app_state.device());
       if (success) {
@@ -70,7 +74,6 @@ struct MidiInputManager::Impl {
       }
     }
   }
-
 
   void shutdown() {
     if (midi_in && midi_in->isPortOpen()) {
@@ -82,14 +85,8 @@ struct MidiInputManager::Impl {
 MidiInputManager::MidiInputManager() : impl_(std::make_unique<Impl>()) {}
 MidiInputManager::~MidiInputManager() { impl_->shutdown(); }
 
-bool MidiInputManager::init() {
-  return impl_->init();
-}
+bool MidiInputManager::init() { return impl_->init(); }
 
-void MidiInputManager::shutdown() {
-  impl_->shutdown();
-}
+void MidiInputManager::shutdown() { impl_->shutdown(); }
 
-void MidiInputManager::poll(AppState &app_state) {
-  impl_->poll(app_state);
-}
+void MidiInputManager::poll(AppState &app_state) { impl_->poll(app_state); }
