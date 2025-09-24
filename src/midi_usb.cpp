@@ -1,6 +1,7 @@
 // midi.cpp
 #include "midi_usb.hpp"
 #include "types.hpp"
+#include "channel_allocator.hpp"
 #include "ym2612/types.hpp"
 #include "ym2612/channel.hpp"
 #include "ym2612/device.hpp"
@@ -13,6 +14,7 @@ struct MidiInputManager::Impl {
   std::unique_ptr<RtMidiIn> midi_in;
   std::vector<unsigned char> message;
   std::mutex message_mutex;
+  ChannelAllocator channel_allocator;
 
   bool init() {
     try {
@@ -37,43 +39,38 @@ struct MidiInputManager::Impl {
   }
 
   void poll(AppState &app_state) {
-    if (!midi_in)
-        return;
+    if (!midi_in) return;
 
     double stamp;
     message.clear();
 
     stamp = midi_in->getMessage(&message);
-    if (message.empty())
-        return;
+    if (message.empty()) return;
 
     unsigned char status = message[0];
+    int midi_note = message[1];
+
+    uint8_t octave = static_cast<uint8_t>((midi_note / 12) - 1);
+    Key key_enum = static_cast<Key>(static_cast<uint8_t>(midi_note % 12));
+    ym2612::Note noteFreq(octave, key_enum);
+
     if ((status & 0xF0) == 0x90 && message[2] > 0) {
-        // Note On
-        int midi_note = message[1];
-        uint8_t octave = static_cast<uint8_t>((midi_note / 12) - 1);
-        Key key_enum = static_cast<Key>(static_cast<uint8_t>(midi_note % 12));
-
-        ym2612::Note noteFreq(octave, key_enum);
-
-        app_state.device()
-            .channel(ym2612::ChannelIndex::Fm1)
-            .write_frequency(noteFreq);
-
-        app_state.device()
-            .channel(ym2612::ChannelIndex::Fm1)
-            .write_key_on();
-
+      // Note On
+      bool success = channel_allocator.note_on(noteFreq, app_state.device());
+      if (!success) {
+        std::cout << "No free channels available for note " << midi_note << "\n";
+      } else {
+        std::cout << "Note ON " << midi_note << "\n";
+      }
     } else if ((status & 0xF0) == 0x80 || ((status & 0xF0) == 0x90 && message[2] == 0)) {
-        // Note Off
-        int midi_note = message[1];
-        std::cout << "Note OFF: " << midi_note << "\n";
-
-        app_state.device()
-            .channel(ym2612::ChannelIndex::Fm1)
-            .write_key_off();
+      // Note Off
+      bool success = channel_allocator.note_off(noteFreq, app_state.device());
+      if (success) {
+        std::cout << "Note OFF " << midi_note << "\n";
+      }
     }
   }
+
 
   void shutdown() {
     if (midi_in && midi_in->isPortOpen()) {
