@@ -94,6 +94,21 @@ std::filesystem::path PreferenceManager::get_preferences_file_path() const {
   return std::filesystem::current_path() / "preferences.json";
 }
 
+std::filesystem::path PreferenceManager::get_imgui_ini_file() const {
+#ifdef _WIN32
+  const char *appdata = std::getenv("APPDATA");
+  if (appdata) {
+    return std::filesystem::path(appdata) / "megatoy" / "imgui.ini";
+  }
+#else
+  const char *home = std::getenv("HOME");
+  if (home) {
+    return std::filesystem::path(home) / ".config" / "megatoy" / "imgui.ini";
+  }
+#endif
+  return std::filesystem::current_path() / "imgui.ini";
+}
+
 bool PreferenceManager::save_preferences() {
   try {
     auto prefs_path = get_preferences_file_path();

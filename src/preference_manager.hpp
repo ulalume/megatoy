@@ -15,6 +15,8 @@ public:
   std::filesystem::path get_user_patches_directory() const;
   std::filesystem::path get_patches_directory() const;
   std::filesystem::path get_export_directory() const;
+  std::filesystem::path get_config_directory() const;
+  std::filesystem::path get_imgui_ini_file() const;
 
   // Directory picker dialog
   bool select_data_directory();

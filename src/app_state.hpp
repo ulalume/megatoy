@@ -86,6 +86,7 @@ public:
   bool load_patch(const patches::PatchEntry &preset_info);
 
   void sync_patch_directories();
+  void sync_imgui_ini_file();
 
   const std::string &current_patch_path() const;
   void update_current_patch_path(const std::filesystem::path &patch_path);

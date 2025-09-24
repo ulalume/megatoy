@@ -98,6 +98,11 @@ void AppState::sync_patch_directories() {
   patch_state_.patch_repository = patches::PatchRepository(patch_dir);
 }
 
+void AppState::sync_imgui_ini_file() {
+  auto gui_ini_path = preference_manager_.get_imgui_ini_file();
+  gui_manager_.set_imgui_ini_file(gui_ini_path.generic_string());
+}
+
 void AppState::initialize_patch_defaults() {
   auto &patch = patch_state_.current;
   patch.global = {
@@ -142,8 +147,9 @@ void AppState::configure_audio() {
 void AppState::configure_gui() {
   if (!gui_manager_.init("megatoy", 1000, 700)) {
     std::cerr << "Failed to initialize GUI system\n";
+  } else {
+    sync_imgui_ini_file();
   }
-
   // Native dialogs require the GUI subsystem to be active on macOS.
   if (!preference_manager_.initialize_file_dialog()) {
     std::cerr << "Native File Dialog unavailable; directory picker disabled\n";
