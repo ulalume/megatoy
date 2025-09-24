@@ -20,4 +20,10 @@ bool load_patch(const std::filesystem::path &patches_dir, Patch &patch,
 std::vector<std::string>
 list_patch_files(const std::filesystem::path &patches_dir);
 
+bool export_patch_as_ctrmml(const Patch &patch,
+                            const std::filesystem::path &target_path);
+
+bool export_patch_as_dmp(const Patch &patch,
+                         const std::filesystem::path &target_path);
+
 } // namespace ym2612

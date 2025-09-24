@@ -100,7 +100,7 @@ bool parse_dmp_file(const std::filesystem::path &file_path,
       operator_settings.release_rate = rr & 0x0F;
       operator_settings.amplitude_modulation_enable = (am != 0);
       operator_settings.key_scale = rs & 0x03;
-      operator_settings.detune = parsers::convert_detune(dt);
+      operator_settings.detune = parsers::convert_detune_from_dmp_to_patch(dt);
       operator_settings.sustain_rate = d2r & 0x1F;
 
       // Handle SSGEG bits

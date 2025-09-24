@@ -1,6 +1,10 @@
 #include "patch_io.hpp"
+#include "parsers/util.hpp"
+#include <array>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <vector>
 
 namespace ym2612 {
 
@@ -82,6 +86,122 @@ list_patch_files(const std::filesystem::path &patches_dir) {
   }
 
   return files;
+}
+
+bool export_patch_as_ctrmml(const Patch &patch,
+                            const std::filesystem::path &target_path) {
+  try {
+    std::filesystem::path output_path = target_path;
+    if (output_path.extension().empty()) {
+      output_path.replace_extension(".mml");
+    }
+
+    std::ofstream out(output_path);
+    if (!out) {
+      std::cerr << "Failed to open file for writing: " << output_path
+                << std::endl;
+      return false;
+    }
+
+    const std::string instrument_name =
+        patch.name.empty() ? "Instrument" : patch.name;
+
+    out << "@1 fm ; " << instrument_name << "\n";
+    out << ";  ALG  FB\n";
+    out << "  " << std::setw(2) << static_cast<int>(patch.instrument.algorithm)
+        << "   " << static_cast<int>(patch.instrument.feedback) << "\n";
+    out << ";  AR  DR  SR  RR  SL  TL  KS  ML  DT SSG\n";
+
+    const std::array<std::string, 4> op_labels = {
+        "S1",
+        "S3",
+        "S2",
+        "S4",
+    };
+
+    for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
+         ++op_idx) {
+      const auto &op = patch.instrument.operators[op_idx];
+
+      int ssg_value = op.ssg_type_envelope_control & 0x07;
+      if (op.ssg_enable) {
+        ssg_value += 8;
+      }
+      if (op.amplitude_modulation_enable) {
+        ssg_value += 100;
+      }
+      out << std::setfill(' ');
+      out << "   " << std::setw(2) << static_cast<int>(op.attack_rate) << " "
+          << std::setw(3) << static_cast<int>(op.decay_rate) << " "
+          << std::setw(3) << static_cast<int>(op.sustain_rate) << " "
+          << std::setw(3) << static_cast<int>(op.release_rate) << " "
+          << std::setw(3) << static_cast<int>(op.sustain_level) << " "
+          << std::setw(3) << static_cast<int>(op.total_level) << " "
+          << std::setw(3) << static_cast<int>(op.key_scale) << " "
+          << std::setw(3) << static_cast<int>(op.multiple) << " "
+          << std::setw(3) << static_cast<int>(op.detune) << " " << std::setw(3)
+          << ssg_value << " ; " << op_labels[op_idx] << "\n";
+    }
+
+    return true;
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to export patch to ctrmml text: " << e.what()
+              << std::endl;
+    return false;
+  }
+}
+
+bool export_patch_as_dmp(const Patch &patch,
+                         const std::filesystem::path &target_path) {
+  try {
+    std::filesystem::path output_path = target_path;
+    if (output_path.extension().empty()) {
+      output_path.replace_extension(".dmp");
+    }
+
+    std::vector<uint8_t> data;
+    data.reserve(3 + 4 * 11);
+    data.push_back(0x0B); // version
+    data.push_back(0x02); // system: Genesis
+    data.push_back(0x01); // instrument mode FM
+    data.push_back(patch.channel.frequency_modulation_sensitivity & 0x07);
+    data.push_back(patch.instrument.feedback & 0x07);
+    data.push_back(patch.instrument.algorithm & 0x07);
+    data.push_back(patch.channel.amplitude_modulation_sensitivity & 0x03);
+
+    for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
+         ++op_idx) {
+      const auto &op = patch.instrument.operators[op_idx];
+
+      data.push_back(op.multiple & 0x0F);
+      data.push_back(std::min<uint8_t>(op.total_level, 127));
+      data.push_back(std::min<uint8_t>(op.attack_rate, 31));
+      data.push_back(std::min<uint8_t>(op.decay_rate, 31));
+      data.push_back(std::min<uint8_t>(op.sustain_level, 15));
+      data.push_back(std::min<uint8_t>(op.release_rate, 15));
+      data.push_back(op.amplitude_modulation_enable ? 1 : 0);
+      data.push_back(std::min<uint8_t>(op.key_scale, 3));
+      data.push_back(parsers::convert_detune_from_patch_to_dmp_fui(
+          op.detune & 0x07)); // DT2 unsupported
+      data.push_back(std::min<uint8_t>(op.sustain_rate, 31));
+      uint8_t ssg =
+          (op.ssg_enable ? 0x08 : 0x00) | (op.ssg_type_envelope_control & 0x07);
+      data.push_back(ssg);
+    }
+
+    std::ofstream out(output_path, std::ios::binary);
+    if (!out) {
+      std::cerr << "Failed to open file for writing: " << output_path
+                << std::endl;
+      return false;
+    }
+
+    out.write(reinterpret_cast<const char *>(data.data()), data.size());
+    return true;
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to export patch to DMP: " << e.what() << std::endl;
+    return false;
+  }
 }
 
 } // namespace ym2612
