@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <imgui.h>
 #include <ostream>
