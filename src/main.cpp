@@ -8,6 +8,7 @@
 #include "ui/preferences.hpp"
 #include "ym2612/channel.hpp"
 #include <iostream>
+#include "midi_usb.hpp"
 
 int main(int argc, char *argv[]) {
   std::cout << "VGM Real-time Audio Test with Dear ImGui\n";
@@ -20,6 +21,10 @@ int main(int argc, char *argv[]) {
       .channel(ym2612::ChannelIndex::Fm1)
       .write_frequency({4, Key::C});
 
+  // Init MIDI
+  MidiInputManager midi;
+  midi.init();
+
   std::cout
       << "GUI initialized. Use the button in the window to play C4 note.\n";
 
@@ -29,6 +34,9 @@ int main(int argc, char *argv[]) {
     app_state.gui_manager().poll_events();
     // Start new frame
     app_state.gui_manager().begin_frame();
+
+    // Midi USB update
+    midi.poll(app_state);
 
     ui::render_main_menu(app_state);
     // Render UI panels
