@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Linux
+            runner: ubuntu-latest
+            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+            build: cmake --build build --config Release --parallel
+          - os: macOS
+            runner: macos-latest
+            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+            build: cmake --build build --config Release --parallel
+          - os: Windows
+            runner: windows-latest
+            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64
+            build: cmake --build build --config Release --parallel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libgtk-3-dev \
+            xorg-dev
+
+      - name: Configure
+        run: ${{ matrix.configure }}
+        shell: ${{ matrix.os == 'Windows' && 'pwsh' || 'bash' }}
+
+      - name: Build
+        run: ${{ matrix.build }}
+        shell: ${{ matrix.os == 'Windows' && 'pwsh' || 'bash' }}

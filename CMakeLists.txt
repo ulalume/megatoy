@@ -86,13 +86,22 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/ValleyBell/libvgm
   GIT_TAG        e9f2b023e8918b56be0d2e634b3f5aab2a589ffe
 )
-# Link statically and disable extra tools
-# on Windows to avoid 32-bit libs in MSVC builds
-set(LIBRARY_TYPE STATIC CACHE STRING "")
-set(BUILD_PLAYER OFF CACHE BOOL "")
-set(BUILD_VGM2WAV OFF CACHE BOOL "")
-set(LINK_STATIC_LIBS ON CACHE BOOL "")
-set(USE_SANITIZERS OFF CACHE BOOL "")
+# Configure libvgm for MSVC-friendly static builds
+if(WIN32)
+  set(LIBRARY_TYPE STATIC CACHE STRING "" FORCE)
+  set(BUILD_PLAYER OFF CACHE BOOL "" FORCE)
+  set(BUILD_VGM2WAV OFF CACHE BOOL "" FORCE)
+  set(LINK_STATIC_LIBS ON CACHE BOOL "" FORCE)
+  set(USE_SANITIZERS OFF CACHE BOOL "" FORCE)
+  set(UTIL_CHARCNV_ICONV OFF CACHE BOOL "" FORCE)
+  set(UTIL_CHARCNV_WINAPI ON CACHE BOOL "" FORCE)
+  set(ZLIB_INCLUDE_DIR "${libvgm_SOURCE_DIR}/libs/include" CACHE PATH "" FORCE)
+  set(ZLIB_INCLUDE_DIRS "${libvgm_SOURCE_DIR}/libs/include" CACHE PATH "" FORCE)
+  set(ZLIB_LIBRARY "${libvgm_SOURCE_DIR}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
+  set(ZLIB_LIBRARIES "${libvgm_SOURCE_DIR}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
+  set(ZLIB_LIBRARY_RELEASE "${libvgm_SOURCE_DIR}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
+  set(ZLIB_LIBRARY_DEBUG "${libvgm_SOURCE_DIR}/libs/lib/zlib64d.lib" CACHE FILEPATH "" FORCE)
+endif()
 FetchContent_MakeAvailable(libvgm)
 
 # stb single-header image loader
@@ -155,6 +164,10 @@ set(MEGATOY_SOURCES
   src/ym2612/operator.cpp
   src/ym2612/patch_io.cpp
 )
+
+if(WIN32)
+  list(APPEND MEGATOY_SOURCES src/platform/windows_entry.cpp)
+endif()
 
 if(APPLE)
   add_executable(megatoy MACOSX_BUNDLE ${MEGATOY_SOURCES})
