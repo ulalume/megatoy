@@ -30,7 +30,7 @@ struct UIState {
   bool show_patch_editor = true;
   bool show_audio_controls = true;
   bool show_midi_keyboard = true;
-  bool show_preferences = true;
+  bool show_preferences = false;
   bool show_patch_selector = true;
   std::string patch_search_query;
   bool open_directory_dialog = false;
