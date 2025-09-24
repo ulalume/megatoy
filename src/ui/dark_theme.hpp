@@ -8,6 +8,8 @@ inline void apply_dark_theme() {
   style.ScrollbarSize = 8;
   style.ScrollbarRounding = 0;
   style.ScrollbarPadding = 0;
+  style.SeparatorTextBorderSize = 1;
+  style.FramePadding = ImVec2(4, 2);
 
   ImVec4 *colors = ImGui::GetStyle().Colors;
   colors[ImGuiCol_Text] = ImVec4(0.86f, 0.93f, 0.89f, 0.78f);
@@ -37,7 +39,7 @@ inline void apply_dark_theme() {
   colors[ImGuiCol_Header] = ImVec4(0.92f, 0.18f, 0.29f, 0.41f);
   colors[ImGuiCol_HeaderHovered] = ImVec4(0.92f, 0.18f, 0.29f, 0.86f);
   colors[ImGuiCol_HeaderActive] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
-  colors[ImGuiCol_Separator] = ImVec4(0.14f, 0.16f, 0.19f, 1.00f);
+  colors[ImGuiCol_Separator] = ImVec4(0.31f, 0.31f, 0.35f, 0.78f);
   colors[ImGuiCol_SeparatorHovered] = ImVec4(0.92f, 0.18f, 0.29f, 0.78f);
   colors[ImGuiCol_SeparatorActive] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
   colors[ImGuiCol_ResizeGrip] = ImVec4(0.47f, 0.77f, 0.83f, 1.00f);
