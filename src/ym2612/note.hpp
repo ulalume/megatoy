@@ -1,7 +1,7 @@
 #pragma once
 
-#include "types.hpp"
 #include "../types.hpp"
+#include "types.hpp"
 #include <cstdint>
 #include <iostream>
 
@@ -34,6 +34,7 @@ inline uint16_t fnote_from_key(Key key) {
   case Key::B:
     return 608;
   }
+  return 322;
 }
 
 struct Note {

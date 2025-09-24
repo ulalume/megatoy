@@ -53,9 +53,9 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
         if (ImGui::BeginPopupContextItem(nullptr)) {
           if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
-            ui::reveal_in_file_manager(
-                app_state.patch_repository().to_absolute_path(
-                    item.relative_path));
+            ui::reveal_in_file_manager(app_state.patch_repository()
+                                           .to_absolute_path(item.relative_path)
+                                           .string());
           }
           ImGui::EndPopup();
         }
@@ -81,9 +81,9 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
       if (ImGui::BeginPopupContextItem(nullptr)) {
         if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
-          ui::reveal_in_file_manager(
-              app_state.patch_repository().to_absolute_path(
-                  item.relative_path));
+          ui::reveal_in_file_manager(app_state.patch_repository()
+                                         .to_absolute_path(item.relative_path)
+                                         .string());
         }
         ImGui::EndPopup();
       }
@@ -201,9 +201,9 @@ void render_patch_selector(AppState &app_state) {
 
           if (ImGui::BeginPopupContextItem(nullptr)) {
             if (ImGui::MenuItem(reveal_in_file_manager_label())) {
-              reveal_in_file_manager(
-                  app_state.patch_repository().to_absolute_path(
-                      entry->relative_path));
+              reveal_in_file_manager(app_state.patch_repository()
+                                         .to_absolute_path(entry->relative_path)
+                                         .string());
             }
             ImGui::EndPopup();
           }
