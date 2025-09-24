@@ -1,5 +1,9 @@
 // midi.cpp
-#include "midi.hpp"
+#include "midi_usb.hpp"
+#include "types.hpp"
+#include "ym2612/types.hpp"
+#include "ym2612/channel.hpp"
+#include "ym2612/device.hpp"
 #include <RtMidi.h>
 #include <iostream>
 #include <mutex>
@@ -34,38 +38,40 @@ struct MidiInputManager::Impl {
 
   void poll(AppState &app_state) {
     if (!midi_in)
-      return;
+        return;
 
     double stamp;
     message.clear();
 
     stamp = midi_in->getMessage(&message);
     if (message.empty())
-      return;
+        return;
 
     unsigned char status = message[0];
     if ((status & 0xF0) == 0x90 && message[2] > 0) {
-      // Note On
-      int note = message[1];
-      int velocity = message[2];
-      std::cout << "Note ON: " << note << " vel: " << velocity << "\n";
+        // Note On
+        int midi_note = message[1];
+        uint8_t octave = static_cast<uint8_t>((midi_note / 12) - 1);
+        Key key_enum = static_cast<Key>(static_cast<uint8_t>(midi_note % 12));
 
-      // Example: Play note on FM1
-      auto key = static_cast<Key>(note % 12);
-      int octave = (note / 12) - 1;
-      app_state.device()
-          .channel(ym2612::ChannelIndex::Fm1)
-          .write_frequency({octave, key});
-      app_state.device()
-          .channel(ym2612::ChannelIndex::Fm1)
-          .key_on(true);
-    } else if ((status & 0xF0) == 0x80 || (status & 0xF0) == 0x90) {
-      // Note Off
-      int note = message[1];
-      std::cout << "Note OFF: " << note << "\n";
-      app_state.device()
-          .channel(ym2612::ChannelIndex::Fm1)
-          .key_on(false);
+        ym2612::Note noteFreq(octave, key_enum);
+
+        app_state.device()
+            .channel(ym2612::ChannelIndex::Fm1)
+            .write_frequency(noteFreq);
+
+        app_state.device()
+            .channel(ym2612::ChannelIndex::Fm1)
+            .write_key_on();
+
+    } else if ((status & 0xF0) == 0x80 || ((status & 0xF0) == 0x90 && message[2] == 0)) {
+        // Note Off
+        int midi_note = message[1];
+        std::cout << "Note OFF: " << midi_note << "\n";
+
+        app_state.device()
+            .channel(ym2612::ChannelIndex::Fm1)
+            .write_key_off();
     }
   }
 
