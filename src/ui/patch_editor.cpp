@@ -1,7 +1,9 @@
 #include "patch_editor.hpp"
 #include "../patches/patch_repository.hpp"
 #include "../platform/file_dialog.hpp"
-#include "../ym2612/patch_io.hpp"
+#include "../formats/gin.hpp"
+#include "../formats/ctrmml.hpp"
+#include "../formats/dmp.hpp"
 #include "operator_editor.hpp"
 #include "preview/algorithm_preview.hpp"
 #include <cctype>
@@ -101,7 +103,7 @@ void render_patch_editor(AppState &app_state) {
         // Check whether the file already exists
         auto patches_dir =
             app_state.preference_manager().get_user_patches_directory();
-        auto patch_path = ym2612::build_patch_path(patches_dir, patch.name);
+        auto patch_path = ym2612::formats::gin::build_patch_path(patches_dir, patch.name);
 
         if (std::filesystem::exists(patch_path)) {
           // Prompt if the file already exists
@@ -110,7 +112,7 @@ void render_patch_editor(AppState &app_state) {
               app_state.patch_repository().to_relative_path(patch_path));
         } else {
           // Save as new file
-          if (ym2612::save_patch(patches_dir, patch, patch.name)) {
+          if (ym2612::formats::gin::save_patch(patches_dir, patch, patch.name)) {
             ImGui::OpenPopup("Save Success");
             app_state.patch_repository().refresh();
             app_state.update_current_patch_path(
@@ -144,7 +146,7 @@ void render_patch_editor(AppState &app_state) {
           if (selected_path.extension().empty()) {
             selected_path.replace_extension(".mml");
           }
-          if (ym2612::export_patch_as_ctrmml(patch, selected_path)) {
+          if (ym2612::formats::ctrmml::write_patch(patch, selected_path)) {
             last_export_path = selected_path.string();
             ImGui::OpenPopup("Export Success");
           } else {
@@ -167,7 +169,7 @@ void render_patch_editor(AppState &app_state) {
           if (selected_path.extension().empty()) {
             selected_path.replace_extension(".dmp");
           }
-          if (ym2612::export_patch_as_dmp(patch, selected_path)) {
+          if (ym2612::formats::dmp::write_patch(patch, selected_path)) {
             last_export_path = selected_path.string();
             ImGui::OpenPopup("Export Success");
           } else {
@@ -219,7 +221,7 @@ void render_patch_editor(AppState &app_state) {
       if (ImGui::Button("Overwrite", ImVec2(120, 0))) {
         auto patches_dir =
             app_state.preference_manager().get_user_patches_directory();
-        if (save_patch(patches_dir, patch, patch.name)) {
+        if (ym2612::formats::gin::save_patch(patches_dir, patch, patch.name)) {
           ImGui::OpenPopup("Save Success");
         } else {
           ImGui::OpenPopup("Save Error");

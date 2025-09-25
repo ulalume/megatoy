@@ -1,9 +1,9 @@
 #include "patch_repository.hpp"
-#include "../parsers/ctrmml_parser.hpp"
-#include "../parsers/dmp_parser.hpp"
+#include "../formats/ctrmml.hpp"
+#include "../formats/dmp.hpp"
 #include "../parsers/fui_parser.hpp"
 #include "../parsers/rym2612_parser.hpp"
-#include "../ym2612/patch_io.hpp"
+#include "../formats/gin.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -51,14 +51,14 @@ bool PatchRepository::load_patch(const PatchEntry &entry,
     } else if (entry.format == "gin") {
       auto patches_dir = entry.full_path.parent_path();
       auto filename = entry.full_path.stem().string();
-      return ym2612::load_patch(patches_dir, patch, filename);
+      return ym2612::formats::gin::load_patch(patches_dir, patch, filename);
     } else if (entry.format == "dmp") {
-      return parsers::parse_dmp_file(entry.full_path, patch);
+      return ym2612::formats::dmp::read_file(entry.full_path, patch);
     } else if (entry.format == "fui") {
       return parsers::parse_fui_file(entry.full_path, patch);
     } else if (entry.format == "ctrmml") {
-      std::vector<parsers::CtrmmlInstrument> instruments;
-      if (!parsers::parse_ctrmml_file(entry.full_path, instruments)) {
+      std::vector<ym2612::formats::ctrmml::Instrument> instruments;
+      if (!ym2612::formats::ctrmml::read_file(entry.full_path, instruments)) {
         return false;
       }
       size_t instrument_index = 0;
@@ -160,8 +160,8 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
                      ::tolower);
 
       if (extension == ".mml") {
-        std::vector<parsers::CtrmmlInstrument> instruments;
-        if (parsers::parse_ctrmml_file(path, instruments) &&
+        std::vector<ym2612::formats::ctrmml::Instrument> instruments;
+        if (ym2612::formats::ctrmml::read_file(path, instruments) &&
             !instruments.empty()) {
           PatchEntry container;
           container.name = path.stem().string();
@@ -205,7 +205,7 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
       } else if (info.format == "rym2612") {
         info.name = parsers::get_rym2612_patch_name(path);
       } else if (info.format == "dmp") {
-        info.name = parsers::get_dmp_patch_name(path);
+        info.name = ym2612::formats::dmp::get_patch_name(path);
       } else if (info.format == "fui") {
         info.name = path.stem().string();
       }

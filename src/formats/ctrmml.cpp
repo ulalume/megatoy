@@ -1,13 +1,14 @@
-#include "ctrmml_parser.hpp"
+#include "ctrmml.hpp"
 
 #include "../ym2612/types.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <string>
 
 namespace {
 
@@ -57,10 +58,10 @@ bool starts_with_at(const std::string &line) {
 
 } // namespace
 
-namespace parsers {
+namespace ym2612::formats::ctrmml {
 
-bool parse_ctrmml_file(const std::filesystem::path &file_path,
-                       std::vector<CtrmmlInstrument> &out_instruments) {
+bool read_file(const std::filesystem::path &file_path,
+               std::vector<Instrument> &out_instruments) {
   out_instruments.clear();
 
   std::ifstream file(file_path);
@@ -87,7 +88,6 @@ bool parse_ctrmml_file(const std::filesystem::path &file_path,
       continue;
     }
 
-    // Extract comment (instrument name) from the raw line.
     std::string comment;
     auto comment_pos = raw_line.find(';');
     if (comment_pos != std::string::npos) {
@@ -194,7 +194,6 @@ bool parse_ctrmml_file(const std::filesystem::path &file_path,
         continue;
       }
 
-      // Single value lines can be optional TRS; ignore.
       if (numbers.size() == 1) {
         consumed_index = next;
         continue;
@@ -231,8 +230,6 @@ bool parse_ctrmml_file(const std::filesystem::path &file_path,
 
     for (size_t op_idx = 0; op_idx < 4; ++op_idx) {
       const auto &row = operator_rows[op_idx];
-      // const auto ym_op =
-      //     ym2612::all_operator_indices[static_cast<size_t>(op_idx)];
       auto &op = patch.instrument.operators[static_cast<uint8_t>(op_idx)];
 
       op.attack_rate = clamp_uint8(row[0], 0, 31);
@@ -261,7 +258,7 @@ bool parse_ctrmml_file(const std::filesystem::path &file_path,
 
     patch.name = instrument_name;
 
-    CtrmmlInstrument instrument;
+    Instrument instrument;
     instrument.instrument_number = instrument_number;
     instrument.name = instrument_name;
     instrument.patch = patch;
@@ -272,4 +269,62 @@ bool parse_ctrmml_file(const std::filesystem::path &file_path,
   return !out_instruments.empty();
 }
 
-} // namespace parsers
+bool write_patch(const ym2612::Patch &patch,
+                 const std::filesystem::path &target_path) {
+  try {
+    std::filesystem::path output_path = target_path;
+    if (output_path.extension().empty()) {
+      output_path.replace_extension(".mml");
+    }
+
+    std::ofstream out(output_path);
+    if (!out) {
+      std::cerr << "Failed to open file for writing: " << output_path
+                << std::endl;
+      return false;
+    }
+
+    const std::string instrument_name =
+        patch.name.empty() ? "Instrument" : patch.name;
+
+    out << "@1 fm ; " << instrument_name << "\n";
+    out << ";  ALG  FB\n";
+    out << "  " << std::setw(2) << static_cast<int>(patch.instrument.algorithm)
+        << "   " << static_cast<int>(patch.instrument.feedback) << "\n";
+    out << ";  AR  DR  SR  RR  SL  TL  KS  ML  DT SSG\n";
+
+    const std::array<std::string, 4> op_labels = {"S1", "S3", "S2", "S4"};
+
+    for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
+         ++op_idx) {
+      const auto &op = patch.instrument.operators[op_idx];
+
+      int ssg_value = op.ssg_type_envelope_control & 0x07;
+      if (op.ssg_enable) {
+        ssg_value += 8;
+      }
+      if (op.amplitude_modulation_enable) {
+        ssg_value += 100;
+      }
+      out << std::setfill(' ');
+      out << "   " << std::setw(2) << static_cast<int>(op.attack_rate) << " "
+          << std::setw(3) << static_cast<int>(op.decay_rate) << " "
+          << std::setw(3) << static_cast<int>(op.sustain_rate) << " "
+          << std::setw(3) << static_cast<int>(op.release_rate) << " "
+          << std::setw(3) << static_cast<int>(op.sustain_level) << " "
+          << std::setw(3) << static_cast<int>(op.total_level) << " "
+          << std::setw(3) << static_cast<int>(op.key_scale) << " "
+          << std::setw(3) << static_cast<int>(op.multiple) << " "
+          << std::setw(3) << static_cast<int>(op.detune) << " " << std::setw(3)
+          << ssg_value << " ; " << op_labels[op_idx] << "\n";
+    }
+
+    return true;
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to export patch to ctrmml text: " << e.what()
+              << std::endl;
+    return false;
+  }
+}
+
+} // namespace ym2612::formats::ctrmml
