@@ -1,9 +1,8 @@
-#include "util.hpp"
-// #include <iostream>
+#include "common.hpp"
 
-namespace parsers {
-uint8_t convert_detune_from_dmp_to_patch(int dt) {
-  // std::cout << "Detune value: " << dt << std::endl;
+namespace ym2612::formats::conversion {
+
+uint8_t detune_from_dmp_to_patch(int dt) {
   switch (dt) {
   case 0: // -3
     return 7;
@@ -26,8 +25,7 @@ uint8_t convert_detune_from_dmp_to_patch(int dt) {
   }
 }
 
-uint8_t convert_detune_from_patch_to_dmp_fui(int dt) {
-  // std::cout << "Detune value: " << dt << std::endl;
+uint8_t detune_from_patch_to_dmp(int dt) {
   switch (dt) {
   case 7: // -3
     return 0;
@@ -49,4 +47,5 @@ uint8_t convert_detune_from_patch_to_dmp_fui(int dt) {
     return 4; // Default fallback
   }
 }
-} // namespace parsers
+
+} // namespace ym2612::formats::conversion

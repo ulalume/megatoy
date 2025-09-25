@@ -159,11 +159,12 @@ set(MEGATOY_SOURCES
   src/midi_usb.cpp
   src/patches/patch_repository.cpp
   src/platform/file_dialog.cpp
-  src/parsers/ctrmml_parser.cpp
+  src/formats/common.cpp
+  src/formats/ctrmml.cpp
+  src/formats/dmp.cpp
+  src/formats/gin.cpp
   src/parsers/fui_parser.cpp
   src/parsers/rym2612_parser.cpp
-  src/parsers/dmp_parser.cpp
-  src/parsers/util.cpp
   src/ui/keyboard_typing.cpp
   src/ui/preview/preview.cpp
   src/ui/preview/algorithm_preview.cpp
@@ -177,7 +178,6 @@ set(MEGATOY_SOURCES
   src/ym2612/device.cpp
   src/ym2612/channel.cpp
   src/ym2612/operator.cpp
-  src/ym2612/patch_io.cpp
 )
 
 if(WIN32)
