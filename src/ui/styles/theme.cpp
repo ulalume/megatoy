@@ -13,9 +13,10 @@ namespace {
 
 const std::vector<ThemeDefinition> &all_theme_definitions() {
   static const std::vector<ThemeDefinition> themes = {
-      {ThemeId::MegatoyDark, "Megatoy Dark", "megatoy-dark", "dark"},
-      {ThemeId::MegatoyLight, "Megatoy Light", "megatoy-light", "light"},
-      {ThemeId::ImGuiDark, "ImGui Dark", "imgui-dark", "imgui_default"},
+      {ThemeId::MegatoyDark, "Megatoy Dark", "megatoy-dark", "megatoy_dark"},
+      {ThemeId::MegatoyLight, "Megatoy Light", "megatoy-light",
+       "megatoy_light"},
+      {ThemeId::ImGuiDark, "ImGui Dark", "imgui-dark", "imgui_dark"},
   };
   return themes;
 }
