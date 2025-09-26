@@ -4,10 +4,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
-#include <format>
 #include <imgui.h>
 #include <string>
 #include <vector>
+
+#include "styles/megatoy_style.hpp"
 
 namespace ui {
 namespace {
@@ -72,7 +73,8 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
       bool is_current = (item.relative_path == app_state.current_patch_path());
       if (is_current) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.4f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              styles::color(styles::MegatoyCol::TextHighlight));
       }
       std::string name_and_format = "[" + item.format + "] " + item.name;
       if (ImGui::Selectable(name_and_format.c_str(), false)) {
@@ -161,7 +163,8 @@ void render_patch_selector(AppState &app_state) {
         [](unsigned char ch) { return !std::isspace(ch); });
 
     if (preset_tree.empty()) {
-      ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No patches found");
+      ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                         "No patches found");
       ImGui::Text("Check directory: %s", patches_dir.c_str());
     } else if (has_query) {
       std::vector<const patches::PatchEntry *> all_patches;
@@ -185,8 +188,9 @@ void render_patch_selector(AppState &app_state) {
           bool is_current =
               (entry->relative_path == app_state.current_patch_path());
           if (is_current) {
-            ImGui::PushStyleColor(ImGuiCol_Text,
-                                  ImVec4(0.3f, 1.0f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(
+                ImGuiCol_Text,
+                styles::color(styles::MegatoyCol::StatusSuccess));
           }
 
           std::string label = "[" + entry->format + "] " + entry->name + "##" +
@@ -217,7 +221,7 @@ void render_patch_selector(AppState &app_state) {
         }
 
         if (match_count == 0) {
-          ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+          ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                              "No results for '%s'",
                              ui_state.patch_search_query.c_str());
         }

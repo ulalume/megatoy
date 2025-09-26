@@ -1,4 +1,6 @@
+#include "megatoy_style.hpp"
 #include <imgui.h>
+
 namespace ui::styles::megatoy_dark {
 inline void apply() {
   ImGui::StyleColorsDark();
@@ -65,6 +67,32 @@ inline void apply() {
   colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
   colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
   colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.22f, 0.27f, 0.73f);
+
+  auto &palette = ::ui::styles::mutable_style();
+  palette.colors[static_cast<int>(MegatoyCol::StatusSuccess)] =
+      ImVec4(0.30f, 0.85f, 0.40f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::StatusError)] =
+      ImVec4(0.95f, 0.35f, 0.40f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::StatusWarning)] =
+      ImVec4(1.00f, 0.70f, 0.25f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::TextMuted)] =
+      ImVec4(0.70f, 0.70f, 0.70f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::TextHighlight)] =
+      ImVec4(1.00f, 1.00f, 0.45f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::TextOnWhiteKey)] =
+      ImVec4(0.13f, 0.14f, 0.17f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::TextOnBlackKey)] =
+      ImVec4(0.86f, 0.93f, 0.89f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::PianoKeyBorder)] =
+      ImVec4(0.24f, 0.26f, 0.30f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKey)] =
+      ImVec4(0.88f, 0.92f, 0.90f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKeyPressed)] =
+      ImVec4(0.98f, 1.00f, 0.98f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::PianoBlackKey)] =
+      ImVec4(0.22f, 0.25f, 0.28f, 1.0f);
+  palette.colors[static_cast<int>(MegatoyCol::PianoBlackKeyPressed)] =
+      ImVec4(0.40f, 0.45f, 0.50f, 1.0f);
 }
 
 } // namespace ui::styles::megatoy_dark

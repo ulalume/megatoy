@@ -10,6 +10,9 @@ enum class MegatoyCol : int {
   StatusWarning,
   TextMuted,
   TextHighlight,
+  TextOnWhiteKey,
+  TextOnBlackKey,
+  PianoKeyBorder,
   PianoWhiteKey,
   PianoWhiteKeyPressed,
   PianoBlackKey,
@@ -26,8 +29,5 @@ const MegatoyStyle &style();
 
 const ImVec4 &color(MegatoyCol col);
 ImU32 color_u32(MegatoyCol col);
-
-enum class ThemeId;
-void apply_megatoy_palette(ThemeId theme);
 
 } // namespace ui::styles

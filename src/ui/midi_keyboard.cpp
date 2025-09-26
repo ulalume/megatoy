@@ -1,5 +1,6 @@
 #include "midi_keyboard.hpp"
 #include "../types.hpp"
+#include "styles/megatoy_style.hpp"
 #include "util.hpp"
 #include <algorithm>
 #include <cstring>

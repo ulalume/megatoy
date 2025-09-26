@@ -176,6 +176,7 @@ set(MEGATOY_SOURCES
   src/ui/midi_keyboard.cpp
   src/ui/patch_selector.cpp
   src/ui/preferences.cpp
+  src/ui/styles/megatoy_style.cpp
   src/ym2612/device.cpp
   src/ym2612/channel.cpp
   src/ym2612/operator.cpp

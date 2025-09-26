@@ -1,5 +1,6 @@
 #include "preferences.hpp"
 #include "../preference_manager.hpp"
+#include "styles/megatoy_style.hpp"
 #include "styles/theme.hpp"
 #include <imgui.h>
 
@@ -49,9 +50,11 @@ void render_preferences_window(AppState &app_state) {
 
     // Directory status indicator
     if (prefs.is_initialized()) {
-      ImGui::TextColored(ImVec4(0, 1, 0, 1), "Directories initialized");
+      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusSuccess),
+                         "Directories initialized");
     } else {
-      ImGui::TextColored(ImVec4(1, 0, 0, 1), "Directory initialization failed");
+      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusError),
+                         "Directory initialization failed");
       if (ImGui::Button("Retry Directory Creation")) {
         if (prefs.ensure_directories_exist()) {
           app_state.sync_patch_directories();

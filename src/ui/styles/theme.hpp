@@ -8,7 +8,7 @@ namespace ui::styles {
 enum class ThemeId {
   MegatoyDark,
   MegatoyLight,
-  ImGuiDefault,
+  ImGuiDark,
 };
 
 struct ThemeDefinition {

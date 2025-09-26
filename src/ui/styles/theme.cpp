@@ -15,8 +15,7 @@ const std::vector<ThemeDefinition> &all_theme_definitions() {
   static const std::vector<ThemeDefinition> themes = {
       {ThemeId::MegatoyDark, "Megatoy Dark", "megatoy-dark", "dark"},
       {ThemeId::MegatoyLight, "Megatoy Light", "megatoy-light", "light"},
-      {ThemeId::ImGuiDefault, "Dear ImGui Default", "imgui-default",
-       "imgui_default"},
+      {ThemeId::ImGuiDark, "ImGui Dark", "imgui-dark", "imgui_default"},
   };
   return themes;
 }
@@ -53,7 +52,7 @@ void apply_theme(ThemeId id) {
   case ThemeId::MegatoyLight:
     ui::styles::megatoy_light::apply();
     break;
-  case ThemeId::ImGuiDefault:
+  case ThemeId::ImGuiDark:
     ui::styles::imgui_dark::apply();
     break;
   }
