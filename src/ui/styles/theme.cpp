@@ -1,5 +1,5 @@
 #include "theme.hpp"
-#include "imgui_default.hpp"
+#include "imgui_dark.hpp"
 #include "megatoy_dark.hpp"
 #include "megatoy_light.hpp"
 
@@ -14,9 +14,9 @@ namespace {
 const std::vector<ThemeDefinition> &all_theme_definitions() {
   static const std::vector<ThemeDefinition> themes = {
       {ThemeId::MegatoyDark, "Megatoy Dark", "megatoy-dark", "dark"},
+      {ThemeId::MegatoyLight, "Megatoy Light", "megatoy-light", "light"},
       {ThemeId::ImGuiDefault, "Dear ImGui Default", "imgui-default",
        "imgui_default"},
-      {ThemeId::MegatoyLight, "Megatoy Light", "megatoy-light", "light"},
   };
   return themes;
 }
@@ -50,11 +50,11 @@ void apply_theme(ThemeId id) {
   case ThemeId::MegatoyDark:
     ui::styles::megatoy_dark::apply();
     break;
-  case ThemeId::ImGuiDefault:
-    ui::styles::imgui_default::apply();
-    break;
   case ThemeId::MegatoyLight:
     ui::styles::megatoy_light::apply();
+    break;
+  case ThemeId::ImGuiDefault:
+    ui::styles::imgui_dark::apply();
     break;
   }
 }
