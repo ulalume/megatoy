@@ -1,15 +1,7 @@
-#pragma once
 #include <imgui.h>
-
-namespace ui {
-
-inline void apply_dark_theme() {
-  ImGuiStyle &style = ImGui::GetStyle();
-  style.ScrollbarSize = 8;
-  style.ScrollbarRounding = 0;
-  style.ScrollbarPadding = 0;
-  style.SeparatorTextBorderSize = 1;
-  style.FramePadding = ImVec2(4, 2);
+namespace ui::styles::megatoy_dark {
+inline void apply() {
+  ImGui::StyleColorsDark();
 
   ImVec4 *colors = ImGui::GetStyle().Colors;
   colors[ImGuiCol_Text] = ImVec4(0.86f, 0.93f, 0.89f, 0.78f);
@@ -75,4 +67,4 @@ inline void apply_dark_theme() {
   colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.22f, 0.27f, 0.73f);
 }
 
-} // namespace ui
+} // namespace ui::styles::megatoy_dark

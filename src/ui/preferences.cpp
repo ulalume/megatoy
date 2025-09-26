@@ -1,5 +1,6 @@
 #include "preferences.hpp"
 #include "../preference_manager.hpp"
+#include "styles/theme.hpp"
 #include <imgui.h>
 
 namespace ui {
@@ -56,6 +57,39 @@ void render_preferences_window(AppState &app_state) {
           app_state.sync_patch_directories();
         }
       }
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    ImGui::Text("Theme");
+
+    const auto &themes = ui::styles::available_themes();
+    int current_theme_index = 0;
+    auto current_theme = prefs.theme();
+    for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
+      if (themes[i].id == current_theme) {
+        current_theme_index = i;
+        break;
+      }
+    }
+
+    const char *theme_preview =
+        themes.empty() ? "" : themes[current_theme_index].display_name;
+    if (ImGui::BeginCombo("##UI Theme", theme_preview)) {
+      for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
+        const bool is_selected = (i == current_theme_index);
+        if (ImGui::Selectable(themes[i].display_name, is_selected)) {
+          current_theme_index = i;
+          auto selected_id = themes[i].id;
+          prefs.set_theme(selected_id);
+          app_state.gui_manager().set_theme(selected_id);
+        }
+        if (is_selected) {
+          ImGui::SetItemDefaultFocus();
+        }
+      }
+      ImGui::EndCombo();
     }
 
     ImGui::Spacing();

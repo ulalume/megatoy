@@ -166,6 +166,7 @@ set(MEGATOY_SOURCES
   src/parsers/fui_parser.cpp
   src/parsers/rym2612_parser.cpp
   src/ui/keyboard_typing.cpp
+  src/ui/styles/theme.cpp
   src/ui/preview/preview.cpp
   src/ui/preview/algorithm_preview.cpp
   src/ui/preview/ssg_preview.cpp
@@ -250,28 +251,63 @@ endfunction()
 
 # Generate embedded assets
 set(ASSET_FILES
-    algorithm0.png
-    algorithm1.png
-    algorithm2.png
-    algorithm3.png
-    algorithm4.png
-    algorithm5.png
-    algorithm6.png
-    algorithm7.png
-    ssg0.png
-    ssg1.png
-    ssg2.png
-    ssg3.png
-    ssg4.png
-    ssg5.png
-    ssg6.png
-    ssg7.png
-    ssgoff.png
+    dark/algorithm0.png
+    dark/algorithm1.png
+    dark/algorithm2.png
+    dark/algorithm3.png
+    dark/algorithm4.png
+    dark/algorithm5.png
+    dark/algorithm6.png
+    dark/algorithm7.png
+    dark/ssg0.png
+    dark/ssg1.png
+    dark/ssg2.png
+    dark/ssg3.png
+    dark/ssg4.png
+    dark/ssg5.png
+    dark/ssg6.png
+    dark/ssg7.png
+    dark/ssgoff.png
+    imgui_default/algorithm0.png
+    imgui_default/algorithm1.png
+    imgui_default/algorithm2.png
+    imgui_default/algorithm3.png
+    imgui_default/algorithm4.png
+    imgui_default/algorithm5.png
+    imgui_default/algorithm6.png
+    imgui_default/algorithm7.png
+    imgui_default/ssg0.png
+    imgui_default/ssg1.png
+    imgui_default/ssg2.png
+    imgui_default/ssg3.png
+    imgui_default/ssg4.png
+    imgui_default/ssg5.png
+    imgui_default/ssg6.png
+    imgui_default/ssg7.png
+    imgui_default/ssgoff.png
+    light/algorithm0.png
+    light/algorithm1.png
+    light/algorithm2.png
+    light/algorithm3.png
+    light/algorithm4.png
+    light/algorithm5.png
+    light/algorithm6.png
+    light/algorithm7.png
+    light/ssg0.png
+    light/ssg1.png
+    light/ssg2.png
+    light/ssg3.png
+    light/ssg4.png
+    light/ssg5.png
+    light/ssg6.png
+    light/ssg7.png
+    light/ssgoff.png
 )
 
 set(EMBEDDED_HEADERS)
 foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
+  string(REPLACE "/" "_" var_name ${var_name})
   set(output_file "${CMAKE_BINARY_DIR}/embedded_${var_name}.hpp")
   embed_resource("${CMAKE_SOURCE_DIR}/assets/${asset}" "${output_file}" "${var_name}")
   list(APPEND EMBEDDED_HEADERS "${output_file}")
@@ -289,6 +325,7 @@ file(WRITE ${REGISTRY_FILE}
 
 foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
+  string(REPLACE "/" "_" var_name ${var_name})
   file(APPEND ${REGISTRY_FILE} "#include \"embedded_${var_name}.hpp\"\n")
 endforeach()
 
@@ -303,6 +340,7 @@ file(APPEND ${REGISTRY_FILE}
 
 foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
+  string(REPLACE "/" "_" var_name ${var_name})
   file(APPEND ${REGISTRY_FILE} "    {\"${asset}\", {${var_name}, ${var_name}_size}},\n")
 endforeach()
 

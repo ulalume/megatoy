@@ -8,7 +8,8 @@
 
 PreferenceManager::PreferenceManager()
     : data_directory(get_default_data_directory()),
-      directories_initialized(false) {
+      directories_initialized(false),
+      theme_(ui::styles::ThemeId::MegatoyDark) {
   load_preferences();
   ensure_directories_exist();
 }
@@ -116,6 +117,7 @@ bool PreferenceManager::save_preferences() {
 
     nlohmann::json j;
     j["data_directory"] = data_directory.string();
+    j["theme"] = ui::styles::storage_key(theme_);
 
     std::ofstream file(prefs_path);
     if (!file) {
@@ -152,6 +154,11 @@ bool PreferenceManager::load_preferences() {
       data_directory = j["data_directory"].get<std::string>();
     }
 
+    if (j.contains("theme")) {
+      theme_ = ui::styles::theme_id_from_storage_key(
+          j["theme"].get<std::string>(), ui::styles::ThemeId::MegatoyDark);
+    }
+
     return true;
   } catch (const std::exception &e) {
     std::cerr << "Error loading preferences: " << e.what() << std::endl;
@@ -162,6 +169,7 @@ bool PreferenceManager::load_preferences() {
 void PreferenceManager::reset_to_defaults() {
   data_directory = get_default_data_directory();
   ensure_directories_exist();
+  theme_ = ui::styles::ThemeId::MegatoyDark;
   save_preferences();
 }
 
@@ -172,3 +180,13 @@ bool PreferenceManager::is_initialized() const {
 bool PreferenceManager::initialize_file_dialog() {
   return platform::file_dialog::initialize();
 }
+
+void PreferenceManager::set_theme(ui::styles::ThemeId theme) {
+  if (theme_ == theme) {
+    return;
+  }
+  theme_ = theme;
+  save_preferences();
+}
+
+ui::styles::ThemeId PreferenceManager::theme() const { return theme_; }

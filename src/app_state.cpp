@@ -145,6 +145,7 @@ void AppState::configure_audio() {
 }
 
 void AppState::configure_gui() {
+  gui_manager_.set_theme(preference_manager_.theme());
   if (!gui_manager_.init("megatoy", 1000, 700)) {
     std::cerr << "Failed to initialize GUI system\n";
   } else {

@@ -1,5 +1,7 @@
 #include "gui_manager.hpp"
-#include "ui/dark_theme.hpp"
+#include "ui/preview/algorithm_preview.hpp"
+#include "ui/preview/ssg_preview.hpp"
+#include "ui/styles/theme.hpp"
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -88,8 +90,13 @@ bool GuiManager::init(const std::string &window_title, int width, int height) {
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
 
   // Setup Dear ImGui style
-  ImGui::StyleColorsDark();
-  ui::apply_dark_theme();
+  ImGuiStyle &style = ImGui::GetStyle();
+  style.ScrollbarSize = 8;
+  style.ScrollbarRounding = 0;
+  style.ScrollbarPadding = 0;
+  style.SeparatorTextBorderSize = 1;
+  style.FramePadding = ImVec2(4, 2);
+  set_theme(theme_);
 
   // Setup Platform/Renderer backends
   ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -110,6 +117,15 @@ static char *copy_string(const char s[], int size) {
 
 void GuiManager::set_imgui_ini_file(const std::string &path) {
   ImGui::GetIO().IniFilename = copy_string(path.c_str(), path.length());
+}
+
+void GuiManager::set_theme(ui::styles::ThemeId theme) {
+  theme_ = theme;
+  ui::styles::apply_theme(theme_);
+  if (ImGui::GetCurrentContext() != nullptr) {
+    ui::reset_algorithm_preview_textures();
+    ui::reset_ssg_preview_textures();
+  }
 }
 
 void GuiManager::shutdown() {

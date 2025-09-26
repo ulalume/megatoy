@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/styles/theme.hpp"
+
 #include <filesystem>
 
 class PreferenceManager {
@@ -17,6 +19,9 @@ public:
   std::filesystem::path get_export_directory() const;
   std::filesystem::path get_config_directory() const;
   std::filesystem::path get_imgui_ini_file() const;
+
+  void set_theme(ui::styles::ThemeId theme);
+  ui::styles::ThemeId theme() const;
 
   // Directory picker dialog
   bool select_data_directory();
@@ -45,6 +50,7 @@ private:
   // Internal members
   std::filesystem::path data_directory;
   bool directories_initialized;
+  ui::styles::ThemeId theme_;
 
   // Fetch the default data directory
   std::filesystem::path get_default_data_directory() const;
