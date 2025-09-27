@@ -156,6 +156,7 @@ set(MEGATOY_SOURCES
   src/preference_manager.cpp
   src/channel_allocator.cpp
   src/resource_manager.cpp
+  src/history/history_manager.cpp
   src/midi_usb.cpp
   src/patches/patch_repository.cpp
   src/platform/file_dialog.cpp

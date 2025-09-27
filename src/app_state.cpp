@@ -12,7 +12,7 @@ AppState::PatchState::PatchState(const std::filesystem::path &preset_dir,
 
 AppState::AppState()
     : device_(), audio_manager_(), gui_manager_(), preference_manager_(),
-      channel_allocator_(), input_state_(), ui_state_(),
+      channel_allocator_(), input_state_(), ui_state_(), history_(),
       patch_state_(preference_manager_.get_patches_directory(),
                    preference_manager_.get_user_patches_directory()) {
   const auto &ui_prefs = preference_manager_.ui_preferences();
@@ -29,6 +29,7 @@ void AppState::init() {
 
   initialize_patch_defaults();
   apply_patch_to_device();
+  history_.reset();
 
   configure_audio();
   configure_gui();
@@ -94,6 +95,7 @@ bool AppState::load_patch(const patches::PatchEntry &patch_info) {
   patch_state_.current = loaded_patch;
   patch_state_.current_patch_path = patch_info.relative_path;
   apply_patch_to_device();
+  history_.reset();
   std::cout << "Loaded preset patch: " << patch_info.name << std::endl;
   return true;
 }

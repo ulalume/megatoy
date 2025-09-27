@@ -3,6 +3,7 @@
 #include "audio_manager.hpp"
 #include "channel_allocator.hpp"
 #include "gui_manager.hpp"
+#include "history/history_manager.hpp"
 #include "patches/patch_repository.hpp"
 #include "preference_manager.hpp"
 #include "types.hpp"
@@ -74,7 +75,11 @@ public:
   patches::PatchRepository &patch_repository();
   const patches::PatchRepository &patch_repository() const;
 
+  history::HistoryManager &history() { return history_; }
+  const history::HistoryManager &history() const { return history_; }
+
   void update_all_settings();
+  void apply_patch_to_device();
 
   bool key_on(ym2612::Note note);
   bool key_off(ym2612::Note note);
@@ -101,6 +106,7 @@ private:
   ChannelAllocator channel_allocator_;
   InputState input_state_;
   UIState ui_state_;
+  history::HistoryManager history_;
 
   struct PatchState {
     ym2612::Patch current;
@@ -115,5 +121,4 @@ private:
   void configure_audio();
   void configure_gui();
   void configure_audio_callback();
-  void apply_patch_to_device();
 };

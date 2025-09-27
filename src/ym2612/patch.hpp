@@ -1,5 +1,7 @@
 #pragma once
 #include "types.hpp"
+#include <algorithm>
+#include <iterator>
 #include <nlohmann/json.hpp>
 #include <string>
 
@@ -13,6 +15,69 @@ struct Patch {
   ChannelSettings channel;
   ChannelInstrument instrument;
 };
+
+inline bool operator==(const GlobalSettings &lhs, const GlobalSettings &rhs) {
+  return lhs.dac_enable == rhs.dac_enable && lhs.lfo_enable == rhs.lfo_enable &&
+         lhs.lfo_frequency == rhs.lfo_frequency;
+}
+
+inline bool operator!=(const GlobalSettings &lhs, const GlobalSettings &rhs) {
+  return !(lhs == rhs);
+}
+
+inline bool operator==(const OperatorSettings &lhs,
+                       const OperatorSettings &rhs) {
+  return lhs.attack_rate == rhs.attack_rate &&
+         lhs.decay_rate == rhs.decay_rate &&
+         lhs.sustain_rate == rhs.sustain_rate &&
+         lhs.release_rate == rhs.release_rate &&
+         lhs.sustain_level == rhs.sustain_level &&
+         lhs.total_level == rhs.total_level && lhs.key_scale == rhs.key_scale &&
+         lhs.multiple == rhs.multiple && lhs.detune == rhs.detune &&
+         lhs.ssg_type_envelope_control == rhs.ssg_type_envelope_control &&
+         lhs.ssg_enable == rhs.ssg_enable &&
+         lhs.amplitude_modulation_enable == rhs.amplitude_modulation_enable;
+}
+
+inline bool operator!=(const OperatorSettings &lhs,
+                       const OperatorSettings &rhs) {
+  return !(lhs == rhs);
+}
+
+inline bool operator==(const ChannelSettings &lhs, const ChannelSettings &rhs) {
+  return lhs.left_speaker == rhs.left_speaker &&
+         lhs.right_speaker == rhs.right_speaker &&
+         lhs.amplitude_modulation_sensitivity ==
+             rhs.amplitude_modulation_sensitivity &&
+         lhs.frequency_modulation_sensitivity ==
+             rhs.frequency_modulation_sensitivity;
+}
+
+inline bool operator!=(const ChannelSettings &lhs, const ChannelSettings &rhs) {
+  return !(lhs == rhs);
+}
+
+inline bool operator==(const ChannelInstrument &lhs,
+                       const ChannelInstrument &rhs) {
+  return lhs.feedback == rhs.feedback && lhs.algorithm == rhs.algorithm &&
+         std::equal(std::begin(lhs.operators), std::end(lhs.operators),
+                    std::begin(rhs.operators), std::end(rhs.operators));
+}
+
+inline bool operator!=(const ChannelInstrument &lhs,
+                       const ChannelInstrument &rhs) {
+  return !(lhs == rhs);
+}
+
+inline bool operator==(const Patch &lhs, const Patch &rhs) {
+  return lhs.name == rhs.name && lhs.category == rhs.category &&
+         lhs.global == rhs.global && lhs.channel == rhs.channel &&
+         lhs.instrument == rhs.instrument;
+}
+
+inline bool operator!=(const Patch &lhs, const Patch &rhs) {
+  return !(lhs == rhs);
+}
 
 // JSON serialization helpers
 inline void to_json(nlohmann::json &j, const GlobalSettings &device) {
