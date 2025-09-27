@@ -2,6 +2,7 @@
 #include "ui/preview/algorithm_preview.hpp"
 #include "ui/preview/ssg_preview.hpp"
 #include "ui/styles/theme.hpp"
+#include <filesystem>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -116,8 +117,11 @@ static char *copy_string(const char s[], int size) {
 }
 
 void GuiManager::set_imgui_ini_file(const std::string &path) {
+  first_frame = !std::filesystem::exists(path);
   ImGui::GetIO().IniFilename = copy_string(path.c_str(), path.length());
 }
+
+void GuiManager::reset_layout() { first_frame = true; }
 
 void GuiManager::set_theme(ui::styles::ThemeId theme) {
   theme_ = theme;

@@ -15,6 +15,7 @@ public:
             int height = 600);
 
   void set_imgui_ini_file(const std::string &path);
+  void reset_layout();
   void set_theme(ui::styles::ThemeId theme);
   ui::styles::ThemeId theme() const { return theme_; }
   // Cleanup

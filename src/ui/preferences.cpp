@@ -29,10 +29,8 @@ void render_preferences_window(AppState &app_state) {
     }
 
     ImGui::SameLine();
-
-    // Reset-to-default button
     if (ImGui::Button("Reset to Default")) {
-      prefs.reset_to_defaults();
+      prefs.reset_data_directory();
       app_state.sync_patch_directories();
     }
 

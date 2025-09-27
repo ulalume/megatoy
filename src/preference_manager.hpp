@@ -3,9 +3,19 @@
 #include "ui/styles/theme.hpp"
 
 #include <filesystem>
+#include <string>
 
 class PreferenceManager {
 public:
+  struct UIPreferences {
+    bool show_patch_editor = true;
+    bool show_audio_controls = true;
+    bool show_midi_keyboard = true;
+    bool show_patch_selector = true;
+    bool show_preferences = false;
+    std::string patch_search_query;
+  };
+
   PreferenceManager();
   ~PreferenceManager();
 
@@ -23,6 +33,9 @@ public:
   void set_theme(ui::styles::ThemeId theme);
   ui::styles::ThemeId theme() const;
 
+  const UIPreferences &ui_preferences() const;
+  void set_ui_preferences(const UIPreferences &preferences);
+
   // Directory picker dialog
   bool select_data_directory();
 
@@ -36,8 +49,9 @@ public:
   // Validate directories and create them if missing
   bool ensure_directories_exist();
 
-  // Reset to default settings
-  void reset_to_defaults();
+  // Reset individual preference groups
+  void reset_data_directory();
+  void reset_ui_preferences();
 
   // Check initialization state
   bool is_initialized() const;
@@ -51,6 +65,7 @@ private:
   std::filesystem::path data_directory;
   bool directories_initialized;
   ui::styles::ThemeId theme_;
+  UIPreferences ui_preferences_;
 
   // Fetch the default data directory
   std::filesystem::path get_default_data_directory() const;
