@@ -8,7 +8,7 @@
 
 PreferenceManager::PreferenceManager()
     : data_directory(get_default_data_directory()),
-      directories_initialized(false) {
+      directories_initialized(false), theme_(ui::styles::ThemeId::MegatoyDark) {
   load_preferences();
   ensure_directories_exist();
 }
@@ -116,6 +116,16 @@ bool PreferenceManager::save_preferences() {
 
     nlohmann::json j;
     j["data_directory"] = data_directory.string();
+    j["theme"] = ui::styles::storage_key(theme_);
+
+    nlohmann::json ui;
+    ui["show_patch_editor"] = ui_preferences_.show_patch_editor;
+    ui["show_audio_controls"] = ui_preferences_.show_audio_controls;
+    ui["show_midi_keyboard"] = ui_preferences_.show_midi_keyboard;
+    ui["show_patch_selector"] = ui_preferences_.show_patch_selector;
+    ui["show_preferences"] = ui_preferences_.show_preferences;
+    ui["patch_search_query"] = ui_preferences_.patch_search_query;
+    j["ui"] = ui;
 
     std::ofstream file(prefs_path);
     if (!file) {
@@ -152,6 +162,37 @@ bool PreferenceManager::load_preferences() {
       data_directory = j["data_directory"].get<std::string>();
     }
 
+    if (j.contains("theme")) {
+      theme_ = ui::styles::theme_id_from_storage_key(
+          j["theme"].get<std::string>(), ui::styles::ThemeId::MegatoyDark);
+    }
+
+    if (j.contains("ui")) {
+      const auto &ui = j["ui"];
+      if (ui.contains("show_patch_editor")) {
+        ui_preferences_.show_patch_editor = ui["show_patch_editor"].get<bool>();
+      }
+      if (ui.contains("show_audio_controls")) {
+        ui_preferences_.show_audio_controls =
+            ui["show_audio_controls"].get<bool>();
+      }
+      if (ui.contains("show_midi_keyboard")) {
+        ui_preferences_.show_midi_keyboard =
+            ui["show_midi_keyboard"].get<bool>();
+      }
+      if (ui.contains("show_patch_selector")) {
+        ui_preferences_.show_patch_selector =
+            ui["show_patch_selector"].get<bool>();
+      }
+      if (ui.contains("show_preferences")) {
+        ui_preferences_.show_preferences = ui["show_preferences"].get<bool>();
+      }
+      if (ui.contains("patch_search_query")) {
+        ui_preferences_.patch_search_query =
+            ui["patch_search_query"].get<std::string>();
+      }
+    }
+
     return true;
   } catch (const std::exception &e) {
     std::cerr << "Error loading preferences: " << e.what() << std::endl;
@@ -159,9 +200,14 @@ bool PreferenceManager::load_preferences() {
   }
 }
 
-void PreferenceManager::reset_to_defaults() {
+void PreferenceManager::reset_data_directory() {
   data_directory = get_default_data_directory();
   ensure_directories_exist();
+  save_preferences();
+}
+
+void PreferenceManager::reset_ui_preferences() {
+  ui_preferences_ = {};
   save_preferences();
 }
 
@@ -171,4 +217,36 @@ bool PreferenceManager::is_initialized() const {
 
 bool PreferenceManager::initialize_file_dialog() {
   return platform::file_dialog::initialize();
+}
+
+void PreferenceManager::set_theme(ui::styles::ThemeId theme) {
+  if (theme_ == theme) {
+    return;
+  }
+  theme_ = theme;
+  save_preferences();
+}
+
+ui::styles::ThemeId PreferenceManager::theme() const { return theme_; }
+
+const PreferenceManager::UIPreferences &
+PreferenceManager::ui_preferences() const {
+  return ui_preferences_;
+}
+
+void PreferenceManager::set_ui_preferences(
+    const PreferenceManager::UIPreferences &preferences) {
+  const bool unchanged =
+      ui_preferences_.show_patch_editor == preferences.show_patch_editor &&
+      ui_preferences_.show_audio_controls == preferences.show_audio_controls &&
+      ui_preferences_.show_midi_keyboard == preferences.show_midi_keyboard &&
+      ui_preferences_.show_patch_selector == preferences.show_patch_selector &&
+      ui_preferences_.show_preferences == preferences.show_preferences &&
+      ui_preferences_.patch_search_query == preferences.patch_search_query;
+  if (unchanged) {
+    return;
+  }
+
+  ui_preferences_ = preferences;
+  save_preferences();
 }

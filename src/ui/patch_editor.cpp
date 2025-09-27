@@ -1,15 +1,17 @@
 #include "patch_editor.hpp"
-#include "../patches/patch_repository.hpp"
-#include "../platform/file_dialog.hpp"
-#include "../formats/gin.hpp"
 #include "../formats/ctrmml.hpp"
 #include "../formats/dmp.hpp"
+#include "../formats/gin.hpp"
+#include "../patches/patch_repository.hpp"
+#include "../platform/file_dialog.hpp"
 #include "operator_editor.hpp"
 #include "preview/algorithm_preview.hpp"
 #include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <imgui.h>
+
+#include "styles/megatoy_style.hpp"
 
 namespace ui {
 
@@ -103,7 +105,8 @@ void render_patch_editor(AppState &app_state) {
         // Check whether the file already exists
         auto patches_dir =
             app_state.preference_manager().get_user_patches_directory();
-        auto patch_path = ym2612::formats::gin::build_patch_path(patches_dir, patch.name);
+        auto patch_path =
+            ym2612::formats::gin::build_patch_path(patches_dir, patch.name);
 
         if (std::filesystem::exists(patch_path)) {
           // Prompt if the file already exists
@@ -112,7 +115,8 @@ void render_patch_editor(AppState &app_state) {
               app_state.patch_repository().to_relative_path(patch_path));
         } else {
           // Save as new file
-          if (ym2612::formats::gin::save_patch(patches_dir, patch, patch.name)) {
+          if (ym2612::formats::gin::save_patch(patches_dir, patch,
+                                               patch.name)) {
             ImGui::OpenPopup("Save Success");
             app_state.patch_repository().refresh();
             app_state.update_current_patch_path(
@@ -200,7 +204,8 @@ void render_patch_editor(AppState &app_state) {
 
     if (!name_valid && !patch.name.empty()) {
       ImGui::SameLine();
-      ImGui::TextColored(ImVec4(1, 0.5, 0, 1), "Invalid filename");
+      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusWarning),
+                         "Invalid filename");
     }
 
     // Duplicate confirmation dialog

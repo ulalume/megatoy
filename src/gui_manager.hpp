@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/styles/theme.hpp"
+
 #include <GLFW/glfw3.h>
 #include <string>
 
@@ -13,6 +15,9 @@ public:
             int height = 600);
 
   void set_imgui_ini_file(const std::string &path);
+  void reset_layout();
+  void set_theme(ui::styles::ThemeId theme);
+  ui::styles::ThemeId theme() const { return theme_; }
   // Cleanup
   void shutdown();
 
@@ -45,6 +50,8 @@ private:
   int windowed_height;
 
   bool first_frame = true;
+
+  ui::styles::ThemeId theme_ = ui::styles::ThemeId::MegatoyDark;
 
   // Static callbacks
   static void glfw_error_callback(int error, const char *description);

@@ -17,6 +17,8 @@
 #include "../../resource_manager.hpp"
 #endif
 
+#include "../styles/theme.hpp"
+
 namespace ui {
 namespace {
 std::filesystem::path assets_base_directory() {
@@ -80,16 +82,18 @@ bool PreviewImageList::load_entry(size_t index) {
   }
 
   const std::string &relative_name = filenames_[index];
+  const std::string themed_relative_name =
+      styles::themed_asset_relative_path(relative_name);
 
 #ifdef USE_EMBEDDED_RESOURCES
   // Try to load from embedded resources first
   auto &rm = ResourceManager::instance();
-  if (rm.has_resource(relative_name)) {
+  if (rm.has_resource(themed_relative_name)) {
     unsigned int texture_id = 0;
     int width = 0;
     int height = 0;
 
-    if (rm.load_texture_from_resource(relative_name, texture_id, width,
+    if (rm.load_texture_from_resource(themed_relative_name, texture_id, width,
                                       height)) {
       entry.gl_id = texture_id;
       entry.texture.texture_id = to_imtexture_id<ImTextureID>(texture_id);
@@ -98,7 +102,8 @@ bool PreviewImageList::load_entry(size_t index) {
       entry.loaded = true;
       return true;
     } else {
-      std::cerr << "Failed to load embedded resource: " << relative_name
+      std::cerr << "Failed to load embedded resource: "
+                << themed_relative_name
                 << '\n';
       entry.failed = true;
       return false;
@@ -107,7 +112,7 @@ bool PreviewImageList::load_entry(size_t index) {
 #endif
 
   // Fallback to file system loading
-  const std::filesystem::path path = build_asset_path(relative_name);
+  const std::filesystem::path path = build_asset_path(themed_relative_name);
   if (!std::filesystem::exists(path)) {
     std::cerr << "Preview image not found: " << path << '\n';
     entry.failed = true;

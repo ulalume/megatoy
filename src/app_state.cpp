@@ -14,7 +14,15 @@ AppState::AppState()
     : device_(), audio_manager_(), gui_manager_(), preference_manager_(),
       channel_allocator_(), input_state_(), ui_state_(),
       patch_state_(preference_manager_.get_patches_directory(),
-                   preference_manager_.get_user_patches_directory()) {}
+                   preference_manager_.get_user_patches_directory()) {
+  const auto &ui_prefs = preference_manager_.ui_preferences();
+  ui_state_.show_patch_editor = ui_prefs.show_patch_editor;
+  ui_state_.show_audio_controls = ui_prefs.show_audio_controls;
+  ui_state_.show_midi_keyboard = ui_prefs.show_midi_keyboard;
+  ui_state_.show_patch_selector = ui_prefs.show_patch_selector;
+  ui_state_.show_preferences = ui_prefs.show_preferences;
+  ui_state_.patch_search_query = ui_prefs.patch_search_query;
+}
 
 void AppState::init() {
   device_.init(kSampleRate);
@@ -145,6 +153,7 @@ void AppState::configure_audio() {
 }
 
 void AppState::configure_gui() {
+  gui_manager_.set_theme(preference_manager_.theme());
   if (!gui_manager_.init("megatoy", 1000, 700)) {
     std::cerr << "Failed to initialize GUI system\n";
   } else {

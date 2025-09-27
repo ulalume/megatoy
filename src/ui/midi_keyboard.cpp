@@ -1,5 +1,6 @@
 #include "midi_keyboard.hpp"
 #include "../types.hpp"
+#include "styles/megatoy_style.hpp"
 #include "util.hpp"
 #include <algorithm>
 #include <cstring>
@@ -9,27 +10,20 @@
 namespace ui {
 
 void render_midi_keyboard(AppState &app_state) {
-
-  ImVec4 text_col_vec = ImGui::GetStyle().Colors[ImGuiCol_Text];
-  ImU32 text_col = ImGui::ColorConvertFloat4ToU32(text_col_vec);
-  ImVec4 bg_col_vec = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
-  bg_col_vec.w = 1.0f;
-  ImU32 bg_col = ImGui::ColorConvertFloat4ToU32(bg_col_vec);
-
-  ImVec4 black_key_col_vec =
-      ImVec4(std::clamp((bg_col_vec.x + 0.1f), 0.0f, 1.0f),
-             std::clamp((bg_col_vec.y + 0.1f), 0.0f, 1.0f),
-             std::clamp((bg_col_vec.z + 0.1f), 0.0f, 1.0f), 1.0f);
-  ImU32 black_key_col = ImGui::ColorConvertFloat4ToU32(black_key_col_vec);
-  ImU32 black_key_pressed_col = bg_col;
-
-  ImVec4 white_key_pressed_col_vec =
-      ImVec4(std::clamp((text_col_vec.x - 0.1f) * 0.8f, 0.0f, 1.0f),
-             std::clamp((text_col_vec.y - 0.1f) * 0.8f, 0.0f, 1.0f),
-             std::clamp((text_col_vec.z - 0.1f) * 0.8f, 0.0f, 1.0f), 1.0f);
-  ImU32 white_key_col = text_col;
-  ImU32 white_key_pressed_col =
-      ImGui::ColorConvertFloat4ToU32(white_key_pressed_col_vec);
+  const ImU32 black_key_col =
+      styles::color_u32(styles::MegatoyCol::PianoBlackKey);
+  const ImU32 black_key_pressed_col =
+      styles::color_u32(styles::MegatoyCol::PianoBlackKeyPressed);
+  const ImU32 white_key_col =
+      styles::color_u32(styles::MegatoyCol::PianoWhiteKey);
+  const ImU32 white_key_pressed_col =
+      styles::color_u32(styles::MegatoyCol::PianoWhiteKeyPressed);
+  const ImU32 white_key_text_col =
+      styles::color_u32(styles::MegatoyCol::TextOnWhiteKey);
+  const ImU32 black_key_text_col =
+      styles::color_u32(styles::MegatoyCol::TextOnBlackKey);
+  const ImU32 key_border_col =
+      styles::color_u32(styles::MegatoyCol::PianoKeyBorder);
 
   auto &ui_state = app_state.ui_state();
   if (!ui_state.show_midi_keyboard) {
@@ -125,10 +119,10 @@ void render_midi_keyboard(AppState &app_state) {
                       ? (is_pressed ? white_key_pressed_col : white_key_col)
                       : (is_pressed ? black_key_pressed_col : black_key_col);
       draw_list->AddRectFilled(key_min, key_max, col);
-      draw_list->AddRect(key_min, key_max, bg_col, 0, 0, 1.0f);
+      draw_list->AddRect(key_min, key_max, key_border_col, 0, 0, 1.0f);
 
       if (note.key == keyboard_settings.key) {
-        ImU32 text_color = is_white ? bg_col : text_col;
+        ImU32 text_color = is_white ? white_key_text_col : black_key_text_col;
         std::stringstream key_name;
         key_name << note;
         std::string key_text = key_name.str();

@@ -166,6 +166,7 @@ set(MEGATOY_SOURCES
   src/parsers/fui_parser.cpp
   src/parsers/rym2612_parser.cpp
   src/ui/keyboard_typing.cpp
+  src/ui/styles/theme.cpp
   src/ui/preview/preview.cpp
   src/ui/preview/algorithm_preview.cpp
   src/ui/preview/ssg_preview.cpp
@@ -175,6 +176,7 @@ set(MEGATOY_SOURCES
   src/ui/midi_keyboard.cpp
   src/ui/patch_selector.cpp
   src/ui/preferences.cpp
+  src/ui/styles/megatoy_style.cpp
   src/ym2612/device.cpp
   src/ym2612/channel.cpp
   src/ym2612/operator.cpp
@@ -250,28 +252,63 @@ endfunction()
 
 # Generate embedded assets
 set(ASSET_FILES
-    algorithm0.png
-    algorithm1.png
-    algorithm2.png
-    algorithm3.png
-    algorithm4.png
-    algorithm5.png
-    algorithm6.png
-    algorithm7.png
-    ssg0.png
-    ssg1.png
-    ssg2.png
-    ssg3.png
-    ssg4.png
-    ssg5.png
-    ssg6.png
-    ssg7.png
-    ssgoff.png
+    megatoy_dark/algorithm0.png
+    megatoy_dark/algorithm1.png
+    megatoy_dark/algorithm2.png
+    megatoy_dark/algorithm3.png
+    megatoy_dark/algorithm4.png
+    megatoy_dark/algorithm5.png
+    megatoy_dark/algorithm6.png
+    megatoy_dark/algorithm7.png
+    megatoy_dark/ssg0.png
+    megatoy_dark/ssg1.png
+    megatoy_dark/ssg2.png
+    megatoy_dark/ssg3.png
+    megatoy_dark/ssg4.png
+    megatoy_dark/ssg5.png
+    megatoy_dark/ssg6.png
+    megatoy_dark/ssg7.png
+    megatoy_dark/ssgoff.png
+    megatoy_light/algorithm0.png
+    megatoy_light/algorithm1.png
+    megatoy_light/algorithm2.png
+    megatoy_light/algorithm3.png
+    megatoy_light/algorithm4.png
+    megatoy_light/algorithm5.png
+    megatoy_light/algorithm6.png
+    megatoy_light/algorithm7.png
+    megatoy_light/ssg0.png
+    megatoy_light/ssg1.png
+    megatoy_light/ssg2.png
+    megatoy_light/ssg3.png
+    megatoy_light/ssg4.png
+    megatoy_light/ssg5.png
+    megatoy_light/ssg6.png
+    megatoy_light/ssg7.png
+    megatoy_light/ssgoff.png
+    imgui_dark/algorithm0.png
+    imgui_dark/algorithm1.png
+    imgui_dark/algorithm2.png
+    imgui_dark/algorithm3.png
+    imgui_dark/algorithm4.png
+    imgui_dark/algorithm5.png
+    imgui_dark/algorithm6.png
+    imgui_dark/algorithm7.png
+    imgui_dark/ssg0.png
+    imgui_dark/ssg1.png
+    imgui_dark/ssg2.png
+    imgui_dark/ssg3.png
+    imgui_dark/ssg4.png
+    imgui_dark/ssg5.png
+    imgui_dark/ssg6.png
+    imgui_dark/ssg7.png
+    imgui_dark/ssgoff.png
 )
 
 set(EMBEDDED_HEADERS)
 foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
+  string(REPLACE "/" "_" var_name ${var_name})
   set(output_file "${CMAKE_BINARY_DIR}/embedded_${var_name}.hpp")
   embed_resource("${CMAKE_SOURCE_DIR}/assets/${asset}" "${output_file}" "${var_name}")
   list(APPEND EMBEDDED_HEADERS "${output_file}")
@@ -289,6 +326,7 @@ file(WRITE ${REGISTRY_FILE}
 
 foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
+  string(REPLACE "/" "_" var_name ${var_name})
   file(APPEND ${REGISTRY_FILE} "#include \"embedded_${var_name}.hpp\"\n")
 endforeach()
 
@@ -303,6 +341,7 @@ file(APPEND ${REGISTRY_FILE}
 
 foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
+  string(REPLACE "/" "_" var_name ${var_name})
   file(APPEND ${REGISTRY_FILE} "    {\"${asset}\", {${var_name}, ${var_name}_size}},\n")
 endforeach()
 
