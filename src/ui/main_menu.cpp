@@ -27,7 +27,7 @@ void render_main_menu(AppState &app_state) {
       ImGui::Separator();
 
       // Reset buttons
-      if (ImGui::MenuItem("Reset View")) {
+      if (ImGui::MenuItem("Reset to Default View")) {
         app_state.preference_manager().reset_ui_preferences();
         const auto &ui_prefs = app_state.preference_manager().ui_preferences();
         auto &state = app_state.ui_state();
