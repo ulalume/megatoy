@@ -98,7 +98,7 @@ inline void apply() {
   palette.colors[static_cast<int>(MegatoyCol::TextOnBlackKey)] =
       ImVec4(0.95f, 0.97f, 1.00f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoKeyBorder)] =
-      ImVec4(0.55f, 0.60f, 0.70f, 1.0f);
+      ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
   palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKey)] =
       ImVec4(0.97f, 0.98f, 0.99f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKeyPressed)] =

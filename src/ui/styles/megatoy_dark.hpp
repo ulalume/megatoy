@@ -16,12 +16,12 @@ inline void apply() {
   colors[ImGuiCol_FrameBg] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
   colors[ImGuiCol_FrameBgHovered] = ImVec4(0.92f, 0.18f, 0.29f, 0.78f);
   colors[ImGuiCol_FrameBgActive] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
-  colors[ImGuiCol_TitleBg] = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
-  colors[ImGuiCol_TitleBgActive] = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
+  colors[ImGuiCol_TitleBg] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
+  colors[ImGuiCol_TitleBgActive] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
   colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.20f, 0.22f, 0.27f, 0.75f);
   colors[ImGuiCol_MenuBarBg] = ImVec4(0.20f, 0.22f, 0.27f, 0.47f);
-  colors[ImGuiCol_ScrollbarBg] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
-  colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
+  colors[ImGuiCol_ScrollbarBg] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
+  colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
   colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.92f, 0.18f, 0.29f, 0.78f);
   colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
   colors[ImGuiCol_CheckMark] = ImVec4(0.86f, 0.93f, 0.89f, 0.78f);
@@ -36,7 +36,7 @@ inline void apply() {
   colors[ImGuiCol_Separator] = ImVec4(0.31f, 0.31f, 0.35f, 0.78f);
   colors[ImGuiCol_SeparatorHovered] = ImVec4(0.92f, 0.18f, 0.29f, 0.78f);
   colors[ImGuiCol_SeparatorActive] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
-  colors[ImGuiCol_ResizeGrip] = ImVec4(0.47f, 0.77f, 0.83f, 1.00f);
+  colors[ImGuiCol_ResizeGrip] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
   colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.92f, 0.18f, 0.29f, 0.78f);
   colors[ImGuiCol_ResizeGripActive] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
   colors[ImGuiCol_InputTextCursor] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
@@ -49,7 +49,7 @@ inline void apply() {
   colors[ImGuiCol_TabDimmedSelectedOverline] =
       ImVec4(0.50f, 0.50f, 0.50f, 0.00f);
   colors[ImGuiCol_DockingPreview] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
-  colors[ImGuiCol_DockingEmptyBg] = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
+  colors[ImGuiCol_DockingEmptyBg] = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
   colors[ImGuiCol_PlotLines] = ImVec4(0.86f, 0.93f, 0.89f, 0.63f);
   colors[ImGuiCol_PlotLinesHovered] = ImVec4(0.92f, 0.18f, 0.29f, 1.00f);
   colors[ImGuiCol_PlotHistogram] = ImVec4(0.86f, 0.93f, 0.89f, 0.63f);
@@ -84,7 +84,7 @@ inline void apply() {
   palette.colors[static_cast<int>(MegatoyCol::TextOnBlackKey)] =
       ImVec4(0.86f, 0.93f, 0.89f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoKeyBorder)] =
-      ImVec4(0.24f, 0.26f, 0.30f, 1.0f);
+      ImVec4(0.11f, 0.11f, 0.13f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKey)] =
       ImVec4(0.88f, 0.92f, 0.90f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKeyPressed)] =
