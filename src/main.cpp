@@ -8,6 +8,7 @@
 #include "ui/patch_selector.hpp"
 #include "ui/preferences.hpp"
 #include "ym2612/channel.hpp"
+#include <imgui.h>
 #include <iostream>
 
 namespace {
@@ -21,6 +22,36 @@ PreferenceManager::UIPreferences make_ui_preferences(const UIState &ui_state) {
   prefs.show_preferences = ui_state.show_preferences;
   prefs.patch_search_query = ui_state.patch_search_query;
   return prefs;
+}
+
+void handle_history_shortcuts(AppState &app_state) {
+  ImGuiIO &io = ImGui::GetIO();
+
+  if (io.WantTextInput || app_state.input_state().text_input_focused) {
+    return;
+  }
+
+  const bool primary_modifier = io.KeyCtrl || io.KeySuper;
+  if (!primary_modifier) {
+    return;
+  }
+
+  const bool shift = io.KeyShift;
+  auto &history = app_state.history();
+
+  if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+    if (shift) {
+      if (history.can_redo()) {
+        history.redo(app_state);
+      }
+    } else if (history.can_undo()) {
+      history.undo(app_state);
+    }
+  } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+    if (history.can_redo()) {
+      history.redo(app_state);
+    }
+  }
 }
 
 } // namespace
@@ -56,6 +87,7 @@ int main(int argc, char *argv[]) {
     // ImGui::ShowDemoWindow();
 
     ui::render_main_menu(app_state);
+    handle_history_shortcuts(app_state);
     // Render UI panels
     ui::render_patch_editor(app_state);
 

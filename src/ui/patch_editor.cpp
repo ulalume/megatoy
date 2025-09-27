@@ -4,6 +4,7 @@
 #include "../formats/gin.hpp"
 #include "../patches/patch_repository.hpp"
 #include "../platform/file_dialog.hpp"
+#include "history_helpers.hpp"
 #include "operator_editor.hpp"
 #include "preview/algorithm_preview.hpp"
 #include <cctype>
@@ -69,7 +70,6 @@ static int filename_input_callback(ImGuiInputTextCallbackData *data) {
 void render_patch_editor(AppState &app_state) {
   auto &patch = app_state.patch();
   auto &ui_state = app_state.ui_state();
-
   static std::string last_export_path;
   static std::string last_export_error;
 
@@ -198,6 +198,7 @@ void render_patch_editor(AppState &app_state) {
                          filename_input_callback)) {
       patch.name = std::string(name_buffer);
     }
+    track_patch_history(app_state, "Patch Name", "meta.name");
     if (ImGui::IsItemActive()) {
       app_state.input_state().text_input_focused = true;
     }
@@ -296,6 +297,7 @@ void render_patch_editor(AppState &app_state) {
                          sizeof(category_buffer))) {
       patch.category = std::string(category_buffer);
     }
+    track_patch_history(app_state, "Patch Category", "meta.category");
     if (ImGui::IsItemActive()) {
       app_state.input_state().text_input_focused = true;
     }
@@ -303,12 +305,17 @@ void render_patch_editor(AppState &app_state) {
     // Global Settings
     //
     ImGui::SeparatorText("Global Register");
-    if (ImGui::Checkbox("LFO Enable", &patch.global.lfo_enable)) {
+    bool lfo_enable = patch.global.lfo_enable;
+    if (ImGui::Checkbox("LFO Enable", &lfo_enable)) {
+      patch.global.lfo_enable = lfo_enable;
       settings_changed = true;
     }
+    track_patch_history(app_state, "LFO Enable", "global.lfo_enable");
 
     int lfo_freq = patch.global.lfo_frequency;
-    if (ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7)) {
+    bool lfo_freq_changed = ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7);
+    track_patch_history(app_state, "LFO Frequency", "global.lfo_frequency");
+    if (lfo_freq_changed) {
       patch.global.lfo_frequency = static_cast<uint8_t>(lfo_freq);
       settings_changed = true;
     }
@@ -319,25 +326,39 @@ void render_patch_editor(AppState &app_state) {
 
     ImGui::Columns(2, "channel_columns", false);
     ImGui::PushItemWidth(150);
-    if (ImGui::Checkbox("Left Speaker", &patch.channel.left_speaker)) {
+    bool left_speaker = patch.channel.left_speaker;
+    if (ImGui::Checkbox("Left Speaker", &left_speaker)) {
+      patch.channel.left_speaker = left_speaker;
       settings_changed = true;
     }
+    track_patch_history(app_state, "Left Speaker", "channel.left_speaker");
 
     ImGui::SameLine();
 
-    if (ImGui::Checkbox("Right Speaker", &patch.channel.right_speaker)) {
+    bool right_speaker = patch.channel.right_speaker;
+    if (ImGui::Checkbox("Right Speaker", &right_speaker)) {
+      patch.channel.right_speaker = right_speaker;
       settings_changed = true;
     }
+    track_patch_history(app_state, "Right Speaker", "channel.right_speaker");
 
     int ams = patch.channel.amplitude_modulation_sensitivity;
-    if (ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3)) {
+    bool ams_changed =
+        ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3);
+    track_patch_history(app_state, "Amplitude Modulation Sensitivity",
+                        "channel.am_sensitivity");
+    if (ams_changed) {
       patch.channel.amplitude_modulation_sensitivity =
           static_cast<uint8_t>(ams);
       settings_changed = true;
     }
 
     int fms = patch.channel.frequency_modulation_sensitivity;
-    if (ImGui::SliderInt("Frequency Modulation Sensitivity", &fms, 0, 7)) {
+    bool fms_changed =
+        ImGui::SliderInt("Frequency Modulation Sensitivity", &fms, 0, 7);
+    track_patch_history(app_state, "Frequency Modulation Sensitivity",
+                        "channel.fm_sensitivity");
+    if (fms_changed) {
       patch.channel.frequency_modulation_sensitivity =
           static_cast<uint8_t>(fms);
       settings_changed = true;
@@ -347,7 +368,11 @@ void render_patch_editor(AppState &app_state) {
 
     // Feedback (0-7)
     int feedback = patch.instrument.feedback;
-    if (ImGui::SliderInt("Operator 1 Feedback", &feedback, 0, 7)) {
+    bool feedback_changed =
+        ImGui::SliderInt("Operator 1 Feedback", &feedback, 0, 7);
+    track_patch_history(app_state, "Operator 1 Feedback",
+                        "instrument.feedback");
+    if (feedback_changed) {
       patch.instrument.feedback = static_cast<uint8_t>(feedback);
       settings_changed = true;
     }
@@ -360,7 +385,9 @@ void render_patch_editor(AppState &app_state) {
     }
     // Algorithm (0-7)
     int algorithm = patch.instrument.algorithm;
-    if (ImGui::SliderInt("Algorithm", &algorithm, 0, 7)) {
+    bool algorithm_changed = ImGui::SliderInt("Algorithm", &algorithm, 0, 7);
+    track_patch_history(app_state, "Algorithm", "instrument.algorithm");
+    if (algorithm_changed) {
       patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
       settings_changed = true;
     }
@@ -372,14 +399,12 @@ void render_patch_editor(AppState &app_state) {
     // Operators
     ImGui::Columns(2, "operation_columns", false);
     for (auto i = 0; i < 4; i++) {
-      bool op_changed = false;
       auto op_index = static_cast<int>(ym2612::all_operator_indices[i]);
       ym2612::OperatorSettings old_op = patch.instrument.operators[op_index];
-      render_operator_editor(patch.instrument.operators[op_index], i + 1);
+      render_operator_editor(app_state, patch.instrument.operators[op_index],
+                             i + 1);
 
-      // Check if operator settings changed
-      if (memcmp(&old_op, &patch.instrument.operators[op_index],
-                 sizeof(ym2612::OperatorSettings)) != 0) {
+      if (old_op != patch.instrument.operators[op_index]) {
         settings_changed = true;
       }
 
