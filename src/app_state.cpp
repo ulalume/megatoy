@@ -170,6 +170,8 @@ void AppState::configure_gui() {
   if (!preference_manager_.initialize_file_dialog()) {
     std::cerr << "Native File Dialog unavailable; directory picker disabled\n";
   }
+
+  ui_state_.prefs = preference_manager_.ui_preferences();
 }
 
 void AppState::configure_audio_callback() {
