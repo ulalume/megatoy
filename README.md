@@ -30,6 +30,7 @@ Recommended sources:
 - **Furnace** (https://github.com/tildearrow/furnace) - instruments/OPN
 - **Rym2612 ReFill** (https://www.inphonik.com/press/press-release-rym2612-refill/) - free pack of 180 patches
 - **RymCast** (https://www.inphonik.com/products/rymcast-genesis-vgm-player/) - extract `.dmp` from VGM/VGZ files
+  > **Note:** RymCast 1.0.6 DMP Export appears to reverse the values of Operators 2 and 3.
 
 ## Build
 
