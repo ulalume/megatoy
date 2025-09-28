@@ -25,11 +25,7 @@ AppState::AppState()
 }
 
 void AppState::init() {
-  device_.init(kSampleRate);
-
   initialize_patch_defaults();
-  apply_patch_to_device();
-  history_.reset();
 
   configure_audio();
   configure_gui();
@@ -142,9 +138,24 @@ void AppState::initialize_patch_defaults() {
 }
 
 void AppState::configure_audio() {
-  if (!audio_manager_.init(kSampleRate)) {
+  const bool audio_ready = audio_manager_.init(kSampleRate);
+  const UINT32 device_sample_rate =
+      audio_ready ? audio_manager_.get_sample_rate() : kSampleRate;
+
+  device_.stop();
+  device_.init(device_sample_rate);
+
+  apply_patch_to_device();
+  history_.reset();
+
+  if (!audio_ready) {
     std::cerr << "Failed to initialize audio system\n";
+    audio_manager_.clear_callback();
     return;
+  }
+
+  if (device_sample_rate != kSampleRate) {
+    std::cout << "Audio sample rate set to " << device_sample_rate << " Hz\n";
   }
 
   configure_audio_callback();

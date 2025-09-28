@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ym2612/types.hpp"
 #include "ym2612/note.hpp"
+#include "ym2612/types.hpp"
 #include <array>
 #include <map>
 
@@ -27,4 +27,3 @@ private:
   std::array<bool, 6> channel_key_on_;
   std::map<ym2612::Note, ym2612::ChannelIndex> note_to_channel_;
 };
-

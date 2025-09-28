@@ -14,7 +14,7 @@ class Channel; // Forward declaration
 class Device {
 public:
   Device();
-  void init(uint16_t smplRate);
+  void init(uint32_t smplRate);
   ~Device();
 
   Channel channel(ChannelIndex idx);
@@ -29,6 +29,7 @@ private:
   DEVFUNC_WRITE_A8D8 device_func_write = nullptr;
   DEV_GEN_CFG config;
   DEV_INFO info;
+  bool is_initialized() const;
 };
 
 } // namespace ym2612
