@@ -94,6 +94,7 @@ private:
   // Audio system state
   void *aud_drv;
   UINT32 driver_index;
+  std::vector<UINT32> driver_order_;
   UINT32 smpl_size;
   UINT32 smpl_alloc;
   UINT32 sample_rate;

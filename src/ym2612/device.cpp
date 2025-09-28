@@ -4,7 +4,7 @@
 
 namespace ym2612 {
 Device::Device() {}
-void Device::init(uint16_t smplRate) {
+void Device::init(uint32_t smplRate) {
   config.emuCore = FCC_GPGX;
   config.srMode = DEVRI_SRMODE_CUSTOM;
   config.flags = 0x00;

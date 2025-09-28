@@ -14,7 +14,7 @@ class Channel; // Forward declaration
 class Device {
 public:
   Device();
-  void init(uint16_t smplRate);
+  void init(uint32_t smplRate);
   ~Device();
 
   Channel channel(ChannelIndex idx);

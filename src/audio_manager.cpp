@@ -1,4 +1,5 @@
 #include "audio_manager.hpp"
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 
@@ -23,25 +24,46 @@ bool AudioManager::init(UINT32 sample_rate_param) {
     return false;
   }
 
-  // Find suitable driver
+  // Find suitable driver candidates
   if (!find_suitable_driver()) {
     Audio_Deinit();
     return false;
   }
 
-  // Initialize the selected driver
-  ret_val = AudioDrv_Init(driver_index, &aud_drv);
-  if (ret_val) {
-    std::cerr << "AudioDrv_Init failed: " << (int)ret_val << std::endl;
+  AUDDRV_INFO *drv_info = nullptr;
+  bool driver_initialized = false;
+  for (UINT32 candidate : driver_order_) {
+    ret_val = AudioDrv_Init(candidate, &aud_drv);
+    if (ret_val == 0) {
+      driver_index = candidate;
+      Audio_GetDriverInfo(driver_index, &drv_info);
+      driver_initialized = true;
+      break;
+    }
+    std::cerr << "AudioDrv_Init failed for driver " << candidate << ": "
+              << (int)ret_val << std::endl;
+  }
+
+  if (!driver_initialized || drv_info == nullptr) {
     Audio_Deinit();
     return false;
   }
 
+  std::cout << "Using audio driver: " << drv_info->drvName << std::endl;
+
   // Configure audio options
   AUDIO_OPTS *opts = AudioDrv_GetOptions(aud_drv);
-  opts->sampleRate = sample_rate;
+  const bool allow_custom_sample_rate =
+      !(drv_info->drvName != nullptr &&
+        strstr(drv_info->drvName, "WASAPI") != nullptr);
+
+  if (allow_custom_sample_rate && sample_rate_param != 0) {
+    opts->sampleRate = sample_rate_param;
+  }
   opts->numChannels = 2;
   opts->numBitsPerSmpl = 16;
+
+  sample_rate = opts->sampleRate;
   smpl_size = opts->numChannels * opts->numBitsPerSmpl / 8;
 
   // Set up audio callback
@@ -68,6 +90,8 @@ void AudioManager::shutdown() {
   // Clear sample buffers
   smpl_data[0].clear();
   smpl_data[1].clear();
+
+  driver_order_.clear();
 
   initialized = false;
 }
@@ -143,6 +167,7 @@ UINT32 AudioManager::fill_buffer(UINT32 buf_size, void *data) {
   return buf_size;
 }
 
+
 bool AudioManager::find_suitable_driver() {
   UINT32 drv_count = Audio_GetDriverCount();
   if (!drv_count) {
@@ -151,29 +176,66 @@ bool AudioManager::find_suitable_driver() {
   }
 
   AUDDRV_INFO *drv_info;
-  bool found_suitable_driver = false;
+  driver_order_.clear();
+
+  struct Candidate {
+    int priority;
+    UINT32 index;
+  };
+
+  auto compute_priority = [](const char *name) {
+    if (name == nullptr) {
+      return 50;
+    }
+    if (strstr(name, "CoreAudio") != nullptr || strstr(name, "ALSA") != nullptr) {
+      return 0;
+    }
+    if (strstr(name, "PulseAudio") != nullptr || strstr(name, "PipeWire") != nullptr) {
+      return 1;
+    }
+    if (strstr(name, "XAudio2") != nullptr) {
+      return 1;
+    }
+    if (strstr(name, "WinMM") != nullptr) {
+      return 2;
+    }
+    if (strstr(name, "DirectSound") != nullptr) {
+      return 3;
+    }
+    if (strstr(name, "WASAPI") != nullptr) {
+      return 4;
+    }
+    if (strstr(name, "WaveWrite") != nullptr) {
+      return 100;
+    }
+    return 10;
+  };
+
+  std::vector<Candidate> candidates;
+  candidates.reserve(drv_count);
 
   std::cout << "Available audio drivers:\n";
   for (UINT32 i = 0; i < drv_count; i++) {
     Audio_GetDriverInfo(i, &drv_info);
     std::cout << "  " << i << ": " << drv_info->drvName << std::endl;
-
-    // Prefer CoreAudio on macOS, avoid WaveWrite for real-time
-    if (!found_suitable_driver) {
-      if (strstr(drv_info->drvName, "CoreAudio") != nullptr ||
-          strstr(drv_info->drvName, "ALSA") != nullptr ||
-          strstr(drv_info->drvName, "PulseAudio") != nullptr) {
-        driver_index = i;
-        found_suitable_driver = true;
-      } else if (strstr(drv_info->drvName, "WaveWrite") == nullptr) {
-        // Use any driver except WaveWrite if we haven't found a preferred one
-        driver_index = i;
-      }
-    }
+    candidates.push_back({compute_priority(drv_info->drvName), i});
   }
 
-  Audio_GetDriverInfo(driver_index, &drv_info);
-  std::cout << "Using audio driver: " << drv_info->drvName << std::endl;
+  std::sort(candidates.begin(), candidates.end(), [](const Candidate &lhs, const Candidate &rhs) {
+    if (lhs.priority == rhs.priority) {
+      return lhs.index < rhs.index;
+    }
+    return lhs.priority < rhs.priority;
+  });
 
+  for (const Candidate &candidate : candidates) {
+    driver_order_.push_back(candidate.index);
+  }
+
+  if (driver_order_.empty()) {
+    return false;
+  }
+
+  driver_index = driver_order_.front();
   return true;
 }
