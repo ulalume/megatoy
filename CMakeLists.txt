@@ -243,7 +243,7 @@ target_compile_definitions(megatoy PRIVATE
 # Resource embedding function
 function(embed_resource resource_file output_file variable_name)
   file(READ ${resource_file} file_content HEX)
-  string(REGEX_REPLACE "([0-9a-f][0-9a-f])" "0x\\1,"
+  string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1,"
          file_content "${file_content}")
   string(REGEX REPLACE ",$" "" file_content "${file_content}")
   file(WRITE ${output_file}
