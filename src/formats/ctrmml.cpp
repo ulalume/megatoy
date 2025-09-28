@@ -276,8 +276,8 @@ std::string patch_to_string(const ym2612::Patch &patch) {
       patch.name.empty() ? "Instrument" : patch.name;
 
   out << "@1 fm ; " << instrument_name << "\n";
-  out << ";  ALG  FB\n";
-  out << "  " << std::setw(2) << static_cast<int>(patch.instrument.algorithm)
+  out << "; ALG  FB\n";
+  out << "   " << std::setw(2) << static_cast<int>(patch.instrument.algorithm)
       << "   " << static_cast<int>(patch.instrument.feedback) << "\n";
   out << ";  AR  DR  SR  RR  SL  TL  KS  ML  DT SSG\n";
 
@@ -302,10 +302,10 @@ std::string patch_to_string(const ym2612::Patch &patch) {
         << std::setw(3) << static_cast<int>(op.release_rate) << " "
         << std::setw(3) << static_cast<int>(op.sustain_level) << " "
         << std::setw(3) << static_cast<int>(op.total_level) << " "
-        << std::setw(3) << static_cast<int>(op.key_scale) << " "
-        << std::setw(3) << static_cast<int>(op.multiple) << " "
-        << std::setw(3) << static_cast<int>(op.detune) << " " << std::setw(3)
-        << ssg_value << " ; " << op_labels[op_idx] << "\n";
+        << std::setw(3) << static_cast<int>(op.key_scale) << " " << std::setw(3)
+        << static_cast<int>(op.multiple) << " " << std::setw(3)
+        << static_cast<int>(op.detune) << " " << std::setw(3) << ssg_value
+        << " ; " << op_labels[op_idx] << "\n";
   }
 
   return out.str();
