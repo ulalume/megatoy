@@ -198,6 +198,7 @@ void GuiManager::begin_frame() {
     ImGui::DockBuilderDockWindow("Keyboard Typing", dock_id_left_down);
     ImGui::DockBuilderDockWindow("Patch Editor", dock_main_id);
     ImGui::DockBuilderDockWindow("Soft Keyboard", dock_id_right_down);
+    ImGui::DockBuilderDockWindow("MML Console", dock_id_right_down);
 
     // Finish the dockspace
     ImGui::DockBuilderFinish(dockspace_id);

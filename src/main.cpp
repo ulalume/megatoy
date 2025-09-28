@@ -4,6 +4,7 @@
 #include "ui/keyboard_typing.hpp"
 #include "ui/main_menu.hpp"
 #include "ui/midi_keyboard.hpp"
+#include "ui/mml_console.hpp"
 #include "ui/patch_editor.hpp"
 #include "ui/patch_selector.hpp"
 #include "ui/preferences.hpp"
@@ -12,17 +13,6 @@
 #include <iostream>
 
 namespace {
-
-PreferenceManager::UIPreferences make_ui_preferences(const UIState &ui_state) {
-  PreferenceManager::UIPreferences prefs;
-  prefs.show_patch_editor = ui_state.show_patch_editor;
-  prefs.show_audio_controls = ui_state.show_audio_controls;
-  prefs.show_midi_keyboard = ui_state.show_midi_keyboard;
-  prefs.show_patch_selector = ui_state.show_patch_selector;
-  prefs.show_preferences = ui_state.show_preferences;
-  prefs.patch_search_query = ui_state.patch_search_query;
-  return prefs;
-}
 
 void handle_history_shortcuts(AppState &app_state) {
   ImGuiIO &io = ImGui::GetIO();
@@ -96,10 +86,12 @@ int main(int argc, char *argv[]) {
     ui::render_patch_selector(app_state);
 
     ui::render_keyboard_typing(app_state);
+    ui::render_mml_console(app_state);
+
     app_state.input_state().text_input_focused = false;
 
     app_state.preference_manager().set_ui_preferences(
-        make_ui_preferences(app_state.ui_state()));
+        app_state.ui_state().prefs);
 
     // End frame and render
     app_state.gui_manager().end_frame();

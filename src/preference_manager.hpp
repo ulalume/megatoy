@@ -12,10 +12,23 @@ public:
     bool show_audio_controls = true;
     bool show_midi_keyboard = true;
     bool show_patch_selector = true;
+    bool show_mml_console = false;
     bool show_preferences = false;
     std::string patch_search_query;
-  };
 
+    bool operator==(const UIPreferences &other) const {
+      return show_patch_editor == other.show_patch_editor &&
+             show_audio_controls == other.show_audio_controls &&
+             show_midi_keyboard == other.show_midi_keyboard &&
+             show_patch_selector == other.show_patch_selector &&
+             show_mml_console == other.show_mml_console &&
+             show_preferences == other.show_preferences &&
+             patch_search_query == other.patch_search_query;
+    };
+    bool operator!=(const UIPreferences &other) const {
+      return !(*this == other);
+    };
+  };
   PreferenceManager();
   ~PreferenceManager();
 

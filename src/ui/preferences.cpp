@@ -10,13 +10,13 @@ void render_preferences_window(AppState &app_state) {
   auto &prefs = app_state.preference_manager();
 
   auto &ui_state = app_state.ui_state();
-  if (!ui_state.show_preferences) {
+  if (!ui_state.prefs.show_preferences) {
     return;
   }
 
   ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Preferences", &ui_state.show_preferences)) {
+  if (ImGui::Begin("Preferences", &ui_state.prefs.show_preferences)) {
 
     // Show the current directory
     ImGui::Text("Current data directory:");

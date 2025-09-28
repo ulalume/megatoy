@@ -166,16 +166,17 @@ set(MEGATOY_SOURCES
   src/formats/gin.cpp
   src/parsers/fui_parser.cpp
   src/parsers/rym2612_parser.cpp
-  src/ui/keyboard_typing.cpp
-  src/ui/styles/theme.cpp
   src/ui/preview/preview.cpp
   src/ui/preview/algorithm_preview.cpp
   src/ui/preview/ssg_preview.cpp
+  src/ui/keyboard_typing.cpp
+  src/ui/styles/theme.cpp
   src/ui/main_menu.cpp
   src/ui/patch_editor.cpp
   src/ui/operator_editor.cpp
   src/ui/midi_keyboard.cpp
   src/ui/patch_selector.cpp
+  src/ui/mml_console.cpp
   src/ui/preferences.cpp
   src/ui/styles/megatoy_style.cpp
   src/ym2612/device.cpp

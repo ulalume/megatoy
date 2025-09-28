@@ -113,14 +113,14 @@ void render_patch_selector(AppState &app_state) {
       app_state.preference_manager().get_user_patches_directory();
 
   auto &ui_state = app_state.ui_state();
-  if (!ui_state.show_patch_selector) {
+  if (!ui_state.prefs.show_patch_selector) {
     return;
   }
 
   ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Patch Browser", &ui_state.show_patch_selector)) {
+  if (ImGui::Begin("Patch Browser", &ui_state.prefs.show_patch_selector)) {
     if (ImGui::Button("Refresh")) {
       app_state.patch_repository().refresh();
     }
@@ -133,14 +133,14 @@ void render_patch_selector(AppState &app_state) {
     ImGui::Spacing();
 
     char search_buffer[128];
-    std::strncpy(search_buffer, ui_state.patch_search_query.c_str(),
+    std::strncpy(search_buffer, ui_state.prefs.patch_search_query.c_str(),
                  sizeof(search_buffer));
     search_buffer[sizeof(search_buffer) - 1] = '\0';
 
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     if (ImGui::InputTextWithHint("##Search", "Type to filter patches",
                                  search_buffer, sizeof(search_buffer))) {
-      ui_state.patch_search_query = std::string(search_buffer);
+      ui_state.prefs.patch_search_query = std::string(search_buffer);
     }
     if (ImGui::IsItemActive()) {
       app_state.input_state().text_input_focused = true;
@@ -158,9 +158,10 @@ void render_patch_selector(AppState &app_state) {
                 return a.name < b.name;
               });
 
-    bool has_query = std::any_of(
-        ui_state.patch_search_query.begin(), ui_state.patch_search_query.end(),
-        [](unsigned char ch) { return !std::isspace(ch); });
+    bool has_query =
+        std::any_of(ui_state.prefs.patch_search_query.begin(),
+                    ui_state.prefs.patch_search_query.end(),
+                    [](unsigned char ch) { return !std::isspace(ch); });
 
     if (preset_tree.empty()) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
@@ -170,7 +171,7 @@ void render_patch_selector(AppState &app_state) {
       std::vector<const patches::PatchEntry *> all_patches;
       collect_leaf_patches(preset_tree, all_patches);
 
-      std::string query_lower = to_lower(ui_state.patch_search_query);
+      std::string query_lower = to_lower(ui_state.prefs.patch_search_query);
 
       if (ImGui::BeginChild("PresetSearchResults",
                             ImGui::GetContentRegionAvail(), true)) {
@@ -223,7 +224,7 @@ void render_patch_selector(AppState &app_state) {
         if (match_count == 0) {
           ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                              "No results for '%s'",
-                             ui_state.patch_search_query.c_str());
+                             ui_state.prefs.patch_search_query.c_str());
         }
       }
       ImGui::EndChild();

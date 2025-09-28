@@ -12,14 +12,14 @@ static std::map<ImGuiKey, bool> key_pressed_last_frame;
 void render_keyboard_typing(AppState &app_state) {
   // Create main window
   auto &ui_state = app_state.ui_state();
-  if (!ui_state.show_audio_controls) {
+  if (!ui_state.prefs.show_audio_controls) {
     return;
   }
 
   ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
 
-  if (!ImGui::Begin("Keyboard Typing", &ui_state.show_audio_controls)) {
+  if (!ImGui::Begin("Keyboard Typing", &ui_state.prefs.show_audio_controls)) {
     ImGui::End();
     return;
   }

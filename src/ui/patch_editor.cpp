@@ -73,14 +73,14 @@ void render_patch_editor(AppState &app_state) {
   static std::string last_export_path;
   static std::string last_export_error;
 
-  if (!ui_state.show_patch_editor) {
+  if (!ui_state.prefs.show_patch_editor) {
     return;
   }
 
   ImGui::SetNextWindowPos(ImVec2(400, 50), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Patch Editor", &ui_state.show_patch_editor)) {
+  if (ImGui::Begin("Patch Editor", &ui_state.prefs.show_patch_editor)) {
     bool settings_changed = false;
     ImGui::PushItemWidth(150);
 

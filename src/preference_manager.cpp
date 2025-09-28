@@ -124,6 +124,7 @@ bool PreferenceManager::save_preferences() {
     ui["show_midi_keyboard"] = ui_preferences_.show_midi_keyboard;
     ui["show_patch_selector"] = ui_preferences_.show_patch_selector;
     ui["show_preferences"] = ui_preferences_.show_preferences;
+    ui["show_mml_view"] = ui_preferences_.show_mml_console;
     ui["patch_search_query"] = ui_preferences_.patch_search_query;
     j["ui"] = ui;
 
@@ -184,6 +185,9 @@ bool PreferenceManager::load_preferences() {
         ui_preferences_.show_patch_selector =
             ui["show_patch_selector"].get<bool>();
       }
+      if (ui.contains("show_mml_view")) {
+        ui_preferences_.show_mml_console = ui["show_mml_view"].get<bool>();
+      }
       if (ui.contains("show_preferences")) {
         ui_preferences_.show_preferences = ui["show_preferences"].get<bool>();
       }
@@ -236,14 +240,7 @@ PreferenceManager::ui_preferences() const {
 
 void PreferenceManager::set_ui_preferences(
     const PreferenceManager::UIPreferences &preferences) {
-  const bool unchanged =
-      ui_preferences_.show_patch_editor == preferences.show_patch_editor &&
-      ui_preferences_.show_audio_controls == preferences.show_audio_controls &&
-      ui_preferences_.show_midi_keyboard == preferences.show_midi_keyboard &&
-      ui_preferences_.show_patch_selector == preferences.show_patch_selector &&
-      ui_preferences_.show_preferences == preferences.show_preferences &&
-      ui_preferences_.patch_search_query == preferences.patch_search_query;
-  if (unchanged) {
+  if (ui_preferences_ == preferences) {
     return;
   }
 

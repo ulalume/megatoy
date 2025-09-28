@@ -26,12 +26,12 @@ void render_midi_keyboard(AppState &app_state) {
       styles::color_u32(styles::MegatoyCol::PianoKeyBorder);
 
   auto &ui_state = app_state.ui_state();
-  if (!ui_state.show_midi_keyboard) {
+  if (!ui_state.prefs.show_midi_keyboard) {
     return;
   }
 
   ImGui::SetNextWindowSize(ImVec2(400, 180), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("Soft Keyboard", &ui_state.show_midi_keyboard)) {
+  if (!ImGui::Begin("Soft Keyboard", &ui_state.prefs.show_midi_keyboard)) {
     ImGui::End();
     return;
   }
