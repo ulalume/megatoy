@@ -98,11 +98,16 @@ if(WIN32)
   set(_LIBVGM_FETCH_ROOT "${CMAKE_BINARY_DIR}/_deps/libvgm-src")
   set(ZLIB_ROOT "${_LIBVGM_FETCH_ROOT}/libs" CACHE PATH "" FORCE)
   set(ZLIB_INCLUDE_DIR "${_LIBVGM_FETCH_ROOT}/libs/include" CACHE PATH "" FORCE)
-  set(ZLIB_INCLUDE_DIRS "${_LIBVGM_FETCH_ROOT}/libs/include" CACHE PATH "" FORCE)
-  set(ZLIB_LIBRARY "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
-  set(ZLIB_LIBRARIES "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
-  set(ZLIB_LIBRARY_RELEASE "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
-  set(ZLIB_LIBRARY_DEBUG "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64d.lib" CACHE FILEPATH "" FORCE)
+  set(ZLIB_INCLUDE_DIRS "${_LIBVGM_FETCH_ROOT}/libs/include"
+      CACHE PATH "" FORCE)
+  set(ZLIB_LIBRARY "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib"
+      CACHE FILEPATH "" FORCE)
+  set(ZLIB_LIBRARIES "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib"
+      CACHE FILEPATH "" FORCE)
+  set(ZLIB_LIBRARY_RELEASE "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib"
+      CACHE FILEPATH "" FORCE)
+  set(ZLIB_LIBRARY_DEBUG "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64d.lib"
+      CACHE FILEPATH "" FORCE)
 endif()
 FetchContent_MakeAvailable(libvgm)
 
@@ -115,7 +120,8 @@ FetchContent_Declare(
 set(RTMIDI_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
 set(RTMIDI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RTMIDI_TARGETNAME_UNINSTALL rtmidi_uninstall CACHE STRING "" FORCE)
+set(RTMIDI_TARGETNAME_UNINSTALL rtmidi_uninstall
+    CACHE STRING "" FORCE)
 FetchContent_MakeAvailable(rtmidi)
 
 # stb single-header image loader
@@ -237,7 +243,8 @@ target_compile_definitions(megatoy PRIVATE
 # Resource embedding function
 function(embed_resource resource_file output_file variable_name)
   file(READ ${resource_file} file_content HEX)
-  string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," file_content "${file_content}")
+  string(REGEX_REPLACE "([0-9a-f][0-9a-f])" "0x\\1,"
+         file_content "${file_content}")
   string(REGEX REPLACE ",$" "" file_content "${file_content}")
   file(WRITE ${output_file}
         "#pragma once\n"
@@ -247,7 +254,8 @@ function(embed_resource resource_file output_file variable_name)
         "inline const uint8_t ${variable_name}[] = {\n"
         "${file_content}\n"
         "};\n"
-        "inline const size_t ${variable_name}_size = sizeof(${variable_name});\n"
+        "inline const size_t ${variable_name}_size = "
+        "sizeof(${variable_name});\n"
         "}\n"
     )
 endfunction()
@@ -312,7 +320,8 @@ foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
   string(REPLACE "/" "_" var_name ${var_name})
   set(output_file "${CMAKE_BINARY_DIR}/embedded_${var_name}.hpp")
-  embed_resource("${CMAKE_SOURCE_DIR}/assets/${asset}" "${output_file}" "${var_name}")
+  embed_resource("${CMAKE_SOURCE_DIR}/assets/${asset}"
+                 "${output_file}" "${var_name}")
   list(APPEND EMBEDDED_HEADERS "${output_file}")
 endforeach()
 
@@ -329,7 +338,8 @@ file(WRITE ${REGISTRY_FILE}
 foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
   string(REPLACE "/" "_" var_name ${var_name})
-  file(APPEND ${REGISTRY_FILE} "#include \"embedded_${var_name}.hpp\"\n")
+  file(APPEND ${REGISTRY_FILE}
+       "#include \"embedded_${var_name}.hpp\"\n")
 endforeach()
 
 file(APPEND ${REGISTRY_FILE}
@@ -338,13 +348,15 @@ file(APPEND ${REGISTRY_FILE}
     "    const uint8_t* data;\n"
     "    size_t size;\n"
     "};\n\n"
-    "inline const std::unordered_map<std::string, ResourceInfo> resource_registry = {\n"
+    "inline const std::unordered_map<std::string, ResourceInfo> "
+    "resource_registry = {\n"
 )
 
 foreach(asset ${ASSET_FILES})
   string(REPLACE "." "_" var_name ${asset})
   string(REPLACE "/" "_" var_name ${var_name})
-  file(APPEND ${REGISTRY_FILE} "    {\"${asset}\", {${var_name}, ${var_name}_size}},\n")
+  file(APPEND ${REGISTRY_FILE}
+       "    {\"${asset}\", {${var_name}, ${var_name}_size}},\n")
 endforeach()
 
 file(APPEND ${REGISTRY_FILE}
@@ -353,7 +365,8 @@ file(APPEND ${REGISTRY_FILE}
 )
 
 # Add embedded headers as dependency
-add_custom_target(generate_embedded_assets DEPENDS ${EMBEDDED_HEADERS} ${REGISTRY_FILE})
+add_custom_target(generate_embedded_assets
+                  DEPENDS ${EMBEDDED_HEADERS} ${REGISTRY_FILE})
 add_dependencies(megatoy generate_embedded_assets)
 
 target_include_directories(megatoy PRIVATE
