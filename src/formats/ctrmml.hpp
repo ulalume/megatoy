@@ -16,6 +16,8 @@ struct Instrument {
 bool read_file(const std::filesystem::path &file_path,
                std::vector<Instrument> &out_instruments);
 
+std::string patch_to_string(const ym2612::Patch &patch);
+
 bool write_patch(const ym2612::Patch &patch,
                  const std::filesystem::path &target_path);
 

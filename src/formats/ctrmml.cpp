@@ -269,6 +269,48 @@ bool read_file(const std::filesystem::path &file_path,
   return !out_instruments.empty();
 }
 
+std::string patch_to_string(const ym2612::Patch &patch) {
+  std::ostringstream out;
+
+  const std::string instrument_name =
+      patch.name.empty() ? "Instrument" : patch.name;
+
+  out << "@1 fm ; " << instrument_name << "\n";
+  out << ";  ALG  FB\n";
+  out << "  " << std::setw(2) << static_cast<int>(patch.instrument.algorithm)
+      << "   " << static_cast<int>(patch.instrument.feedback) << "\n";
+  out << ";  AR  DR  SR  RR  SL  TL  KS  ML  DT SSG\n";
+
+  const std::array<std::string, 4> op_labels = {"S1", "S3", "S2", "S4"};
+  out << std::setfill(' ');
+
+  for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
+       ++op_idx) {
+    const auto &op = patch.instrument.operators[op_idx];
+
+    int ssg_value = op.ssg_type_envelope_control & 0x07;
+    if (op.ssg_enable) {
+      ssg_value += 8;
+    }
+    if (op.amplitude_modulation_enable) {
+      ssg_value += 100;
+    }
+
+    out << "   " << std::setw(2) << static_cast<int>(op.attack_rate) << " "
+        << std::setw(3) << static_cast<int>(op.decay_rate) << " "
+        << std::setw(3) << static_cast<int>(op.sustain_rate) << " "
+        << std::setw(3) << static_cast<int>(op.release_rate) << " "
+        << std::setw(3) << static_cast<int>(op.sustain_level) << " "
+        << std::setw(3) << static_cast<int>(op.total_level) << " "
+        << std::setw(3) << static_cast<int>(op.key_scale) << " "
+        << std::setw(3) << static_cast<int>(op.multiple) << " "
+        << std::setw(3) << static_cast<int>(op.detune) << " " << std::setw(3)
+        << ssg_value << " ; " << op_labels[op_idx] << "\n";
+  }
+
+  return out.str();
+}
+
 bool write_patch(const ym2612::Patch &patch,
                  const std::filesystem::path &target_path) {
   try {
@@ -284,40 +326,7 @@ bool write_patch(const ym2612::Patch &patch,
       return false;
     }
 
-    const std::string instrument_name =
-        patch.name.empty() ? "Instrument" : patch.name;
-
-    out << "@1 fm ; " << instrument_name << "\n";
-    out << ";  ALG  FB\n";
-    out << "  " << std::setw(2) << static_cast<int>(patch.instrument.algorithm)
-        << "   " << static_cast<int>(patch.instrument.feedback) << "\n";
-    out << ";  AR  DR  SR  RR  SL  TL  KS  ML  DT SSG\n";
-
-    const std::array<std::string, 4> op_labels = {"S1", "S3", "S2", "S4"};
-
-    for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
-         ++op_idx) {
-      const auto &op = patch.instrument.operators[op_idx];
-
-      int ssg_value = op.ssg_type_envelope_control & 0x07;
-      if (op.ssg_enable) {
-        ssg_value += 8;
-      }
-      if (op.amplitude_modulation_enable) {
-        ssg_value += 100;
-      }
-      out << std::setfill(' ');
-      out << "   " << std::setw(2) << static_cast<int>(op.attack_rate) << " "
-          << std::setw(3) << static_cast<int>(op.decay_rate) << " "
-          << std::setw(3) << static_cast<int>(op.sustain_rate) << " "
-          << std::setw(3) << static_cast<int>(op.release_rate) << " "
-          << std::setw(3) << static_cast<int>(op.sustain_level) << " "
-          << std::setw(3) << static_cast<int>(op.total_level) << " "
-          << std::setw(3) << static_cast<int>(op.key_scale) << " "
-          << std::setw(3) << static_cast<int>(op.multiple) << " "
-          << std::setw(3) << static_cast<int>(op.detune) << " " << std::setw(3)
-          << ssg_value << " ; " << op_labels[op_idx] << "\n";
-    }
+    out << patch_to_string(patch);
 
     return true;
   } catch (const std::exception &e) {
