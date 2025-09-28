@@ -31,7 +31,6 @@ void AppState::init() {
   configure_gui();
 }
 
-
 void AppState::shutdown() {
   channel_allocator_.release_all(device_);
 

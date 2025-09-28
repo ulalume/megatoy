@@ -167,7 +167,6 @@ UINT32 AudioManager::fill_buffer(UINT32 buf_size, void *data) {
   return buf_size;
 }
 
-
 bool AudioManager::find_suitable_driver() {
   UINT32 drv_count = Audio_GetDriverCount();
   if (!drv_count) {
@@ -187,10 +186,12 @@ bool AudioManager::find_suitable_driver() {
     if (name == nullptr) {
       return 50;
     }
-    if (strstr(name, "CoreAudio") != nullptr || strstr(name, "ALSA") != nullptr) {
+    if (strstr(name, "CoreAudio") != nullptr ||
+        strstr(name, "ALSA") != nullptr) {
       return 0;
     }
-    if (strstr(name, "PulseAudio") != nullptr || strstr(name, "PipeWire") != nullptr) {
+    if (strstr(name, "PulseAudio") != nullptr ||
+        strstr(name, "PipeWire") != nullptr) {
       return 1;
     }
     if (strstr(name, "XAudio2") != nullptr) {
@@ -221,12 +222,13 @@ bool AudioManager::find_suitable_driver() {
     candidates.push_back({compute_priority(drv_info->drvName), i});
   }
 
-  std::sort(candidates.begin(), candidates.end(), [](const Candidate &lhs, const Candidate &rhs) {
-    if (lhs.priority == rhs.priority) {
-      return lhs.index < rhs.index;
-    }
-    return lhs.priority < rhs.priority;
-  });
+  std::sort(candidates.begin(), candidates.end(),
+            [](const Candidate &lhs, const Candidate &rhs) {
+              if (lhs.priority == rhs.priority) {
+                return lhs.index < rhs.index;
+              }
+              return lhs.priority < rhs.priority;
+            });
 
   for (const Candidate &candidate : candidates) {
     driver_order_.push_back(candidate.index);

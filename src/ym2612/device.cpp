@@ -26,7 +26,7 @@ void Device::init(uint32_t smplRate) {
 Device::~Device() { stop(); }
 
 void Device::write(uint8_t reg, uint8_t data, bool port) {
-  if (info.dataPtr == nullptr || device_func_write == nullptr) {
+  if (!is_initialized()) {
     return;
   }
   device_func_write(info.dataPtr, (port << 1), reg);      // Register address
@@ -39,19 +39,26 @@ void Device::write_settings(const GlobalSettings &settings) {
 }
 
 void Device::update(uint32_t sample_buffer, std::array<DEV_SMPL *, 2> &outs) {
-  if (info.dataPtr != nullptr && info.devDef != nullptr) {
-    info.devDef->Update(info.dataPtr, sample_buffer, outs.data());
+  if (!is_initialized()) {
+    return;
   }
+  info.devDef->Update(info.dataPtr, sample_buffer, outs.data());
 }
 
 void Device::stop() {
-  if (info.dataPtr != nullptr && info.devDef != nullptr) {
-    SndEmu_Stop(&info);
-    info.dataPtr = nullptr;
-    info.devDef = nullptr;
+  if (!is_initialized()) {
+    return;
   }
+  SndEmu_Stop(&info);
+  info.dataPtr = nullptr;
+  info.devDef = nullptr;
 }
 
 Channel Device::channel(ChannelIndex idx) { return Channel(*this, idx); }
+
+inline bool Device::is_initialized() const {
+  return device_func_write != nullptr && info.dataPtr != nullptr &&
+         info.devDef != nullptr;
+}
 
 } // namespace ym2612
