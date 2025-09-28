@@ -45,7 +45,7 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
 
   // Decay Rate (0-31)
   int decay_rate = op.decay_rate;
-  bool decay_changed = ImGui::SliderInt("Decay Rate", &decay_rate, 0, 31);
+  bool decay_changed = ImGui::SliderInt("Decay Rate", &decay_rate, 31, 0);
   track_patch_history(app_state, op_label + " Decay Rate",
                       key_prefix + ".decay_rate");
   if (decay_changed) {
