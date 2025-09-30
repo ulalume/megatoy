@@ -8,40 +8,6 @@
 
 namespace parsers {
 
-// Convert the volume slider to dB
-float slider_to_dB(float slider) {
-  if (slider >= 0.7f) {
-    return (slider - 0.7f) / 0.3f * 9.29f; // 0.7-1.0 -> 0 to +9.29 dB
-  } else if (slider > 0.0f) {
-    return 20.0f * log10f(slider / 0.7f); // 0.0-0.7 -> -inf to 0 dB
-  } else {
-    return -1000.0f; // Treat as silence
-  }
-}
-
-// Apply volume to the total level
-int total_level_with_volume(float total_level, float volume) {
-  // 1. Convert TL to dB
-  float tl_dB = total_level * 0.75f;
-
-  // 2. Convert volume to dB
-  float vol_dB = slider_to_dB(volume);
-
-  // 3. Combine the values
-  float new_dB = tl_dB - vol_dB;
-
-  // 4. Convert back to TL
-  int new_TL = static_cast<int>(std::round(new_dB / 0.75f));
-
-  // 5. Clamp to 0-127
-  if (new_TL < 0)
-    new_TL = 0;
-  if (new_TL > 127)
-    new_TL = 127;
-
-  return new_TL;
-}
-
 // Convert rym2612 detune into the app format
 static uint8_t convert_detune(int rym_dt) {
   switch (rym_dt) {
@@ -190,10 +156,6 @@ bool parse_rym2612_file(const std::filesystem::path &file_path,
     patch.instrument.feedback =
         safe_convert<uint8_t>(extract_xml_value(xml_content, "Feedback"), 0);
 
-    // Fetch the volume value (affects every operator)
-    float volume =
-        safe_convert<float>(extract_xml_value(xml_content, "volume"), 1.0f);
-
     // Operator settings
     for (int i = 1; i <= 4; ++i) {
       auto &operator_settings = patch.instrument.operators[static_cast<uint8_t>(
@@ -237,7 +199,7 @@ bool parse_rym2612_file(const std::filesystem::path &file_path,
       base_tl += velocity;
 
       // Apply volume
-      int final_tl = total_level_with_volume(base_tl, volume);
+      int final_tl = static_cast<int>(std::round(base_tl));
 
       // Invert TL (app.tl = 127 - TL)
       operator_settings.total_level =
