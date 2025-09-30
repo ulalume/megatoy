@@ -14,12 +14,12 @@ void render_preferences_window(AppState &app_state) {
     return;
   }
 
-  ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(450, 160), ImGuiCond_FirstUseEver);
 
   if (ImGui::Begin("Preferences", &ui_state.prefs.show_preferences)) {
 
     // Show the current directory
-    ImGui::Text("Current data directory:");
+    ImGui::SeparatorText("Data Directory");
     ImGui::TextWrapped("%s", prefs.get_data_directory().c_str());
     ImGui::Spacing();
 
@@ -34,17 +34,13 @@ void render_preferences_window(AppState &app_state) {
       app_state.sync_patch_directories();
     }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-
-    // Sub-directory info
-    ImGui::Text("Sub-directories:");
-    ImGui::Bullet();
-    ImGui::Text("Patches: %s", prefs.get_patches_directory().c_str());
-    ImGui::Bullet();
-    ImGui::Text("User Patches: %s", prefs.get_user_patches_directory().c_str());
-
-    ImGui::Spacing();
+    // // Sub-directory info
+    // ImGui::Text("Sub-directories:");
+    // ImGui::Bullet();
+    // ImGui::Text("Patches: %s", prefs.get_patches_directory().c_str());
+    // ImGui::Bullet();
+    // ImGui::Text("User Patches: %s",
+    // prefs.get_user_patches_directory().c_str());
 
     // Directory status indicator
     if (prefs.is_initialized()) {
@@ -60,10 +56,7 @@ void render_preferences_window(AppState &app_state) {
       }
     }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-
-    ImGui::Text("Theme");
+    ImGui::SeparatorText("Theme");
 
     const auto &themes = ui::styles::available_themes();
     int current_theme_index = 0;
@@ -92,11 +85,6 @@ void render_preferences_window(AppState &app_state) {
       }
       ImGui::EndCombo();
     }
-
-    ImGui::Spacing();
-    ImGui::Separator();
-
-    ImGui::Text("Preferences are automatically saved");
   }
   ImGui::End();
 
