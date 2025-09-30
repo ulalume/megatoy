@@ -109,14 +109,17 @@ struct MidiInputManager::Impl {
     }
   }
 
-  void handle_port_changes() {
-    if (!enumerator)
+  void handle_port_changes(AppState &app_state) {
+    if (!enumerator) {
+      app_state.set_connected_midi_inputs({});
       return;
+    }
 
     const auto ports = enumerate_ports();
 
     const bool had_ports = !available_ports.empty();
     available_ports = ports;
+    app_state.set_connected_midi_inputs(available_ports);
 
     if (available_ports.empty()) {
       if (had_ports) {
@@ -166,7 +169,7 @@ struct MidiInputManager::Impl {
       return;
 
     try {
-      handle_port_changes();
+      handle_port_changes(app_state);
     } catch (RtMidiError &error) {
       std::cerr << "RtMidi error while handling port changes: "
                 << error.getMessage() << "\n";

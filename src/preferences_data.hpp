@@ -13,6 +13,7 @@ struct UIPreferences {
   bool show_mml_console = false;
   bool show_preferences = false;
   bool show_waveform = true;
+  bool use_velocity = true;
   std::string patch_search_query;
 
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
@@ -23,6 +24,7 @@ struct UIPreferences {
            lhs.show_mml_console == rhs.show_mml_console &&
            lhs.show_preferences == rhs.show_preferences &&
            lhs.show_waveform == rhs.show_waveform &&
+           lhs.use_velocity == rhs.use_velocity &&
            lhs.patch_search_query == rhs.patch_search_query;
   }
 

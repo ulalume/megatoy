@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <iostream>
+#include <utility>
 
 AppState::PatchState::PatchState(const std::filesystem::path &preset_dir,
                                  const std::filesystem::path &user_dir)
@@ -52,7 +53,10 @@ void AppState::update_all_settings() { apply_patch_to_device(); }
 
 bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
   const uint8_t clamped_velocity =
-      std::min<uint8_t>(velocity, static_cast<uint8_t>(0xFF));
+      std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
+  const uint8_t effective_velocity = ui_state_.prefs.use_velocity
+                                         ? clamped_velocity
+                                         : static_cast<uint8_t>(127);
 
   auto channel = channel_allocator_.note_on(note);
   if (!channel) {
@@ -62,12 +66,11 @@ bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
   auto ym_channel = device_.channel(*channel);
   ym_channel.write_frequency(note);
 
-  auto instrument = copy_instrument_with_velocity(
-      patch_state_.current.instrument, clamped_velocity);
+  auto instrument =
+      patch_state_.current.instrument.clone_with_velocity(effective_velocity);
   ym_channel.write_instrument(instrument);
   ym_channel.write_key_on();
   std::cout << "Key ON - " << note << " (velocity "
-            << static_cast<int>(clamped_velocity) << ")\n"
             << std::flush;
   return true;
 }
@@ -86,6 +89,10 @@ bool AppState::key_is_pressed(const ym2612::Note &note) const {
 
 const std::array<bool, 6> &AppState::active_channels() const {
   return channel_allocator_.channel_usage();
+}
+
+void AppState::set_connected_midi_inputs(std::vector<std::string> devices) {
+  connected_midi_inputs_ = std::move(devices);
 }
 
 bool AppState::load_patch(const patches::PatchEntry &patch_info) {
@@ -205,27 +212,6 @@ uint8_t AppState::scale_total_level(uint8_t base_total_level,
       127 - std::min<uint8_t>(base_total_level, static_cast<uint8_t>(127));
   return static_cast<uint8_t>(127 -
                               reversed_total_level * clamped_velocity / 127);
-}
-
-ym2612::ChannelInstrument AppState::copy_instrument_with_velocity(
-    const ym2612::ChannelInstrument &instrument, uint8_t velocity) const {
-
-  static const uint8_t opn_con_op[8] = {3, 3, 3, 3, 2, 1, 1, 0};
-  int vol = velocity >> 3;
-  if (vol > 15)
-    vol = 0;
-  else
-    vol = 15 - vol;
-  vol = 2 + vol * 3 - vol / 3;
-  ym2612::ChannelInstrument modified = instrument;
-  auto opn_con_op_one = opn_con_op[modified.algorithm];
-  for (int op = 3; op >= opn_con_op_one; op--) {
-    uint8_t max_tl = modified.operators[op].total_level;
-    modified.operators[op].total_level += vol;
-    if (modified.operators[op].total_level > 127)
-      modified.operators[op].total_level = 127;
-  }
-  return modified;
 }
 
 void AppState::apply_patch_to_device() {
