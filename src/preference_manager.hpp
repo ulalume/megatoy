@@ -1,34 +1,16 @@
 #pragma once
 
-#include "ui/styles/theme.hpp"
+#include "preferences_data.hpp"
 
 #include <filesystem>
-#include <string>
+#include <memory>
+
+class PreferenceStorage;
 
 class PreferenceManager {
 public:
-  struct UIPreferences {
-    bool show_patch_editor = true;
-    bool show_audio_controls = true;
-    bool show_midi_keyboard = true;
-    bool show_patch_selector = true;
-    bool show_mml_console = false;
-    bool show_preferences = false;
-    std::string patch_search_query;
+  using UIPreferences = ::UIPreferences;
 
-    bool operator==(const UIPreferences &other) const {
-      return show_patch_editor == other.show_patch_editor &&
-             show_audio_controls == other.show_audio_controls &&
-             show_midi_keyboard == other.show_midi_keyboard &&
-             show_patch_selector == other.show_patch_selector &&
-             show_mml_console == other.show_mml_console &&
-             show_preferences == other.show_preferences &&
-             patch_search_query == other.patch_search_query;
-    };
-    bool operator!=(const UIPreferences &other) const {
-      return !(*this == other);
-    };
-  };
   PreferenceManager();
   ~PreferenceManager();
 
@@ -74,11 +56,15 @@ private:
   PreferenceManager(const PreferenceManager &) = delete;
   PreferenceManager &operator=(const PreferenceManager &) = delete;
 
+  PreferenceData to_data() const;
+  void apply_loaded_data(const PreferenceData &data);
+
   // Internal members
   std::filesystem::path data_directory;
   bool directories_initialized;
   ui::styles::ThemeId theme_;
   UIPreferences ui_preferences_;
+  std::unique_ptr<PreferenceStorage> storage_;
 
   // Fetch the default data directory
   std::filesystem::path get_default_data_directory() const;

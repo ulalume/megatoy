@@ -65,6 +65,7 @@ void render_main_menu(AppState &app_state) {
                       &ui_state.prefs.show_midi_keyboard);
       ImGui::MenuItem("Patch Browser", nullptr,
                       &ui_state.prefs.show_patch_selector);
+      ImGui::MenuItem("Waveform", nullptr, &ui_state.prefs.show_waveform);
       ImGui::MenuItem("MML Console", nullptr, &ui_state.prefs.show_mml_console);
       ImGui::MenuItem("Preferences", nullptr, &ui_state.prefs.show_preferences);
 

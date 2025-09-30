@@ -10,6 +10,7 @@
 #include "ym2612/device.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
+#include "ym2612/wave_sampler.hpp"
 #include <array>
 #include <filesystem>
 #include <string>
@@ -73,6 +74,9 @@ public:
   history::HistoryManager &history() { return history_; }
   const history::HistoryManager &history() const { return history_; }
 
+  ym2612::WaveSampler &wave_sampler() { return wave_sampler_; }
+  const ym2612::WaveSampler &wave_sampler() const { return wave_sampler_; }
+
   void update_all_settings();
   void apply_patch_to_device();
 
@@ -102,6 +106,7 @@ private:
   InputState input_state_;
   UIState ui_state_;
   history::HistoryManager history_;
+  ym2612::WaveSampler wave_sampler_;
 
   struct PatchState {
     ym2612::Patch current;

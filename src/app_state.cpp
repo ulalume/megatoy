@@ -14,12 +14,11 @@ AppState::AppState()
     : device_(), audio_manager_(), gui_manager_(), preference_manager_(),
       channel_allocator_(), input_state_(), ui_state_(), history_(),
       patch_state_(preference_manager_.get_patches_directory(),
-                   preference_manager_.get_user_patches_directory()) {
-  const auto &ui_prefs = preference_manager_.ui_preferences();
-}
+                   preference_manager_.get_user_patches_directory()) {}
 
 void AppState::init() {
   initialize_patch_defaults();
+  wave_sampler_.clear();
 
   configure_audio();
   configure_gui();
@@ -138,6 +137,7 @@ void AppState::configure_audio() {
 
   device_.stop();
   device_.init(device_sample_rate);
+  wave_sampler_.clear();
 
   apply_patch_to_device();
   history_.reset();
@@ -178,6 +178,7 @@ void AppState::configure_audio_callback() {
   audio_manager_.set_callback(
       [this](UINT32 sample_count, std::array<DEV_SMPL *, 2> &outputs) {
         device_.update(sample_count, outputs);
+        wave_sampler_.push_samples(outputs[0], outputs[1], sample_count);
       });
 }
 

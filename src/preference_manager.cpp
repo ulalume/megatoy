@@ -1,14 +1,14 @@
 #include "preference_manager.hpp"
 
 #include "platform/file_dialog.hpp"
+#include "preference_storage.hpp"
 #include <cstdlib>
-#include <fstream>
 #include <iostream>
-#include <nlohmann/json.hpp>
 
 PreferenceManager::PreferenceManager()
     : data_directory(get_default_data_directory()),
-      directories_initialized(false), theme_(ui::styles::ThemeId::MegatoyDark) {
+      directories_initialized(false), theme_(ui::styles::ThemeId::MegatoyDark),
+      storage_(make_json_preference_storage(get_preferences_file_path())) {
   load_preferences();
   ensure_directories_exist();
 }
@@ -110,98 +110,24 @@ std::filesystem::path PreferenceManager::get_imgui_ini_file() const {
 }
 
 bool PreferenceManager::save_preferences() {
-  try {
-    auto prefs_path = get_preferences_file_path();
-    std::filesystem::create_directories(prefs_path.parent_path());
-
-    nlohmann::json j;
-    j["data_directory"] = data_directory.string();
-    j["theme"] = ui::styles::storage_key(theme_);
-
-    nlohmann::json ui;
-    ui["show_patch_editor"] = ui_preferences_.show_patch_editor;
-    ui["show_audio_controls"] = ui_preferences_.show_audio_controls;
-    ui["show_midi_keyboard"] = ui_preferences_.show_midi_keyboard;
-    ui["show_patch_selector"] = ui_preferences_.show_patch_selector;
-    ui["show_preferences"] = ui_preferences_.show_preferences;
-    ui["show_mml_console"] = ui_preferences_.show_mml_console;
-    ui["patch_search_query"] = ui_preferences_.patch_search_query;
-    j["ui"] = ui;
-
-    std::ofstream file(prefs_path);
-    if (!file) {
-      std::cerr << "Failed to open preferences file for writing" << std::endl;
-      return false;
-    }
-
-    file << j.dump(2);
-    return true;
-  } catch (const std::exception &e) {
-    std::cerr << "Error saving preferences: " << e.what() << std::endl;
+  if (!storage_) {
     return false;
   }
+  return storage_->save(to_data());
 }
 
 bool PreferenceManager::load_preferences() {
-  try {
-    auto prefs_path = get_preferences_file_path();
-
-    if (!std::filesystem::exists(prefs_path)) {
-      return true;
-    }
-
-    std::ifstream file(prefs_path);
-    if (!file) {
-      std::cerr << "Failed to open preferences file for reading" << std::endl;
-      return false;
-    }
-
-    nlohmann::json j;
-    file >> j;
-
-    if (j.contains("data_directory")) {
-      data_directory = j["data_directory"].get<std::string>();
-    }
-
-    if (j.contains("theme")) {
-      theme_ = ui::styles::theme_id_from_storage_key(
-          j["theme"].get<std::string>(), ui::styles::ThemeId::MegatoyDark);
-    }
-
-    if (j.contains("ui")) {
-      const auto &ui = j["ui"];
-      if (ui.contains("show_patch_editor")) {
-        ui_preferences_.show_patch_editor = ui["show_patch_editor"].get<bool>();
-      }
-      if (ui.contains("show_audio_controls")) {
-        ui_preferences_.show_audio_controls =
-            ui["show_audio_controls"].get<bool>();
-      }
-      if (ui.contains("show_midi_keyboard")) {
-        ui_preferences_.show_midi_keyboard =
-            ui["show_midi_keyboard"].get<bool>();
-      }
-      if (ui.contains("show_patch_selector")) {
-        ui_preferences_.show_patch_selector =
-            ui["show_patch_selector"].get<bool>();
-      }
-      if (ui.contains("show_mml_console")) {
-        ui_preferences_.show_mml_console = ui["show_mml_console"].get<bool>();
-      }
-      if (ui.contains("show_preferences")) {
-        ui_preferences_.show_preferences = ui["show_preferences"].get<bool>();
-      }
-      if (ui.contains("patch_search_query")) {
-        ui_preferences_.patch_search_query =
-            ui["patch_search_query"].get<std::string>();
-      }
-    }
-
-    return true;
-  } catch (const std::exception &e) {
-    std::cerr << "Error loading preferences: " << e.what() << std::endl;
+  if (!storage_) {
     return false;
   }
+
+  PreferenceData data = to_data();
+  if (!storage_->load(data)) {
+    return false;
+  }
+
+  apply_loaded_data(data);
+  return true;
 }
 
 void PreferenceManager::reset_data_directory() {
@@ -246,4 +172,18 @@ void PreferenceManager::set_ui_preferences(
 
   ui_preferences_ = preferences;
   save_preferences();
+}
+
+PreferenceData PreferenceManager::to_data() const {
+  PreferenceData data;
+  data.data_directory = data_directory;
+  data.theme = theme_;
+  data.ui_preferences = ui_preferences_;
+  return data;
+}
+
+void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
+  data_directory = data.data_directory;
+  theme_ = data.theme;
+  ui_preferences_ = data.ui_preferences;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.hpp"
+#include <array>
 #include <emu/EmuCores.h>
 #include <emu/EmuStructs.h>
 #include <emu/SoundDevs.h>

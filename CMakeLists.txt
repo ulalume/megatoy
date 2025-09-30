@@ -160,6 +160,7 @@ set(MEGATOY_SOURCES
   src/audio_manager.cpp
   src/gui_manager.cpp
   src/preference_manager.cpp
+  src/preference_storage_json.cpp
   src/channel_allocator.cpp
   src/resource_manager.cpp
   src/history/history_manager.cpp
@@ -183,11 +184,13 @@ set(MEGATOY_SOURCES
   src/ui/midi_keyboard.cpp
   src/ui/patch_selector.cpp
   src/ui/mml_console.cpp
+  src/ui/waveform.cpp
   src/ui/preferences.cpp
   src/ui/styles/megatoy_style.cpp
   src/ym2612/device.cpp
   src/ym2612/channel.cpp
   src/ym2612/operator.cpp
+  src/ym2612/wave_sampler.cpp
 )
 
 if(WIN32)

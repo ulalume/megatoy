@@ -8,6 +8,7 @@
 #include "ui/patch_editor.hpp"
 #include "ui/patch_selector.hpp"
 #include "ui/preferences.hpp"
+#include "ui/waveform.hpp"
 #include "ym2612/channel.hpp"
 #include <imgui.h>
 #include <iostream>
@@ -87,6 +88,7 @@ int main(int argc, char *argv[]) {
 
     ui::render_keyboard_typing(app_state);
     ui::render_mml_console(app_state);
+    ui::render_waveform(app_state);
 
     app_state.input_state().text_input_focused = false;
 
