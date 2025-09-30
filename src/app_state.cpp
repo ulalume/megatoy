@@ -71,6 +71,7 @@ bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
   ym_channel.write_instrument(instrument);
   ym_channel.write_key_on();
   std::cout << "Key ON - " << note << " (velocity "
+            << static_cast<int>(effective_velocity) << ")\n"
             << std::flush;
   return true;
 }
