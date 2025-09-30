@@ -309,6 +309,19 @@ std::string patch_to_string(const ym2612::Patch &patch) {
         << " ; " << op_labels[op_idx] << "\n";
   }
 
+  if (patch.channel.amplitude_modulation_sensitivity != 0 ||
+      patch.channel.frequency_modulation_sensitivity != 0) {
+    out << "; 'lforate "
+        << (patch.global.lfo_enable
+                ? static_cast<int>(patch.global.lfo_frequency) + 1
+                : 0)
+        << "' 'lfo "
+        << static_cast<int>(patch.channel.amplitude_modulation_sensitivity)
+        << " "
+        << static_cast<int>(patch.channel.frequency_modulation_sensitivity)
+        << "'\n";
+  }
+
   return out.str();
 }
 
