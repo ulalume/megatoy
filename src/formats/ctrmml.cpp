@@ -286,7 +286,8 @@ std::string patch_to_string(const ym2612::Patch &patch) {
 
   for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
        ++op_idx) {
-    const auto &op = patch.instrument.operators[op_idx];
+    size_t op_index = static_cast<size_t>(all_operator_indices[op_idx]);
+    const auto &op = patch.instrument.operators[op_index];
 
     int ssg_value = op.ssg_type_envelope_control & 0x07;
     if (op.ssg_enable) {
