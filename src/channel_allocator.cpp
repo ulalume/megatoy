@@ -8,10 +8,10 @@ bool ChannelAllocator::is_note_active(const ym2612::Note &note) const {
   return note_to_channel_.find(note) != note_to_channel_.end();
 }
 
-bool ChannelAllocator::note_on(const ym2612::Note &note,
-                               ym2612::Device &device) {
+std::optional<ym2612::ChannelIndex>
+ChannelAllocator::note_on(const ym2612::Note &note) {
   if (is_note_active(note)) {
-    return false;
+    return std::nullopt;
   }
 
   for (uint8_t i = 0; i < channel_key_on_.size(); ++i) {
@@ -19,14 +19,11 @@ bool ChannelAllocator::note_on(const ym2612::Note &note,
       ym2612::ChannelIndex channel = ym2612::all_channel_indices[i];
       channel_key_on_[i] = true;
       note_to_channel_[note] = channel;
-
-      device.channel(channel).write_frequency(note);
-      device.channel(channel).write_key_on();
-      return true;
+      return channel;
     }
   }
 
-  return false;
+  return std::nullopt;
 }
 
 bool ChannelAllocator::note_off(const ym2612::Note &note,

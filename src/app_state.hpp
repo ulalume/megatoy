@@ -80,7 +80,8 @@ public:
   void update_all_settings();
   void apply_patch_to_device();
 
-  bool key_on(ym2612::Note note);
+  bool key_on(ym2612::Note note, uint8_t velocity);
+  bool key_on(ym2612::Note note) { return key_on(note, 127); }
   bool key_off(ym2612::Note note);
   bool key_is_pressed(const ym2612::Note &note) const;
 
@@ -121,4 +122,9 @@ private:
   void configure_audio();
   void configure_gui();
   void configure_audio_callback();
+
+  static uint8_t scale_total_level(uint8_t base_total_level, uint8_t velocity);
+  ym2612::ChannelInstrument
+  copy_instrument_with_velocity(const ym2612::ChannelInstrument &instrument,
+                                uint8_t velocity) const;
 };

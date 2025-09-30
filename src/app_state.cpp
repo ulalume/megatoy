@@ -3,6 +3,7 @@
 #include "ui/preview/algorithm_preview.hpp"
 #include "ui/preview/ssg_preview.hpp"
 #include "ym2612/channel.hpp"
+#include <algorithm>
 #include <array>
 #include <iostream>
 
@@ -49,12 +50,28 @@ const patches::PatchRepository &AppState::patch_repository() const {
 
 void AppState::update_all_settings() { apply_patch_to_device(); }
 
-bool AppState::key_on(ym2612::Note note) {
-  if (channel_allocator_.note_on(note, device_)) {
-    std::cout << "Key ON - " << note << "\n" << std::flush;
-    return true;
+bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
+  const uint8_t clamped_velocity =
+      std::min<uint8_t>(velocity, static_cast<uint8_t>(0xFF));
+
+  auto channel = channel_allocator_.note_on(note);
+  if (!channel) {
+    return false;
   }
-  return false;
+
+  auto ym_channel = device_.channel(*channel);
+  ym_channel.write_frequency(note);
+
+  auto instrument = copy_instrument_with_velocity(
+      patch_state_.current.instrument, clamped_velocity);
+  ym_channel.write_instrument(instrument);
+
+  ym_channel.write_key_on();
+
+  std::cout << "Key ON - " << note << " (velocity "
+            << static_cast<int>(clamped_velocity) << ")\n"
+            << std::flush;
+  return true;
 }
 
 bool AppState::key_off(ym2612::Note note) {
@@ -180,6 +197,32 @@ void AppState::configure_audio_callback() {
         device_.update(sample_count, outputs);
         wave_sampler_.push_samples(outputs[0], outputs[1], sample_count);
       });
+}
+
+uint8_t AppState::scale_total_level(uint8_t base_total_level,
+                                    uint8_t velocity) {
+  const uint16_t clamped_velocity =
+      std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
+  const uint16_t reversed_total_level =
+      127 - std::min<uint8_t>(base_total_level, static_cast<uint8_t>(127));
+
+  const uint16_t scaled_velocity =
+      127 - reversed_total_level * clamped_velocity / 127;
+  std::cout << "base_total_level: " << static_cast<int>(base_total_level)
+            << ", velocity: " << static_cast<int>(velocity)
+            << ", scaled_velocity: " << static_cast<int>(scaled_velocity)
+            << std::endl;
+  return static_cast<uint8_t>(scaled_velocity);
+}
+
+ym2612::ChannelInstrument AppState::copy_instrument_with_velocity(
+    const ym2612::ChannelInstrument &instrument, uint8_t velocity) const {
+  ym2612::ChannelInstrument modified = instrument;
+  std::cout << "is equal " << (modified == instrument) << std::endl;
+  for (auto &op : modified.operators) {
+    op.total_level = scale_total_level(op.total_level, velocity);
+  }
+  return modified;
 }
 
 void AppState::apply_patch_to_device() {

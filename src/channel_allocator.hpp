@@ -4,6 +4,7 @@
 #include "ym2612/types.hpp"
 #include <array>
 #include <map>
+#include <optional>
 
 namespace ym2612 {
 class Device;
@@ -14,7 +15,7 @@ public:
   ChannelAllocator();
 
   bool is_note_active(const ym2612::Note &note) const;
-  bool note_on(const ym2612::Note &note, ym2612::Device &device);
+  std::optional<ym2612::ChannelIndex> note_on(const ym2612::Note &note);
   bool note_off(const ym2612::Note &note, ym2612::Device &device);
   void release_all(ym2612::Device &device);
 

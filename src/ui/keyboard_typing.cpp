@@ -90,7 +90,7 @@ void render_keyboard_typing(AppState &app_state) {
       bool key_was_pressed = key_pressed_last_frame[imgui_key];
 
       if (key_pressed_now && !key_was_pressed) {
-        app_state.key_on(note);
+        app_state.key_on(note, 100);
         input.active_keyboard_notes[static_cast<int>(imgui_key)] = note;
       } else if (!key_pressed_now && key_was_pressed) {
         auto it = input.active_keyboard_notes.find(static_cast<int>(imgui_key));

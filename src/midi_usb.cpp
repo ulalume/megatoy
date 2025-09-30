@@ -41,8 +41,7 @@ struct MidiInputManager::Impl {
 
   void close_connection(Connection &connection) {
     if (connection.midi_in && connection.midi_in->isPortOpen()) {
-      std::cout << "Closing MIDI input port: " << connection.port_name
-                << "\n";
+      std::cout << "Closing MIDI input port: " << connection.port_name << "\n";
       connection.midi_in->closePort();
     }
   }
@@ -75,8 +74,7 @@ struct MidiInputManager::Impl {
     try {
       midi->openPort(static_cast<unsigned int>(matched_index));
       midi->ignoreTypes(false, false, false);
-      connections.push_back(
-          Connection{std::move(midi), {}, port_name});
+      connections.push_back(Connection{std::move(midi), {}, port_name});
       std::cout << "Opened MIDI input port: " << port_name << "\n";
       return true;
     } catch (RtMidiError &error) {
@@ -89,8 +87,7 @@ struct MidiInputManager::Impl {
   void sync_connections(const std::vector<std::string> &ports) {
     // Remove stale connections first.
     for (auto it = connections.begin(); it != connections.end();) {
-      if (std::find(ports.begin(), ports.end(), it->port_name) ==
-          ports.end()) {
+      if (std::find(ports.begin(), ports.end(), it->port_name) == ports.end()) {
         std::cout << "MIDI input disconnected: " << it->port_name << "\n";
         close_connection(*it);
         it = connections.erase(it);
@@ -203,10 +200,12 @@ struct MidiInputManager::Impl {
         const bool is_note_on = status_type == 0x90 && velocity > 0;
 
         if (is_note_on) {
-          if (!app_state.key_on(note)) {
-            std::clog << "MIDI note-on ignored (no free channel or already active): "
-                      << static_cast<int>(midi_note_value) << " ("
-                      << connection.port_name << ")\n";
+          if (!app_state.key_on(note, velocity)) {
+            std::clog
+                << "MIDI note-on ignored (no free channel or already active): "
+                << static_cast<int>(midi_note_value) << " velocity "
+                << static_cast<int>(velocity) << " (" << connection.port_name
+                << ")\n";
           }
         } else if (is_note_off) {
           if (!app_state.key_off(note)) {
