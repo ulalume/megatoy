@@ -65,9 +65,7 @@ bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
   auto instrument = copy_instrument_with_velocity(
       patch_state_.current.instrument, clamped_velocity);
   ym_channel.write_instrument(instrument);
-
   ym_channel.write_key_on();
-
   std::cout << "Key ON - " << note << " (velocity "
             << static_cast<int>(clamped_velocity) << ")\n"
             << std::flush;
@@ -205,22 +203,27 @@ uint8_t AppState::scale_total_level(uint8_t base_total_level,
       std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
   const uint16_t reversed_total_level =
       127 - std::min<uint8_t>(base_total_level, static_cast<uint8_t>(127));
-
-  const uint16_t scaled_velocity =
-      127 - reversed_total_level * clamped_velocity / 127;
-  std::cout << "base_total_level: " << static_cast<int>(base_total_level)
-            << ", velocity: " << static_cast<int>(velocity)
-            << ", scaled_velocity: " << static_cast<int>(scaled_velocity)
-            << std::endl;
-  return static_cast<uint8_t>(scaled_velocity);
+  return static_cast<uint8_t>(127 -
+                              reversed_total_level * clamped_velocity / 127);
 }
 
 ym2612::ChannelInstrument AppState::copy_instrument_with_velocity(
     const ym2612::ChannelInstrument &instrument, uint8_t velocity) const {
+
+  static const uint8_t opn_con_op[8] = {3, 3, 3, 3, 2, 1, 1, 0};
+  int vol = velocity >> 3;
+  if (vol > 15)
+    vol = 0;
+  else
+    vol = 15 - vol;
+  vol = 2 + vol * 3 - vol / 3;
   ym2612::ChannelInstrument modified = instrument;
-  std::cout << "is equal " << (modified == instrument) << std::endl;
-  for (auto &op : modified.operators) {
-    op.total_level = scale_total_level(op.total_level, velocity);
+  auto opn_con_op_one = opn_con_op[modified.algorithm];
+  for (int op = 3; op >= opn_con_op_one; op--) {
+    uint8_t max_tl = modified.operators[op].total_level;
+    modified.operators[op].total_level += vol;
+    if (modified.operators[op].total_level > 127)
+      modified.operators[op].total_level = 127;
   }
   return modified;
 }
