@@ -55,6 +55,7 @@ set(MEGATOY_SOURCES
   src/ui/waveform.cpp
   src/ui/preferences.cpp
   src/ui/styles/megatoy_style.cpp
+  src/system/path_resolver.cpp
   src/ym2612/device.cpp
   src/ym2612/channel.cpp
   src/ym2612/operator.cpp
