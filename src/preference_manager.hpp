@@ -24,6 +24,7 @@ public:
   std::filesystem::path get_export_directory() const;
   std::filesystem::path get_config_directory() const;
   std::filesystem::path get_imgui_ini_file() const;
+  std::filesystem::path get_builtin_presets_directory() const;
 
   void set_theme(ui::styles::ThemeId theme);
   ui::styles::ThemeId theme() const;
@@ -61,6 +62,7 @@ private:
 
   // Internal members
   std::filesystem::path data_directory;
+  std::filesystem::path builtin_presets_directory_;
   bool directories_initialized;
   ui::styles::ThemeId theme_;
   UIPreferences ui_preferences_;

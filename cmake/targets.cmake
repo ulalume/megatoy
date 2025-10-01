@@ -104,14 +104,20 @@ target_include_directories(megatoy PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
 
+set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "presets")
+if(APPLE)
+  set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "../Resources/presets")
+endif()
+
 target_compile_definitions(megatoy PRIVATE
   VGM_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
   USE_EMBEDDED_RESOURCES
+  MEGATOY_PRESETS_RELATIVE_PATH="${MEGATOY_PRESETS_RELATIVE_PATH_VALUE}"
   $<$<PLATFORM_ID:Darwin>:GL_SILENCE_DEPRECATION>
 )
 
 add_embedded_assets(megatoy
-  EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$"
+  EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/"
 )
 
 target_include_directories(megatoy PRIVATE ${CMAKE_BINARY_DIR})
@@ -124,3 +130,24 @@ add_custom_command(
             ${CMAKE_BINARY_DIR}/compile_commands.json
             ${CMAKE_SOURCE_DIR}/compile_commands.json
 )
+
+set(MEGATOY_PRESETS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets/presets")
+if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
+  if(APPLE)
+    set(MEGATOY_PRESETS_DESTINATION
+        "$<TARGET_BUNDLE_CONTENT_DIR:megatoy>/Resources/presets")
+  else()
+    set(MEGATOY_PRESETS_DESTINATION "$<TARGET_FILE_DIR:megatoy>/presets")
+  endif()
+
+  add_custom_command(
+      TARGET megatoy POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E remove_directory
+              "${MEGATOY_PRESETS_DESTINATION}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${MEGATOY_PRESETS_SOURCE_DIR}"
+              "${MEGATOY_PRESETS_DESTINATION}"
+  )
+else()
+  message(WARNING "Presets directory not found at ${MEGATOY_PRESETS_SOURCE_DIR}")
+endif()

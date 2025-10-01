@@ -111,6 +111,8 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 void render_patch_selector(AppState &app_state) {
   const auto patches_dir =
       app_state.preference_manager().get_user_patches_directory();
+  const auto builtin_dir =
+      app_state.preference_manager().get_builtin_presets_directory();
 
   auto &ui_state = app_state.ui_state();
   if (!ui_state.prefs.show_patch_selector) {
@@ -155,6 +157,13 @@ void render_patch_selector(AppState &app_state) {
                 if (b.name == "user") {
                   return false;
                 }
+
+                if (a.name == "presets") {
+                  return false;
+                }
+                if (b.name == "presets") {
+                  return true;
+                }
                 return a.name < b.name;
               });
 
@@ -166,7 +175,8 @@ void render_patch_selector(AppState &app_state) {
     if (preset_tree.empty()) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                          "No patches found");
-      ImGui::Text("Check directory: %s", patches_dir.c_str());
+      ImGui::Text("User directory: %s", patches_dir.c_str());
+      ImGui::Text("Factory directory: %s", builtin_dir.c_str());
     } else if (has_query) {
       std::vector<const patches::PatchEntry *> all_patches;
       collect_leaf_patches(preset_tree, all_patches);

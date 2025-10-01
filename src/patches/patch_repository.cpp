@@ -1,36 +1,62 @@
 #include "patch_repository.hpp"
 #include "../formats/ctrmml.hpp"
 #include "../formats/dmp.hpp"
+#include "../formats/gin.hpp"
 #include "../parsers/fui_parser.hpp"
 #include "../parsers/rym2612_parser.hpp"
-#include "../formats/gin.hpp"
 #include <algorithm>
 #include <iostream>
 
 namespace patches {
 
-PatchRepository::PatchRepository(const std::filesystem::path &preset_dir)
-    : patch_directory_(preset_dir), cache_initialized_(false) {
+PatchRepository::PatchRepository(const std::filesystem::path &user_dir,
+                                 const std::filesystem::path &builtin_dir)
+    : user_patch_directory_(user_dir), builtin_patch_directory_(builtin_dir),
+      has_builtin_directory_(!builtin_dir.empty()), cache_initialized_(false) {
   refresh();
 }
 
 void PatchRepository::refresh() {
   tree_cache_.clear();
 
-  if (!std::filesystem::exists(patch_directory_)) {
-    std::cerr << "Preset directory does not exist: " << patch_directory_
-              << std::endl;
-    cache_initialized_ = true;
-    return;
-  }
-
   try {
-    last_directory_check_time_ =
-        std::filesystem::last_write_time(patch_directory_);
-    scan_directory(patch_directory_, tree_cache_);
+    if (std::filesystem::exists(user_patch_directory_) &&
+        std::filesystem::is_directory(user_patch_directory_)) {
+      user_time_valid_ = true;
+      last_user_directory_check_time_ =
+          std::filesystem::last_write_time(user_patch_directory_);
+      scan_directory(user_patch_directory_, tree_cache_);
+    } else {
+      user_time_valid_ = false;
+    }
+
+    if (has_builtin_directory_ &&
+        std::filesystem::exists(builtin_patch_directory_) &&
+        std::filesystem::is_directory(builtin_patch_directory_)) {
+      PatchEntry builtin_root;
+      builtin_root.name = kBuiltinRootName;
+      builtin_root.relative_path = kBuiltinRootName;
+      builtin_root.full_path = builtin_patch_directory_;
+      builtin_root.format = "";
+      builtin_root.is_directory = true;
+
+      scan_directory(builtin_patch_directory_, builtin_root.children,
+                     builtin_root.relative_path);
+
+      if (!builtin_root.children.empty()) {
+        tree_cache_.push_back(std::move(builtin_root));
+      }
+
+      builtin_time_valid_ = true;
+      last_builtin_directory_check_time_ =
+          std::filesystem::last_write_time(builtin_patch_directory_);
+    } else {
+      builtin_time_valid_ = false;
+    }
+
     cache_initialized_ = true;
   } catch (const std::filesystem::filesystem_error &e) {
-    std::cerr << "Error scanning preset directory: " << e.what() << std::endl;
+    std::cerr << "Error scanning preset directories: " << e.what() << std::endl;
     cache_initialized_ = false;
   }
 }
@@ -89,16 +115,42 @@ bool PatchRepository::has_directory_changed() const {
     return true;
   }
 
-  if (!std::filesystem::exists(patch_directory_)) {
-    return false;
+  bool changed = false;
+
+  try {
+    if (std::filesystem::exists(user_patch_directory_) &&
+        std::filesystem::is_directory(user_patch_directory_)) {
+      auto current_time =
+          std::filesystem::last_write_time(user_patch_directory_);
+      if (!user_time_valid_ ||
+          current_time != last_user_directory_check_time_) {
+        changed = true;
+      }
+    } else if (user_time_valid_) {
+      changed = true;
+    }
+  } catch (const std::filesystem::filesystem_error &) {
+    changed = true;
   }
 
   try {
-    auto current_time = std::filesystem::last_write_time(patch_directory_);
-    return current_time != last_directory_check_time_;
+    if (has_builtin_directory_ &&
+        std::filesystem::exists(builtin_patch_directory_) &&
+        std::filesystem::is_directory(builtin_patch_directory_)) {
+      auto current_time =
+          std::filesystem::last_write_time(builtin_patch_directory_);
+      if (!builtin_time_valid_ ||
+          current_time != last_builtin_directory_check_time_) {
+        changed = true;
+      }
+    } else if (builtin_time_valid_) {
+      changed = true;
+    }
   } catch (const std::filesystem::filesystem_error &) {
-    return true;
+    changed = true;
   }
+
+  return changed;
 }
 
 std::vector<std::string> PatchRepository::supported_extensions() {
@@ -249,12 +301,38 @@ bool PatchRepository::is_supported_file(
 
 std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
-  return path.lexically_relative(patch_directory_);
+  if (has_builtin_directory_) {
+    auto relative_builtin = path.lexically_relative(builtin_patch_directory_);
+    if (!relative_builtin.empty() && relative_builtin.native()[0] != '.') {
+      return std::filesystem::path(kBuiltinRootName) / relative_builtin;
+    }
+  }
+
+  auto relative_user = path.lexically_relative(user_patch_directory_);
+  if (!relative_user.empty() && relative_user.native()[0] != '.') {
+    return relative_user;
+  }
+
+  return path;
 }
 
 std::filesystem::path
 PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
-  return patch_directory_ / path;
+  std::string relative = path.generic_string();
+
+  if (has_builtin_directory_) {
+    const std::string builtin_root = kBuiltinRootName;
+    if (relative == builtin_root) {
+      return builtin_patch_directory_;
+    }
+    const std::string builtin_prefix = builtin_root + "/";
+    if (relative.rfind(builtin_prefix, 0) == 0) {
+      std::string without_prefix = relative.substr(builtin_prefix.size());
+      return builtin_patch_directory_ / without_prefix;
+    }
+  }
+
+  return user_patch_directory_ / path;
 }
 
 } // namespace patches
