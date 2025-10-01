@@ -65,6 +65,9 @@ public:
           data.ui_preferences.show_preferences =
               ui["show_preferences"].get<bool>();
         }
+        if (ui.contains("use_velocity")) {
+          data.ui_preferences.use_velocity = ui["use_velocity"].get<bool>();
+        }
         if (ui.contains("patch_search_query")) {
           data.ui_preferences.patch_search_query =
               ui["patch_search_query"].get<std::string>();
@@ -96,6 +99,7 @@ public:
       ui["show_mml_console"] = data.ui_preferences.show_mml_console;
       ui["show_preferences"] = data.ui_preferences.show_preferences;
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
+      ui["use_velocity"] = data.ui_preferences.use_velocity;
       ui["patch_search_query"] = data.ui_preferences.patch_search_query;
       j["ui"] = ui;
 

@@ -14,6 +14,7 @@
 #include <array>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 struct MidiKeyboardSettings {
   Key key = Key::C;
@@ -80,11 +81,16 @@ public:
   void update_all_settings();
   void apply_patch_to_device();
 
-  bool key_on(ym2612::Note note);
+  bool key_on(ym2612::Note note, uint8_t velocity);
+  bool key_on(ym2612::Note note) { return key_on(note, 127); }
   bool key_off(ym2612::Note note);
   bool key_is_pressed(const ym2612::Note &note) const;
 
   const std::array<bool, 6> &active_channels() const;
+  const std::vector<std::string> &connected_midi_inputs() const {
+    return connected_midi_inputs_;
+  }
+  void set_connected_midi_inputs(std::vector<std::string> devices);
 
   // bool load_user_patch(const std::string &patch_name);
   bool load_patch(const patches::PatchEntry &preset_info);
@@ -107,6 +113,7 @@ private:
   UIState ui_state_;
   history::HistoryManager history_;
   ym2612::WaveSampler wave_sampler_;
+  std::vector<std::string> connected_midi_inputs_;
 
   struct PatchState {
     ym2612::Patch current;
@@ -121,4 +128,6 @@ private:
   void configure_audio();
   void configure_gui();
   void configure_audio_callback();
+
+  static uint8_t scale_total_level(uint8_t base_total_level, uint8_t velocity);
 };

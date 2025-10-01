@@ -72,6 +72,25 @@ struct ChannelInstrument {
   uint8_t feedback;  // 0 ~ 7
   uint8_t algorithm; // 0 ~ 7
   OperatorSettings operators[4];
+
+  inline ym2612::ChannelInstrument clone_with_velocity(uint8_t velocity) const {
+    static const uint8_t opn_con_op[8] = {3, 3, 3, 3, 2, 1, 1, 0};
+    int vol = velocity >> 3;
+    if (vol > 15)
+      vol = 0;
+    else
+      vol = 15 - vol;
+    vol = 2 + vol * 3 - vol / 3;
+    ym2612::ChannelInstrument modified = *this;
+    auto opn_con_op_one = opn_con_op[modified.algorithm];
+    for (int op = 3; op >= opn_con_op_one; op--) {
+      uint8_t max_tl = modified.operators[op].total_level;
+      modified.operators[op].total_level += vol;
+      if (modified.operators[op].total_level > 127)
+        modified.operators[op].total_level = 127;
+    }
+    return modified;
+  }
 };
 
 } // namespace ym2612

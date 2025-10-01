@@ -14,16 +14,16 @@ void render_preferences_window(AppState &app_state) {
     return;
   }
 
-  ImGui::SetNextWindowSize(ImVec2(450, 160), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(480, 260), ImGuiCond_FirstUseEver);
 
   if (ImGui::Begin("Preferences", &ui_state.prefs.show_preferences)) {
+    auto &ui_prefs = ui_state.prefs;
 
     // Show the current directory
     ImGui::SeparatorText("Data Directory");
     ImGui::TextWrapped("%s", prefs.get_data_directory().c_str());
     ImGui::Spacing();
 
-    // Directory selection button
     if (ImGui::Button("Select Directory...")) {
       ui_state.open_directory_dialog = true;
     }
@@ -34,15 +34,6 @@ void render_preferences_window(AppState &app_state) {
       app_state.sync_patch_directories();
     }
 
-    // // Sub-directory info
-    // ImGui::Text("Sub-directories:");
-    // ImGui::Bullet();
-    // ImGui::Text("Patches: %s", prefs.get_patches_directory().c_str());
-    // ImGui::Bullet();
-    // ImGui::Text("User Patches: %s",
-    // prefs.get_user_patches_directory().c_str());
-
-    // Directory status indicator
     if (prefs.is_initialized()) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::StatusSuccess),
                          "Directories initialized");
@@ -85,7 +76,27 @@ void render_preferences_window(AppState &app_state) {
       }
       ImGui::EndCombo();
     }
+
+    ImGui::SeparatorText("MIDI Input");
+
+    ImGui::Checkbox("Use MIDI velocity", &ui_prefs.use_velocity);
+    if (!ui_prefs.use_velocity) {
+      ImGui::TextWrapped("Notes play at full velocity.");
+    }
+
+    const auto &devices = app_state.connected_midi_inputs();
+    if (devices.empty()) {
+      ImGui::TextUnformatted("No MIDI devices detected.");
+    } else {
+      ImGui::Text("Connected devices (%zu)", devices.size());
+      ImGui::Indent();
+      for (const auto &name : devices) {
+        ImGui::BulletText("%s", name.c_str());
+      }
+      ImGui::Unindent();
+    }
   }
+
   ImGui::End();
 
   if (ui_state.open_directory_dialog) {

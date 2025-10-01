@@ -106,7 +106,7 @@ void render_midi_keyboard(AppState &app_state) {
       bool key_is_active = ImGui::IsItemActive();
       bool key_was_deactivated = ImGui::IsItemDeactivated();
       if (key_is_active && !is_pressed) {
-        app_state.key_on(note);
+        app_state.key_on(note, 127);
       }
 
       if (key_was_deactivated && is_pressed) {

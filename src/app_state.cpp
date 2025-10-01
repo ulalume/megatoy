@@ -3,8 +3,10 @@
 #include "ui/preview/algorithm_preview.hpp"
 #include "ui/preview/ssg_preview.hpp"
 #include "ym2612/channel.hpp"
+#include <algorithm>
 #include <array>
 #include <iostream>
+#include <utility>
 
 AppState::PatchState::PatchState(const std::filesystem::path &preset_dir,
                                  const std::filesystem::path &user_dir)
@@ -49,12 +51,29 @@ const patches::PatchRepository &AppState::patch_repository() const {
 
 void AppState::update_all_settings() { apply_patch_to_device(); }
 
-bool AppState::key_on(ym2612::Note note) {
-  if (channel_allocator_.note_on(note, device_)) {
-    std::cout << "Key ON - " << note << "\n" << std::flush;
-    return true;
+bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
+  const uint8_t clamped_velocity =
+      std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
+  const uint8_t effective_velocity = ui_state_.prefs.use_velocity
+                                         ? clamped_velocity
+                                         : static_cast<uint8_t>(127);
+
+  auto channel = channel_allocator_.note_on(note);
+  if (!channel) {
+    return false;
   }
-  return false;
+
+  auto ym_channel = device_.channel(*channel);
+  ym_channel.write_frequency(note);
+
+  auto instrument =
+      patch_state_.current.instrument.clone_with_velocity(effective_velocity);
+  ym_channel.write_instrument(instrument);
+  ym_channel.write_key_on();
+  std::cout << "Key ON - " << note << " (velocity "
+            << static_cast<int>(effective_velocity) << ")\n"
+            << std::flush;
+  return true;
 }
 
 bool AppState::key_off(ym2612::Note note) {
@@ -71,6 +90,10 @@ bool AppState::key_is_pressed(const ym2612::Note &note) const {
 
 const std::array<bool, 6> &AppState::active_channels() const {
   return channel_allocator_.channel_usage();
+}
+
+void AppState::set_connected_midi_inputs(std::vector<std::string> devices) {
+  connected_midi_inputs_ = std::move(devices);
 }
 
 bool AppState::load_patch(const patches::PatchEntry &patch_info) {
@@ -180,6 +203,16 @@ void AppState::configure_audio_callback() {
         device_.update(sample_count, outputs);
         wave_sampler_.push_samples(outputs[0], outputs[1], sample_count);
       });
+}
+
+uint8_t AppState::scale_total_level(uint8_t base_total_level,
+                                    uint8_t velocity) {
+  const uint16_t clamped_velocity =
+      std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
+  const uint16_t reversed_total_level =
+      127 - std::min<uint8_t>(base_total_level, static_cast<uint8_t>(127));
+  return static_cast<uint8_t>(127 -
+                              reversed_total_level * clamped_velocity / 127);
 }
 
 void AppState::apply_patch_to_device() {
