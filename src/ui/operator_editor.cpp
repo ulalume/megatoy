@@ -65,7 +65,7 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   // Sustain Rate (0-31)
   int sustain_rate = op.sustain_rate;
   bool sustain_rate_changed =
-      ImGui::SliderInt("Sustain Rate", &sustain_rate, 0, 31);
+      ImGui::SliderInt("Sustain Rate", &sustain_rate, 31, 0);
   track_patch_history(app_state, op_label + " Sustain Rate",
                       key_prefix + ".sustain_rate");
   if (sustain_rate_changed) {
