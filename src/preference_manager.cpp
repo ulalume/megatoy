@@ -2,6 +2,7 @@
 
 #include "platform/file_dialog.hpp"
 #include "preference_storage.hpp"
+#include <array>
 #include <cstdlib>
 #include <iostream>
 
