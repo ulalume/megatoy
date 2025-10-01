@@ -1,6 +1,7 @@
 #pragma once
 
 #include "preferences_data.hpp"
+#include "system/data_paths.hpp"
 
 #include <filesystem>
 #include <memory>
@@ -61,8 +62,7 @@ private:
   void apply_loaded_data(const PreferenceData &data);
 
   // Internal members
-  std::filesystem::path data_directory;
-  std::filesystem::path builtin_presets_directory_;
+  megatoy::system::DataPathProvider data_paths_;
   bool directories_initialized;
   ui::styles::ThemeId theme_;
   UIPreferences ui_preferences_;

@@ -9,10 +9,9 @@
 using megatoy::system::PathResolver;
 
 PreferenceManager::PreferenceManager()
-    : data_directory(get_default_data_directory()),
-      builtin_presets_directory_(PathResolver::builtin_presets_directory()),
-      directories_initialized(false), theme_(ui::styles::ThemeId::MegatoyDark),
+    : directories_initialized(false), theme_(ui::styles::ThemeId::MegatoyDark),
       storage_(make_json_preference_storage(get_preferences_file_path())) {
+  data_paths_.set_data_root(get_default_data_directory());
   load_preferences();
   ensure_directories_exist();
 }
@@ -24,34 +23,35 @@ std::filesystem::path PreferenceManager::get_default_data_directory() const {
 }
 
 void PreferenceManager::set_data_directory(const std::filesystem::path &path) {
-  data_directory = path;
+  data_paths_.set_data_root(path);
   ensure_directories_exist();
   save_preferences();
 }
 
 std::filesystem::path PreferenceManager::get_data_directory() const {
-  return data_directory;
+  return data_paths_.paths().data_root;
 }
 
 std::filesystem::path PreferenceManager::get_patches_directory() const {
-  return data_directory / "patches";
+  return data_paths_.paths().patches_root;
 }
 
 std::filesystem::path PreferenceManager::get_user_patches_directory() const {
-  return data_directory / "patches/user";
+  return data_paths_.paths().user_patches_root;
 }
 
 std::filesystem::path PreferenceManager::get_export_directory() const {
-  return data_directory / "export";
+  return data_paths_.paths().export_root;
 }
 
 std::filesystem::path PreferenceManager::get_builtin_presets_directory() const {
-  return builtin_presets_directory_;
+  return data_paths_.paths().builtin_presets_root;
 }
 
 bool PreferenceManager::select_data_directory() {
   std::filesystem::path chosen_path;
-  auto result = platform::file_dialog::pick_folder(data_directory, chosen_path);
+  auto result =
+      platform::file_dialog::pick_folder(get_data_directory(), chosen_path);
   if (result == platform::file_dialog::DialogResult::Ok) {
     set_data_directory(chosen_path);
     return true;
@@ -60,19 +60,8 @@ bool PreferenceManager::select_data_directory() {
 }
 
 bool PreferenceManager::ensure_directories_exist() {
-  try {
-    std::filesystem::create_directories(data_directory);
-    std::filesystem::create_directories(get_user_patches_directory());
-    std::filesystem::create_directories(get_patches_directory());
-    std::filesystem::create_directories(get_export_directory());
-
-    directories_initialized = true;
-    return true;
-  } catch (const std::filesystem::filesystem_error &e) {
-    std::cerr << "Failed to create directories: " << e.what() << std::endl;
-    directories_initialized = false;
-    return false;
-  }
+  directories_initialized = data_paths_.ensure_directories();
+  return directories_initialized;
 }
 
 std::filesystem::path PreferenceManager::get_preferences_file_path() const {
@@ -105,7 +94,7 @@ bool PreferenceManager::load_preferences() {
 }
 
 void PreferenceManager::reset_data_directory() {
-  data_directory = get_default_data_directory();
+  data_paths_.set_data_root(get_default_data_directory());
   ensure_directories_exist();
   save_preferences();
 }
@@ -150,14 +139,14 @@ void PreferenceManager::set_ui_preferences(
 
 PreferenceData PreferenceManager::to_data() const {
   PreferenceData data;
-  data.data_directory = data_directory;
+  data.data_directory = data_paths_.paths().data_root;
   data.theme = theme_;
   data.ui_preferences = ui_preferences_;
   return data;
 }
 
 void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
-  data_directory = data.data_directory;
+  data_paths_.set_data_root(data.data_directory);
   theme_ = data.theme;
   ui_preferences_ = data.ui_preferences;
 }
