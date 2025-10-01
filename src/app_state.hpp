@@ -120,8 +120,8 @@ private:
     patches::PatchRepository patch_repository;
     std::string current_patch_path;
 
-    PatchState(const std::filesystem::path &preset_dir,
-               const std::filesystem::path &user_dir);
+    PatchState(const std::filesystem::path &user_dir,
+               const std::filesystem::path &builtin_dir);
   } patch_state_;
 
   void initialize_patch_defaults();

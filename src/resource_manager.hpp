@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -18,6 +19,7 @@ public:
 
   // Get embedded resource by name
   const EmbeddedResource *get_resource(const std::string &name) const;
+  const EmbeddedResource *get_resource(const std::filesystem::path &path) const;
 
   // Load texture from embedded resource
   bool load_texture_from_resource(const std::string &name,
@@ -26,6 +28,7 @@ public:
 
   // Check if resource exists
   bool has_resource(const std::string &name) const;
+  bool has_resource(const std::filesystem::path &path) const;
 
   // Get list of all available resources
   std::vector<std::string> get_resource_names() const;

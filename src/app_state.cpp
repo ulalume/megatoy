@@ -8,15 +8,15 @@
 #include <iostream>
 #include <utility>
 
-AppState::PatchState::PatchState(const std::filesystem::path &preset_dir,
-                                 const std::filesystem::path &user_dir)
-    : current(), patch_repository(preset_dir) {}
+AppState::PatchState::PatchState(const std::filesystem::path &user_dir,
+                                 const std::filesystem::path &builtin_dir)
+    : current(), patch_repository(user_dir, builtin_dir) {}
 
 AppState::AppState()
     : device_(), audio_manager_(), gui_manager_(), preference_manager_(),
       channel_allocator_(), input_state_(), ui_state_(), history_(),
       patch_state_(preference_manager_.get_patches_directory(),
-                   preference_manager_.get_user_patches_directory()) {}
+                   preference_manager_.get_builtin_presets_directory()) {}
 
 void AppState::init() {
   initialize_patch_defaults();
@@ -114,10 +114,10 @@ bool AppState::load_patch(const patches::PatchEntry &patch_info) {
 
 void AppState::sync_patch_directories() {
   auto patch_dir = preference_manager_.get_patches_directory();
-  // auto user_dir = preference_manager_.get_user_patches_directory();
+  auto builtin_dir = preference_manager_.get_builtin_presets_directory();
 
-  // patch_state_.user_repository.set_directory(user_dir);
-  patch_state_.patch_repository = patches::PatchRepository(patch_dir);
+  patch_state_.patch_repository =
+      patches::PatchRepository(patch_dir, builtin_dir);
 }
 
 void AppState::sync_imgui_ini_file() {
