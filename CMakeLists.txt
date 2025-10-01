@@ -159,6 +159,8 @@ set(MEGATOY_SOURCES
   src/app_state.cpp
   src/audio_manager.cpp
   src/gui_manager.cpp
+  src/graphics/texture_utils.cpp
+  src/graphics/stb_image_impl.cpp
   src/preference_manager.cpp
   src/preference_storage_json.cpp
   src/channel_allocator.cpp
@@ -243,7 +245,7 @@ target_compile_definitions(megatoy PRIVATE
   $<$<PLATFORM_ID:Darwin>:GL_SILENCE_DEPRECATION>
 )
 
-# Resource embedding function
+# Resource embedding helpers
 function(embed_resource resource_file output_file variable_name)
   file(READ ${resource_file} file_content HEX)
   string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1,"
@@ -263,72 +265,57 @@ function(embed_resource resource_file output_file variable_name)
     )
 endfunction()
 
-# Generate embedded assets
-set(ASSET_FILES
-    megatoy_dark/algorithm0.png
-    megatoy_dark/algorithm1.png
-    megatoy_dark/algorithm2.png
-    megatoy_dark/algorithm3.png
-    megatoy_dark/algorithm4.png
-    megatoy_dark/algorithm5.png
-    megatoy_dark/algorithm6.png
-    megatoy_dark/algorithm7.png
-    megatoy_dark/ssg0.png
-    megatoy_dark/ssg1.png
-    megatoy_dark/ssg2.png
-    megatoy_dark/ssg3.png
-    megatoy_dark/ssg4.png
-    megatoy_dark/ssg5.png
-    megatoy_dark/ssg6.png
-    megatoy_dark/ssg7.png
-    megatoy_dark/ssgoff.png
-    megatoy_light/algorithm0.png
-    megatoy_light/algorithm1.png
-    megatoy_light/algorithm2.png
-    megatoy_light/algorithm3.png
-    megatoy_light/algorithm4.png
-    megatoy_light/algorithm5.png
-    megatoy_light/algorithm6.png
-    megatoy_light/algorithm7.png
-    megatoy_light/ssg0.png
-    megatoy_light/ssg1.png
-    megatoy_light/ssg2.png
-    megatoy_light/ssg3.png
-    megatoy_light/ssg4.png
-    megatoy_light/ssg5.png
-    megatoy_light/ssg6.png
-    megatoy_light/ssg7.png
-    megatoy_light/ssgoff.png
-    imgui_dark/algorithm0.png
-    imgui_dark/algorithm1.png
-    imgui_dark/algorithm2.png
-    imgui_dark/algorithm3.png
-    imgui_dark/algorithm4.png
-    imgui_dark/algorithm5.png
-    imgui_dark/algorithm6.png
-    imgui_dark/algorithm7.png
-    imgui_dark/ssg0.png
-    imgui_dark/ssg1.png
-    imgui_dark/ssg2.png
-    imgui_dark/ssg3.png
-    imgui_dark/ssg4.png
-    imgui_dark/ssg5.png
-    imgui_dark/ssg6.png
-    imgui_dark/ssg7.png
-    imgui_dark/ssgoff.png
-)
+function(sanitize_identifier input output_var)
+  string(REGEX REPLACE "[^A-Za-z0-9]" "_" identifier "${input}")
+  string(REGEX REPLACE "_+" "_" identifier "${identifier}")
+  set(${output_var} "asset_${identifier}" PARENT_SCOPE)
+endfunction()
 
-set(EMBEDDED_HEADERS)
-foreach(asset ${ASSET_FILES})
-  string(REPLACE "." "_" var_name ${asset})
-  string(REPLACE "/" "_" var_name ${var_name})
-  set(output_file "${CMAKE_BINARY_DIR}/embedded_${var_name}.hpp")
-  embed_resource("${CMAKE_SOURCE_DIR}/assets/${asset}"
-                 "${output_file}" "${var_name}")
-  list(APPEND EMBEDDED_HEADERS "${output_file}")
+set(EMBEDDED_ASSETS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets")
+set(EMBEDDED_OUTPUT_DIR "${CMAKE_BINARY_DIR}/embedded_assets")
+file(MAKE_DIRECTORY "${EMBEDDED_OUTPUT_DIR}")
+
+file(GLOB_RECURSE EMBEDDABLE_ASSET_FILES
+     CONFIGURE_DEPENDS
+     LIST_DIRECTORIES FALSE
+     RELATIVE "${EMBEDDED_ASSETS_SOURCE_DIR}"
+     "${EMBEDDED_ASSETS_SOURCE_DIR}/*")
+
+list(SORT EMBEDDABLE_ASSET_FILES)
+
+set(EMBED_EXCLUDE_REGEXES "\\.DS_Store$" "\\.ase$" "\\.gitkeep$")
+foreach(pattern ${EMBED_EXCLUDE_REGEXES})
+  list(FILTER EMBEDDABLE_ASSET_FILES EXCLUDE REGEX "${pattern}")
 endforeach()
 
-# Generate embedded assets registry
+set(EMBEDDED_HEADERS)
+set(EMBEDDED_REGISTRY_INCLUDES)
+set(EMBEDDED_REGISTRY_ENTRIES)
+
+foreach(relative_path ${EMBEDDABLE_ASSET_FILES})
+  if(IS_DIRECTORY "${EMBEDDED_ASSETS_SOURCE_DIR}/${relative_path}")
+    continue()
+  endif()
+
+  file(TO_CMAKE_PATH "${relative_path}" cmake_style_relative_path)
+
+  sanitize_identifier("${cmake_style_relative_path}" identifier)
+  set(output_file "${EMBEDDED_OUTPUT_DIR}/${identifier}.hpp")
+
+  embed_resource("${EMBEDDED_ASSETS_SOURCE_DIR}/${cmake_style_relative_path}"
+                 "${output_file}" "${identifier}")
+
+  list(APPEND EMBEDDED_HEADERS "${output_file}")
+  list(APPEND EMBEDDED_REGISTRY_INCLUDES
+       "#include \"embedded_assets/${identifier}.hpp\"")
+  list(APPEND EMBEDDED_REGISTRY_ENTRIES
+       "    {\"${cmake_style_relative_path}\", {${identifier}, ${identifier}_size}},")
+endforeach()
+
+list(REMOVE_DUPLICATES EMBEDDED_REGISTRY_INCLUDES)
+list(SORT EMBEDDED_REGISTRY_INCLUDES)
+list(SORT EMBEDDED_REGISTRY_ENTRIES)
+
 set(REGISTRY_FILE "${CMAKE_BINARY_DIR}/embedded_assets_registry.hpp")
 file(WRITE ${REGISTRY_FILE}
     "#pragma once\n"
@@ -338,11 +325,8 @@ file(WRITE ${REGISTRY_FILE}
     "#include <cstddef>\n\n"
 )
 
-foreach(asset ${ASSET_FILES})
-  string(REPLACE "." "_" var_name ${asset})
-  string(REPLACE "/" "_" var_name ${var_name})
-  file(APPEND ${REGISTRY_FILE}
-       "#include \"embedded_${var_name}.hpp\"\n")
+foreach(include_line ${EMBEDDED_REGISTRY_INCLUDES})
+  file(APPEND ${REGISTRY_FILE} "${include_line}\n")
 endforeach()
 
 file(APPEND ${REGISTRY_FILE}
@@ -355,11 +339,8 @@ file(APPEND ${REGISTRY_FILE}
     "resource_registry = {\n"
 )
 
-foreach(asset ${ASSET_FILES})
-  string(REPLACE "." "_" var_name ${asset})
-  string(REPLACE "/" "_" var_name ${var_name})
-  file(APPEND ${REGISTRY_FILE}
-       "    {\"${asset}\", {${var_name}, ${var_name}_size}},\n")
+foreach(entry ${EMBEDDED_REGISTRY_ENTRIES})
+  file(APPEND ${REGISTRY_FILE} "${entry}\n")
 endforeach()
 
 file(APPEND ${REGISTRY_FILE}

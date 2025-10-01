@@ -75,13 +75,25 @@ const char *asset_subdirectory(ThemeId id) {
   return theme_definition(id).asset_subdirectory;
 }
 
-std::string themed_asset_relative_path(const std::string &filename) {
-  const char *subdir = asset_subdirectory(current_theme());
-  if (subdir == nullptr || subdir[0] == '\0') {
-    return filename;
+std::string themed_asset_relative_path(const std::string &filename,
+                                       const std::string &asset_category) {
+  std::string result;
+
+  if (!asset_category.empty()) {
+    result.append(asset_category);
+    if (!result.empty() && result.back() != '/') {
+      result.push_back('/');
+    }
   }
-  std::string result(subdir);
-  result.push_back('/');
+
+  const char *subdir = asset_subdirectory(current_theme());
+  if (subdir != nullptr && subdir[0] != '\0') {
+    result.append(subdir);
+    if (!result.empty() && result.back() != '/') {
+      result.push_back('/');
+    }
+  }
+
   result.append(filename);
   return result;
 }

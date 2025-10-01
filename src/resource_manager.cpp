@@ -1,16 +1,12 @@
 #include "resource_manager.hpp"
 
+#include <filesystem>
 #include <iostream>
+#include <stb_image.h>
 #include <vector>
 
-#include <imgui_impl_opengl3_loader.h>
-
-#define STB_IMAGE_IMPLEMENTATION_ALREADY_INCLUDED
-#include <stb_image.h>
-
-#ifdef USE_EMBEDDED_RESOURCES
 #include "embedded_assets_registry.hpp"
-#endif
+#include "graphics/texture_utils.hpp"
 
 ResourceManager &ResourceManager::instance() {
   static ResourceManager instance;
@@ -26,6 +22,11 @@ ResourceManager::get_resource(const std::string &name) const {
     return &it->second;
   }
   return nullptr;
+}
+
+const EmbeddedResource *
+ResourceManager::get_resource(const std::filesystem::path &path) const {
+  return get_resource(path.generic_string());
 }
 
 bool ResourceManager::load_texture_from_resource(const std::string &name,
@@ -49,22 +50,11 @@ bool ResourceManager::load_texture_from_resource(const std::string &name,
   }
 
   GLuint gl_texture_id = 0;
-  glGenTextures(1, &gl_texture_id);
-  if (!gl_texture_id) {
-    std::cerr << "Failed to create OpenGL texture for: " << name << '\n';
+  if (!gfx::create_texture_from_rgba(data, width, height, gl_texture_id)) {
     stbi_image_free(data);
+    std::cerr << "Failed to create OpenGL texture for: " << name << '\n';
     return false;
   }
-
-  glBindTexture(GL_TEXTURE_2D, gl_texture_id);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
-               GL_UNSIGNED_BYTE, data);
-  glBindTexture(GL_TEXTURE_2D, 0);
 
   stbi_image_free(data);
   texture_id = gl_texture_id;
@@ -73,6 +63,10 @@ bool ResourceManager::load_texture_from_resource(const std::string &name,
 
 bool ResourceManager::has_resource(const std::string &name) const {
   return resources_.find(name) != resources_.end();
+}
+
+bool ResourceManager::has_resource(const std::filesystem::path &path) const {
+  return has_resource(path.generic_string());
 }
 
 std::vector<std::string> ResourceManager::get_resource_names() const {
@@ -85,7 +79,6 @@ std::vector<std::string> ResourceManager::get_resource_names() const {
 }
 
 void ResourceManager::register_embedded_resources() {
-#ifdef USE_EMBEDDED_RESOURCES
   // Register all embedded resources from the generated registry
   for (const auto &entry : embedded_assets::resource_registry) {
     EmbeddedResource resource;
@@ -96,8 +89,4 @@ void ResourceManager::register_embedded_resources() {
   }
 
   std::cout << "Registered " << resources_.size() << " embedded resources\n";
-#else
-  std::cout << "Embedded resources not available (USE_EMBEDDED_RESOURCES not "
-               "defined)\n";
-#endif
 }
