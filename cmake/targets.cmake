@@ -41,6 +41,7 @@ set(MEGATOY_SOURCES
   src/formats/gin.cpp
   src/parsers/fui_parser.cpp
   src/parsers/rym2612_parser.cpp
+  src/parsers/patch_loader.cpp
   src/patches/patch_manager.cpp
   src/ui/preview/preview.cpp
   src/ui/preview/algorithm_preview.cpp
@@ -49,6 +50,7 @@ set(MEGATOY_SOURCES
   src/ui/styles/theme.cpp
   src/ui/main_menu.cpp
   src/ui/patch_editor.cpp
+  src/ui/patch_drop.cpp
   src/ui/operator_editor.cpp
   src/ui/midi_keyboard.cpp
   src/ui/patch_selector.cpp

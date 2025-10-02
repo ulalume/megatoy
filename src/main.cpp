@@ -6,10 +6,13 @@
 #include "ui/midi_keyboard.hpp"
 #include "ui/mml_console.hpp"
 #include "ui/patch_editor.hpp"
+#include "ui/patch_drop.hpp"
 #include "ui/patch_selector.hpp"
 #include "ui/preferences.hpp"
 #include "ui/waveform.hpp"
 #include "ym2612/channel.hpp"
+#include <GLFW/glfw3.h>
+#include <filesystem>
 #include <imgui.h>
 #include <iostream>
 
@@ -45,6 +48,23 @@ void handle_history_shortcuts(AppState &app_state) {
   }
 }
 
+void handle_file_drop(GLFWwindow *window, int count, const char **paths) {
+  if (paths == nullptr || count <= 0) {
+    return;
+  }
+
+  auto *state = static_cast<AppState *>(glfwGetWindowUserPointer(window));
+  if (state == nullptr) {
+    return;
+  }
+
+  for (int i = 0; i < count; ++i) {
+    if (paths[i] != nullptr) {
+      state->handle_patch_file_drop(std::filesystem::path(paths[i]));
+    }
+  }
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -52,6 +72,11 @@ int main(int argc, char *argv[]) {
 
   AppState app_state;
   app_state.init();
+
+  if (GLFWwindow *window = app_state.gui_manager().get_window()) {
+    glfwSetWindowUserPointer(window, &app_state);
+    glfwSetDropCallback(window, handle_file_drop);
+  }
 
   // Set up frequency for C4 note
   app_state.device()
@@ -79,6 +104,7 @@ int main(int argc, char *argv[]) {
 
     ui::render_main_menu(app_state);
     handle_history_shortcuts(app_state);
+    ui::render_patch_drop_feedback(app_state);
     // Render UI panels
     ui::render_patch_editor(app_state);
 

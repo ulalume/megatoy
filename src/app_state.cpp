@@ -1,6 +1,7 @@
 #include "app_state.hpp"
-#include "patches/patch_repository.hpp"
 #include "formats/dmp.hpp"
+#include "parsers/patch_loader.hpp"
+#include "patches/patch_repository.hpp"
 #include "ui/preview/algorithm_preview.hpp"
 #include "ui/preview/ssg_preview.hpp"
 #include "ym2612/channel.hpp"
@@ -128,12 +129,10 @@ void AppState::initialize_patch_defaults() {
   if (!paths.builtin_presets_root.empty() &&
       std::filesystem::exists(init_patch)) {
     if (ym2612::formats::dmp::read_file(init_patch, patch)) {
-      patch_manager_.set_current_patch_path(
-          patch_manager_.repository().to_relative_path(init_patch));
+      patch_manager_.set_current_patch_path(init_patch);
       loaded_builtin = true;
     } else {
-      std::cerr << "Failed to load builtin init patch: " << init_patch
-                << "\n";
+      std::cerr << "Failed to load builtin init patch: " << init_patch << "\n";
     }
   }
 
@@ -161,11 +160,98 @@ void AppState::initialize_patch_defaults() {
                 {31, 0, 0, 5, 0, 48, 0, 1, 3, 0, false, false},
                 {31, 0, 0, 5, 0, 24, 0, 1, 1, 0, false, false},
                 {31, 0, 0, 5, 0, 36, 0, 1, 2, 0, false, false},
-                {31, 0, 0, 5, 0, 0, 0, 1, 4, 0, false, false},
+                {31, 0, 0, 5, 0, 12, 0, 1, 4, 0, false, false},
             },
     };
     patch_manager_.set_current_patch_path({});
   }
+}
+
+void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
+  auto &drop = ui_state_.drop_state;
+  drop.error_message.clear();
+
+  if (!std::filesystem::exists(path) ||
+      !std::filesystem::is_regular_file(path)) {
+    drop.error_message = "Error: " + path.string();
+    drop.show_error_popup = true;
+    return;
+  }
+
+  auto apply_loaded_patch = [&](const ym2612::Patch &loaded,
+                                const std::filesystem::path &src) {
+    patch_manager_.current_patch() = loaded;
+    patch_manager_.set_current_patch_path(src);
+    apply_patch_to_device();
+    history_.reset();
+    drop.instruments.clear();
+    drop.pending_instruments_path.clear();
+    drop.selected_instrument = 0;
+    drop.show_error_popup = false;
+    drop.error_message.clear();
+  };
+
+  const auto result = parsers::load_patch_from_file(path);
+  switch (result.status) {
+  case parsers::PatchLoadStatus::Success:
+    apply_loaded_patch(result.patch, path);
+    break;
+  case parsers::PatchLoadStatus::MultiInstrument:
+    drop.instruments = result.instruments;
+    drop.pending_instruments_path = path;
+    drop.selected_instrument = 0;
+    drop.show_picker_for_multiple_instruments = true;
+    drop.show_error_popup = false;
+    drop.error_message.clear();
+    break;
+  case parsers::PatchLoadStatus::Failure:
+  default:
+    drop.instruments.clear();
+    drop.pending_instruments_path.clear();
+    drop.error_message = result.message.empty() ? "Unsupported file format: " +
+                                                      path.filename().string()
+                                                : result.message;
+    drop.show_error_popup = true;
+    drop.show_picker_for_multiple_instruments = false;
+    break;
+  }
+}
+
+void AppState::apply_mml_instrument_selection(size_t index) {
+  auto &drop = ui_state_.drop_state;
+  if (index >= drop.instruments.size()) {
+    cancel_instrument_selection();
+    return;
+  }
+
+  ym2612::Patch selected = drop.instruments[index].patch;
+  if (!drop.instruments[index].name.empty()) {
+    selected.name = drop.instruments[index].name;
+  } else if (selected.name.empty()) {
+    selected.name = drop.pending_instruments_path.stem().string();
+  }
+
+  patch_manager_.current_patch() = selected;
+  patch_manager_.set_current_patch_path(drop.pending_instruments_path);
+  apply_patch_to_device();
+  history_.reset();
+
+  drop.instruments.clear();
+  drop.pending_instruments_path.clear();
+  drop.selected_instrument = 0;
+  drop.show_picker_for_multiple_instruments = false;
+  drop.error_message.clear();
+  drop.show_error_popup = false;
+}
+
+void AppState::cancel_instrument_selection() {
+  auto &drop = ui_state_.drop_state;
+  drop.instruments.clear();
+  drop.pending_instruments_path.clear();
+  drop.selected_instrument = 0;
+  drop.show_picker_for_multiple_instruments = false;
+  drop.error_message.clear();
+  drop.show_error_popup = false;
 }
 
 void AppState::configure_audio() {

@@ -2,6 +2,7 @@
 
 #include "audio_manager.hpp"
 #include "channel_allocator.hpp"
+#include "formats/ctrmml.hpp"
 #include "gui_manager.hpp"
 #include "history/history_manager.hpp"
 #include "patches/patch_manager.hpp"
@@ -33,6 +34,15 @@ struct InputState {
 struct UIState {
   PreferenceManager::UIPreferences prefs;
   bool open_directory_dialog = false;
+
+  struct DropState {
+    bool show_error_popup = false;
+    std::string error_message;
+    bool show_picker_for_multiple_instruments = false;
+    std::filesystem::path pending_instruments_path;
+    std::vector<ym2612::formats::ctrmml::Instrument> instruments;
+    int selected_instrument = 0;
+  } drop_state;
 };
 
 class AppState {
@@ -79,15 +89,14 @@ public:
 
   patches::PatchRepository &patch_repository();
   const patches::PatchRepository &patch_repository() const;
+  patches::PatchManager &patch_manager() { return patch_manager_; }
+  const patches::PatchManager &patch_manager() const { return patch_manager_; }
 
   history::HistoryManager &history() { return history_; }
   const history::HistoryManager &history() const { return history_; }
 
   ym2612::WaveSampler &wave_sampler() { return wave_sampler_; }
   const ym2612::WaveSampler &wave_sampler() const { return wave_sampler_; }
-
-  patches::PatchManager &patch_manager() { return patch_manager_; }
-  const patches::PatchManager &patch_manager() const { return patch_manager_; }
 
   void update_all_settings();
   void apply_patch_to_device();
@@ -108,6 +117,10 @@ public:
 
   void sync_patch_directories();
   void sync_imgui_ini_file();
+
+  void handle_patch_file_drop(const std::filesystem::path &path);
+  void apply_mml_instrument_selection(size_t index);
+  void cancel_instrument_selection();
 
 private:
   static constexpr UINT32 kSampleRate = 44100;
