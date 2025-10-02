@@ -230,7 +230,9 @@ bool read_file(const std::filesystem::path &file_path,
 
     for (size_t op_idx = 0; op_idx < 4; ++op_idx) {
       const auto &row = operator_rows[op_idx];
-      auto &op = patch.instrument.operators[static_cast<uint8_t>(op_idx)];
+      auto &op =
+          patch.instrument
+              .operators[static_cast<size_t>(all_operator_indices[op_idx])];
 
       op.attack_rate = clamp_uint8(row[0], 0, 31);
       op.decay_rate = clamp_uint8(row[1], 0, 31);
