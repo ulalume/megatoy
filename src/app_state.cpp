@@ -1,10 +1,12 @@
 #include "app_state.hpp"
 #include "patches/patch_repository.hpp"
+#include "formats/dmp.hpp"
 #include "ui/preview/algorithm_preview.hpp"
 #include "ui/preview/ssg_preview.hpp"
 #include "ym2612/channel.hpp"
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <iostream>
 #include <utility>
 
@@ -118,33 +120,52 @@ void AppState::sync_imgui_ini_file() {
 }
 
 void AppState::initialize_patch_defaults() {
+  const auto &paths = directory_service_.paths();
+  const auto init_patch = paths.builtin_presets_root / "init.dmp";
   auto &patch = patch_manager_.current_patch();
-  patch.global = {
-      .dac_enable = false,
-      .lfo_enable = false,
-      .lfo_frequency = 0,
-  };
 
-  patch.channel = {
-      .left_speaker = true,
-      .right_speaker = true,
-      .amplitude_modulation_sensitivity = 0,
-      .frequency_modulation_sensitivity = 0,
-  };
+  bool loaded_builtin = false;
+  if (!paths.builtin_presets_root.empty() &&
+      std::filesystem::exists(init_patch)) {
+    if (ym2612::formats::dmp::read_file(init_patch, patch)) {
+      patch_manager_.set_current_patch_path(
+          patch_manager_.repository().to_relative_path(init_patch));
+      loaded_builtin = true;
+    } else {
+      std::cerr << "Failed to load builtin init patch: " << init_patch
+                << "\n";
+    }
+  }
 
-  patch.instrument = {
-      .feedback = 7,
-      .algorithm = 5,
-      .operators =
-          {
-              {15, 10, 0, 5, 2, 26, 0, 1, 3, 0, false, false},
-              {21, 31, 0, 10, 0, 18, 0, 1, 3, 0, false, false},
-              {21, 31, 0, 10, 0, 18, 0, 1, 3, 0, false, false},
-              {21, 31, 0, 10, 0, 18, 0, 1, 3, 0, false, false},
-          },
-  };
+  if (!loaded_builtin) {
+    patch.name = "init";
 
-  patch_manager_.set_current_patch_path({});
+    patch.global = {
+        .dac_enable = false,
+        .lfo_enable = false,
+        .lfo_frequency = 0,
+    };
+
+    patch.channel = {
+        .left_speaker = true,
+        .right_speaker = true,
+        .amplitude_modulation_sensitivity = 0,
+        .frequency_modulation_sensitivity = 0,
+    };
+
+    patch.instrument = {
+        .feedback = 7,
+        .algorithm = 3,
+        .operators =
+            {
+                {31, 0, 0, 5, 0, 48, 0, 1, 3, 0, false, false},
+                {31, 0, 0, 5, 0, 24, 0, 1, 1, 0, false, false},
+                {31, 0, 0, 5, 0, 36, 0, 1, 2, 0, false, false},
+                {31, 0, 0, 5, 0, 0, 0, 1, 4, 0, false, false},
+            },
+    };
+    patch_manager_.set_current_patch_path({});
+  }
 }
 
 void AppState::configure_audio() {
