@@ -19,7 +19,7 @@ struct PatchEntry {
 
 class PatchRepository {
 public:
-  PatchRepository(const std::filesystem::path &user_dir,
+  PatchRepository(const std::filesystem::path &patches_root,
                   const std::filesystem::path &builtin_dir = {});
 
   void refresh();
@@ -36,9 +36,9 @@ public:
   to_absolute_path(const std::filesystem::path &path) const;
 
 private:
-  static constexpr const char *kBuiltinRootName = "factory";
+  static constexpr const char *kBuiltinRootName = "presets";
 
-  std::filesystem::path user_patch_directory_;
+  std::filesystem::path patches_directory_;
   std::filesystem::path builtin_patch_directory_;
 
   std::vector<PatchEntry> tree_cache_;

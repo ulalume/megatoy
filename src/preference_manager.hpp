@@ -1,7 +1,7 @@
 #pragma once
 
 #include "preferences_data.hpp"
-#include "system/data_paths.hpp"
+#include "system/directory_service.hpp"
 
 #include <filesystem>
 #include <memory>
@@ -12,20 +12,13 @@ class PreferenceManager {
 public:
   using UIPreferences = ::UIPreferences;
 
-  PreferenceManager();
+  explicit PreferenceManager(megatoy::system::DirectoryService &paths);
   ~PreferenceManager();
 
   // Directory configuration
   void set_data_directory(const std::filesystem::path &path);
   std::filesystem::path get_data_directory() const;
-
-  // Retrieve subdirectories
-  std::filesystem::path get_user_patches_directory() const;
-  std::filesystem::path get_patches_directory() const;
-  std::filesystem::path get_export_directory() const;
-  std::filesystem::path get_config_directory() const;
   std::filesystem::path get_imgui_ini_file() const;
-  std::filesystem::path get_builtin_presets_directory() const;
 
   void set_theme(ui::styles::ThemeId theme);
   ui::styles::ThemeId theme() const;
@@ -62,7 +55,7 @@ private:
   void apply_loaded_data(const PreferenceData &data);
 
   // Internal members
-  megatoy::system::DataPathProvider data_paths_;
+  megatoy::system::DirectoryService &paths_;
   bool directories_initialized;
   ui::styles::ThemeId theme_;
   UIPreferences ui_preferences_;

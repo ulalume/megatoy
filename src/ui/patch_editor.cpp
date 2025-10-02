@@ -107,21 +107,21 @@ void render_patch_editor(AppState &app_state) {
     if (ImGui::Button("Save")) {
       // Check whether the file already exists
       auto patches_dir =
-          app_state.preference_manager().get_user_patches_directory();
+          app_state.directory_service().paths().user_patches_root;
       auto patch_path =
           ym2612::formats::gin::build_patch_path(patches_dir, patch.name);
 
       if (std::filesystem::exists(patch_path)) {
         // Prompt if the file already exists
         ImGui::OpenPopup("Overwrite Confirmation");
-        app_state.update_current_patch_path(
+        app_state.patch_manager().set_current_patch_path(
             app_state.patch_repository().to_relative_path(patch_path));
       } else {
         // Save as new file
         if (ym2612::formats::gin::save_patch(patches_dir, patch, patch.name)) {
           ImGui::OpenPopup("Save Success");
           app_state.patch_repository().refresh();
-          app_state.update_current_patch_path(
+          app_state.patch_manager().set_current_patch_path(
               app_state.patch_repository().to_relative_path(patch_path));
         } else {
           ImGui::OpenPopup("Save Error");
@@ -136,8 +136,7 @@ void render_patch_editor(AppState &app_state) {
 
   // Export Options popup
   if (ImGui::BeginPopup("Export Options")) {
-    const auto default_dir =
-        app_state.preference_manager().get_export_directory();
+    const auto &default_dir = app_state.directory_service().paths().export_root;
     const std::string sanitized_name =
         sanitize_filename(patch.name.empty() ? "patch" : patch.name);
 
@@ -229,7 +228,7 @@ void render_patch_editor(AppState &app_state) {
 
     if (ImGui::Button("Overwrite", ImVec2(120, 0))) {
       auto patches_dir =
-          app_state.preference_manager().get_user_patches_directory();
+          app_state.directory_service().paths().user_patches_root;
       if (ym2612::formats::gin::save_patch(patches_dir, patch, patch.name)) {
         ImGui::OpenPopup("Save Success");
       } else {

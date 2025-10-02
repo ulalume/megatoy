@@ -41,6 +41,7 @@ set(MEGATOY_SOURCES
   src/formats/gin.cpp
   src/parsers/fui_parser.cpp
   src/parsers/rym2612_parser.cpp
+  src/patches/patch_manager.cpp
   src/ui/preview/preview.cpp
   src/ui/preview/algorithm_preview.cpp
   src/ui/preview/ssg_preview.cpp
@@ -56,7 +57,7 @@ set(MEGATOY_SOURCES
   src/ui/preferences.cpp
   src/ui/styles/megatoy_style.cpp
   src/system/path_resolver.cpp
-  src/system/data_paths.cpp
+  src/system/directory_service.cpp
   src/ym2612/device.cpp
   src/ym2612/channel.cpp
   src/ym2612/operator.cpp

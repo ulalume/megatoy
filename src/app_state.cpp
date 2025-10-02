@@ -8,15 +8,11 @@
 #include <iostream>
 #include <utility>
 
-AppState::PatchState::PatchState(const std::filesystem::path &user_dir,
-                                 const std::filesystem::path &builtin_dir)
-    : current(), patch_repository(user_dir, builtin_dir) {}
-
 AppState::AppState()
-    : device_(), audio_manager_(), gui_manager_(), preference_manager_(),
-      channel_allocator_(), input_state_(), ui_state_(), history_(),
-      patch_state_(preference_manager_.get_patches_directory(),
-                   preference_manager_.get_builtin_presets_directory()) {}
+    : device_(), audio_manager_(), gui_manager_(), directory_service_(),
+      preference_manager_(directory_service_),
+      patch_manager_(directory_service_), channel_allocator_(), input_state_(),
+      ui_state_(), history_() {}
 
 void AppState::init() {
   initialize_patch_defaults();
@@ -37,16 +33,17 @@ void AppState::shutdown() {
   gui_manager_.shutdown();
 }
 
-ym2612::Patch &AppState::patch() { return patch_state_.current; }
-
-const ym2612::Patch &AppState::patch() const { return patch_state_.current; }
+ym2612::Patch &AppState::patch() { return patch_manager_.current_patch(); }
+const ym2612::Patch &AppState::patch() const {
+  return patch_manager_.current_patch();
+}
 
 patches::PatchRepository &AppState::patch_repository() {
-  return patch_state_.patch_repository;
+  return patch_manager_.repository();
 }
 
 const patches::PatchRepository &AppState::patch_repository() const {
-  return patch_state_.patch_repository;
+  return patch_manager_.repository();
 }
 
 void AppState::update_all_settings() { apply_patch_to_device(); }
@@ -67,7 +64,8 @@ bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
   ym_channel.write_frequency(note);
 
   auto instrument =
-      patch_state_.current.instrument.clone_with_velocity(effective_velocity);
+      patch_manager_.current_patch().instrument.clone_with_velocity(
+          effective_velocity);
   ym_channel.write_instrument(instrument);
   ym_channel.write_key_on();
   std::cout << "Key ON - " << note << " (velocity "
@@ -97,15 +95,12 @@ void AppState::set_connected_midi_inputs(std::vector<std::string> devices) {
 }
 
 bool AppState::load_patch(const patches::PatchEntry &patch_info) {
-  ym2612::Patch loaded_patch;
-  if (!patch_state_.patch_repository.load_patch(patch_info, loaded_patch)) {
+  if (!patch_manager_.load_patch(patch_info)) {
     std::cerr << "Failed to load preset patch: " << patch_info.name
               << std::endl;
     return false;
   }
 
-  patch_state_.current = loaded_patch;
-  patch_state_.current_patch_path = patch_info.relative_path;
   apply_patch_to_device();
   history_.reset();
   std::cout << "Loaded preset patch: " << patch_info.name << std::endl;
@@ -113,11 +108,8 @@ bool AppState::load_patch(const patches::PatchEntry &patch_info) {
 }
 
 void AppState::sync_patch_directories() {
-  auto patch_dir = preference_manager_.get_patches_directory();
-  auto builtin_dir = preference_manager_.get_builtin_presets_directory();
-
-  patch_state_.patch_repository =
-      patches::PatchRepository(patch_dir, builtin_dir);
+  directory_service_.ensure_directories();
+  patch_manager_.refresh_directories();
 }
 
 void AppState::sync_imgui_ini_file() {
@@ -126,7 +118,7 @@ void AppState::sync_imgui_ini_file() {
 }
 
 void AppState::initialize_patch_defaults() {
-  auto &patch = patch_state_.current;
+  auto &patch = patch_manager_.current_patch();
   patch.global = {
       .dac_enable = false,
       .lfo_enable = false,
@@ -151,6 +143,8 @@ void AppState::initialize_patch_defaults() {
               {21, 31, 0, 10, 0, 18, 0, 1, 3, 0, false, false},
           },
   };
+
+  patch_manager_.set_current_patch_path({});
 }
 
 void AppState::configure_audio() {
@@ -205,35 +199,12 @@ void AppState::configure_audio_callback() {
       });
 }
 
-uint8_t AppState::scale_total_level(uint8_t base_total_level,
-                                    uint8_t velocity) {
-  const uint16_t clamped_velocity =
-      std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
-  const uint16_t reversed_total_level =
-      127 - std::min<uint8_t>(base_total_level, static_cast<uint8_t>(127));
-  return static_cast<uint8_t>(127 -
-                              reversed_total_level * clamped_velocity / 127);
-}
-
 void AppState::apply_patch_to_device() {
-  device_.write_settings(patch_state_.current.global);
+  device_.write_settings(patch_manager_.current_patch().global);
   for (ym2612::ChannelIndex channel_index : ym2612::all_channel_indices) {
-    device_.channel(channel_index).write_settings(patch_state_.current.channel);
     device_.channel(channel_index)
-        .write_instrument(patch_state_.current.instrument);
-  }
-}
-
-const std::string &AppState::current_patch_path() const {
-  return patch_state_.current_patch_path;
-}
-
-void AppState::update_current_patch_path(
-    const std::filesystem::path &patch_path) {
-  std::cout << "Updating current patch path to: " << patch_path << std::endl;
-  if (patch_path.empty()) {
-    patch_state_.current_patch_path.clear();
-  } else {
-    patch_state_.current_patch_path = patch_path.generic_string();
+        .write_settings(patch_manager_.current_patch().channel);
+    device_.channel(channel_index)
+        .write_instrument(patch_manager_.current_patch().instrument);
   }
 }

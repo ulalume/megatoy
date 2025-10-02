@@ -4,8 +4,9 @@
 #include "channel_allocator.hpp"
 #include "gui_manager.hpp"
 #include "history/history_manager.hpp"
-#include "patches/patch_repository.hpp"
+#include "patches/patch_manager.hpp"
 #include "preference_manager.hpp"
+#include "system/directory_service.hpp"
 #include "types.hpp"
 #include "ym2612/device.hpp"
 #include "ym2612/note.hpp"
@@ -50,6 +51,13 @@ public:
   GuiManager &gui_manager() { return gui_manager_; }
   const GuiManager &gui_manager() const { return gui_manager_; }
 
+  megatoy::system::DirectoryService &directory_service() {
+    return directory_service_;
+  }
+  const megatoy::system::DirectoryService &directory_service() const {
+    return directory_service_;
+  }
+
   PreferenceManager &preference_manager() { return preference_manager_; }
   const PreferenceManager &preference_manager() const {
     return preference_manager_;
@@ -78,6 +86,9 @@ public:
   ym2612::WaveSampler &wave_sampler() { return wave_sampler_; }
   const ym2612::WaveSampler &wave_sampler() const { return wave_sampler_; }
 
+  patches::PatchManager &patch_manager() { return patch_manager_; }
+  const patches::PatchManager &patch_manager() const { return patch_manager_; }
+
   void update_all_settings();
   void apply_patch_to_device();
 
@@ -98,16 +109,15 @@ public:
   void sync_patch_directories();
   void sync_imgui_ini_file();
 
-  const std::string &current_patch_path() const;
-  void update_current_patch_path(const std::filesystem::path &patch_path);
-
 private:
   static constexpr UINT32 kSampleRate = 44100;
 
   ym2612::Device device_;
   AudioManager audio_manager_;
   GuiManager gui_manager_;
+  megatoy::system::DirectoryService directory_service_;
   PreferenceManager preference_manager_;
+  patches::PatchManager patch_manager_;
   ChannelAllocator channel_allocator_;
   InputState input_state_;
   UIState ui_state_;
@@ -115,19 +125,8 @@ private:
   ym2612::WaveSampler wave_sampler_;
   std::vector<std::string> connected_midi_inputs_;
 
-  struct PatchState {
-    ym2612::Patch current;
-    patches::PatchRepository patch_repository;
-    std::string current_patch_path;
-
-    PatchState(const std::filesystem::path &user_dir,
-               const std::filesystem::path &builtin_dir);
-  } patch_state_;
-
   void initialize_patch_defaults();
   void configure_audio();
   void configure_gui();
   void configure_audio_callback();
-
-  static uint8_t scale_total_level(uint8_t base_total_level, uint8_t velocity);
 };

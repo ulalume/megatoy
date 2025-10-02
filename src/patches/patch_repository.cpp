@@ -9,9 +9,9 @@
 
 namespace patches {
 
-PatchRepository::PatchRepository(const std::filesystem::path &user_dir,
+PatchRepository::PatchRepository(const std::filesystem::path &patches_root,
                                  const std::filesystem::path &builtin_dir)
-    : user_patch_directory_(user_dir), builtin_patch_directory_(builtin_dir),
+    : patches_directory_(patches_root), builtin_patch_directory_(builtin_dir),
       has_builtin_directory_(!builtin_dir.empty()), cache_initialized_(false) {
   refresh();
 }
@@ -20,12 +20,12 @@ void PatchRepository::refresh() {
   tree_cache_.clear();
 
   try {
-    if (std::filesystem::exists(user_patch_directory_) &&
-        std::filesystem::is_directory(user_patch_directory_)) {
+    if (std::filesystem::exists(patches_directory_) &&
+        std::filesystem::is_directory(patches_directory_)) {
       user_time_valid_ = true;
       last_user_directory_check_time_ =
-          std::filesystem::last_write_time(user_patch_directory_);
-      scan_directory(user_patch_directory_, tree_cache_);
+          std::filesystem::last_write_time(patches_directory_);
+      scan_directory(patches_directory_, tree_cache_);
     } else {
       user_time_valid_ = false;
     }
@@ -118,10 +118,9 @@ bool PatchRepository::has_directory_changed() const {
   bool changed = false;
 
   try {
-    if (std::filesystem::exists(user_patch_directory_) &&
-        std::filesystem::is_directory(user_patch_directory_)) {
-      auto current_time =
-          std::filesystem::last_write_time(user_patch_directory_);
+    if (std::filesystem::exists(patches_directory_) &&
+        std::filesystem::is_directory(patches_directory_)) {
+      auto current_time = std::filesystem::last_write_time(patches_directory_);
       if (!user_time_valid_ ||
           current_time != last_user_directory_check_time_) {
         changed = true;
@@ -308,7 +307,7 @@ PatchRepository::to_relative_path(const std::filesystem::path &path) const {
     }
   }
 
-  auto relative_user = path.lexically_relative(user_patch_directory_);
+  auto relative_user = path.lexically_relative(patches_directory_);
   if (!relative_user.empty() && relative_user.native()[0] != '.') {
     return relative_user;
   }
@@ -332,7 +331,7 @@ PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
     }
   }
 
-  return user_patch_directory_ / path;
+  return patches_directory_ / path;
 }
 
 } // namespace patches

@@ -8,6 +8,7 @@ namespace ui {
 
 void render_preferences_window(AppState &app_state) {
   auto &prefs = app_state.preference_manager();
+  const auto &paths = app_state.directory_service().paths();
 
   auto &ui_state = app_state.ui_state();
   if (!ui_state.prefs.show_preferences) {
@@ -21,7 +22,7 @@ void render_preferences_window(AppState &app_state) {
 
     // Show the current directory
     ImGui::SeparatorText("Data Directory");
-    ImGui::TextWrapped("%s", prefs.get_data_directory().c_str());
+    ImGui::TextWrapped("%s", paths.data_root.c_str());
     ImGui::Spacing();
 
     if (ImGui::Button("Select Directory...")) {
