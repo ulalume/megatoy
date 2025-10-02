@@ -1,5 +1,6 @@
 #include "app_state.hpp"
 #include "formats/dmp.hpp"
+#include "history/snapshot_entry.hpp"
 #include "parsers/patch_loader.hpp"
 #include "patches/patch_repository.hpp"
 #include "ui/preview/algorithm_preview.hpp"
@@ -98,6 +99,7 @@ void AppState::set_connected_midi_inputs(std::vector<std::string> devices) {
 }
 
 bool AppState::load_patch(const patches::PatchEntry &patch_info) {
+  const auto before = capture_patch_snapshot();
   if (!patch_manager_.load_patch(patch_info)) {
     std::cerr << "Failed to load preset patch: " << patch_info.name
               << std::endl;
@@ -105,7 +107,8 @@ bool AppState::load_patch(const patches::PatchEntry &patch_info) {
   }
 
   apply_patch_to_device();
-  history_.reset();
+  const auto after = capture_patch_snapshot();
+  record_patch_change("Load Patch: " + patch_info.name, before, after);
   std::cout << "Loaded preset patch: " << patch_info.name << std::endl;
   return true;
 }
@@ -165,6 +168,8 @@ void AppState::initialize_patch_defaults() {
     };
     patch_manager_.set_current_patch_path({});
   }
+
+  history_.clear();
 }
 
 void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
@@ -173,17 +178,20 @@ void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
 
   if (!std::filesystem::exists(path) ||
       !std::filesystem::is_regular_file(path)) {
-    drop.error_message = "Error: " + path.string();
+    drop.error_message = "File not found: " + path.string();
     drop.show_error_popup = true;
     return;
   }
 
   auto apply_loaded_patch = [&](const ym2612::Patch &loaded,
-                                const std::filesystem::path &src) {
+                                const std::filesystem::path &src,
+                                const std::string &label) {
+    const auto before = capture_patch_snapshot();
     patch_manager_.current_patch() = loaded;
     patch_manager_.set_current_patch_path(src);
     apply_patch_to_device();
-    history_.reset();
+    const auto after = capture_patch_snapshot();
+    record_patch_change(label, before, after);
     drop.instruments.clear();
     drop.pending_instruments_path.clear();
     drop.selected_instrument = 0;
@@ -194,7 +202,8 @@ void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
   const auto result = parsers::load_patch_from_file(path);
   switch (result.status) {
   case parsers::PatchLoadStatus::Success:
-    apply_loaded_patch(result.patch, path);
+    apply_loaded_patch(result.patch, path,
+                       "Load Patch: " + path.filename().string());
     break;
   case parsers::PatchLoadStatus::MultiInstrument:
     drop.instruments = result.instruments;
@@ -224,6 +233,7 @@ void AppState::apply_mml_instrument_selection(size_t index) {
     return;
   }
 
+  const auto before = capture_patch_snapshot();
   ym2612::Patch selected = drop.instruments[index].patch;
   if (!drop.instruments[index].name.empty()) {
     selected.name = drop.instruments[index].name;
@@ -234,7 +244,12 @@ void AppState::apply_mml_instrument_selection(size_t index) {
   patch_manager_.current_patch() = selected;
   patch_manager_.set_current_patch_path(drop.pending_instruments_path);
   apply_patch_to_device();
-  history_.reset();
+  const auto after = capture_patch_snapshot();
+  std::string label = "Select Instrument";
+  if (!drop.instruments[index].name.empty()) {
+    label += ": " + drop.instruments[index].name;
+  }
+  record_patch_change(label, before, after);
 
   drop.instruments.clear();
   drop.pending_instruments_path.clear();
@@ -254,6 +269,36 @@ void AppState::cancel_instrument_selection() {
   drop.show_error_popup = false;
 }
 
+AppState::PatchSnapshot AppState::capture_patch_snapshot() const {
+  PatchSnapshot snapshot;
+  snapshot.patch = patch_manager_.current_patch();
+  snapshot.path = patch_manager_.current_patch_path();
+  return snapshot;
+}
+
+void AppState::apply_patch_snapshot(const PatchSnapshot &snapshot) {
+  patch_manager_.current_patch() = snapshot.patch;
+  if (snapshot.path.empty()) {
+    patch_manager_.set_current_patch_path({});
+  } else {
+    patch_manager_.set_current_patch_path(snapshot.path);
+  }
+  apply_patch_to_device();
+}
+
+void AppState::record_patch_change(const std::string &label,
+                                   const PatchSnapshot &before,
+                                   const PatchSnapshot &after) {
+  history_.begin_transaction(label, {}, [label, before, after](AppState &) {
+    return history::make_snapshot_entry<PatchSnapshot>(
+        label, std::string{}, before, after,
+        [](AppState &state, const PatchSnapshot &snapshot) {
+          state.apply_patch_snapshot(snapshot);
+        });
+  });
+  history_.commit_transaction(*this);
+}
+
 void AppState::configure_audio() {
   const bool audio_ready = audio_manager_.init(kSampleRate);
   const UINT32 device_sample_rate =
@@ -264,7 +309,6 @@ void AppState::configure_audio() {
   wave_sampler_.clear();
 
   apply_patch_to_device();
-  history_.reset();
 
   if (!audio_ready) {
     std::cerr << "Failed to initialize audio system\n";

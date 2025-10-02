@@ -1,6 +1,7 @@
 #include "patch_drop.hpp"
 
 #include "../app_state.hpp"
+#include <algorithm>
 #include <imgui.h>
 
 namespace ui {
@@ -8,7 +9,7 @@ namespace {
 constexpr const char *kErrorPopupTitle = "Patch Load Error";
 constexpr const char *kInstrumentPopupTitle = "Select Instrument";
 constexpr const char *kFallbackErrorMessage = "Unsupported file format.";
-}
+} // namespace
 
 void render_patch_drop_feedback(AppState &app_state) {
   auto &drop = app_state.ui_state().drop_state;
@@ -40,11 +41,11 @@ void render_patch_drop_feedback(AppState &app_state) {
   if (ImGui::BeginPopupModal(kInstrumentPopupTitle, nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     if (!drop.instruments.empty()) {
-      drop.selected_instrument = std::clamp(
-          drop.selected_instrument, 0,
-          static_cast<int>(drop.instruments.size() - 1));
-      const auto &current = drop.instruments[static_cast<size_t>(
-          drop.selected_instrument)];
+      drop.selected_instrument =
+          std::clamp(drop.selected_instrument, 0,
+                     static_cast<int>(drop.instruments.size() - 1));
+      const auto &current =
+          drop.instruments[static_cast<size_t>(drop.selected_instrument)];
       const char *preview =
           current.name.empty() ? "(No name)" : current.name.c_str();
       if (ImGui::BeginCombo("Instrument", preview)) {

@@ -125,6 +125,21 @@ public:
 private:
   static constexpr UINT32 kSampleRate = 44100;
 
+  struct PatchSnapshot {
+    ym2612::Patch patch;
+    std::string path;
+
+    bool operator==(const PatchSnapshot &other) const {
+      return patch == other.patch && path == other.path;
+    }
+  };
+
+  PatchSnapshot capture_patch_snapshot() const;
+  void apply_patch_snapshot(const PatchSnapshot &snapshot);
+  void record_patch_change(const std::string &label,
+                           const PatchSnapshot &before,
+                           const PatchSnapshot &after);
+
   ym2612::Device device_;
   AudioManager audio_manager_;
   GuiManager gui_manager_;
