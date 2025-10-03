@@ -22,9 +22,11 @@ public:
 
   static constexpr std::size_t buffer_size() { return kBufferSize; }
 
+  bool is_volume_warning() const;
+
 private:
   static constexpr std::size_t kBufferSize = 2048;
-  static constexpr float kNormalization = 1.0f / 8192.0f;
+  static constexpr float kNormalization = 1.0f / 32768.0f;
 
   using Buffer = std::array<float, kBufferSize>;
 
@@ -33,6 +35,8 @@ private:
 
   mutable std::atomic<uint32_t> write_index_;
   mutable std::atomic<uint32_t> valid_count_;
+
+  mutable std::atomic<bool> volume_warning_;
 };
 
 } // namespace ym2612

@@ -3,6 +3,7 @@
 #include "../app_state.hpp"
 // #include "../channel_allocator.hpp"
 // #include <algorithm>
+#include "../ui/styles/megatoy_style.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <vector>
@@ -33,6 +34,12 @@ void render_waveform(AppState &app_state) {
   std::vector<float> right;
   auto &sampler = app_state.wave_sampler();
   sampler.latest_samples(static_cast<std::size_t>(sample_count), left, right);
+  bool is_warning = sampler.is_volume_warning();
+
+  if (is_warning) {
+    ImGui::PushStyleColor(ImGuiCol_PlotLines,
+                          styles::color_u32(styles::MegatoyCol::StatusWarning));
+  }
 
   const ImVec2 available_region = ImGui::GetContentRegionAvail();
   const ImVec2 plot_size(
@@ -44,7 +51,6 @@ void render_waveform(AppState &app_state) {
                      nullptr, -1.0f, 1.0f, plot_size);
   } else {
     ImGui::Dummy(plot_size);
-    ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "No samples yet");
   }
   ImGui::NextColumn();
   if (!right.empty()) {
@@ -54,6 +60,10 @@ void render_waveform(AppState &app_state) {
     ImGui::Dummy(plot_size);
   }
   ImGui::Columns(1);
+
+  if (is_warning) {
+    ImGui::PopStyleColor();
+  }
 
   // ImGui::Separator();
 
