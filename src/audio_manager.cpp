@@ -160,8 +160,8 @@ UINT32 AudioManager::fill_buffer(UINT32 buf_size, void *data) {
   INT16 *smpl_ptr_16 = (INT16 *)data;
   for (UINT32 cur_smpl = 0; cur_smpl < smpl_count;
        cur_smpl++, smpl_ptr_16 += 2) {
-    smpl_ptr_16[0] = smpl_data[0][cur_smpl];
-    smpl_ptr_16[1] = smpl_data[1][cur_smpl];
+    smpl_ptr_16[0] = std::clamp(smpl_data[0][cur_smpl], -32768, 32767);
+    smpl_ptr_16[1] = std::clamp(smpl_data[1][cur_smpl], -32768, 32767);
   }
 
   return buf_size;
