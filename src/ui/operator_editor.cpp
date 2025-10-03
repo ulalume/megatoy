@@ -126,14 +126,14 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   ImGui::SameLine();
 
   bool ssg_enable = op.ssg_enable;
-  if (ImGui::Checkbox("SSG Enable", &ssg_enable)) {
+  if (ImGui::Checkbox("SSG EG Enable", &ssg_enable)) {
     op.ssg_enable = ssg_enable;
   }
-  track_patch_history(app_state, op_label + " SSG Enable",
+  track_patch_history(app_state, op_label + " SSG EG Enable",
                       key_prefix + ".ssg_enable");
 
-  bool ssg_type_changed = ImGui::SliderInt("SSG Type", &ssg_type, 0, 7);
-  track_patch_history(app_state, op_label + " SSG Type",
+  bool ssg_type_changed = ImGui::SliderInt("SSG EG Type", &ssg_type, 0, 7);
+  track_patch_history(app_state, op_label + " SSG EG Type",
                       key_prefix + ".ssg_type");
   if (ssg_type_changed) {
     op.ssg_type_envelope_control = static_cast<uint8_t>(ssg_type);

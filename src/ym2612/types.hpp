@@ -4,6 +4,8 @@
 #include <cstdint>
 namespace ym2612 {
 
+const uint8_t algorithm_modulator_count[8] = {3, 3, 3, 3, 2, 1, 1, 0};
+
 enum class ChannelIndex : uint8_t {
   Fm1 = 0,
   Fm2 = 1,
@@ -74,7 +76,6 @@ struct ChannelInstrument {
   OperatorSettings operators[4];
 
   inline ym2612::ChannelInstrument clone_with_velocity(uint8_t velocity) const {
-    static const uint8_t opn_con_op[8] = {3, 3, 3, 3, 2, 1, 1, 0};
     int vol = velocity >> 3;
     if (vol > 15)
       vol = 0;
@@ -82,8 +83,9 @@ struct ChannelInstrument {
       vol = 15 - vol;
     vol = 2 + vol * 3 - vol / 3;
     ym2612::ChannelInstrument modified = *this;
-    auto opn_con_op_one = opn_con_op[modified.algorithm];
-    for (int op = 3; op >= opn_con_op_one; op--) {
+    // change carrier's total level
+    auto modulater_count = algorithm_modulator_count[modified.algorithm];
+    for (int op = 3; op >= modulater_count; op--) {
       uint8_t max_tl = modified.operators[op].total_level;
       modified.operators[op].total_level += vol;
       if (modified.operators[op].total_level > 127)
