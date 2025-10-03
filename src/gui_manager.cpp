@@ -188,11 +188,11 @@ void GuiManager::begin_frame() {
 
     ImGuiID dock_id_left_down;
     dock_id_left_down = ImGui::DockBuilderSplitNode(
-        dock_id_left, ImGuiDir_Down, 0.3f, nullptr, &dock_id_left);
+        dock_id_left, ImGuiDir_Down, 0.36f, nullptr, &dock_id_left);
 
     ImGuiID dock_id_left_down_down;
     dock_id_left_down_down = ImGui::DockBuilderSplitNode(
-        dock_id_left_down, ImGuiDir_Down, 0.3f, nullptr, &dock_id_left_down);
+        dock_id_left_down, ImGuiDir_Down, 0.45f, nullptr, &dock_id_left_down);
 
     ImGuiID dock_id_right_down;
     dock_id_right_down = ImGui::DockBuilderSplitNode(
