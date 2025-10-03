@@ -1,86 +1,156 @@
 #include "operator_editor.hpp"
+#include "envelope_image.hpp"
 #include "history_helpers.hpp"
 #include "preview/ssg_preview.hpp"
+#include "ym2612/types.hpp"
 #include <imgui.h>
 #include <string>
 
 namespace ui {
+void text_centered(std::string text, float frame_width) {
+  ImGui::Dummy(ImVec2(frame_width, ImGui::GetTextLineHeight()));
 
-// Helper function to render operator settings
-void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
-                            int op_num) {
-  std::string op_label = "Operator " + std::to_string(op_num);
-  std::string key_prefix = "instrument.op" + std::to_string(op_num);
-  ImGui::SeparatorText(op_label.c_str());
-  ImGui::PushID(op_num);
-  ImGui::PushItemWidth(150);
+  ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
+  ImVec2 cursor_pos = ImGui::GetItemRectMin();
+  cursor_pos.x += (frame_width - text_size.x) * 0.5f;
 
-  // Amplitude Modulation Enable
-  bool amplitude_mod = op.amplitude_modulation_enable;
-  if (ImGui::Checkbox("Amplitude Modulation Enable", &amplitude_mod)) {
-    op.amplitude_modulation_enable = amplitude_mod;
-  }
-  track_patch_history(app_state, op_label + " Amplitude Modulation",
-                      key_prefix + ".am_enable");
+  ImGui::GetWindowDrawList()->AddText(
+      cursor_pos, ImGui::GetColorU32(ImGuiCol_Text), text.c_str());
+}
+
+void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
+                     std::string op_label, std::string key_prefix) {
+
+  ImGui::BeginGroup(); // ADSR Envelope group
+
+  render_envelope_image(op, image_size);
+
+  ImGui::BeginGroup();
+  text_centered("TL", vslider_width);
+  ImGui::SameLine();
+  text_centered("AR", vslider_width);
+  ImGui::SameLine();
+  text_centered("DR", vslider_width);
+  ImGui::SameLine();
+  text_centered("SL", vslider_width);
+  ImGui::SameLine();
+  text_centered("SR", vslider_width);
+  ImGui::SameLine();
+  text_centered("RR", vslider_width);
+  ImGui::EndGroup();
+
+  // Attack Rate (0-31)
+  ImGui::BeginGroup();
 
   // Total Level (0-127)
   int total_level = op.total_level;
-  bool total_changed = ImGui::SliderInt("Total Level", &total_level, 127, 0);
+  bool total_changed =
+      ImGui::VSliderInt("##Total Level", vslider_size, &total_level, 127, 0);
   track_patch_history(app_state, op_label + " Total Level",
                       key_prefix + ".total_level");
   if (total_changed) {
     op.total_level = static_cast<uint8_t>(total_level);
   }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Total Level");
+  }
 
-  ImGui::Spacing();
+  ImGui::SameLine();
 
-  // Attack Rate (0-31)
   int attack_rate = op.attack_rate;
-  bool attack_changed = ImGui::SliderInt("Attack Rate", &attack_rate, 0, 31);
+  bool attack_changed =
+      ImGui::VSliderInt("##Attack Rate", vslider_size, &attack_rate, 0, 31);
   track_patch_history(app_state, op_label + " Attack Rate",
                       key_prefix + ".attack_rate");
   if (attack_changed) {
     op.attack_rate = static_cast<uint8_t>(attack_rate);
   }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Attack Rate");
+  }
+
+  ImGui::SameLine();
 
   // Decay Rate (0-31)
   int decay_rate = op.decay_rate;
-  bool decay_changed = ImGui::SliderInt("Decay Rate", &decay_rate, 31, 0);
+  bool decay_changed =
+      ImGui::VSliderInt("##Decay Rate", vslider_size, &decay_rate, 31, 0);
   track_patch_history(app_state, op_label + " Decay Rate",
                       key_prefix + ".decay_rate");
   if (decay_changed) {
     op.decay_rate = static_cast<uint8_t>(decay_rate);
   }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Decay Rate");
+  }
+  ImGui::SameLine();
 
   // Sustain Level (0-15)
   int sustain_level = op.sustain_level;
   bool sustain_level_changed =
-      ImGui::SliderInt("Sustain Level", &sustain_level, 15, 0);
+      ImGui::VSliderInt("##Sustain Level", vslider_size, &sustain_level, 15, 0);
   track_patch_history(app_state, op_label + " Sustain Level",
                       key_prefix + ".sustain_level");
   if (sustain_level_changed) {
     op.sustain_level = static_cast<uint8_t>(sustain_level);
   }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Sustain Level");
+  };
+
+  ImGui::SameLine();
 
   // Sustain Rate (0-31)
   int sustain_rate = op.sustain_rate;
   bool sustain_rate_changed =
-      ImGui::SliderInt("Sustain Rate", &sustain_rate, 31, 0);
+      ImGui::VSliderInt("##Sustain Rate", vslider_size, &sustain_rate, 31, 0);
   track_patch_history(app_state, op_label + " Sustain Rate",
                       key_prefix + ".sustain_rate");
   if (sustain_rate_changed) {
     op.sustain_rate = static_cast<uint8_t>(sustain_rate);
   }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Sustain Rate");
+  }
+  ImGui::SameLine();
 
   // Release Rate (0-15)
   int release_rate = op.release_rate;
-  bool release_changed = ImGui::SliderInt("Release Rate", &release_rate, 15, 0);
+  bool release_changed =
+      ImGui::VSliderInt("##Release Rate", vslider_size, &release_rate, 15, 0);
   track_patch_history(app_state, op_label + " Release Rate",
                       key_prefix + ".release_rate");
   if (release_changed) {
     op.release_rate = static_cast<uint8_t>(release_rate);
   }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Release Rate");
+  }
+  ImGui::EndGroup();
 
+  ImGui::EndGroup(); // End ADSR Envelope group
+}
+
+// Helper function to render operator settings
+void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
+                            int op_index) {
+  ym2612::OperatorIndex op_enum = ym2612::all_operator_indices[op_index];
+  auto is_modulator =
+      static_cast<int>(op_enum) <
+      ym2612::algorithm_modulator_count[app_state.patch().instrument.algorithm];
+  std::string op_label = "Operator " + std::to_string(op_index + 1) +
+                         (is_modulator ? "" : " (Carrier)");
+  std::string key_prefix = "instrument.op" + std::to_string(op_index);
+
+  if (!is_modulator) {
+    ImGui::PushStyleColor(ImGuiCol_Separator,
+                          ImGui::GetStyleColorVec4(ImGuiCol_Header));
+  }
+  ImGui::SeparatorText(op_label.c_str());
+  ImGui::PushID(op_index);
+  ImGui::PushItemWidth(hslider_width);
+
+  render_envelope(app_state, op, op_label, key_prefix);
   ImGui::Spacing();
 
   // Key Scale (0-3)
@@ -138,7 +208,23 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   if (ssg_type_changed) {
     op.ssg_type_envelope_control = static_cast<uint8_t>(ssg_type);
   }
+
+  ImGui::Spacing();
+
+  // Amplitude Modulation Enable
+  bool amplitude_mod = op.amplitude_modulation_enable;
+  if (ImGui::Checkbox("Amplitude Modulation Enable", &amplitude_mod)) {
+    op.amplitude_modulation_enable = amplitude_mod;
+  }
+  track_patch_history(app_state, op_label + " Amplitude Modulation",
+                      key_prefix + ".am_enable");
+
   ImGui::PopItemWidth();
+
+  if (!is_modulator) {
+    ImGui::PopStyleColor();
+  }
+
   ImGui::PopID();
 }
 

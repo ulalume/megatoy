@@ -313,7 +313,7 @@ void render_patch_editor(AppState &app_state) {
   }
   track_patch_history(app_state, "LFO Enable", "global.lfo_enable");
 
-  ImGui::PushItemWidth(150);
+  ImGui::PushItemWidth(hslider_width);
   int lfo_freq = patch.global.lfo_frequency;
   bool lfo_freq_changed = ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7);
   track_patch_history(app_state, "LFO Frequency", "global.lfo_frequency");
@@ -343,7 +343,7 @@ void render_patch_editor(AppState &app_state) {
   }
   track_patch_history(app_state, "Right Speaker", "channel.right_speaker");
 
-  ImGui::PushItemWidth(150);
+  ImGui::PushItemWidth(hslider_width);
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed =
       ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3);
@@ -380,7 +380,7 @@ void render_patch_editor(AppState &app_state) {
 
   ImGui::NextColumn();
 
-  ImGui::PushItemWidth(150);
+  ImGui::PushItemWidth(hslider_width);
   if (const auto *preview =
           get_algorithm_preview_texture(patch.instrument.algorithm)) {
     ImGui::Image(preview->texture_id, preview->size);
@@ -402,8 +402,7 @@ void render_patch_editor(AppState &app_state) {
   for (auto i = 0; i < 4; i++) {
     auto op_index = static_cast<int>(ym2612::all_operator_indices[i]);
     ym2612::OperatorSettings old_op = patch.instrument.operators[op_index];
-    render_operator_editor(app_state, patch.instrument.operators[op_index],
-                           i + 1);
+    render_operator_editor(app_state, patch.instrument.operators[op_index], i);
 
     if (old_op != patch.instrument.operators[op_index]) {
       settings_changed = true;

@@ -43,6 +43,7 @@ set(MEGATOY_SOURCES
   src/parsers/rym2612_parser.cpp
   src/parsers/patch_loader.cpp
   src/patches/patch_manager.cpp
+  src/ui/envelope_image.cpp
   src/ui/preview/preview.cpp
   src/ui/preview/algorithm_preview.cpp
   src/ui/preview/ssg_preview.cpp
