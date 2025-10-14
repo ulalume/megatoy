@@ -1,4 +1,5 @@
 #include "operator_editor.hpp"
+#include "../formats/common.hpp"
 #include "app_state.hpp"
 #include "envelope_image.hpp"
 #include "history_helpers.hpp"
@@ -242,8 +243,12 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   }
 
   // Multiple (0-15)
+  const char *multiple_labels[] = {"0.5", "1",  "2",  "3", "4",  "5",
+                                   "6",   "7",  "8",  "9", "10", "11",
+                                   "12",  "13", "14", "15"};
   int multiple = op.multiple;
-  bool multiple_changed = ImGui::SliderInt("Multiple", &multiple, 0, 15);
+  bool multiple_changed =
+      ImGui::SliderInt("Multiple", &multiple, 0, 15, multiple_labels[multiple]);
   track_patch_history(app_state, op_label + " Multiple",
                       key_prefix + ".multiple");
   if (multiple_changed) {
