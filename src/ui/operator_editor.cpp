@@ -151,6 +151,9 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
 // Helper function to render operator settings
 void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
                             int op_index) {
+
+  const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
+
   ym2612::OperatorIndex op_enum = ym2612::all_operator_indices[op_index];
   auto is_modulator =
       static_cast<int>(op_enum) <
@@ -159,16 +162,75 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
                          (is_modulator ? "" : " (Carrier)");
   std::string key_prefix = "instrument.op" + std::to_string(op_index);
 
-  // if (!is_modulator) {
-  //   ImGui::PushStyleColor(ImGuiCol_Separator,
-  //                         ImGui::GetStyleColorVec4(ImGuiCol_Header));
-  // }
+  if (!is_modulator) {
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+    ImGui::PushStyleColor(ImGuiCol_Separator,
+                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+  }
   ImGui::SeparatorText(op_label.c_str());
+  if (!is_modulator) {
+    ImGui::PopStyleColor();
+    ImGui::PopStyleColor();
+  }
+
   ImGui::PushID(op_index);
   ImGui::PushItemWidth(hslider_width);
+
+  // Amplitude Modulation Enable
+  bool amplitude_mod = op.amplitude_modulation_enable;
+  if (ImGui::Checkbox("Amplitude Modulation Enable", &amplitude_mod)) {
+    op.amplitude_modulation_enable = amplitude_mod;
+  }
+  ImGui::Spacing();
+
+  track_patch_history(app_state, op_label + " Amplitude Modulation",
+                      key_prefix + ".am_enable");
+
   render_envelope(app_state, op, app_state.ui_state().envelope_states[op_index],
                   op_label, key_prefix);
-  ImGui::Spacing();
+
+  if (column_layout) {
+    ImGui::SameLine();
+    ImGui::Spacing();
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+  } else {
+    ImGui::Spacing();
+  }
+
+  // SSG Enable
+  //
+  // SSG Type Envelope Control (0-7)
+  int ssg_type = op.ssg_type_envelope_control;
+  if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
+                                          : get_ssg_preview_off_texture()) {
+    if (preview->valid()) {
+      ImGui::Image(preview->texture_id, preview->size);
+    }
+  }
+  ImGui::SameLine();
+
+  bool ssg_enable = op.ssg_enable;
+  if (ImGui::Checkbox("SSG EG Enable", &ssg_enable)) {
+    op.ssg_enable = ssg_enable;
+  }
+  track_patch_history(app_state, op_label + " SSG EG Enable",
+                      key_prefix + ".ssg_enable");
+
+  bool ssg_type_changed = ImGui::SliderInt("SSG EG Type", &ssg_type, 0, 7);
+  track_patch_history(app_state, op_label + " SSG EG Type",
+                      key_prefix + ".ssg_type");
+  if (ssg_type_changed) {
+    op.ssg_type_envelope_control = static_cast<uint8_t>(ssg_type);
+  }
+
+  if (column_layout) {
+    ImVec2 pos = ImGui::GetCursorPos();
+    ImGui::SetCursorPosY(pos.y + 123);
+  } else {
+    ImGui::Spacing();
+  }
 
   // Key Scale (0-3)
   int key_scale = op.key_scale;
@@ -200,47 +262,10 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
     op.detune = static_cast<uint8_t>(detune);
   }
 
-  // SSG Enable
-  //
-  // SSG Type Envelope Control (0-7)
-  int ssg_type = op.ssg_type_envelope_control;
-  if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
-                                          : get_ssg_preview_off_texture()) {
-    if (preview->valid()) {
-      ImGui::Image(preview->texture_id, preview->size);
-    }
+  if (column_layout) {
+    ImGui::EndGroup();
   }
-  ImGui::SameLine();
-
-  bool ssg_enable = op.ssg_enable;
-  if (ImGui::Checkbox("SSG EG Enable", &ssg_enable)) {
-    op.ssg_enable = ssg_enable;
-  }
-  track_patch_history(app_state, op_label + " SSG EG Enable",
-                      key_prefix + ".ssg_enable");
-
-  bool ssg_type_changed = ImGui::SliderInt("SSG EG Type", &ssg_type, 0, 7);
-  track_patch_history(app_state, op_label + " SSG EG Type",
-                      key_prefix + ".ssg_type");
-  if (ssg_type_changed) {
-    op.ssg_type_envelope_control = static_cast<uint8_t>(ssg_type);
-  }
-
-  ImGui::Spacing();
-
-  // Amplitude Modulation Enable
-  bool amplitude_mod = op.amplitude_modulation_enable;
-  if (ImGui::Checkbox("Amplitude Modulation Enable", &amplitude_mod)) {
-    op.amplitude_modulation_enable = amplitude_mod;
-  }
-  track_patch_history(app_state, op_label + " Amplitude Modulation",
-                      key_prefix + ".am_enable");
-
   ImGui::PopItemWidth();
-
-  // if (!is_modulator) {
-  //   ImGui::PopStyleColor();
-  // }
 
   ImGui::PopID();
 }

@@ -17,7 +17,7 @@ int compute_effective_rate_attack(int attack_rate, int rate_key_scaling = 0) {
 int compute_effective_rate_decay(int decay_rate, int rate_key_scaling = 0) {
   return decay_rate + rate_key_scaling; // 0 ~ 31
 }
-int compute_effectiveRate_release(int release_rate, int rate_key_scaling = 0) {
+int compute_effective_rate_release(int release_rate, int rate_key_scaling = 0) {
   return 2 * release_rate + 1 + rate_key_scaling; // 0 ~ 31
 }
 ImU32 color_from_slider_state(
@@ -114,8 +114,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
     }
   }
 
-  float release_width =
-      draw_height / compute_effectiveRate_release(op.release_rate);
+  float release_width = (draw_height - total_level_height) /
+                        compute_effective_rate_release(op.release_rate);
   auto r = fmin(4.0f, draw_width / fmax(release_width, envelope_points[3].x));
   for (int i = 0; i < 4; i++) {
     envelope_points[i].x *= r;
@@ -132,7 +132,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
 
   auto i = 0;
   while (true) {
-    auto grid_x = i * 12.2f * r;
+    auto grid_x = i * 12.4f * r;
     if (grid_x > draw_width)
       break;
     draw_list->AddLine(ImVec2(grid_x, 0) + draw_min,
@@ -141,7 +141,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   }
   i = 0;
   while (true) {
-    auto grid_y = i * 12.2f * 4.0f;
+    auto grid_y = i * 12.4f * 4.0f;
     if (grid_y > draw_height)
       break;
     draw_list->AddLine(ImVec2(0, draw_height - grid_y) + draw_min,
