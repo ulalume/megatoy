@@ -1,47 +1,59 @@
-# YM2612 Patch Editor
+# Megatoy - YM2612 Patch Editor
+
+> ⚠️ **Early Development**: This project is in active development and features may be incomplete.
 
 ![Screenshot](https://raw.githubusercontent.com/ulalume/megatoy/main/docs/screenshot.png)
 
-A **YM2612 patch editor** for learning and experimentation with the chip.
-This project is built on **libvgm**.
-> ⚠️ This project is in a very early stage.
+A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sound chip. Designed for musicians, sound designers, and chiptune enthusiasts who want to create and experiment with FM synthesis patches.
 
-## Features
+## Key Features
 
-- Load patches from:
-  - `.dmp` DefleMask Preset Format
-  - `.mml` ctrmml
-  - `.fui` Furnace Instrument
-  - `.rym2612` RYM2612 Iconic FM Synthesizer Preset
-  - *Software-specific macros/effects are ignored.*
-- Save patches in a custom format.
-- Export patches to:
-  - `.dmp`
-  - `.mml`
-- Support MIDI Input
+### Patch Management
+- **Load patches** from multiple formats: `.dmp`, `.fui`, `.rym2612`, `.mml`
+- **Save patches** in custom format with full metadata
+- **Export patches** to DefleMask (`.dmp`) and ctrmml (`.mml`) formats
+- **Drag & drop** support for easy file loading
 
-## Patches
+### Real-time Audio & MIDI
+- **Live audio playback** with built-in YM2612 emulation
+- **MIDI input support** with velocity sensitivity
+- **Software keyboard** for testing patches without MIDI hardware
+- **Real-time parameter adjustment** with immediate audio feedback
 
-You can load patch files by placing `.dmp`, `.fui`, `.rym2612`, or `.mml` (ctrmml) files in `~/megatoy/patches/`.
+### Advanced Editing
+- **Visual envelope editor** with interactive ADSR curves
+- **Undo/Redo history** for safe experimentation
 
-Recommended sources:
+### MML Integration
+- **MML Console** for viewing current patch as ctrmml code
+- **One-click copy** to clipboard for easy integration with MML tools
+- **Real-time MML preview** updates as you edit parameters
+- Compatible with ctrmml
 
-- **DefleMask Legacy** (https://www.deflemask.com/get_legacy/) - instruments/Genesis
-- **Furnace** (https://github.com/tildearrow/furnace) - instruments/OPN
-- **Rym2612 ReFill** (https://www.inphonik.com/press/press-release-rym2612-refill/) - free pack of 180 patches
-- **RymCast** (https://www.inphonik.com/products/rymcast-genesis-vgm-player/) - extract `.dmp` from VGM/VGZ files
-  > **Note:** RymCast 1.0.6 DMP Export appears to reverse the values of Operators 2 and 3.
+## Build Instructions
 
-## Build
+```bash
+# Clone repository
+git clone https://github.com/ulalume/megatoy.git
+cd megatoy
 
-```
+# Debug build
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j$(sysctl -n hw.ncpu)
 
-# Release Build
+# Release build
 cmake -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --config Release -j$(sysctl -n hw.ncpu)
 ```
+
+## Patch Sources
+
+Load patches by placing files in `~/megatoy/patches/` (created automatically) or drag-and-drop into the application.
+
+Recommended collections:
+- **DefleMask Legacy** (https://www.deflemask.com/get_legacy/) - instruments/Genesis
+- **Furnace** (https://github.com/tildearrow/furnace) - instruments/OPN
+- **Rym2612 ReFill** (https://www.inphonik.com/press/press-release-rym2612-refill/) - free pack of 180 patches
 
 ## Thanks
 
