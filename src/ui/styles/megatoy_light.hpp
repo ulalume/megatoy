@@ -102,11 +102,11 @@ inline void apply() {
   palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKey)] =
       ImVec4(0.97f, 0.98f, 0.99f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKeyPressed)] =
-      ImVec4(0.82f, 0.87f, 0.95f, 1.0f);
+      ImVec4(0.45f, 0.65f, 0.95f, 1.00f);
   palette.colors[static_cast<int>(MegatoyCol::PianoBlackKey)] =
-      ImVec4(0.28f, 0.32f, 0.42f, 1.0f);
+      ImVec4(0.10f, 0.12f, 0.20f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoBlackKeyPressed)] =
-      ImVec4(0.48f, 0.52f, 0.62f, 1.0f);
+      ImVec4(0.45f, 0.65f, 0.95f, 1.00f);
 }
 
 } // namespace ui::styles::megatoy_light
