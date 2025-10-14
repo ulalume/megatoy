@@ -256,15 +256,16 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   }
 
   // Detune (0-7)
-  static const char *labels[] = {
-      "0", "+1", "+2", "+3", "0", "-1", "-2", "-3",
+  const char *detune_labels[] = {
+      "-3", "-2", "-1", "0", "1", "2", "3",
   };
-  int detune = op.detune;
+  int detune = ym2612::formats::conversion::detune_from_patch_to_dmp(op.detune);
   bool detune_changed =
-      ImGui::SliderInt("Detune", &detune, 0, 7, labels[detune]);
+      ImGui::SliderInt("Detune", &detune, 0, 6, detune_labels[detune]);
   track_patch_history(app_state, op_label + " Detune", key_prefix + ".detune");
   if (detune_changed) {
-    op.detune = static_cast<uint8_t>(detune);
+    op.detune = static_cast<uint8_t>(
+        ym2612::formats::conversion::detune_from_dmp_to_patch(detune));
   }
 
   if (column_layout) {
