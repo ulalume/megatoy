@@ -25,7 +25,7 @@ inline void apply() {
   palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKey)] =
       ImVec4(0.86f, 0.88f, 0.92f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoWhiteKeyPressed)] =
-      ImVec4(0.95f, 0.96f, 0.99f, 1.0f);
+      colors[ImGuiCol_FrameBgActive];
   palette.colors[static_cast<int>(MegatoyCol::PianoBlackKey)] =
       colors[ImGuiCol_FrameBg];
   palette.colors[static_cast<int>(MegatoyCol::PianoBlackKeyPressed)] =

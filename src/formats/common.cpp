@@ -17,7 +17,6 @@ uint8_t detune_from_dmp_to_patch(int dt) {
   case 5: // 2
     return 2;
   case 6: // 3
-    return 3;
   case 7: // 3
     return 3;
   default:
@@ -33,18 +32,16 @@ uint8_t detune_from_patch_to_dmp(int dt) {
     return 1;
   case 5: // -1
     return 2;
-  case 4: // 0
-    return 3;
   case 3: // 3
-    return 7;
-  case 2: // 2
     return 6;
-  case 1: // 1
+  case 2: // 2
     return 5;
-  case 0: // 0
+  case 1: // 1
     return 4;
-  default:
-    return 4; // Default fallback
+  case 0:  // 0
+  case 4:  // 0
+  default: // 0
+    return 3;
   }
 }
 

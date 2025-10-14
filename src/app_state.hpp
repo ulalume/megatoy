@@ -43,6 +43,20 @@ struct UIState {
     std::vector<ym2612::formats::ctrmml::Instrument> instruments;
     int selected_instrument = 0;
   } drop_state;
+
+  struct EnvelopeState {
+    enum class SliderState {
+      None,
+      Hover,
+      Active,
+    };
+    SliderState total_level = SliderState::None;
+    SliderState attack_rate = SliderState::None;
+    SliderState decay_rate = SliderState::None;
+    SliderState sustain_level = SliderState::None;
+    SliderState sustain_rate = SliderState::None;
+    SliderState release_rate = SliderState::None;
+  } envelope_states[4];
 };
 
 class AppState {
