@@ -56,7 +56,7 @@ struct UIState {
     SliderState sustain_level = SliderState::None;
     SliderState sustain_rate = SliderState::None;
     SliderState release_rate = SliderState::None;
-  } envelope_state_;
+  } envelope_states[4];
 };
 
 class AppState {
