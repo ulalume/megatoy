@@ -1,16 +1,11 @@
 #include "patch_editor.hpp"
-#include "../formats/ctrmml.hpp"
-#include "../formats/dmp.hpp"
-#include "../formats/gin.hpp"
 #include "../patches/patch_manager.hpp"
 #include "../patches/patch_repository.hpp"
-#include "../platform/file_dialog.hpp"
 #include "history_helpers.hpp"
 #include "operator_editor.hpp"
 #include "preview/algorithm_preview.hpp"
 #include <cctype>
 #include <cstring>
-#include <filesystem>
 #include <imgui.h>
 
 #include "styles/megatoy_style.hpp"
@@ -19,6 +14,16 @@ namespace ui {
 void center_next_window() {
   ImVec2 center = ImGui::GetMainViewport()->GetCenter();
   ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+}
+void force_center_window() {
+  ImVec2 pos = ImGui::GetWindowPos();
+  ImVec2 size = ImGui::GetWindowSize();
+  ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+  ImVec2 target_pos(center.x - size.x * 0.5f, center.y - size.y * 0.5f);
+
+  if (abs(pos.x - target_pos.x) > 5.0f || abs(pos.y - target_pos.y) > 5.0f) {
+    ImGui::SetWindowPos(target_pos, ImGuiCond_Always);
+  }
 }
 
 // ImGui callback to block invalid characters
@@ -70,27 +75,21 @@ void render_patch_editor(AppState &app_state) {
     }
   } else {
     if (ImGui::Button("Save")) {
-      // Check whether the file already exists
-      auto patches_dir =
-          app_state.directory_service().paths().user_patches_root;
-      auto patch_path =
-          ym2612::formats::gin::build_patch_path(patches_dir, patch.name);
-
-      if (std::filesystem::exists(patch_path)) {
-        // Prompt if the file already exists
+      auto result = app_state.patch_manager().save_current_patch(false);
+      if (result.is_duplicated()) {
+        last_export_path = result.path;
         ImGui::OpenPopup("Overwrite Confirmation");
         app_state.patch_manager().set_current_patch_path(
-            app_state.patch_repository().to_relative_path(patch_path));
-      } else {
-        // Save as new file
-        if (app_state.patch_manager().save_current_patch()) {
-          ImGui::OpenPopup("Save Success");
-          app_state.patch_repository().refresh();
-          app_state.patch_manager().set_current_patch_path(
-              app_state.patch_repository().to_relative_path(patch_path));
-        } else {
-          ImGui::OpenPopup("Save Error");
-        }
+            app_state.patch_repository().to_relative_path(result.path));
+      } else if (result.is_success()) {
+        last_export_path = result.path;
+        ImGui::OpenPopup("Save Success");
+        app_state.patch_repository().refresh();
+        app_state.patch_manager().set_current_patch_path(
+            app_state.patch_repository().to_relative_path(result.path));
+      } else if (result.is_error()) {
+        last_export_error = result.error_message;
+        ImGui::OpenPopup("Error##SaveOrExport");
       }
     }
     ImGui::SameLine();
@@ -104,29 +103,17 @@ void render_patch_editor(AppState &app_state) {
     auto mml = ImGui::MenuItem(".mml (ctrmml)");
     auto dmp = ImGui::MenuItem(".dmp");
     ImGui::EndPopup();
-
-    if (mml) {
-      patches::ExportResult result =
-          app_state.patch_manager().export_current_patch_as(
-              patches::ExportFormat::MML);
+    if (mml || dmp) {
+      const auto export_format =
+          mml ? patches::ExportFormat::MML : patches::ExportFormat::DMP;
+      auto result =
+          app_state.patch_manager().export_current_patch_as(export_format);
       if (result.is_success()) {
         last_export_path = result.path;
         ImGui::OpenPopup("Export Success");
       } else if (result.is_error()) {
         last_export_error = result.error_message;
-        ImGui::OpenPopup("Export Error");
-      }
-    }
-    if (dmp) {
-      patches::ExportResult result =
-          app_state.patch_manager().export_current_patch_as(
-              patches::ExportFormat::MML);
-      if (result.is_success()) {
-        last_export_path = result.path;
-        ImGui::OpenPopup("Export Success");
-      } else if (result.is_error()) {
-        last_export_error = result.error_message;
-        ImGui::OpenPopup("Export Error");
+        ImGui::OpenPopup("Error##SaveOrExport");
       }
     }
   }
@@ -154,12 +141,13 @@ void render_patch_editor(AppState &app_state) {
   }
 
   // Popup Modal
-  // Duplicate confirmation dialog
+  // Overwrite confirmation dialog
   center_next_window();
   if (ImGui::BeginPopupModal("Overwrite Confirmation", nullptr,
                              ImGuiWindowFlags_NoMove |
                                  ImGuiWindowFlags_NoResize |
                                  ImGuiWindowFlags_AlwaysAutoResize)) {
+    force_center_window();
     ImGui::Text("A patch with this name already exists:");
     ImGui::Text("\"%s\"", patch.name.c_str());
     ImGui::Spacing();
@@ -176,10 +164,13 @@ void render_patch_editor(AppState &app_state) {
     ImGui::EndPopup();
 
     if (overwrite_button) {
-      if (app_state.patch_manager().save_current_patch()) {
+      auto result = app_state.patch_manager().save_current_patch(true);
+      if (result.is_success()) {
+        last_export_path = result.path;
         ImGui::OpenPopup("Save Success");
-      } else {
-        ImGui::OpenPopup("Save Error");
+      } else if (result.is_error()) {
+        last_export_error = result.error_message;
+        ImGui::OpenPopup("Error##SaveOrExport");
       }
       ImGui::CloseCurrentPopup();
     }
@@ -191,31 +182,13 @@ void render_patch_editor(AppState &app_state) {
                              ImGuiWindowFlags_NoMove |
                                  ImGuiWindowFlags_NoResize |
                                  ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::Text("Patch saved successfully!");
-    ImGui::Text("File: %s.gin", patch.name.c_str());
+    force_center_window();
+    ImGui::Text("Patch saved successfully.");
+    ImGui::TextWrapped("%s", last_export_path.c_str());
     ImGui::Spacing();
-
     if (ImGui::Button("OK", ImVec2(120, 0))) {
       ImGui::CloseCurrentPopup();
     }
-
-    ImGui::EndPopup();
-  }
-
-  // Save-error dialog
-  center_next_window();
-  if (ImGui::BeginPopupModal("Save Error", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::Text("Failed to save patch!");
-    ImGui::Text("Please check directory permissions.");
-    ImGui::Spacing();
-
-    if (ImGui::Button("OK", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
-
     ImGui::EndPopup();
   }
 
@@ -225,7 +198,8 @@ void render_patch_editor(AppState &app_state) {
                              ImGuiWindowFlags_NoMove |
                                  ImGuiWindowFlags_NoResize |
                                  ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::Text("Export completed successfully.");
+    force_center_window();
+    ImGui::Text("Patch exported successfully.");
     ImGui::TextWrapped("%s", last_export_path.c_str());
     ImGui::Spacing();
     if (ImGui::Button("OK", ImVec2(120, 0))) {
@@ -234,13 +208,13 @@ void render_patch_editor(AppState &app_state) {
     ImGui::EndPopup();
   }
 
-  // Export-error dialog
+  // Error dialog
   center_next_window();
-  if (ImGui::BeginPopupModal("Export Error", nullptr,
+  if (ImGui::BeginPopupModal("Error##SaveOrExport", nullptr,
                              ImGuiWindowFlags_NoMove |
                                  ImGuiWindowFlags_NoResize |
                                  ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::Text("Export failed.");
+    force_center_window();
     ImGui::TextWrapped("%s", last_export_error.c_str());
     ImGui::Spacing();
     if (ImGui::Button("OK", ImVec2(120, 0))) {

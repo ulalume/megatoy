@@ -11,7 +11,11 @@ struct FileFilter {
   std::vector<std::string> extensions; // e.g. {"txt", "mml"}
 };
 
-enum class DialogResult { Ok, Cancel, Error };
+enum class DialogResult {
+  Ok,
+  Cancelled,
+  Error,
+};
 
 bool initialize();
 void shutdown();

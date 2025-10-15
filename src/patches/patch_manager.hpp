@@ -3,33 +3,36 @@
 #include "../system/directory_service.hpp"
 #include "../ym2612/patch.hpp"
 #include "patch_repository.hpp"
-
 #include <filesystem>
 #include <string>
 
 namespace patches {
 
-struct ExportResult {
+struct SaveResult {
   enum class Status {
     Success,
-    Cancel,
+    Cancelled,
     Error,
+    Duplicated,
   };
 
   Status status;
   std::filesystem::path path;
   std::string error_message;
 
-  static ExportResult success(const std::filesystem::path &exported_path) {
+  static SaveResult success(const std::filesystem::path &exported_path) {
     return {Status::Success, exported_path, ""};
   }
-  static ExportResult cancelled() { return {Status::Cancel, {}, ""}; }
-  static ExportResult error(const std::string &message) {
+  static SaveResult cancelled() { return {Status::Cancelled, {}, ""}; }
+  static SaveResult error(const std::string &message) {
     return {Status::Error, {}, message};
   }
+  static SaveResult duplicated() { return {Status::Duplicated, {}, ""}; }
+
   bool is_success() const { return status == Status::Success; }
-  bool is_cancelled() const { return status == Status::Cancel; }
+  bool is_cancelled() const { return status == Status::Cancelled; }
   bool is_error() const { return status == Status::Error; }
+  bool is_duplicated() const { return status == Status::Duplicated; }
 };
 
 // Check whether a character is valid in filenames
@@ -89,8 +92,8 @@ public:
   PatchRepository &repository();
   const PatchRepository &repository() const;
 
-  bool save_current_patch();
-  ExportResult export_current_patch_as(ExportFormat format);
+  SaveResult save_current_patch(bool force_overwrite);
+  SaveResult export_current_patch_as(ExportFormat format);
 
 private:
   megatoy::system::DirectoryService &directories_;

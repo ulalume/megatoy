@@ -51,14 +51,26 @@ void PatchManager::refresh_directories() {
 PatchRepository &PatchManager::repository() { return repository_; }
 const PatchRepository &PatchManager::repository() const { return repository_; }
 
-bool PatchManager::save_current_patch() {
+SaveResult PatchManager::save_current_patch(bool force_overwrite = false) {
+  // Check whether the file already exists
   auto patches_dir = directories_.paths().user_patches_root;
-  return ym2612::formats::gin::save_patch(patches_dir, current_patch_,
-                                          current_patch_.name)
-      .has_value();
+  auto patch_path =
+      ym2612::formats::gin::build_patch_path(patches_dir, current_patch_.name);
+  if (std::filesystem::exists(patch_path) && !force_overwrite) {
+    return SaveResult::duplicated();
+  } else {
+    // Save as new file
+    if (ym2612::formats::gin::save_patch(patches_dir, current_patch_,
+                                         current_patch_.name)
+            .has_value()) {
+      return SaveResult::success(patch_path);
+    } else {
+      return SaveResult::error("Please check directory permissions.");
+    }
+  }
 }
 
-ExportResult PatchManager::export_current_patch_as(ExportFormat format) {
+SaveResult PatchManager::export_current_patch_as(ExportFormat format) {
   const auto &default_dir = directories_.paths().export_root;
   const std::string sanitized_name = sanitize_filename(
       current_patch_.name.empty() ? "patch" : current_patch_.name);
@@ -79,15 +91,15 @@ ExportResult PatchManager::export_current_patch_as(ExportFormat format) {
       }
 
       if (ym2612::formats::dmp::write_patch(current_patch_, selected_path)) {
-        return ExportResult::success(selected_path);
+        return SaveResult::success(selected_path);
       } else {
-        return ExportResult::error("Failed to export DMP file: " +
-                                   selected_path.string());
+        return SaveResult::error("Failed to export DMP file: " +
+                                 selected_path.string());
       }
-    } else if (result == platform::file_dialog::DialogResult::Cancel) {
-      return ExportResult::cancelled();
+    } else if (result == platform::file_dialog::DialogResult::Cancelled) {
+      return SaveResult::cancelled();
     } else {
-      return ExportResult::error("Could not open save dialog for DMP export");
+      return SaveResult::error("Could not open save dialog for DMP export");
     }
   }
 
@@ -106,20 +118,20 @@ ExportResult PatchManager::export_current_patch_as(ExportFormat format) {
       }
 
       if (ym2612::formats::ctrmml::write_patch(current_patch_, selected_path)) {
-        return ExportResult::success(selected_path);
+        return SaveResult::success(selected_path);
       } else {
-        return ExportResult::error("Failed to export MML file: " +
-                                   selected_path.string());
+        return SaveResult::error("Failed to export MML file: " +
+                                 selected_path.string());
       }
-    } else if (result == platform::file_dialog::DialogResult::Cancel) {
-      return ExportResult::cancelled();
+    } else if (result == platform::file_dialog::DialogResult::Cancelled) {
+      return SaveResult::cancelled();
     } else {
-      return ExportResult::error("Could not open save dialog for MML export");
+      return SaveResult::error("Could not open save dialog for MML export");
     }
   }
 
   default:
-    return ExportResult::error("Unknown export format");
+    return SaveResult::error("Unknown export format");
   }
 }
 
