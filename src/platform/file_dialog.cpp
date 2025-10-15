@@ -151,7 +151,7 @@ DialogResult pick_folder(const std::filesystem::path &default_path,
 
   std::string output = run_applescript(script);
   if (output.empty()) {
-    return DialogResult::Cancel;
+    return DialogResult::Cancelled;
   }
   selected_path = std::filesystem::path(output);
   return DialogResult::Ok;
@@ -203,7 +203,7 @@ DialogResult save_file(const std::filesystem::path &default_dir,
 
   std::string output = run_applescript(script);
   if (output.empty()) {
-    return DialogResult::Cancel;
+    return DialogResult::Cancelled;
   }
   selected_path = std::filesystem::path(output);
   return DialogResult::Ok;
