@@ -2,6 +2,7 @@
 #include "../formats/ctrmml.hpp"
 #include "../formats/dmp.hpp"
 #include "../formats/gin.hpp"
+#include "../patches/patch_manager.hpp"
 #include "../patches/patch_repository.hpp"
 #include "../platform/file_dialog.hpp"
 #include "history_helpers.hpp"
@@ -15,51 +16,15 @@
 #include "styles/megatoy_style.hpp"
 
 namespace ui {
-
-// Check whether a character is valid in filenames
-bool is_valid_filename_char(char c) {
-  // Characters disallowed on Windows/Mac/Linux
-  const char invalid_chars[] = {'<', '>', ':', '"', '/', '\\', '|', '?', '*'};
-
-  // Control characters are also rejected
-  if (c < 32 || c == 127) {
-    return false;
-  }
-
-  // Check the invalid character list
-  for (char invalid : invalid_chars) {
-    if (c == invalid) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-// Normalise a filename by removing invalid characters
-std::string sanitize_filename(const std::string &input) {
-  std::string result;
-  for (char c : input) {
-    if (is_valid_filename_char(c)) {
-      result += c;
-    }
-  }
-
-  // Trim leading/trailing spaces and periods
-  while (!result.empty() && (result.front() == ' ' || result.front() == '.')) {
-    result.erase(0, 1);
-  }
-  while (!result.empty() && (result.back() == ' ' || result.back() == '.')) {
-    result.pop_back();
-  }
-
-  return result;
+void center_next_window() {
+  ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 }
 
 // ImGui callback to block invalid characters
 static int filename_input_callback(ImGuiInputTextCallbackData *data) {
   if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter) {
-    if (!is_valid_filename_char(data->EventChar)) {
+    if (!patches::is_valid_filename_char(data->EventChar)) {
       return 1; // Reject the character
     }
   }
@@ -90,7 +55,7 @@ void render_patch_editor(AppState &app_state) {
   // Save/Load section
   // Warn when the filename is empty or invalid
   bool name_valid = !patch.name.empty() &&
-                    sanitize_filename(patch.name) == patch.name &&
+                    patches::sanitize_filename(patch.name) == patch.name &&
                     !patch.name.empty();
 
   // Save button
@@ -118,7 +83,7 @@ void render_patch_editor(AppState &app_state) {
             app_state.patch_repository().to_relative_path(patch_path));
       } else {
         // Save as new file
-        if (ym2612::formats::gin::save_patch(patches_dir, patch, patch.name)) {
+        if (app_state.patch_manager().save_current_patch()) {
           ImGui::OpenPopup("Save Success");
           app_state.patch_repository().refresh();
           app_state.patch_manager().set_current_patch_path(
@@ -136,57 +101,34 @@ void render_patch_editor(AppState &app_state) {
 
   // Export Options popup
   if (ImGui::BeginPopup("Export Options")) {
-    const auto &default_dir = app_state.directory_service().paths().export_root;
-    const std::string sanitized_name =
-        sanitize_filename(patch.name.empty() ? "patch" : patch.name);
-
-    if (ImGui::MenuItem(".mml (ctrmml)")) {
-      std::filesystem::path selected_path;
-      std::string default_filename =
-          sanitized_name.empty() ? "patch.mml" : sanitized_name + ".mml";
-      auto result = platform::file_dialog::save_file(
-          default_dir, default_filename,
-          {{"ctrmml text", {"txt"}}, {"MML", {"mml"}}}, selected_path);
-      if (result == platform::file_dialog::DialogResult::Ok) {
-        if (selected_path.extension().empty()) {
-          selected_path.replace_extension(".mml");
-        }
-        if (ym2612::formats::ctrmml::write_patch(patch, selected_path)) {
-          last_export_path = selected_path.string();
-          ImGui::OpenPopup("Export Success");
-        } else {
-          last_export_error = "Failed to export to " + selected_path.string();
-          ImGui::OpenPopup("Export Error");
-        }
-      } else if (result == platform::file_dialog::DialogResult::Error) {
-        last_export_error = "Could not open save dialog.";
-        ImGui::OpenPopup("Export Error");
-      }
-    }
-    if (ImGui::MenuItem(".dmp")) {
-      std::filesystem::path selected_path;
-      std::string default_filename =
-          sanitized_name.empty() ? "patch.dmp" : sanitized_name + ".dmp";
-      auto result = platform::file_dialog::save_file(
-          default_dir, default_filename, {{"DefleMask preset", {"dmp"}}},
-          selected_path);
-      if (result == platform::file_dialog::DialogResult::Ok) {
-        if (selected_path.extension().empty()) {
-          selected_path.replace_extension(".dmp");
-        }
-        if (ym2612::formats::dmp::write_patch(patch, selected_path)) {
-          last_export_path = selected_path.string();
-          ImGui::OpenPopup("Export Success");
-        } else {
-          last_export_error = "Failed to export to " + selected_path.string();
-          ImGui::OpenPopup("Export Error");
-        }
-      } else if (result == platform::file_dialog::DialogResult::Error) {
-        last_export_error = "Could not open save dialog.";
-        ImGui::OpenPopup("Export Error");
-      }
-    }
+    auto mml = ImGui::MenuItem(".mml (ctrmml)");
+    auto dmp = ImGui::MenuItem(".dmp");
     ImGui::EndPopup();
+
+    if (mml) {
+      patches::ExportResult result =
+          app_state.patch_manager().export_current_patch_as(
+              patches::ExportFormat::MML);
+      if (result.is_success()) {
+        last_export_path = result.path;
+        ImGui::OpenPopup("Export Success");
+      } else if (result.is_error()) {
+        last_export_error = result.error_message;
+        ImGui::OpenPopup("Export Error");
+      }
+    }
+    if (dmp) {
+      patches::ExportResult result =
+          app_state.patch_manager().export_current_patch_as(
+              patches::ExportFormat::MML);
+      if (result.is_success()) {
+        last_export_path = result.path;
+        ImGui::OpenPopup("Export Success");
+      } else if (result.is_error()) {
+        last_export_error = result.error_message;
+        ImGui::OpenPopup("Export Error");
+      }
+    }
   }
 
   ImGui::PushItemWidth(200);
@@ -211,9 +153,13 @@ void render_patch_editor(AppState &app_state) {
                        "Invalid filename");
   }
 
+  // Popup Modal
   // Duplicate confirmation dialog
+  center_next_window();
   if (ImGui::BeginPopupModal("Overwrite Confirmation", nullptr,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::Text("A patch with this name already exists:");
     ImGui::Text("\"%s\"", patch.name.c_str());
     ImGui::Spacing();
@@ -225,24 +171,26 @@ void render_patch_editor(AppState &app_state) {
     }
 
     ImGui::SameLine();
+    auto overwrite_button = ImGui::Button("Overwrite", ImVec2(120, 0));
 
-    if (ImGui::Button("Overwrite", ImVec2(120, 0))) {
-      auto patches_dir =
-          app_state.directory_service().paths().user_patches_root;
-      if (ym2612::formats::gin::save_patch(patches_dir, patch, patch.name)) {
+    ImGui::EndPopup();
+
+    if (overwrite_button) {
+      if (app_state.patch_manager().save_current_patch()) {
         ImGui::OpenPopup("Save Success");
       } else {
         ImGui::OpenPopup("Save Error");
       }
       ImGui::CloseCurrentPopup();
     }
-
-    ImGui::EndPopup();
   }
 
   // Save-success dialog
+  center_next_window();
   if (ImGui::BeginPopupModal("Save Success", nullptr,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::Text("Patch saved successfully!");
     ImGui::Text("File: %s.gin", patch.name.c_str());
     ImGui::Spacing();
@@ -255,8 +203,11 @@ void render_patch_editor(AppState &app_state) {
   }
 
   // Save-error dialog
+  center_next_window();
   if (ImGui::BeginPopupModal("Save Error", nullptr,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::Text("Failed to save patch!");
     ImGui::Text("Please check directory permissions.");
     ImGui::Spacing();
@@ -268,8 +219,12 @@ void render_patch_editor(AppState &app_state) {
     ImGui::EndPopup();
   }
 
+  // Export-success dialog
+  center_next_window();
   if (ImGui::BeginPopupModal("Export Success", nullptr,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::Text("Export completed successfully.");
     ImGui::TextWrapped("%s", last_export_path.c_str());
     ImGui::Spacing();
@@ -279,8 +234,12 @@ void render_patch_editor(AppState &app_state) {
     ImGui::EndPopup();
   }
 
+  // Export-error dialog
+  center_next_window();
   if (ImGui::BeginPopupModal("Export Error", nullptr,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::Text("Export failed.");
     ImGui::TextWrapped("%s", last_export_error.c_str());
     ImGui::Spacing();

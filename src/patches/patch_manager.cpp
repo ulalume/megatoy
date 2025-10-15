@@ -1,4 +1,8 @@
 #include "patch_manager.hpp"
+#include "../formats/ctrmml.hpp"
+#include "../formats/dmp.hpp"
+#include "../formats/gin.hpp"
+#include "../platform/file_dialog.hpp"
 
 #include <iostream>
 #include <utility>
@@ -45,7 +49,78 @@ void PatchManager::refresh_directories() {
 }
 
 PatchRepository &PatchManager::repository() { return repository_; }
-
 const PatchRepository &PatchManager::repository() const { return repository_; }
+
+bool PatchManager::save_current_patch() {
+  auto patches_dir = directories_.paths().user_patches_root;
+  return ym2612::formats::gin::save_patch(patches_dir, current_patch_,
+                                          current_patch_.name)
+      .has_value();
+}
+
+ExportResult PatchManager::export_current_patch_as(ExportFormat format) {
+  const auto &default_dir = directories_.paths().export_root;
+  const std::string sanitized_name = sanitize_filename(
+      current_patch_.name.empty() ? "patch" : current_patch_.name);
+
+  switch (format) {
+  case ExportFormat::DMP: {
+    std::filesystem::path selected_path;
+    std::string default_filename =
+        sanitized_name.empty() ? "patch.dmp" : sanitized_name + ".dmp";
+
+    auto result = platform::file_dialog::save_file(
+        default_dir, default_filename, {{"DefleMask Preset", {"dmp"}}},
+        selected_path);
+
+    if (result == platform::file_dialog::DialogResult::Ok) {
+      if (selected_path.extension().empty()) {
+        selected_path.replace_extension(".dmp");
+      }
+
+      if (ym2612::formats::dmp::write_patch(current_patch_, selected_path)) {
+        return ExportResult::success(selected_path);
+      } else {
+        return ExportResult::error("Failed to export DMP file: " +
+                                   selected_path.string());
+      }
+    } else if (result == platform::file_dialog::DialogResult::Cancel) {
+      return ExportResult::cancelled();
+    } else {
+      return ExportResult::error("Could not open save dialog for DMP export");
+    }
+  }
+
+  case ExportFormat::MML: {
+    std::filesystem::path selected_path;
+    std::string default_filename =
+        sanitized_name.empty() ? "patch.mml" : sanitized_name + ".mml";
+
+    auto result = platform::file_dialog::save_file(
+        default_dir, default_filename,
+        {{"ctrmml text", {"txt"}}, {"MML", {"mml"}}}, selected_path);
+
+    if (result == platform::file_dialog::DialogResult::Ok) {
+      if (selected_path.extension().empty()) {
+        selected_path.replace_extension(".mml");
+      }
+
+      if (ym2612::formats::ctrmml::write_patch(current_patch_, selected_path)) {
+        return ExportResult::success(selected_path);
+      } else {
+        return ExportResult::error("Failed to export MML file: " +
+                                   selected_path.string());
+      }
+    } else if (result == platform::file_dialog::DialogResult::Cancel) {
+      return ExportResult::cancelled();
+    } else {
+      return ExportResult::error("Could not open save dialog for MML export");
+    }
+  }
+
+  default:
+    return ExportResult::error("Unknown export format");
+  }
+}
 
 } // namespace patches
