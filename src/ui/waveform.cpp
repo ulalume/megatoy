@@ -22,7 +22,7 @@ void render_waveform(AppState &app_state) {
     return;
   }
 
-  static int sample_count = 256;
+  static int sample_count = 512;
   // sample_count = std::clamp(
   //     sample_count, 32,
   //     static_cast<int>(ym2612::WaveSampler::buffer_size()));
