@@ -320,7 +320,12 @@ std::string patch_to_string(const ym2612::Patch &patch) {
         << static_cast<int>(patch.channel.amplitude_modulation_sensitivity)
         << " "
         << static_cast<int>(patch.channel.frequency_modulation_sensitivity)
-        << "'\n";
+        << "' ; LFO\n";
+  }
+
+  if (!patch.channel.left_speaker || !patch.channel.right_speaker) {
+    auto p = patch.channel.right_speaker + (patch.channel.left_speaker << 1);
+    out << "; p" << p << " ; Panning \n";
   }
 
   return out.str();
