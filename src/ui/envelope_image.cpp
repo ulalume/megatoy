@@ -101,7 +101,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
 
       // Sustain Rate
       if (op.sustain_rate == 0) {
-        envelope_points[3] = envelope_points[2];
+        envelope_points[3] = envelope_points[2] + ImVec2(3, 0);
         envelope_colors[3] = color_from_slider_state(state.sustain_rate);
       } else {
         float sustain_rate_width = decay_width;
