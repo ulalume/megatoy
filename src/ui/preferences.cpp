@@ -85,6 +85,9 @@ void render_preferences_window(AppState &app_state) {
       ImGui::TextWrapped("Notes play at full velocity.");
     }
 
+    ImGui::Checkbox("Steal oldest note when all 6 channels are busy",
+                    &ui_prefs.steal_oldest_note_when_full);
+
     const auto &devices = app_state.connected_midi_inputs();
     if (devices.empty()) {
       ImGui::TextUnformatted("No MIDI devices detected.");

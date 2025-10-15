@@ -59,12 +59,17 @@ bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
                                          ? clamped_velocity
                                          : static_cast<uint8_t>(127);
 
-  auto channel = channel_allocator_.note_on(note);
-  if (!channel) {
+  const bool allow_voice_steal = ui_state_.prefs.steal_oldest_note_when_full;
+  auto claim = channel_allocator_.note_on(note, allow_voice_steal);
+  if (!claim) {
     return false;
   }
 
-  auto ym_channel = device_.channel(*channel);
+  if (claim->replaced_note) {
+    device_.channel(claim->channel).write_key_off();
+  }
+
+  auto ym_channel = device_.channel(claim->channel);
   ym_channel.write_frequency(note);
 
   auto instrument =

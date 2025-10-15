@@ -72,6 +72,10 @@ public:
           data.ui_preferences.patch_search_query =
               ui["patch_search_query"].get<std::string>();
         }
+        if (ui.contains("steal_oldest_note_when_full")) {
+          data.ui_preferences.steal_oldest_note_when_full =
+              ui["steal_oldest_note_when_full"].get<bool>();
+        }
       }
 
       return true;
@@ -100,6 +104,8 @@ public:
       ui["show_preferences"] = data.ui_preferences.show_preferences;
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
       ui["use_velocity"] = data.ui_preferences.use_velocity;
+      ui["steal_oldest_note_when_full"] =
+          data.ui_preferences.steal_oldest_note_when_full;
       ui["patch_search_query"] = data.ui_preferences.patch_search_query;
       j["ui"] = ui;
 
