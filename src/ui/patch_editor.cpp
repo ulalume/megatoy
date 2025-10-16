@@ -223,18 +223,6 @@ void render_patch_editor(AppState &app_state) {
     ImGui::EndPopup();
   }
 
-  // Category input
-  char category_buffer[32];
-  std::strncpy(category_buffer, patch.category.c_str(),
-               sizeof(category_buffer) - 1);
-  category_buffer[sizeof(category_buffer) - 1] = '\0';
-  if (ImGui::InputText("Category", category_buffer, sizeof(category_buffer))) {
-    patch.category = std::string(category_buffer);
-  }
-  track_patch_history(app_state, "Patch Category", "meta.category");
-  if (ImGui::IsItemActive()) {
-    app_state.input_state().text_input_focused = true;
-  }
   ImGui::PopItemWidth();
 
   ImGui::Spacing();
