@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../ym2612/patch.hpp"
+#include "ym2612/patch.hpp"
 #include <filesystem>
 
 namespace parsers {

@@ -1,6 +1,6 @@
 #include "history_manager.hpp"
 
-#include "../app_state.hpp"
+#include "app_state.hpp"
 #include "history_entry.hpp"
 #include <utility>
 

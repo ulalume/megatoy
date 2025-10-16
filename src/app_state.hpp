@@ -1,18 +1,17 @@
 #pragma once
 
-#include "audio_manager.hpp"
+#include "audio/audio_subsystem.hpp"
 #include "channel_allocator.hpp"
 #include "formats/ctrmml.hpp"
-#include "gui_manager.hpp"
+#include "gui/gui_subsystem.hpp"
 #include "history/history_manager.hpp"
 #include "patches/patch_manager.hpp"
-#include "preference_manager.hpp"
+#include "patches/patch_editing_session.hpp"
+#include "preferences/preference_manager.hpp"
 #include "system/directory_service.hpp"
-#include "types.hpp"
-#include "ym2612/device.hpp"
+#include "core/types.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
-#include "ym2612/wave_sampler.hpp"
 #include <array>
 #include <filesystem>
 #include <string>
@@ -34,6 +33,11 @@ struct InputState {
 struct UIState {
   PreferenceManager::UIPreferences prefs;
   bool open_directory_dialog = false;
+
+  struct PatchEditorState {
+    std::string last_export_path;
+    std::string last_export_error;
+  } patch_editor;
 
   struct DropState {
     bool show_error_popup = false;
@@ -66,14 +70,14 @@ public:
   void init();
   void shutdown();
 
-  ym2612::Device &device() { return device_; }
-  const ym2612::Device &device() const { return device_; }
+  AudioSubsystem &audio() { return audio_subsystem_; }
+  const AudioSubsystem &audio() const { return audio_subsystem_; }
 
-  AudioManager &audio_manager() { return audio_manager_; }
-  const AudioManager &audio_manager() const { return audio_manager_; }
+  GuiSubsystem &gui() { return gui_subsystem_; }
+  const GuiSubsystem &gui() const { return gui_subsystem_; }
 
-  GuiManager &gui_manager() { return gui_manager_; }
-  const GuiManager &gui_manager() const { return gui_manager_; }
+  PatchEditingSession &patch_session() { return patch_session_; }
+  const PatchEditingSession &patch_session() const { return patch_session_; }
 
   megatoy::system::DirectoryService &directory_service() {
     return directory_service_;
@@ -93,24 +97,29 @@ public:
   UIState &ui_state() { return ui_state_; }
   const UIState &ui_state() const { return ui_state_; }
 
-  ChannelAllocator &channel_allocator() { return channel_allocator_; }
-  const ChannelAllocator &channel_allocator() const {
-    return channel_allocator_;
+  ym2612::Patch &patch() { return patch_session_.current_patch(); }
+  const ym2612::Patch &patch() const { return patch_session_.current_patch(); }
+
+  patches::PatchRepository &patch_repository() {
+    return patch_session_.repository();
   }
-
-  ym2612::Patch &patch();
-  const ym2612::Patch &patch() const;
-
-  patches::PatchRepository &patch_repository();
-  const patches::PatchRepository &patch_repository() const;
-  patches::PatchManager &patch_manager() { return patch_manager_; }
-  const patches::PatchManager &patch_manager() const { return patch_manager_; }
+  const patches::PatchRepository &patch_repository() const {
+    return patch_session_.repository();
+  }
+  patches::PatchManager &patch_manager() {
+    return patch_session_.patch_manager();
+  }
+  const patches::PatchManager &patch_manager() const {
+    return patch_session_.patch_manager();
+  }
 
   history::HistoryManager &history() { return history_; }
   const history::HistoryManager &history() const { return history_; }
 
-  ym2612::WaveSampler &wave_sampler() { return wave_sampler_; }
-  const ym2612::WaveSampler &wave_sampler() const { return wave_sampler_; }
+  ym2612::WaveSampler &wave_sampler() { return audio_subsystem_.wave_sampler(); }
+  const ym2612::WaveSampler &wave_sampler() const {
+    return audio_subsystem_.wave_sampler();
+  }
 
   void update_all_settings();
   void apply_patch_to_device();
@@ -139,14 +148,7 @@ public:
 private:
   static constexpr UINT32 kSampleRate = 44100;
 
-  struct PatchSnapshot {
-    ym2612::Patch patch;
-    std::string path;
-
-    bool operator==(const PatchSnapshot &other) const {
-      return patch == other.patch && path == other.path;
-    }
-  };
+  using PatchSnapshot = PatchEditingSession::PatchSnapshot;
 
   PatchSnapshot capture_patch_snapshot() const;
   void apply_patch_snapshot(const PatchSnapshot &snapshot);
@@ -154,21 +156,14 @@ private:
                            const PatchSnapshot &before,
                            const PatchSnapshot &after);
 
-  ym2612::Device device_;
-  AudioManager audio_manager_;
-  GuiManager gui_manager_;
   megatoy::system::DirectoryService directory_service_;
   PreferenceManager preference_manager_;
-  patches::PatchManager patch_manager_;
-  ChannelAllocator channel_allocator_;
+  AudioSubsystem audio_subsystem_;
+  GuiSubsystem gui_subsystem_;
+  PatchEditingSession patch_session_;
   InputState input_state_;
   UIState ui_state_;
   history::HistoryManager history_;
-  ym2612::WaveSampler wave_sampler_;
   std::vector<std::string> connected_midi_inputs_;
 
-  void initialize_patch_defaults();
-  void configure_audio();
-  void configure_gui();
-  void configure_audio_callback();
 };

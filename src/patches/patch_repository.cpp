@@ -1,9 +1,9 @@
 #include "patch_repository.hpp"
-#include "../formats/ctrmml.hpp"
-#include "../formats/dmp.hpp"
-#include "../formats/gin.hpp"
-#include "../parsers/fui_parser.hpp"
-#include "../parsers/rym2612_parser.hpp"
+#include "formats/ctrmml.hpp"
+#include "formats/dmp.hpp"
+#include "formats/gin.hpp"
+#include "parsers/fui_parser.hpp"
+#include "parsers/rym2612_parser.hpp"
 #include <algorithm>
 #include <iostream>
 

@@ -1,6 +1,6 @@
 #include "ctrmml.hpp"
 
-#include "../ym2612/types.hpp"
+#include "ym2612/types.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>

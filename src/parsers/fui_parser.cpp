@@ -1,7 +1,7 @@
 #include "fui_parser.hpp"
 
-#include "../ym2612/types.hpp"
-#include "../formats/common.hpp"
+#include "ym2612/types.hpp"
+#include "formats/common.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>

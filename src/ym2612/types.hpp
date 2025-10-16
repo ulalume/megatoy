@@ -1,5 +1,5 @@
 #pragma once
-#include "../types.hpp"
+#include "core/types.hpp"
 #include <array>
 #include <cstdint>
 namespace ym2612 {

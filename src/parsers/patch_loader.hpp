@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../formats/ctrmml.hpp"
-#include "../ym2612/patch.hpp"
+#include "formats/ctrmml.hpp"
+#include "ym2612/patch.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>

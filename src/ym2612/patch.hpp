@@ -1,5 +1,6 @@
 #pragma once
-#include "types.hpp"
+#include "core/types.hpp"
+#include "ym2612/types.hpp"
 #include <algorithm>
 #include <iterator>
 #include <nlohmann/json.hpp>

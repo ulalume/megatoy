@@ -1,10 +1,9 @@
 #pragma once
 
-#include "../ym2612/patch.hpp"
+#include "ym2612/patch.hpp"
 #include <filesystem>
 #include <optional>
 #include <string>
-#include <vector>
 
 namespace ym2612::formats::gin {
 
@@ -17,8 +16,5 @@ save_patch(const std::filesystem::path &patches_dir, const Patch &patch,
 
 bool load_patch(const std::filesystem::path &patches_dir, Patch &patch,
                 const std::string &filename);
-
-std::vector<std::string>
-list_patch_files(const std::filesystem::path &patches_dir);
 
 } // namespace ym2612::formats::gin

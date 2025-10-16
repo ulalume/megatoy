@@ -1,15 +1,15 @@
 #include "app_state.hpp"
-#include "midi_usb.hpp"
-#include "types.hpp"
-#include "ui/keyboard_typing.hpp"
-#include "ui/main_menu.hpp"
-#include "ui/midi_keyboard.hpp"
-#include "ui/mml_console.hpp"
-#include "ui/patch_drop.hpp"
-#include "ui/patch_editor.hpp"
-#include "ui/patch_selector.hpp"
-#include "ui/preferences.hpp"
-#include "ui/waveform.hpp"
+#include "midi/midi_input_manager.hpp"
+#include "core/types.hpp"
+#include "gui/components/keyboard_typing.hpp"
+#include "gui/components/main_menu.hpp"
+#include "gui/components/midi_keyboard.hpp"
+#include "gui/components/mml_console.hpp"
+#include "gui/components/patch_drop.hpp"
+#include "gui/components/patch_editor.hpp"
+#include "gui/components/patch_selector.hpp"
+#include "gui/components/preferences.hpp"
+#include "gui/components/waveform.hpp"
 #include "ym2612/channel.hpp"
 #include <GLFW/glfw3.h>
 #include <filesystem>
@@ -73,13 +73,14 @@ int main(int argc, char *argv[]) {
   AppState app_state;
   app_state.init();
 
-  if (GLFWwindow *window = app_state.gui_manager().get_window()) {
+  if (GLFWwindow *window = app_state.gui().manager().get_window()) {
     glfwSetWindowUserPointer(window, &app_state);
     glfwSetDropCallback(window, handle_file_drop);
   }
 
   // Set up frequency for C4 note
-  app_state.device()
+  app_state.audio()
+      .device()
       .channel(ym2612::ChannelIndex::Fm1)
       .write_frequency({4, Key::C});
 
@@ -91,14 +92,15 @@ int main(int argc, char *argv[]) {
       << "GUI initialized. Use the button in the window to play C4 note.\n";
 
   // Main GUI loop
-  while (!app_state.gui_manager().should_close()) {
+  while (!app_state.gui().manager().should_close()) {
     // Poll events
-    app_state.gui_manager().poll_events();
+    app_state.gui().manager().poll_events();
     // Start new frame
-    app_state.gui_manager().begin_frame();
+    app_state.gui().manager().begin_frame();
 
     // Midi USB update
-    midi.poll(app_state);
+  midi.poll();
+  midi.dispatch(app_state);
 
     // ImGui::ShowDemoWindow();
 
@@ -122,7 +124,7 @@ int main(int argc, char *argv[]) {
         app_state.ui_state().prefs);
 
     // End frame and render
-    app_state.gui_manager().end_frame();
+    app_state.gui().manager().end_frame();
   }
 
   app_state.shutdown();

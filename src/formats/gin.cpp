@@ -65,25 +65,4 @@ bool load_patch(const std::filesystem::path &patches_dir, Patch &patch,
   }
 }
 
-std::vector<std::string>
-list_patch_files(const std::filesystem::path &patches_dir) {
-  std::vector<std::string> files;
-
-  if (!std::filesystem::exists(patches_dir)) {
-    return files;
-  }
-
-  try {
-    for (const auto &entry : std::filesystem::directory_iterator(patches_dir)) {
-      if (entry.is_regular_file() && entry.path().extension() == ".gin") {
-        files.push_back(entry.path().stem().string());
-      }
-    }
-  } catch (const std::filesystem::filesystem_error &e) {
-    std::cerr << "Error listing files: " << e.what() << std::endl;
-  }
-
-  return files;
-}
-
 } // namespace ym2612::formats::gin

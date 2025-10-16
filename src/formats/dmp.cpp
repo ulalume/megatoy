@@ -1,7 +1,7 @@
 #include "dmp.hpp"
 
 #include "common.hpp"
-#include "../ym2612/types.hpp"
+#include "ym2612/types.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(vgm-test)
 
+enable_testing()
+
 # Set Release as the default build type
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)

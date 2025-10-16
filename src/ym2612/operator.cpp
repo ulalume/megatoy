@@ -1,6 +1,6 @@
 #include "operator.hpp"
 #include "device.hpp"
-#include "types.hpp"
+#include "core/types.hpp"
 
 namespace ym2612 {
 

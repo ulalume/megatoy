@@ -20,74 +20,77 @@ target_link_libraries(imgui_lib PUBLIC
   OpenGL::GL
 )
 
-set(MEGATOY_SOURCES
-  src/main.cpp
+set(MEGATOY_CORE_SOURCES
   src/app_state.cpp
-  src/audio_manager.cpp
-  src/gui_manager.cpp
-  src/graphics/texture_utils.cpp
-  src/graphics/stb_image_impl.cpp
-  src/preference_manager.cpp
-  src/preference_storage_json.cpp
+  src/audio/audio_manager.cpp
+  src/audio/audio_runtime.cpp
+  src/audio/audio_subsystem.cpp
   src/channel_allocator.cpp
-  src/resource_manager.cpp
-  src/history/history_manager.cpp
-  src/midi_usb.cpp
-  src/patches/patch_repository.cpp
-  src/platform/file_dialog.cpp
   src/formats/common.cpp
   src/formats/ctrmml.cpp
   src/formats/dmp.cpp
   src/formats/gin.cpp
+  src/gui/components/envelope_image.cpp
+  src/gui/components/keyboard_typing.cpp
+  src/gui/components/main_menu.cpp
+  src/gui/components/midi_keyboard.cpp
+  src/gui/components/mml_console.cpp
+  src/gui/components/operator_editor.cpp
+  src/gui/components/patch_drop.cpp
+  src/gui/components/patch_editor.cpp
+  src/gui/components/patch_selector.cpp
+  src/gui/components/preferences.cpp
+  src/gui/components/preview/algorithm_preview.cpp
+  src/gui/components/preview/preview.cpp
+  src/gui/components/preview/ssg_preview.cpp
+  src/gui/components/waveform.cpp
+  src/gui/gui_manager.cpp
+  src/gui/gui_runtime.cpp
+  src/gui/gui_subsystem.cpp
+  src/gui/image/resource_manager.cpp
+  src/gui/image/stb_image_impl.cpp
+  src/gui/image/texture_utils.cpp
+  src/gui/styles/megatoy_style.cpp
+  src/gui/styles/theme.cpp
+  src/history/history_manager.cpp
+  src/midi/midi_input_manager.cpp
   src/parsers/fui_parser.cpp
-  src/parsers/rym2612_parser.cpp
   src/parsers/patch_loader.cpp
+  src/parsers/rym2612_parser.cpp
+  src/patches/patch_drop_service.cpp
+  src/patches/patch_editing_session.cpp
   src/patches/patch_manager.cpp
-  src/ui/envelope_image.cpp
-  src/ui/preview/preview.cpp
-  src/ui/preview/algorithm_preview.cpp
-  src/ui/preview/ssg_preview.cpp
-  src/ui/keyboard_typing.cpp
-  src/ui/styles/theme.cpp
-  src/ui/main_menu.cpp
-  src/ui/patch_editor.cpp
-  src/ui/patch_drop.cpp
-  src/ui/operator_editor.cpp
-  src/ui/midi_keyboard.cpp
-  src/ui/patch_selector.cpp
-  src/ui/mml_console.cpp
-  src/ui/waveform.cpp
-  src/ui/preferences.cpp
-  src/ui/styles/megatoy_style.cpp
-  src/system/path_resolver.cpp
+  src/patches/patch_repository.cpp
+  src/platform/file_dialog.cpp
+  src/preferences/preference_manager.cpp
+  src/preferences/preference_storage_json.cpp
   src/system/directory_service.cpp
-  src/ym2612/device.cpp
+  src/system/path_resolver.cpp
   src/ym2612/channel.cpp
+  src/ym2612/device.cpp
   src/ym2612/operator.cpp
   src/ym2612/wave_sampler.cpp
 )
+add_library(megatoy_core ${MEGATOY_CORE_SOURCES})
 
-if(WIN32)
-  list(APPEND MEGATOY_SOURCES src/platform/windows_entry.cpp)
-endif()
-
-if(APPLE)
-  add_executable(megatoy MACOSX_BUNDLE ${MEGATOY_SOURCES})
-elseif(WIN32)
-  add_executable(megatoy WIN32 ${MEGATOY_SOURCES})
-else()
-  add_executable(megatoy ${MEGATOY_SOURCES})
-endif()
+target_include_directories(megatoy_core PUBLIC
+  ${libvgm_SOURCE_DIR}
+  ${imgui_SOURCE_DIR}
+  ${imgui_SOURCE_DIR}/backends
+  ${stb_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_BINARY_DIR}
+)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  target_compile_options(megatoy PRIVATE
+  target_compile_options(megatoy_core PRIVATE
         $<$<CXX_COMPILER_ID:GNU,Clang>:
           -O3 -ffast-math -funroll-loops -march=native>
         $<$<CXX_COMPILER_ID:MSVC>:/O2 /fp:fast>
     )
 endif()
 
-target_link_libraries(megatoy PRIVATE
+target_link_libraries(megatoy_core PUBLIC
   vgm-player vgm-audio
   imgui_lib
   glfw
@@ -97,36 +100,48 @@ target_link_libraries(megatoy PRIVATE
   rtmidi
 )
 
-if(UNIX AND NOT APPLE)
-  find_package(X11 REQUIRED)
-  target_link_libraries(megatoy PRIVATE ${X11_LIBRARIES})
-endif()
-
-target_include_directories(megatoy PRIVATE
-  ${libvgm_SOURCE_DIR}
-  ${imgui_SOURCE_DIR}
-  ${imgui_SOURCE_DIR}/backends
-  ${stb_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/src
-)
-
 set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "presets")
 if(APPLE)
   set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "../Resources/presets")
 endif()
 
-target_compile_definitions(megatoy PRIVATE
+target_compile_definitions(megatoy_core PUBLIC
   VGM_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
   USE_EMBEDDED_RESOURCES
   MEGATOY_PRESETS_RELATIVE_PATH="${MEGATOY_PRESETS_RELATIVE_PATH_VALUE}"
   $<$<PLATFORM_ID:Darwin>:GL_SILENCE_DEPRECATION>
 )
 
+set(MEGATOY_MAIN_SOURCES src/main.cpp)
+if(WIN32)
+  list(APPEND MEGATOY_MAIN_SOURCES src/platform/windows_entry.cpp)
+endif()
+
+if(APPLE)
+  add_executable(megatoy MACOSX_BUNDLE ${MEGATOY_MAIN_SOURCES})
+elseif(WIN32)
+  add_executable(megatoy WIN32 ${MEGATOY_MAIN_SOURCES})
+else()
+  add_executable(megatoy ${MEGATOY_MAIN_SOURCES})
+endif()
+
+target_link_libraries(megatoy PRIVATE megatoy_core)
+
+if(UNIX AND NOT APPLE)
+  find_package(X11 REQUIRED)
+  target_link_libraries(megatoy PRIVATE ${X11_LIBRARIES})
+endif()
+
 add_embedded_assets(megatoy
   EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/"
 )
 
 target_include_directories(megatoy PRIVATE ${CMAKE_BINARY_DIR})
+
+add_executable(subsystem_tests tests/subsystem_tests.cpp)
+target_link_libraries(subsystem_tests PRIVATE megatoy_core)
+
+add_test(NAME subsystem_tests COMMAND subsystem_tests)
 
 add_custom_command(
     TARGET megatoy POST_BUILD

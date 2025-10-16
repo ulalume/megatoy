@@ -1,8 +1,8 @@
 #include "patch_manager.hpp"
-#include "../formats/ctrmml.hpp"
-#include "../formats/dmp.hpp"
-#include "../formats/gin.hpp"
-#include "../platform/file_dialog.hpp"
+#include "formats/ctrmml.hpp"
+#include "formats/dmp.hpp"
+#include "formats/gin.hpp"
+#include "platform/file_dialog.hpp"
 
 #include <iostream>
 #include <utility>
