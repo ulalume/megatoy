@@ -142,10 +142,10 @@ inline void from_json(const nlohmann::json &j, OperatorSettings &op) {
   j.at("ssg_type_envelope_control").get_to(op.ssg_type_envelope_control);
   j.at("ssg_enable").get_to(op.ssg_enable);
   j.at("amplitude_modulation_enable").get_to(op.amplitude_modulation_enable);
-  if (j.at("enable").empty()) {
-    op.enable = true;
-  } else {
+  if (j.contains("enable")) {
     j.at("enable").get_to(op.enable);
+  } else {
+    op.enable = true;
   }
 }
 
