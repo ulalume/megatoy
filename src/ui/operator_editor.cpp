@@ -150,8 +150,9 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
 }
 
 // Helper function to render operator settings
-void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
+bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
                             int op_index) {
+  bool setting_changed = false;
 
   const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
 
@@ -169,24 +170,53 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
     ImGui::PushStyleColor(ImGuiCol_Separator,
                           ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
   }
+  ImVec2 pos = ImGui::GetCursorPos();
   ImGui::SeparatorText(op_label.c_str());
+  ImGui::SetCursorPosY(pos.y);
+
+  ImGui::PushID(op_index);
+  bool operator_enable = op.enable;
+  if (ImGui::Checkbox("##Operator Enable", &operator_enable)) {
+    op.enable = operator_enable;
+    setting_changed = true;
+  }
+  track_patch_history(app_state, op_label + " Enable",
+                      key_prefix + ".op_enable");
+
   if (!is_modulator) {
     ImGui::PopStyleColor();
     ImGui::PopStyleColor();
   }
 
-  ImGui::PushID(op_index);
+  if (!op.enable) {
+    ImGui::BeginDisabled();
+  }
   ImGui::PushItemWidth(hslider_width);
+
+  if (op_index == 0) {
+    // Feedback (0-7)
+    int feedback = app_state.patch().instrument.feedback;
+    bool feedback_changed = ImGui::SliderInt("Feedback", &feedback, 0, 7);
+    track_patch_history(app_state, "Operator 1 Feedback",
+                        "instrument.feedback");
+    if (feedback_changed) {
+      app_state.patch().instrument.feedback = static_cast<uint8_t>(feedback);
+      setting_changed = true;
+    }
+  } else if (op_index == 1) {
+    ImVec2 pos = ImGui::GetCursorPos();
+    ImGui::SetCursorPosY(pos.y + 20);
+  }
 
   // Amplitude Modulation Enable
   bool amplitude_mod = op.amplitude_modulation_enable;
   if (ImGui::Checkbox("Amplitude Modulation Enable", &amplitude_mod)) {
     op.amplitude_modulation_enable = amplitude_mod;
+    setting_changed = true;
   }
-  ImGui::Spacing();
-
   track_patch_history(app_state, op_label + " Amplitude Modulation",
                       key_prefix + ".am_enable");
+  ImGui::Spacing();
 
   render_envelope(app_state, op, app_state.ui_state().envelope_states[op_index],
                   op_label, key_prefix);
@@ -215,15 +245,24 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   bool ssg_enable = op.ssg_enable;
   if (ImGui::Checkbox("SSG EG Enable", &ssg_enable)) {
     op.ssg_enable = ssg_enable;
+    setting_changed = true;
   }
   track_patch_history(app_state, op_label + " SSG EG Enable",
                       key_prefix + ".ssg_enable");
+
+  if (!ssg_enable) {
+    ImGui::BeginDisabled();
+  }
 
   bool ssg_type_changed = ImGui::SliderInt("SSG EG Type", &ssg_type, 0, 7);
   track_patch_history(app_state, op_label + " SSG EG Type",
                       key_prefix + ".ssg_type");
   if (ssg_type_changed) {
     op.ssg_type_envelope_control = static_cast<uint8_t>(ssg_type);
+    setting_changed = true;
+  }
+  if (!ssg_enable) {
+    ImGui::EndDisabled();
   }
 
   if (column_layout) {
@@ -240,6 +279,7 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
                       key_prefix + ".key_scale");
   if (key_scale_changed) {
     op.key_scale = static_cast<uint8_t>(key_scale);
+    setting_changed = true;
   }
 
   // Multiple (0-15)
@@ -253,6 +293,7 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
                       key_prefix + ".multiple");
   if (multiple_changed) {
     op.multiple = static_cast<uint8_t>(multiple);
+    setting_changed = true;
   }
 
   // Detune (0-7)
@@ -266,6 +307,7 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   if (detune_changed) {
     op.detune = static_cast<uint8_t>(
         ym2612::formats::conversion::detune_from_dmp_to_patch(detune));
+    setting_changed = true;
   }
 
   if (column_layout) {
@@ -273,7 +315,12 @@ void render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   }
   ImGui::PopItemWidth();
 
+  if (!op.enable) {
+    ImGui::EndDisabled();
+  }
+
   ImGui::PopID();
+  return setting_changed;
 }
 
 } // namespace ui

@@ -76,7 +76,9 @@ bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
       patch_manager_.current_patch().instrument.clone_with_velocity(
           effective_velocity);
   ym_channel.write_instrument(instrument);
-  ym_channel.write_key_on();
+  ym_channel.write_key_on(
+      instrument.operators[0].enable, instrument.operators[1].enable,
+      instrument.operators[2].enable, instrument.operators[3].enable);
   std::cout << "Key ON - " << note << " (velocity "
             << static_cast<int>(effective_velocity) << ")\n"
             << std::flush;

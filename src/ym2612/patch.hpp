@@ -36,7 +36,8 @@ inline bool operator==(const OperatorSettings &lhs,
          lhs.multiple == rhs.multiple && lhs.detune == rhs.detune &&
          lhs.ssg_type_envelope_control == rhs.ssg_type_envelope_control &&
          lhs.ssg_enable == rhs.ssg_enable &&
-         lhs.amplitude_modulation_enable == rhs.amplitude_modulation_enable;
+         lhs.amplitude_modulation_enable == rhs.amplitude_modulation_enable &&
+         lhs.enable == rhs.enable;
 }
 
 inline bool operator!=(const OperatorSettings &lhs,
@@ -123,7 +124,9 @@ inline void to_json(nlohmann::json &j, const OperatorSettings &op) {
       {"detune", op.detune},
       {"ssg_type_envelope_control", op.ssg_type_envelope_control},
       {"ssg_enable", op.ssg_enable},
-      {"amplitude_modulation_enable", op.amplitude_modulation_enable}};
+      {"amplitude_modulation_enable", op.amplitude_modulation_enable},
+      {"enable", op.enable},
+  };
 }
 
 inline void from_json(const nlohmann::json &j, OperatorSettings &op) {
@@ -139,6 +142,11 @@ inline void from_json(const nlohmann::json &j, OperatorSettings &op) {
   j.at("ssg_type_envelope_control").get_to(op.ssg_type_envelope_control);
   j.at("ssg_enable").get_to(op.ssg_enable);
   j.at("amplitude_modulation_enable").get_to(op.amplitude_modulation_enable);
+  if (j.at("enable").empty()) {
+    op.enable = true;
+  } else {
+    j.at("enable").get_to(op.enable);
+  }
 }
 
 inline void to_json(nlohmann::json &j, const ChannelInstrument &instrument) {

@@ -17,9 +17,11 @@ void Channel::write_instrument(const ChannelInstrument &instrument) {
   const auto &[value, port] = channel_index_to_value(index);
   device.write(0xB0 + value, instrument.feedback << 3 | instrument.algorithm,
                port);
+
   for (OperatorIndex op_index : all_operator_indices) {
-    op(op_index).write_settings(
-        instrument.operators[static_cast<uint8_t>(op_index)]);
+    const auto &op_settings =
+        instrument.operators[static_cast<uint8_t>(op_index)];
+    op(op_index).write_settings(op_settings);
   }
 }
 
@@ -31,13 +33,15 @@ void Channel::write_frequency(const Note &note) {
   device.write(0xA0 + value, fnote & 0xFF, port);
 }
 
-void Channel::write_key_on() {
+void Channel::write_key_on(bool op1 = true, bool op2 = true, bool op3 = true,
+                           bool op4 = true) {
   // YM2612 Key On/Off uses specific channel values: 0,1,2,4,5,6
   uint8_t key_channel = static_cast<uint8_t>(index);
   if (key_channel >= 3) {
     key_channel += 1; // CH4=4, CH5=5, CH6=6
   }
-  device.write(0x28, 0b1111 << 4 | key_channel, false);
+  uint8_t key_on = op1 | (op2 << 1) | (op3 << 2) | (op4 << 3);
+  device.write(0x28, key_on << 4 | key_channel, false);
 }
 
 void Channel::write_key_off() {

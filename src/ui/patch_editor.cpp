@@ -237,8 +237,10 @@ void render_patch_editor(AppState &app_state) {
   }
   ImGui::PopItemWidth();
 
+  ImGui::Spacing();
+
   // Global Settings
-  ImGui::SeparatorText("Global Register");
+  ImGui::SeparatorText("Low Frequency Oscillator");
   bool lfo_enable = patch.global.lfo_enable;
   if (ImGui::Checkbox("LFO Enable", &lfo_enable)) {
     patch.global.lfo_enable = lfo_enable;
@@ -247,36 +249,21 @@ void render_patch_editor(AppState &app_state) {
   track_patch_history(app_state, "LFO Enable", "global.lfo_enable");
 
   ImGui::PushItemWidth(hslider_width);
+
   int lfo_freq = patch.global.lfo_frequency;
+
+  if (!lfo_enable)
+    ImGui::BeginDisabled(true);
   bool lfo_freq_changed = ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7);
+
   track_patch_history(app_state, "LFO Frequency", "global.lfo_frequency");
   if (lfo_freq_changed) {
     patch.global.lfo_frequency = static_cast<uint8_t>(lfo_freq);
     settings_changed = true;
   }
-  ImGui::PopItemWidth();
 
-  // Channel Settings
+  ImGui::Spacing();
 
-  ImGui::SeparatorText("Channel Register");
-  ImGui::Columns(2, "channel_columns", false);
-  bool left_speaker = patch.channel.left_speaker;
-  if (ImGui::Checkbox("Left Speaker", &left_speaker)) {
-    patch.channel.left_speaker = left_speaker;
-    settings_changed = true;
-  }
-  track_patch_history(app_state, "Left Speaker", "channel.left_speaker");
-
-  ImGui::SameLine();
-
-  bool right_speaker = patch.channel.right_speaker;
-  if (ImGui::Checkbox("Right Speaker", &right_speaker)) {
-    patch.channel.right_speaker = right_speaker;
-    settings_changed = true;
-  }
-  track_patch_history(app_state, "Right Speaker", "channel.right_speaker");
-
-  ImGui::PushItemWidth(hslider_width);
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed =
       ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3);
@@ -296,28 +283,39 @@ void render_patch_editor(AppState &app_state) {
     patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(fms);
     settings_changed = true;
   }
-
-  ImGui::Spacing();
-
-  // Feedback (0-7)
-  int feedback = patch.instrument.feedback;
-  bool feedback_changed =
-      ImGui::SliderInt("Operator 1 Feedback", &feedback, 0, 7);
-  track_patch_history(app_state, "Operator 1 Feedback", "instrument.feedback");
-  if (feedback_changed) {
-    patch.instrument.feedback = static_cast<uint8_t>(feedback);
-    settings_changed = true;
-  }
+  if (!lfo_enable)
+    ImGui::EndDisabled();
 
   ImGui::PopItemWidth();
 
-  ImGui::NextColumn();
+  ImGui::Spacing();
+
+  // Channel Settings
+
+  ImGui::SeparatorText("Channel");
+  bool left_speaker = patch.channel.left_speaker;
+  if (ImGui::Checkbox("Left Speaker", &left_speaker)) {
+    patch.channel.left_speaker = left_speaker;
+    settings_changed = true;
+  }
+  track_patch_history(app_state, "Left Speaker", "channel.left_speaker");
+
+  ImGui::SameLine();
+
+  bool right_speaker = patch.channel.right_speaker;
+  if (ImGui::Checkbox("Right Speaker", &right_speaker)) {
+    patch.channel.right_speaker = right_speaker;
+    settings_changed = true;
+  }
+  track_patch_history(app_state, "Right Speaker", "channel.right_speaker");
 
   ImGui::PushItemWidth(hslider_width);
+
   if (const auto *preview =
           get_algorithm_preview_texture(patch.instrument.algorithm)) {
     ImGui::Image(preview->texture_id, preview->size);
   }
+
   // Algorithm (0-7)
   int algorithm = patch.instrument.algorithm;
   bool algorithm_changed = ImGui::SliderInt("Algorithm", &algorithm, 0, 7);
@@ -328,19 +326,19 @@ void render_patch_editor(AppState &app_state) {
   }
   ImGui::PopItemWidth();
 
+  ImGui::Spacing();
+
   ImGui::Columns(1);
 
   // Operators
   ImGui::Columns(2, "operation_columns", false);
   for (auto i = 0; i < 4; i++) {
     auto op_index = static_cast<int>(ym2612::all_operator_indices[i]);
-    ym2612::OperatorSettings old_op = patch.instrument.operators[op_index];
-    render_operator_editor(app_state, patch.instrument.operators[op_index], i);
 
-    if (old_op != patch.instrument.operators[op_index]) {
-      settings_changed = true;
-    }
+    settings_changed |= render_operator_editor(
+        app_state, patch.instrument.operators[op_index], i);
 
+    ImGui::Spacing();
     ImGui::NextColumn();
   }
   ImGui::Columns(1);

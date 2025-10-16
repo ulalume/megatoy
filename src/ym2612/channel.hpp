@@ -20,7 +20,7 @@ public:
   void write_settings(const ChannelSettings &settings);
   void write_instrument(const ChannelInstrument &instrument);
   void write_frequency(const Note &note);
-  void write_key_on();
+  void write_key_on(bool op1, bool op2, bool op3, bool op4);
   void write_key_off();
 
 private:

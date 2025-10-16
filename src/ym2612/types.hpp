@@ -61,6 +61,8 @@ struct OperatorSettings {
   uint8_t ssg_type_envelope_control; // 0 ~ 7
   bool ssg_enable;
   bool amplitude_modulation_enable;
+
+  bool enable = true; // global register
 };
 
 struct ChannelSettings {
