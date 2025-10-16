@@ -1,5 +1,6 @@
 #include "envelope_image.hpp"
 #include "app_state.hpp"
+#include "common.hpp"
 #include <imgui.h>
 
 namespace ui {
@@ -30,11 +31,6 @@ ImU32 color_from_slider_state(
   case UIState::EnvelopeState::SliderState::Active:
     return ImGui::GetColorU32(ImGuiCol_FrameBgActive);
   }
-}
-ImU32 color_with_alpha(ImU32 color, float alpha) {
-  auto vec = ImGui::ColorConvertU32ToFloat4(color);
-  return ImGui::ColorConvertFloat4ToU32(
-      ImVec4(vec.x, vec.y, vec.z, vec.w * alpha));
 }
 
 void render_envelope_image(const ym2612::OperatorSettings &op,

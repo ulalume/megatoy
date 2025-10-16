@@ -1,5 +1,6 @@
 #include "patch_selector.hpp"
 #include "../patches/patch_repository.hpp"
+#include "common.hpp"
 #include "file_manager.hpp"
 #include <algorithm>
 #include <cctype>
@@ -12,7 +13,7 @@
 
 namespace ui {
 namespace {
-#define INDENT (1.0f)
+#define INDENT (4.0f)
 
 std::string to_lower(const std::string &value) {
   std::string lowered;
@@ -51,7 +52,6 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
     if (item.is_directory) {
       if (ImGui::TreeNode(item.name.c_str())) {
-
         if (ImGui::BeginPopupContextItem(nullptr)) {
           if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
             ui::reveal_in_file_manager(app_state.patch_repository()
@@ -60,16 +60,11 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
           }
           ImGui::EndPopup();
         }
-
         render_patch_tree(item.children, app_state, depth + 1);
         ImGui::TreePop();
       }
     } else {
       ImGui::Indent(INDENT * depth);
-      // ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "[%s]",
-      //                    item.format.c_str());
-
-      // ImGui::SameLine();
 
       bool is_current = (item.relative_path ==
                          app_state.patch_manager().current_patch_path());
@@ -77,10 +72,21 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
         ImGui::PushStyleColor(ImGuiCol_Text,
                               styles::color(styles::MegatoyCol::TextHighlight));
       }
-      std::string name_and_format = "[" + item.format + "] " + item.name;
-      if (ImGui::Selectable(name_and_format.c_str(), false)) {
+      std::string name_string = item.name;
+      auto name_string_selectable =
+          ImGui::Selectable(name_string.c_str(), false);
+      std::string format_string =
+          item.format != "ctrmml" ? "." + item.format : " ctrmml";
+      ImGui::SameLine(0, 0);
+      ImGui::PushStyleColor(
+          ImGuiCol_Text,
+          color_with_alpha_vec4(ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f));
+      auto format_string_selectable =
+          ImGui::Selectable(format_string.c_str(), false);
+      if (name_string_selectable || format_string_selectable) {
         app_state.load_patch(item);
       }
+      ImGui::PopStyleColor();
 
       if (ImGui::BeginPopupContextItem(nullptr)) {
         if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
