@@ -18,13 +18,13 @@ template <typename T> T read_binary_value(std::ifstream &file) {
 
 } // namespace
 
-namespace ym2612::formats::dmp {
+namespace formats::dmp {
 
-bool read_file(const std::filesystem::path &file_path, ym2612::Patch &patch) {
+std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
   std::ifstream file(file_path, std::ios::binary);
   if (!file.is_open()) {
     std::cerr << "Failed to open DMP file: " << file_path << std::endl;
-    return false;
+    return {};
   }
 
   try {
@@ -32,21 +32,22 @@ bool read_file(const std::filesystem::path &file_path, ym2612::Patch &patch) {
     if (file_version != 11) {
       std::cerr << "Unsupported DMP version: " << static_cast<int>(file_version)
                 << std::endl;
-      return false;
+      return {};
     }
 
     uint8_t system = read_binary_value<uint8_t>(file);
     if (system != 0x02) { // SYSTEM_GENESIS
       std::cerr << "Unsupported system: " << static_cast<int>(system)
                 << std::endl;
-      return false;
+      return {};
     }
 
     uint8_t instrument_mode = read_binary_value<uint8_t>(file);
     if (instrument_mode != 1) { // FM mode
       std::cerr << "Only FM instruments are supported" << std::endl;
-      return false;
+      return {};
     }
+    ym2612::Patch patch;
 
     patch.name = file_path.stem().string();
     const auto parent = file_path.parent_path().filename().string();
@@ -56,7 +57,7 @@ bool read_file(const std::filesystem::path &file_path, ym2612::Patch &patch) {
     patch.global.lfo_enable = false;
     patch.global.lfo_frequency = 0;
 
-    uint8_t lfo_fms = read_binary_value<uint8_t>(file);  // FMS on YM2612
+    uint8_t lfo_fms = read_binary_value<uint8_t>(file);   // FMS on YM2612
     uint8_t feedback = read_binary_value<uint8_t>(file);  // FB
     uint8_t algorithm = read_binary_value<uint8_t>(file); // ALG
     uint8_t lfo_ams = read_binary_value<uint8_t>(file);   // AMS on YM2612
@@ -92,8 +93,7 @@ bool read_file(const std::filesystem::path &file_path, ym2612::Patch &patch) {
       operator_settings.release_rate = rr & 0x0F;
       operator_settings.amplitude_modulation_enable = (am != 0);
       operator_settings.key_scale = rs & 0x03;
-      operator_settings.detune =
-          ym2612::formats::conversion::detune_from_dmp_to_patch(dt);
+      operator_settings.detune = formats::detune_from_dmp_to_patch(dt);
       operator_settings.sustain_rate = d2r & 0x1F;
 
       bool ssgeg_enabled = (ssgeg & 0x08) != 0;
@@ -122,12 +122,12 @@ bool read_file(const std::filesystem::path &file_path, ym2612::Patch &patch) {
               << " FMS=" << static_cast<int>(lfo_fms)
               << " AMS=" << static_cast<int>(lfo_ams) << std::endl;
 
-    return true;
+    return {patch};
 
   } catch (const std::exception &e) {
     std::cerr << "Error parsing DMP file " << file_path << ": " << e.what()
               << std::endl;
-    return false;
+    return {};
   }
 }
 
@@ -161,9 +161,7 @@ bool write_patch(const ym2612::Patch &patch,
       data.push_back(std::min<uint8_t>(op.release_rate, 15));
       data.push_back(op.amplitude_modulation_enable ? 1 : 0);
       data.push_back(std::min<uint8_t>(op.key_scale, 3));
-      data.push_back(
-          ym2612::formats::conversion::detune_from_patch_to_dmp(op.detune &
-                                                                    0x07));
+      data.push_back(formats::detune_from_patch_to_dmp(op.detune & 0x07));
       data.push_back(std::min<uint8_t>(op.sustain_rate, 31));
       uint8_t ssg =
           (op.ssg_enable ? 0x08 : 0x00) | (op.ssg_type_envelope_control & 0x07);
@@ -189,4 +187,4 @@ std::string get_patch_name(const std::filesystem::path &file_path) {
   return file_path.stem().string();
 }
 
-} // namespace ym2612::formats::dmp
+} // namespace formats::dmp

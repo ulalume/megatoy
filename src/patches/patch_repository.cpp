@@ -1,9 +1,8 @@
 #include "patch_repository.hpp"
 #include "formats/ctrmml.hpp"
-#include "formats/dmp.hpp"
-#include "formats/gin.hpp"
-#include "parsers/fui_parser.hpp"
-#include "parsers/rym2612_parser.hpp"
+
+#include "formats/patch_loader.hpp"
+#include "ym2612/patch.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -70,37 +69,28 @@ bool PatchRepository::load_patch(const PatchEntry &entry,
   if (entry.is_directory) {
     return false;
   }
-
+  auto result = formats::load_patch_from_file(entry.full_path);
+  if (result.status == formats::PatchLoadStatus::Failure) {
+    std::cerr << "Error loading preset patch " << entry.full_path << std::endl;
+    return false;
+  } else if (result.status == formats::PatchLoadStatus::Success) {
+    patch = result.patches[0];
+    return true;
+  }
   try {
-    if (entry.format == "rym2612") {
-      return parsers::parse_rym2612_file(entry.full_path, patch);
-    } else if (entry.format == "gin") {
-      auto patches_dir = entry.full_path.parent_path();
-      auto filename = entry.full_path.stem().string();
-      return ym2612::formats::gin::load_patch(patches_dir, patch, filename);
-    } else if (entry.format == "dmp") {
-      return ym2612::formats::dmp::read_file(entry.full_path, patch);
-    } else if (entry.format == "fui") {
-      return parsers::parse_fui_file(entry.full_path, patch);
-    } else if (entry.format == "ctrmml") {
-      std::vector<ym2612::formats::ctrmml::Instrument> instruments;
-      if (!ym2612::formats::ctrmml::read_file(entry.full_path, instruments)) {
-        return false;
+    size_t instrument_index = 0;
+    if (!entry.metadata.empty()) {
+      try {
+        instrument_index = static_cast<size_t>(std::stoul(entry.metadata));
+      } catch (...) {
+        instrument_index = 0;
       }
-      size_t instrument_index = 0;
-      if (!entry.metadata.empty()) {
-        try {
-          instrument_index = static_cast<size_t>(std::stoul(entry.metadata));
-        } catch (...) {
-          instrument_index = 0;
-        }
-      }
-      if (instrument_index >= instruments.size()) {
-        return false;
-      }
-      patch = instruments[instrument_index].patch;
-      return true;
     }
+    if (instrument_index >= result.patches.size()) {
+      return false;
+    }
+    patch = result.patches[instrument_index];
+    return true;
   } catch (const std::exception &e) {
     std::cerr << "Error loading preset patch " << entry.full_path << ": "
               << e.what() << std::endl;
@@ -211,9 +201,9 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
                      ::tolower);
 
       if (extension == ".mml") {
-        std::vector<ym2612::formats::ctrmml::Instrument> instruments;
-        if (ym2612::formats::ctrmml::read_file(path, instruments) &&
-            !instruments.empty()) {
+        std::vector<ym2612::Patch> instruments =
+            formats::ctrmml::read_file(path);
+        if (!instruments.empty()) {
           PatchEntry container;
           container.name = path.stem().string();
           container.full_path = path;
@@ -250,16 +240,7 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
 
       info.is_directory = false;
       info.format = detect_format(path);
-
-      if (info.format == "gin") {
-        info.name = path.stem().string();
-      } else if (info.format == "rym2612") {
-        info.name = parsers::get_rym2612_patch_name(path);
-      } else if (info.format == "dmp") {
-        info.name = ym2612::formats::dmp::get_patch_name(path);
-      } else if (info.format == "fui") {
-        info.name = path.stem().string();
-      }
+      info.name = formats::get_patch_name_from_file(path, info.format);
 
       tree.push_back(std::move(info));
     }

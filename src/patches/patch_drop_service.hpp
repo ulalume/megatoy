@@ -1,6 +1,4 @@
 #pragma once
-
-#include "formats/ctrmml.hpp"
 #include "ym2612/patch.hpp"
 
 #include <filesystem>
@@ -20,7 +18,7 @@ struct PatchDropResult {
   std::string history_label;
   ym2612::Patch patch;
   std::filesystem::path source_path;
-  std::vector<ym2612::formats::ctrmml::Instrument> instruments;
+  std::vector<ym2612::Patch> instruments;
   std::string error_message;
 };
 

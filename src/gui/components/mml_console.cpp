@@ -17,7 +17,7 @@ void render_mml_console(AppState &app_state) {
     return;
   }
 
-  auto mml = ym2612::formats::ctrmml::patch_to_string(app_state.patch());
+  auto mml = formats::ctrmml::patch_to_string(app_state.patch());
   auto mml_c = mml.c_str();
 
   // copy to clipboard button

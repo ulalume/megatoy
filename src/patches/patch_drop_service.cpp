@@ -1,6 +1,6 @@
 #include "patch_drop_service.hpp"
 
-#include "parsers/patch_loader.hpp"
+#include "formats/patch_loader.hpp"
 
 #include <filesystem>
 
@@ -17,18 +17,18 @@ PatchDropResult load_patch_from_path(const std::filesystem::path &path) {
     return result;
   }
 
-  const auto parsed = parsers::load_patch_from_file(path);
+  const auto parsed = formats::load_patch_from_file(path);
   switch (parsed.status) {
-  case parsers::PatchLoadStatus::Success:
+  case formats::PatchLoadStatus::Success:
     result.status = PatchDropResult::Status::Loaded;
-    result.patch = parsed.patch;
+    result.patch = parsed.patches[0];
     result.history_label = "Load Patch: " + path.filename().string();
     return result;
-  case parsers::PatchLoadStatus::MultiInstrument:
+  case formats::PatchLoadStatus::MultiInstrument:
     result.status = PatchDropResult::Status::MultiInstrument;
-    result.instruments = parsed.instruments;
+    result.instruments = parsed.patches;
     return result;
-  case parsers::PatchLoadStatus::Failure:
+  case formats::PatchLoadStatus::Failure:
   default:
     result.status = PatchDropResult::Status::Error;
     result.error_message =

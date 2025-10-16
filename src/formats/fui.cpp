@@ -1,6 +1,5 @@
-#include "fui_parser.hpp"
+#include "fui.hpp"
 
-#include "ym2612/types.hpp"
 #include "formats/common.hpp"
 #include <algorithm>
 #include <array>
@@ -60,7 +59,7 @@ bool parse_fm_feature(const std::vector<uint8_t> &data, ym2612::Patch &result) {
     const uint8_t reg_90 = data[offset + 6];
     const uint8_t reg_94 = data[offset + 7];
 
-    op.detune = ym2612::formats::conversion::detune_from_dmp_to_patch(reg_30 >> 4);
+    op.detune = formats::detune_from_dmp_to_patch(reg_30 >> 4);
     op.multiple = reg_30 & 0x0F;
 
     op.total_level = reg_40 & 0x7F;
@@ -264,7 +263,7 @@ bool parse_old_fui(const std::vector<uint8_t> &bytes,
     op.release_rate = std::min<uint8_t>(release_rate, 15);
     op.sustain_level = std::min<uint8_t>(sustain_level, 15);
     op.total_level = std::min<uint8_t>(total_level, 127);
-    op.detune = ym2612::formats::conversion::detune_from_dmp_to_patch(detune);
+    op.detune = formats::detune_from_dmp_to_patch(detune);
     op.sustain_rate = std::min<uint8_t>(sustain_rate, 31);
     const bool ssg_enable = (ssg_env & 0x10) != 0;
     op.ssg_enable = ssg_enable;
@@ -363,26 +362,26 @@ bool parse_new_fui(const std::vector<uint8_t> &bytes,
 
 } // namespace
 
-namespace parsers {
+namespace formats::fui {
 
-bool parse_fui_file(const std::filesystem::path &file_path,
-                    ym2612::Patch &patch) {
+std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
   const auto bytes = read_file_bytes(file_path);
+  ym2612::Patch patch;
   if (bytes.empty()) {
     std::cerr << "FUI file could not be read: " << file_path << "\n";
-    return false;
+    return {};
   }
 
   if (parse_new_fui(bytes, file_path, patch)) {
-    return true;
+    return {patch};
   }
 
   if (parse_old_fui(bytes, file_path, patch)) {
-    return true;
+    return {patch};
   }
 
   std::cerr << "Unsupported FUI format: " << file_path << "\n";
-  return false;
+  return {};
 }
 
-} // namespace parsers
+} // namespace formats::fui

@@ -58,16 +58,14 @@ bool starts_with_at(const std::string &line) {
 
 } // namespace
 
-namespace ym2612::formats::ctrmml {
+namespace formats::ctrmml {
 
-bool read_file(const std::filesystem::path &file_path,
-               std::vector<Instrument> &out_instruments) {
-  out_instruments.clear();
-
+std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
+  std::vector<ym2612::Patch> patches;
   std::ifstream file(file_path);
   if (!file.is_open()) {
     std::cerr << "Failed to open ctrmml file: " << file_path << "\n";
-    return false;
+    return {};
   }
 
   std::vector<std::string> lines;
@@ -218,7 +216,7 @@ bool read_file(const std::filesystem::path &file_path,
       continue;
     }
 
-    ym2612::Patch patch{};
+    ym2612::Patch patch;
     patch.global = {
         .dac_enable = false, .lfo_enable = false, .lfo_frequency = 0};
     patch.channel.left_speaker = true;
@@ -230,9 +228,8 @@ bool read_file(const std::filesystem::path &file_path,
 
     for (size_t op_idx = 0; op_idx < 4; ++op_idx) {
       const auto &row = operator_rows[op_idx];
-      auto &op =
-          patch.instrument
-              .operators[static_cast<size_t>(all_operator_indices[op_idx])];
+      auto &op = patch.instrument.operators[static_cast<size_t>(
+          ym2612::all_operator_indices[op_idx])];
 
       op.attack_rate = clamp_uint8(row[0], 0, 31);
       op.decay_rate = clamp_uint8(row[1], 0, 31);
@@ -256,18 +253,10 @@ bool read_file(const std::filesystem::path &file_path,
     if (instrument_name.empty()) {
       instrument_name = file_stem + "_" + std::to_string(instrument_number);
     }
-
     patch.name = instrument_name;
-
-    Instrument instrument;
-    instrument.instrument_number = instrument_number;
-    instrument.name = instrument_name;
-    instrument.patch = patch;
-
-    out_instruments.push_back(std::move(instrument));
+    patches.push_back(std::move(patch));
   }
-
-  return !out_instruments.empty();
+  return patches;
 }
 
 std::string patch_to_string(const ym2612::Patch &patch) {
@@ -287,7 +276,7 @@ std::string patch_to_string(const ym2612::Patch &patch) {
 
   for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
        ++op_idx) {
-    size_t op_index = static_cast<size_t>(all_operator_indices[op_idx]);
+    size_t op_index = static_cast<size_t>(ym2612::all_operator_indices[op_idx]);
     const auto &op = patch.instrument.operators[op_index];
 
     int ssg_value = op.ssg_type_envelope_control & 0x07;
@@ -356,4 +345,4 @@ bool write_patch(const ym2612::Patch &patch,
   }
 }
 
-} // namespace ym2612::formats::ctrmml
+} // namespace formats::ctrmml

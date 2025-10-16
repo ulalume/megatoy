@@ -18,7 +18,8 @@ void AppState::init() {
   patch_session_.initialize_patch_defaults();
 
   if (!audio_subsystem_.initialize(kSampleRate)) {
-    std::cerr << "Audio subsystem failed to start; functionality will be limited\n";
+    std::cerr
+        << "Audio subsystem failed to start; functionality will be limited\n";
   } else {
     patch_session_.apply_patch_to_audio();
   }
@@ -42,8 +43,7 @@ void AppState::shutdown() {
 void AppState::update_all_settings() { patch_session_.apply_patch_to_audio(); }
 
 bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
-  const bool success =
-      patch_session_.note_on(note, velocity, ui_state_.prefs);
+  const bool success = patch_session_.note_on(note, velocity, ui_state_.prefs);
   if (success) {
     const uint8_t effective_velocity =
         ui_state_.prefs.use_velocity
@@ -144,7 +144,7 @@ void AppState::apply_mml_instrument_selection(size_t index) {
   }
 
   auto selected = drop.instruments[index];
-  ym2612::Patch patch_to_apply = selected.patch;
+  ym2612::Patch patch_to_apply = selected;
   if (!selected.name.empty()) {
     patch_to_apply.name = selected.name;
   } else if (patch_to_apply.name.empty()) {
@@ -190,16 +190,14 @@ void AppState::apply_patch_snapshot(const PatchSnapshot &snapshot) {
 void AppState::record_patch_change(const std::string &label,
                                    const PatchSnapshot &before,
                                    const PatchSnapshot &after) {
-  history_.begin_transaction(label, {},
-                             [label, before, after](AppState &state) {
-                               return history::make_snapshot_entry<PatchSnapshot>(
-                                   label, std::string{}, before, after,
-                                   [](AppState &target,
-                                      const PatchSnapshot &snapshot) {
-                                     target.patch_session_.restore_snapshot(
-                                         snapshot);
-                                   });
-                             });
+  history_.begin_transaction(
+      label, {}, [label, before, after](AppState &state) {
+        return history::make_snapshot_entry<PatchSnapshot>(
+            label, std::string{}, before, after,
+            [](AppState &target, const PatchSnapshot &snapshot) {
+              target.patch_session_.restore_snapshot(snapshot);
+            });
+      });
   history_.commit_transaction(*this);
 }
 

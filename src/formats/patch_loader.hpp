@@ -1,12 +1,11 @@
 #pragma once
 
-#include "formats/ctrmml.hpp"
 #include "ym2612/patch.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
 
-namespace parsers {
+namespace formats {
 
 enum class PatchLoadStatus {
   Success,
@@ -16,11 +15,12 @@ enum class PatchLoadStatus {
 
 struct PatchLoadResult {
   PatchLoadStatus status = PatchLoadStatus::Failure;
-  ym2612::Patch patch;
-  std::vector<ym2612::formats::ctrmml::Instrument> instruments;
+  std::vector<ym2612::Patch> patches;
   std::string message;
 };
 
 PatchLoadResult load_patch_from_file(const std::filesystem::path &path);
+std::string get_patch_name_from_file(const std::filesystem::path &path,
+                                     const std::string &format);
 
-} // namespace parsers
+} // namespace formats

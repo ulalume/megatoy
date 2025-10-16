@@ -1,7 +1,8 @@
 #include "patch_selector.hpp"
-#include "patches/patch_repository.hpp"
+#include "app_state.hpp"
 #include "common.hpp"
 #include "file_manager.hpp"
+#include "patches/patch_repository.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -45,6 +46,25 @@ void collect_leaf_patches(const std::vector<patches::PatchEntry> &tree,
   }
 }
 
+void begin_popup_context(const AppState &app_state,
+                         const std::string &relative_path) {
+  if (ImGui::BeginPopupContextItem(nullptr)) {
+    if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
+      ui::reveal_in_file_manager(app_state.patch_repository()
+                                     .to_absolute_path(relative_path)
+                                     .string());
+    }
+    ImGui::EndPopup();
+  }
+}
+void is_item_hovered(const std::string &format,
+                     const std::string &relative_path) {
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Format: %s\nPath: %s", format.c_str(),
+                      relative_path.c_str());
+  }
+}
+
 void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
                        AppState &app_state, int depth = 0) {
   for (const auto &item : tree) {
@@ -52,14 +72,7 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
     if (item.is_directory) {
       if (ImGui::TreeNode(item.name.c_str())) {
-        if (ImGui::BeginPopupContextItem(nullptr)) {
-          if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
-            ui::reveal_in_file_manager(app_state.patch_repository()
-                                           .to_absolute_path(item.relative_path)
-                                           .string());
-          }
-          ImGui::EndPopup();
-        }
+        begin_popup_context(app_state, item.relative_path);
         render_patch_tree(item.children, app_state, depth + 1);
         ImGui::TreePop();
       }
@@ -75,40 +88,25 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       std::string name_string = item.name;
       auto name_string_selectable =
           ImGui::Selectable(name_string.c_str(), false);
-      std::string format_string =
-          item.format != "ctrmml" ? "." + item.format : " ctrmml";
-      ImGui::SameLine(0, 0);
+      begin_popup_context(app_state, item.relative_path);
+      is_item_hovered(item.format, item.relative_path);
+      ImGui::SameLine();
       ImGui::PushStyleColor(
           ImGuiCol_Text,
           color_with_alpha_vec4(ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f));
       auto format_string_selectable =
-          ImGui::Selectable(format_string.c_str(), false);
+          ImGui::Selectable(item.format.c_str(), false);
       if (name_string_selectable || format_string_selectable) {
         app_state.load_patch(item);
       }
       ImGui::PopStyleColor();
-
-      if (ImGui::BeginPopupContextItem(nullptr)) {
-        if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
-          ui::reveal_in_file_manager(app_state.patch_repository()
-                                         .to_absolute_path(item.relative_path)
-                                         .string());
-        }
-        ImGui::EndPopup();
-      }
-
+      begin_popup_context(app_state, item.relative_path);
+      is_item_hovered(item.format, item.relative_path);
       if (is_current) {
         ImGui::PopStyleColor();
       }
-
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Format: %s\nPath: %s", item.format.c_str(),
-                          item.relative_path.c_str());
-      }
-
       ImGui::Unindent(INDENT * depth);
     }
-
     ImGui::PopID();
   }
 }
@@ -213,15 +211,7 @@ void render_patch_selector(AppState &app_state) {
             ImGui::PopStyleColor();
           }
 
-          if (ImGui::BeginPopupContextItem(nullptr)) {
-            if (ImGui::MenuItem(reveal_in_file_manager_label())) {
-              reveal_in_file_manager(app_state.patch_repository()
-                                         .to_absolute_path(entry->relative_path)
-                                         .string());
-            }
-            ImGui::EndPopup();
-          }
-
+          begin_popup_context(app_state, entry->relative_path);
           if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Format: %s\nPath: %s", entry->format.c_str(),
                               entry->relative_path.c_str());

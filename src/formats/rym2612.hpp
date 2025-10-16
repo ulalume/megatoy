@@ -4,13 +4,12 @@
 #include <filesystem>
 #include <string>
 
-namespace formats::dmp {
+namespace formats::rym2612 {
 
+// Convert a rym2612 file into a Patch
 std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path);
 
-bool write_patch(const ym2612::Patch &patch,
-                 const std::filesystem::path &target_path);
-
+// Retrieve the patch name from a rym2612 file (preview before loading)
 std::string get_patch_name(const std::filesystem::path &file_path);
 
-} // namespace formats::dmp
+} // namespace formats::rym2612

@@ -4,7 +4,7 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 
-namespace ym2612::formats::gin {
+namespace formats::gin {
 
 std::filesystem::path build_patch_path(const std::filesystem::path &patches_dir,
                                        const std::string &filename) {
@@ -16,7 +16,7 @@ std::filesystem::path build_patch_path(const std::filesystem::path &patches_dir,
 }
 
 const std::optional<std::filesystem::path>
-save_patch(const std::filesystem::path &patches_dir, const Patch &patch,
+save_patch(const std::filesystem::path &patches_dir, const ym2612::Patch &patch,
            const std::string &filename) {
   try {
     auto filepath = build_patch_path(patches_dir, filename);
@@ -37,32 +37,31 @@ save_patch(const std::filesystem::path &patches_dir, const Patch &patch,
   }
 }
 
-bool load_patch(const std::filesystem::path &patches_dir, Patch &patch,
-                const std::string &filename) {
+std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
   try {
-    auto filepath = build_patch_path(patches_dir, filename);
-
-    if (!std::filesystem::exists(filepath)) {
-      std::cerr << "File does not exist: " << filepath << std::endl;
-      return false;
+    if (!std::filesystem::exists(file_path)) {
+      std::cerr << "File does not exist: " << file_path << std::endl;
+      return {};
     }
 
-    std::ifstream file(filepath);
+    std::ifstream file(file_path);
     if (!file) {
-      std::cerr << "Failed to open file for reading: " << filepath << std::endl;
-      return false;
+      std::cerr << "Failed to open file for reading: " << file_path
+                << std::endl;
+      return {};
     }
 
     nlohmann::json j;
     file >> j;
-    patch = j.get<Patch>();
 
-    std::cout << "Loaded patch from: " << filepath << std::endl;
-    return true;
+    ym2612::Patch patch = j.get<ym2612::Patch>();
+
+    std::cout << "Loaded patch from: " << file_path << std::endl;
+    return {patch};
   } catch (const std::exception &e) {
     std::cerr << "Load error: " << e.what() << std::endl;
-    return false;
+    return {};
   }
 }
 
-} // namespace ym2612::formats::gin
+} // namespace formats::gin

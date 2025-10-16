@@ -1,9 +1,9 @@
 #include "patch_editing_session.hpp"
 
 #include "audio/audio_subsystem.hpp"
+#include "formats/dmp.hpp"
 #include "preferences/preference_manager.hpp"
 #include "ym2612/channel.hpp"
-#include "formats/dmp.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -50,17 +50,20 @@ const ChannelAllocator &PatchEditingSession::channel_allocator() const {
 
 void PatchEditingSession::initialize_patch_defaults() {
   const auto &paths = directories_.paths();
-  const auto init_patch = paths.builtin_presets_root / "init.dmp";
+  const auto init_patch_path = paths.builtin_presets_root / "init.dmp";
   auto &patch = patch_manager_.current_patch();
 
   bool loaded_builtin = false;
   if (!paths.builtin_presets_root.empty() &&
-      std::filesystem::exists(init_patch)) {
-    if (ym2612::formats::dmp::read_file(init_patch, patch)) {
-      patch_manager_.set_current_patch_path(init_patch);
+      std::filesystem::exists(init_patch_path)) {
+    const auto patches = formats::dmp::read_file(init_patch_path);
+    if (!patches.empty()) {
+      patch_manager_.set_current_patch_path(init_patch_path);
+      patch = std::move(patches[0]);
       loaded_builtin = true;
     } else {
-      std::cerr << "Failed to load builtin init patch: " << init_patch << "\n";
+      std::cerr << "Failed to load builtin init patch: " << init_patch_path
+                << "\n";
     }
   }
 
@@ -92,7 +95,6 @@ void PatchEditingSession::initialize_patch_defaults() {
     };
     patch_manager_.set_current_patch_path({});
   }
-
 }
 
 void PatchEditingSession::refresh_directories() {
@@ -119,8 +121,8 @@ void PatchEditingSession::apply_patch_to_audio() {
   audio_.apply_patch_to_all_channels(patch_manager_.current_patch());
 }
 
-patches::PatchDropResult PatchEditingSession::load_patch_from_path(
-    const std::filesystem::path &path) {
+patches::PatchDropResult
+PatchEditingSession::load_patch_from_path(const std::filesystem::path &path) {
   return patches::load_patch_from_path(path);
 }
 
@@ -170,8 +172,8 @@ const std::array<bool, 6> &PatchEditingSession::active_channels() const {
   return channel_allocator_.channel_usage();
 }
 
-PatchEditingSession::PatchSnapshot PatchEditingSession::capture_snapshot()
-    const {
+PatchEditingSession::PatchSnapshot
+PatchEditingSession::capture_snapshot() const {
   PatchSnapshot snapshot;
   snapshot.patch = patch_manager_.current_patch();
   snapshot.path = patch_manager_.current_patch_path();

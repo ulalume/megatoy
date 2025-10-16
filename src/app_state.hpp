@@ -1,15 +1,13 @@
 #pragma once
 
 #include "audio/audio_subsystem.hpp"
-#include "channel_allocator.hpp"
-#include "formats/ctrmml.hpp"
+#include "core/types.hpp"
 #include "gui/gui_subsystem.hpp"
 #include "history/history_manager.hpp"
-#include "patches/patch_manager.hpp"
 #include "patches/patch_editing_session.hpp"
+#include "patches/patch_manager.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/directory_service.hpp"
-#include "core/types.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
 #include <array>
@@ -44,7 +42,7 @@ struct UIState {
     std::string error_message;
     bool show_picker_for_multiple_instruments = false;
     std::filesystem::path pending_instruments_path;
-    std::vector<ym2612::formats::ctrmml::Instrument> instruments;
+    std::vector<ym2612::Patch> instruments;
     int selected_instrument = 0;
   } drop_state;
 
@@ -116,7 +114,9 @@ public:
   history::HistoryManager &history() { return history_; }
   const history::HistoryManager &history() const { return history_; }
 
-  ym2612::WaveSampler &wave_sampler() { return audio_subsystem_.wave_sampler(); }
+  ym2612::WaveSampler &wave_sampler() {
+    return audio_subsystem_.wave_sampler();
+  }
   const ym2612::WaveSampler &wave_sampler() const {
     return audio_subsystem_.wave_sampler();
   }
@@ -165,5 +165,4 @@ private:
   UIState ui_state_;
   history::HistoryManager history_;
   std::vector<std::string> connected_midi_inputs_;
-
 };

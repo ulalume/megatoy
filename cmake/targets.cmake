@@ -30,6 +30,9 @@ set(MEGATOY_CORE_SOURCES
   src/formats/ctrmml.cpp
   src/formats/dmp.cpp
   src/formats/gin.cpp
+  src/formats/fui.cpp
+  src/formats/patch_loader.cpp
+  src/formats/rym2612.cpp
   src/gui/components/envelope_image.cpp
   src/gui/components/keyboard_typing.cpp
   src/gui/components/main_menu.cpp
@@ -54,9 +57,6 @@ set(MEGATOY_CORE_SOURCES
   src/gui/styles/theme.cpp
   src/history/history_manager.cpp
   src/midi/midi_input_manager.cpp
-  src/parsers/fui_parser.cpp
-  src/parsers/patch_loader.cpp
-  src/parsers/rym2612_parser.cpp
   src/patches/patch_drop_service.cpp
   src/patches/patch_editing_session.cpp
   src/patches/patch_manager.cpp

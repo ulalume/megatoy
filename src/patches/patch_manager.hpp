@@ -1,8 +1,8 @@
 #pragma once
 
+#include "patch_repository.hpp"
 #include "system/directory_service.hpp"
 #include "ym2612/patch.hpp"
-#include "patch_repository.hpp"
 #include <filesystem>
 #include <string>
 

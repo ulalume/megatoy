@@ -1,4 +1,4 @@
-#include "rym2612_parser.hpp"
+#include "rym2612.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -6,7 +6,7 @@
 #include <sstream>
 #include <string>
 
-namespace parsers {
+namespace formats::rym2612 {
 
 // Convert rym2612 detune into the app format
 static uint8_t convert_detune(int rym_dt) {
@@ -92,12 +92,11 @@ T safe_convert(const std::string &str, T default_value = T{}) {
   return default_value;
 }
 
-bool parse_rym2612_file(const std::filesystem::path &file_path,
-                        ym2612::Patch &patch) {
+std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
   std::ifstream file(file_path);
   if (!file.is_open()) {
     std::cerr << "Failed to open rym2612 file: " << file_path << std::endl;
-    return false;
+    return {};
   }
 
   // Read the entire file
@@ -108,6 +107,7 @@ bool parse_rym2612_file(const std::filesystem::path &file_path,
   std::cout << "Parsing rym2612 file: " << file_path << std::endl;
 
   try {
+    ym2612::Patch patch;
     auto extract_attribute = [&](const std::string &attribute) {
       const std::string pattern = attribute + "=\"";
       size_t start = xml_content.find(pattern);
@@ -239,16 +239,15 @@ bool parse_rym2612_file(const std::filesystem::path &file_path,
                 << " AM=" << am_val << std::endl;
     }
 
-    return true;
-
+    return {patch};
   } catch (const std::exception &e) {
     std::cerr << "Error parsing rym2612 file " << file_path << ": " << e.what()
               << std::endl;
-    return false;
+    return {};
   }
 }
 
-std::string get_rym2612_patch_name(const std::filesystem::path &file_path) {
+std::string get_patch_name(const std::filesystem::path &file_path) {
   std::ifstream file(file_path);
   if (!file.is_open()) {
     return file_path.stem().string();
@@ -278,4 +277,4 @@ std::string get_rym2612_patch_name(const std::filesystem::path &file_path) {
   return name;
 }
 
-} // namespace parsers
+} // namespace formats::rym2612

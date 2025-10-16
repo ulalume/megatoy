@@ -1,5 +1,4 @@
 #pragma once
-#include "core/types.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <iterator>
@@ -9,7 +8,7 @@
 namespace ym2612 {
 
 struct Patch {
-  std::string name = "init patch";
+  std::string name = "";
   std::string category = "";
 
   GlobalSettings global;

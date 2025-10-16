@@ -35,7 +35,8 @@ public:
                          const std::filesystem::path &source_path);
   void apply_patch_to_audio();
 
-  patches::PatchDropResult load_patch_from_path(const std::filesystem::path &path);
+  patches::PatchDropResult
+  load_patch_from_path(const std::filesystem::path &path);
 
   bool note_on(ym2612::Note note, uint8_t velocity,
                const PreferenceManager::UIPreferences &prefs);
