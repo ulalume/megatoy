@@ -14,22 +14,22 @@ jobs:
           - label: Linux
             os: Linux
             runner: ubuntu-latest
-            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
             build: cmake --build build --config Release --parallel
           - label: macOS (arm64)
             os: macOS
             runner: macos-14
-            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_INSTALL_PREFIX=install
             build: cmake --build build --config Release --parallel
           - label: macOS (Intel)
             os: macOS
             runner: macos-13
-            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
+            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_INSTALL_PREFIX=install
             build: cmake --build build --config Release --parallel
           - label: Windows
             os: Windows
             runner: windows-latest
-            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64
+            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=install
             build: cmake --build build --config Release --parallel
     steps:
       - name: Checkout
@@ -70,3 +70,13 @@ jobs:
         if: matrix.os == 'Windows'
         shell: pwsh
         run: ${{ matrix.build }}
+
+      - name: Install artifacts (Linux/macOS)
+        if: matrix.os != 'Windows'
+        shell: bash
+        run: cmake --install build --config Release
+
+      - name: Install artifacts (Windows)
+        if: matrix.os == 'Windows'
+        shell: pwsh
+        run: cmake --install build --config Release
