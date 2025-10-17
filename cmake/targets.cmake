@@ -127,6 +127,11 @@ endif()
 
 target_link_libraries(megatoy PRIVATE megatoy_core)
 
+install(TARGETS megatoy
+  BUNDLE DESTINATION .
+  RUNTIME DESTINATION .
+)
+
 if(UNIX AND NOT APPLE)
   find_package(X11 REQUIRED)
   target_link_libraries(megatoy PRIVATE ${X11_LIBRARIES})
@@ -161,13 +166,19 @@ if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
     set(MEGATOY_PRESETS_DESTINATION "$<TARGET_FILE_DIR:megatoy>/presets")
   endif()
 
-  add_custom_command(
+add_custom_command(
       TARGET megatoy POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E remove_directory
               "${MEGATOY_PRESETS_DESTINATION}"
       COMMAND ${CMAKE_COMMAND} -E copy_directory
               "${MEGATOY_PRESETS_SOURCE_DIR}"
               "${MEGATOY_PRESETS_DESTINATION}"
+  )
+
+  # Ensure presets are part of install / CPack artefacts on every platform.
+  install(
+    DIRECTORY "${MEGATOY_PRESETS_SOURCE_DIR}/"
+    DESTINATION "$<IF:$<PLATFORM_ID:Darwin>,Resources/presets,presets>"
   )
 else()
   message(WARNING "Presets directory not found at ${MEGATOY_PRESETS_SOURCE_DIR}")
