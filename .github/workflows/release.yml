@@ -59,6 +59,7 @@ jobs:
       VERSION: ${{ github.ref_name }}
       PACKAGE_NAME: megatoy-${{ github.ref_name }}-${{ matrix.archive_suffix }}
       CMAKE_EXTRA_ARGS: ${{ matrix.cmake_extra_args }}
+      INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,12 +83,12 @@ jobs:
       - name: Configure CMake (Linux/macOS)
         if: matrix.os != 'Windows'
         shell: bash
-        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX=install $CMAKE_EXTRA_ARGS
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" $CMAKE_EXTRA_ARGS
 
       - name: Configure CMake (Windows)
         if: matrix.os == 'Windows'
         shell: pwsh
-        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=install $env:CMAKE_EXTRA_ARGS
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX="$env:INSTALL_PREFIX" $env:CMAKE_EXTRA_ARGS
 
       - name: Build (Linux/macOS)
         if: matrix.os != 'Windows'
@@ -102,19 +103,19 @@ jobs:
       - name: Install (Linux/macOS)
         if: matrix.os != 'Windows'
         shell: bash
-        run: cmake --install build-release --config $BUILD_TYPE
+        run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
 
       - name: Install (Windows)
         if: matrix.os == 'Windows'
         shell: pwsh
-        run: cmake --install build-release --config $env:BUILD_TYPE
+        run: cmake --install build-release --config $env:BUILD_TYPE --prefix "$env:INSTALL_PREFIX"
 
       - name: Package Linux artifact
         if: matrix.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          STAGING="build-release/install"
+          STAGING="$INSTALL_PREFIX"
           if [ ! -d "$STAGING" ]; then
             echo "Install directory not found at $STAGING" >&2
             exit 1
@@ -143,7 +144,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installRoot = Join-Path 'build-release' 'install'
+          $installRoot = $env:INSTALL_PREFIX
           if (-Not (Test-Path $installRoot)) {
             throw "Install directory not found at $installRoot"
           }
