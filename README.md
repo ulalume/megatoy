@@ -9,22 +9,26 @@ A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sou
 ## Key Features
 
 ### Patch Management
+
 - **Load patches** from multiple formats: `.dmp`, `.fui`, `.rym2612`, `.mml`
 - **Save patches** in custom format with full metadata
 - **Export patches** to DefleMask (`.dmp`) and ctrmml (`.mml`) formats
 - **Drag & drop** support for easy file loading
 
 ### Real-time Audio & MIDI
+
 - **Live audio playback** with built-in YM2612 emulation
 - **MIDI input support** with velocity sensitivity
 - **Software keyboard** for testing patches without MIDI hardware
 - **Real-time parameter adjustment** with immediate audio feedback
 
 ### Advanced Editing
+
 - **Visual envelope editor** with interactive ADSR curves
 - **Undo/Redo history** for safe experimentation
 
 ### MML Integration
+
 - **MML Console** for viewing current patch as ctrmml code
 - **One-click copy** to clipboard for easy integration with MML tools
 - **Real-time MML preview** updates as you edit parameters
@@ -38,12 +42,12 @@ git clone https://github.com/ulalume/megatoy.git
 cd megatoy
 
 # Debug build
-cmake -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j$(sysctl -n hw.ncpu)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=install
+cmake --build build --config Debug --parallel
 
 # Release build
-cmake -B build-release -DCMAKE_BUILD_TYPE=Release
-cmake --build build-release --config Release -j$(sysctl -n hw.ncpu)
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
+cmake --build build-release --config Release --parallel
 ```
 
 ## Patch Sources
@@ -51,6 +55,7 @@ cmake --build build-release --config Release -j$(sysctl -n hw.ncpu)
 Load patches by placing files in `~/megatoy/patches/` (created automatically) or drag-and-drop into the application.
 
 Recommended collections:
+
 - **DefleMask Legacy** (https://www.deflemask.com/get_legacy/) - instruments/Genesis
 - **Furnace** (https://github.com/tildearrow/furnace) - instruments/OPN
 - **Rym2612 ReFill** (https://www.inphonik.com/press/press-release-rym2612-refill/) - free pack of 180 patches
