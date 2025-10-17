@@ -72,20 +72,20 @@ jobs:
             libgtk-3-dev xorg-dev
 
       - name: Configure CMake
-        run: |
-          cmake -S . -B build-release \
-            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-            -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-            ${{ matrix.cmake_args }}
         shell: bash
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" ${{ matrix.cmake_args }}
 
-      - name: Build & Install
-        run: |
-          cmake --build build-release --config $BUILD_TYPE --parallel
-          cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
+      - name: Build
         shell: bash
+        run: cmake --build build-release --config $BUILD_TYPE --parallel
 
-      - name: Package Artifact
+      - name: Install
+        shell: bash
+        run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
+
+      - name: Package Artifact (Linux/macOS)
+        if: matrix.os != 'windows'
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -95,28 +95,54 @@ jobs:
           if [[ "${{ matrix.os }}" == "linux" ]]; then
             STAGING="$INSTALL_PREFIX"
             mkdir -p "$DIST"
-            cp -r "$STAGING"/{megatoy,bin/megatoy,presets,bin/presets} 2>/dev/null || true
-            chmod +x "$DIST"/megatoy
+
+            if [ -f "$STAGING/megatoy" ]; then
+              cp "$STAGING/megatoy" "$DIST/"
+            elif [ -f "$STAGING/bin/megatoy" ]; then
+              cp "$STAGING/bin/megatoy" "$DIST/"
+            else
+              echo "Executable not found under $STAGING" >&2
+              exit 1
+            fi
+            chmod +x "$DIST/megatoy"
+
+            if [ -d "$STAGING/presets" ]; then
+              cp -a "$STAGING/presets" "$DIST/"
+            elif [ -d "$STAGING/bin/presets" ]; then
+              cp -a "$STAGING/bin/presets" "$DIST/presets"
+            fi
+
             (cd dist && zip -r "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
 
-          elif [[ "${{ matrix.os }}" == "macos" ]]; then
+          else
             APP="build-release/megatoy.app"
             [ -d "$APP" ] || (echo "App bundle not found" && exit 1)
+            mkdir -p dist
             ditto -c -k --keepParent "$APP" "dist/$PACKAGE_NAME.zip"
-
-          else # windows
-            pwsh -Command @'
-            $ErrorActionPreference = "Stop"
-            $install = "$env:INSTALL_PREFIX"
-            $dist = "dist/$env:PACKAGE_NAME"
-            Remove-Item $dist -Recurse -Force -ErrorAction Ignore
-            New-Item -ItemType Directory -Path $dist | Out-Null
-            Copy-Item "$install/megatoy.exe" $dist -Force
-            if (Test-Path "$install/presets") { Copy-Item "$install/presets" $dist -Recurse -Force }
-            Compress-Archive -Path $dist -DestinationPath "dist/$env:PACKAGE_NAME.zip" -Force
-            '@
           fi
 
+      - name: Package Artifact (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $install = "$env:INSTALL_PREFIX"
+          $dist = "dist/$env:PACKAGE_NAME"
+          Remove-Item $dist -Recurse -Force -ErrorAction Ignore
+          New-Item -ItemType Directory -Path $dist | Out-Null
+          $exe = Join-Path $install 'megatoy.exe'
+          if (-Not (Test-Path $exe)) {
+            throw "Executable not found: $exe"
+          }
+          Copy-Item $exe $dist -Force
+          $presets = Join-Path $install 'presets'
+          if (Test-Path $presets) {
+            Copy-Item $presets $dist -Recurse -Force
+          }
+          Push-Location dist
+          Compress-Archive -Path $env:PACKAGE_NAME -DestinationPath "$env:PACKAGE_NAME.zip" -Force
+          Pop-Location
+
       - name: Upload Artifact
-        run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
         shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
