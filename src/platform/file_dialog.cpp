@@ -171,7 +171,7 @@ DialogResult pick_folder(const std::filesystem::path &default_path,
     return DialogResult::Ok;
   }
   if (result == NFD_CANCEL) {
-    return DialogResult::Cancel;
+    return DialogResult::Cancelled;
   }
   const char *error = NFD_GetError();
   if (error != nullptr) {
@@ -234,7 +234,7 @@ DialogResult save_file(const std::filesystem::path &default_dir,
     return DialogResult::Ok;
   }
   if (result == NFD_CANCEL) {
-    return DialogResult::Cancel;
+    return DialogResult::Cancelled;
   }
   const char *error = NFD_GetError();
   if (error != nullptr) {

@@ -40,7 +40,9 @@ void Channel::write_key_on(bool op1 = true, bool op2 = true, bool op3 = true,
   if (key_channel >= 3) {
     key_channel += 1; // CH4=4, CH5=5, CH6=6
   }
-  uint8_t key_on = op1 | (op2 << 1) | (op3 << 2) | (op4 << 3);
+  uint8_t key_on =
+      static_cast<uint8_t>(op1) | (static_cast<uint8_t>(op2) << 1) |
+      (static_cast<uint8_t>(op3) << 2) | (static_cast<uint8_t>(op4) << 3);
   device.write(0x28, key_on << 4 | key_channel, false);
 }
 
