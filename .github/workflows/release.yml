@@ -154,8 +154,13 @@ jobs:
           }
           New-Item -ItemType Directory -Path 'dist' -Force | Out-Null
           $staging = Join-Path 'dist' $env:PACKAGE_NAME
+          if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
           New-Item -ItemType Directory -Path $staging -Force | Out-Null
-          Copy-Item -Path (Join-Path $installRoot '*') -Destination $staging -Recurse -Force
+          Copy-Item -Path $installedExe -Destination $staging -Force
+          $presetsPath = Join-Path $installRoot 'presets'
+          if (Test-Path $presetsPath) {
+            Copy-Item -Path $presetsPath -Destination $staging -Recurse -Force
+          }
           Push-Location 'dist'
           if (Test-Path ($env:PACKAGE_NAME + '.zip')) { Remove-Item ($env:PACKAGE_NAME + '.zip') }
           Compress-Archive -Path $env:PACKAGE_NAME -DestinationPath ($env:PACKAGE_NAME + '.zip')
