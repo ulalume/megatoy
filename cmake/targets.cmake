@@ -148,13 +148,26 @@ target_link_libraries(subsystem_tests PRIVATE megatoy_core)
 
 add_test(NAME subsystem_tests COMMAND subsystem_tests)
 
+set(COMPILE_COMMANDS_BINARY "${CMAKE_BINARY_DIR}/compile_commands.json")
+set(COMPILE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/compile_commands.json")
+
+if(WIN32)
+  # Windows builds typically lack symlink privileges, so fall back to copying.
+  set(COMPILE_COMMANDS_MIRROR_COMMAND copy_if_different)
+else()
+  set(COMPILE_COMMANDS_MIRROR_COMMAND create_symlink)
+endif()
+
+set(COMPILE_COMMANDS_MIRROR_SCRIPT
+    "${CMAKE_SOURCE_DIR}/cmake/update_compile_commands.cmake")
+
 add_custom_command(
     TARGET megatoy POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E remove -f
-            ${CMAKE_SOURCE_DIR}/compile_commands.json
-    COMMAND ${CMAKE_COMMAND} -E create_symlink
-            ${CMAKE_BINARY_DIR}/compile_commands.json
-            ${CMAKE_SOURCE_DIR}/compile_commands.json
+    COMMAND ${CMAKE_COMMAND}
+            -Dsrc="${COMPILE_COMMANDS_BINARY}"
+            -Ddst="${COMPILE_COMMANDS_SOURCE}"
+            -Dmirror_command=${COMPILE_COMMANDS_MIRROR_COMMAND}
+            -P "${COMPILE_COMMANDS_MIRROR_SCRIPT}"
 )
 
 set(MEGATOY_PRESETS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets/presets")

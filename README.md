@@ -42,11 +42,11 @@ git clone https://github.com/ulalume/megatoy.git
 cd megatoy
 
 # Debug build
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=install
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --config Debug --parallel
 
 # Release build
-cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --config Release --parallel
 ```
 
