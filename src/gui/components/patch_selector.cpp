@@ -80,7 +80,7 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       ImGui::Indent(INDENT * depth);
 
       bool is_current = (item.relative_path ==
-                         app_state.patch_manager().current_patch_path());
+                         app_state.patch_session().current_patch_path());
       if (is_current) {
         ImGui::PushStyleColor(ImGuiCol_Text,
                               styles::color(styles::MegatoyCol::TextHighlight));
@@ -191,7 +191,7 @@ void render_patch_selector(const char *title, AppState &app_state) {
           ImGui::PushID(entry->relative_path.c_str());
 
           bool is_current = (entry->relative_path ==
-                             app_state.patch_manager().current_patch_path());
+                             app_state.patch_session().current_patch_path());
           if (is_current) {
             ImGui::PushStyleColor(
                 ImGuiCol_Text,

@@ -2,8 +2,7 @@
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "history_helpers.hpp"
 #include "operator_editor.hpp"
-#include "patches/patch_manager.hpp"
-#include "patches/patch_repository.hpp"
+#include "patches/patch_session.hpp"
 #include <cctype>
 #include <cstring>
 #include <imgui.h>
@@ -45,7 +44,7 @@ bool is_patch_name_valid(const ym2612::Patch &patch) {
 
 void render_save_export_buttons(AppState &app_state, bool name_valid,
                                 UIState::PatchEditorState &state) {
-  auto &patch_manager = app_state.patch_manager();
+  auto &patch_session = app_state.patch_session();
   auto &repository = app_state.patch_repository();
 
   if (!name_valid) {
@@ -61,17 +60,17 @@ void render_save_export_buttons(AppState &app_state, bool name_valid,
   }
 
   if (ImGui::Button("Save")) {
-    auto result = patch_manager.save_current_patch(false);
+    auto result = patch_session.save_current_patch(false);
     if (result.is_duplicated()) {
       state.last_export_path = result.path.string();
       ImGui::OpenPopup("Overwrite Confirmation");
-      patch_manager.set_current_patch_path(
+      patch_session.set_current_patch_path(
           repository.to_relative_path(result.path));
     } else if (result.is_success()) {
       state.last_export_path = result.path.string();
       ImGui::OpenPopup("Save Success");
       repository.refresh();
-      patch_manager.set_current_patch_path(
+      patch_session.set_current_patch_path(
           repository.to_relative_path(result.path));
     } else if (result.is_error()) {
       state.last_export_error = result.error_message;
@@ -131,7 +130,7 @@ void render_save_export_popups(AppState &app_state, const ym2612::Patch &patch,
     ImGui::EndPopup();
 
     if (overwrite_button) {
-      auto result = app_state.patch_manager().save_current_patch(true);
+      auto result = app_state.patch_session().save_current_patch(true);
       if (result.is_success()) {
         state.last_export_path = result.path.string();
         ImGui::OpenPopup("Save Success");
@@ -206,7 +205,7 @@ void render_patch_metadata(AppState &app_state, ym2612::Patch &patch,
     const auto export_format =
         export_mml ? patches::ExportFormat::MML : patches::ExportFormat::DMP;
     auto result =
-        app_state.patch_manager().export_current_patch_as(export_format);
+        app_state.patch_session().export_current_patch_as(export_format);
     if (result.is_success()) {
       state.last_export_path = result.path.string();
       ImGui::OpenPopup("Export Success");

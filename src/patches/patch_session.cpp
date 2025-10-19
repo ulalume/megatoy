@@ -1,0 +1,272 @@
+#include "patch_session.hpp"
+
+#include "audio/audio_manager.hpp"
+#include "formats/ctrmml.hpp"
+#include "formats/dmp.hpp"
+#include "formats/gin.hpp"
+#include "formats/patch_loader.hpp"
+#include "platform/file_dialog.hpp"
+#include "ym2612/channel.hpp"
+#include <algorithm>
+#include <filesystem>
+#include <iostream>
+#include <utility>
+
+namespace patches {
+
+PatchSession::PatchSession(megatoy::system::PathService &directories,
+                           AudioManager &audio)
+    : directories_(directories), audio_(audio),
+      repository_(directories_.paths().patches_root,
+                  directories_.paths().builtin_presets_root),
+      channel_allocator_() {}
+
+ym2612::Patch &PatchSession::current_patch() { return current_patch_; }
+
+const ym2612::Patch &PatchSession::current_patch() const {
+  return current_patch_;
+}
+
+const std::string &PatchSession::current_patch_path() const {
+  return current_patch_path_;
+}
+
+void PatchSession::set_current_patch_path(const std::filesystem::path &path) {
+  if (path.empty()) {
+    current_patch_path_.clear();
+  } else {
+    current_patch_path_ = path.generic_string();
+  }
+}
+
+PatchRepository &PatchSession::repository() { return repository_; }
+
+const PatchRepository &PatchSession::repository() const { return repository_; }
+
+void PatchSession::initialize_patch_defaults() {
+  const auto &paths = directories_.paths();
+  const auto init_patch_path = paths.builtin_presets_root / "init.dmp";
+
+  bool loaded_builtin = false;
+  if (!paths.builtin_presets_root.empty() &&
+      std::filesystem::exists(init_patch_path)) {
+    auto load_result = formats::load_patch_from_file(init_patch_path);
+    if (load_result.status == formats::PatchLoadStatus::Success) {
+      set_current_patch_path(init_patch_path);
+      current_patch_ = std::move(load_result.patches[0]);
+      loaded_builtin = true;
+    } else {
+      std::cerr << "Failed to load builtin init patch: " << init_patch_path
+                << " - " << load_result.message << "\n";
+    }
+  }
+
+  if (!loaded_builtin) {
+    current_patch_.name = "init";
+    current_patch_.global = {
+        .dac_enable = false,
+        .lfo_enable = false,
+        .lfo_frequency = 0,
+    };
+
+    current_patch_.channel = {
+        .left_speaker = true,
+        .right_speaker = true,
+        .amplitude_modulation_sensitivity = 0,
+        .frequency_modulation_sensitivity = 0,
+    };
+
+    current_patch_.instrument = {
+        .feedback = 7,
+        .algorithm = 3,
+        .operators =
+            {
+                {31, 0, 0, 5, 0, 48, 0, 1, 3, 0, false, false},
+                {31, 0, 0, 5, 0, 24, 0, 1, 1, 0, false, false},
+                {31, 0, 0, 5, 0, 36, 0, 1, 2, 0, false, false},
+                {31, 0, 0, 5, 0, 12, 0, 1, 4, 0, false, false},
+            },
+    };
+    set_current_patch_path({});
+  }
+}
+
+void PatchSession::refresh_directories() {
+  repository_ = PatchRepository(directories_.paths().patches_root,
+                                directories_.paths().builtin_presets_root);
+}
+
+void PatchSession::set_current_patch(const ym2612::Patch &patch,
+                                     const std::filesystem::path &source_path) {
+  current_patch_ = patch;
+  set_current_patch_path(source_path);
+  apply_patch_to_audio();
+}
+
+void PatchSession::apply_patch_to_audio() {
+  audio_.apply_patch_to_all_channels(current_patch_);
+}
+
+SaveResult PatchSession::save_current_patch(bool force_overwrite) {
+  // Check whether the file already exists
+  auto patches_dir = directories_.paths().user_patches_root;
+  auto patch_path =
+      formats::gin::build_patch_path(patches_dir, current_patch_.name);
+
+  if (std::filesystem::exists(patch_path) && !force_overwrite) {
+    return SaveResult::duplicated();
+  } else {
+    // Save as new file
+    auto result = formats::gin::save_patch(patches_dir, current_patch_,
+                                           current_patch_.name);
+    if (result.has_value()) {
+      return SaveResult::success(result.value());
+    } else {
+      return SaveResult::error("Failed to save patch");
+    }
+  }
+}
+
+SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
+  const auto &default_dir = directories_.paths().export_root;
+  const std::string sanitized_name = sanitize_filename(
+      current_patch_.name.empty() ? "patch" : current_patch_.name);
+
+  switch (format) {
+  case ExportFormat::DMP: {
+    std::filesystem::path selected_path;
+    auto result = platform::file_dialog::save_file(
+        default_dir, sanitized_name + ".dmp",
+        {{"DMP Files", {"dmp"}}, {"All Files", {"*"}}}, selected_path);
+
+    if (result == platform::file_dialog::DialogResult::Ok) {
+      if (selected_path.extension().empty()) {
+        selected_path.replace_extension(".dmp");
+      }
+
+      if (formats::dmp::write_patch(current_patch_, selected_path)) {
+        return SaveResult::success(selected_path);
+      } else {
+        return SaveResult::error("Failed to export DMP file: " +
+                                 selected_path.string());
+      }
+    }
+    return SaveResult::cancelled();
+  }
+
+  case ExportFormat::MML: {
+    std::filesystem::path selected_path;
+    auto result = platform::file_dialog::save_file(
+        default_dir, sanitized_name + ".mml",
+        {{"MML Files", {"mml"}}, {"All Files", {"*"}}}, selected_path);
+
+    if (result == platform::file_dialog::DialogResult::Ok) {
+      if (selected_path.extension().empty()) {
+        selected_path.replace_extension(".mml");
+      }
+
+      if (formats::ctrmml::write_patch(current_patch_, selected_path)) {
+        return SaveResult::success(selected_path);
+      } else {
+        return SaveResult::error("Failed to export MML file: " +
+                                 selected_path.string());
+      }
+    }
+    return SaveResult::cancelled();
+  }
+  }
+
+  return SaveResult::error("Unknown export format");
+}
+
+PatchDropResult
+PatchSession::load_patch_from_path(const std::filesystem::path &path) {
+  PatchDropResult result;
+
+  auto load_result = formats::load_patch_from_file(path);
+
+  switch (load_result.status) {
+  case formats::PatchLoadStatus::Success:
+    result.status = PatchDropResult::Status::Loaded;
+    result.patch = load_result.patches[0];
+    result.source_path = path;
+    result.history_label = "Load: " + path.filename().string();
+    break;
+
+  case formats::PatchLoadStatus::MultiInstrument:
+    result.status = PatchDropResult::Status::MultiInstrument;
+    result.instruments = std::move(load_result.patches);
+    result.source_path = path;
+    break;
+
+  case formats::PatchLoadStatus::Failure:
+    result.status = PatchDropResult::Status::Error;
+    result.error_message = load_result.message;
+    break;
+  }
+
+  return result;
+}
+
+bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
+                           const PreferenceManager::UIPreferences &prefs) {
+  const uint8_t clamped_velocity =
+      std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
+  const uint8_t effective_velocity =
+      prefs.use_velocity ? clamped_velocity : static_cast<uint8_t>(127);
+
+  auto claim =
+      channel_allocator_.note_on(note, prefs.steal_oldest_note_when_full);
+  if (!claim) {
+    return false;
+  }
+
+  if (claim->replaced_note) {
+    audio_.device().channel(claim->channel).write_key_off();
+  }
+
+  auto ym_channel = audio_.device().channel(claim->channel);
+  ym_channel.write_frequency(note);
+  auto instrument =
+      current_patch_.instrument.clone_with_velocity(effective_velocity);
+  ym_channel.write_instrument(instrument);
+  ym_channel.write_key_on(
+      instrument.operators[0].enable, instrument.operators[1].enable,
+      instrument.operators[2].enable, instrument.operators[3].enable);
+  return true;
+}
+
+bool PatchSession::note_off(ym2612::Note note) {
+  return channel_allocator_.note_off(note, audio_.device());
+}
+
+bool PatchSession::note_is_active(const ym2612::Note &note) const {
+  return channel_allocator_.is_note_active(note);
+}
+
+void PatchSession::release_all_notes() {
+  channel_allocator_.release_all(audio_.device());
+}
+
+const std::array<bool, 6> &PatchSession::active_channels() const {
+  return channel_allocator_.channel_usage();
+}
+
+PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {
+  PatchSnapshot snapshot;
+  snapshot.patch = current_patch_;
+  snapshot.path = current_patch_path_;
+  return snapshot;
+}
+
+void PatchSession::restore_snapshot(const PatchSnapshot &snapshot) {
+  current_patch_ = snapshot.patch;
+  if (snapshot.path.empty()) {
+    set_current_patch_path({});
+  } else {
+    set_current_patch_path(snapshot.path);
+  }
+  apply_patch_to_audio();
+}
+
+} // namespace patches

@@ -55,8 +55,7 @@ set(MEGATOY_CORE_SOURCES
   src/history/history_manager.cpp
   src/midi/midi_input_manager.cpp
 
-  src/patches/patch_editing_session.cpp
-  src/patches/patch_manager.cpp
+  src/patches/patch_session.cpp
   src/patches/patch_repository.cpp
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp

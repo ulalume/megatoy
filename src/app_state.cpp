@@ -77,11 +77,17 @@ void AppState::set_connected_midi_inputs(std::vector<std::string> devices) {
 
 bool AppState::load_patch(const patches::PatchEntry &patch_info) {
   const auto before = capture_patch_snapshot();
-  if (!patch_session_.load_patch_no_history(patch_info)) {
+
+  ym2612::Patch loaded_patch;
+  if (!patch_session_.repository().load_patch(patch_info, loaded_patch)) {
     std::cerr << "Failed to load preset patch: " << patch_info.name
               << std::endl;
     return false;
   }
+
+  patch_session_.current_patch() = loaded_patch;
+  patch_session_.set_current_patch_path(patch_info.relative_path);
+  patch_session_.apply_patch_to_audio();
 
   const auto after = capture_patch_snapshot();
   record_patch_change("Load Patch: " + patch_info.name, before, after);

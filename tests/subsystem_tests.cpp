@@ -1,5 +1,5 @@
 #include "audio/audio_manager.hpp"
-#include "patches/patch_editing_session.hpp"
+#include "patches/patch_session.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
@@ -15,7 +15,7 @@ struct TestEnvironment {
   megatoy::system::PathService directories;
   PreferenceManager preferences;
   AudioManager audio;
-  PatchEditingSession session;
+  patches::PatchSession session;
 
   TestEnvironment()
       : root(std::filesystem::temp_directory_path() /

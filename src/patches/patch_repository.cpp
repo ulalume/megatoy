@@ -5,6 +5,7 @@
 #include "ym2612/patch.hpp"
 #include <algorithm>
 #include <iostream>
+#include <unordered_map>
 
 namespace patches {
 
@@ -253,19 +254,15 @@ PatchRepository::detect_format(const std::filesystem::path &file_path) const {
   std::transform(extension.begin(), extension.end(), extension.begin(),
                  ::tolower);
 
-  if (extension == ".gin") {
-    return "gin";
-  } else if (extension == ".rym2612") {
-    return "rym2612";
-  } else if (extension == ".dmp") {
-    return "dmp";
-  } else if (extension == ".fui") {
-    return "fui";
-  } else if (extension == ".mml") {
-    return "ctrmml";
-  }
+  static const std::unordered_map<std::string, std::string> format_map = {
+      {".gin", "gin"},
+      {".rym2612", "rym2612"},
+      {".dmp", "dmp"},
+      {".fui", "fui"},
+      {".mml", "ctrmml"}};
 
-  return "unknown";
+  auto it = format_map.find(extension);
+  return it != format_map.end() ? it->second : "unknown";
 }
 
 bool PatchRepository::is_supported_file(

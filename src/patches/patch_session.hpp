@@ -1,15 +1,19 @@
 #pragma once
 
+#include "channel_allocator.hpp"
 #include "patch_repository.hpp"
+#include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
+#include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
 #include <GLFW/glfw3.h>
+#include <array>
 #include <filesystem>
 #include <string>
 #include <vector>
 
 // Forward declaration
-class AppState;
+class AudioManager;
 
 namespace patches {
 
@@ -55,6 +59,11 @@ struct PatchDropResult {
   std::string error_message;
 };
 
+enum class ExportFormat {
+  DMP,
+  MML,
+};
+
 // Check whether a character is valid in filenames
 inline bool is_valid_filename_char(char c) {
   // Characters disallowed on Windows/Mac/Linux
@@ -90,49 +99,65 @@ inline std::string sanitize_filename(const std::string &input) {
   return result;
 }
 
-enum class ExportFormat {
-  DMP,
-  MML,
-};
-
-class PatchManager {
+class PatchSession {
 public:
-  explicit PatchManager(megatoy::system::PathService &directories);
+  PatchSession(megatoy::system::PathService &directories, AudioManager &audio);
 
+  // Patch access
   ym2612::Patch &current_patch();
   const ym2612::Patch &current_patch() const;
 
+  // Path management
   const std::string &current_patch_path() const;
   void set_current_patch_path(const std::filesystem::path &path);
 
-  bool load_patch(const PatchEntry &entry);
-
-  void refresh_directories();
-
+  // Repository access
   PatchRepository &repository();
   const PatchRepository &repository() const;
 
-  SaveResult save_current_patch(bool force_overwrite);
-  SaveResult export_current_patch_as(ExportFormat format);
+  // Initialization and directory management
+  void initialize_patch_defaults();
+  void refresh_directories();
 
-  // File drop handling
+  // Patch loading
+  void set_current_patch(const ym2612::Patch &patch,
+                         const std::filesystem::path &source_path);
+
+  // Audio integration
+  void apply_patch_to_audio();
+
+  // File operations
+  SaveResult save_current_patch(bool force_overwrite = false);
+  SaveResult export_current_patch_as(ExportFormat format);
   PatchDropResult load_patch_from_path(const std::filesystem::path &path);
 
-  // Static callback for GLFW file drop
-  static void handle_file_drop_callback(GLFWwindow *window, int count,
-                                        const char **paths);
+  // Note management
+  bool note_on(ym2612::Note note, uint8_t velocity,
+               const PreferenceManager::UIPreferences &prefs);
+  bool note_off(ym2612::Note note);
+  bool note_is_active(const ym2612::Note &note) const;
+  void release_all_notes();
+  const std::array<bool, 6> &active_channels() const;
+
+  // Snapshot functionality for undo/redo
+  struct PatchSnapshot {
+    ym2612::Patch patch;
+    std::string path;
+    bool operator==(const PatchSnapshot &other) const {
+      return patch == other.patch && path == other.path;
+    }
+  };
+
+  PatchSnapshot capture_snapshot() const;
+  void restore_snapshot(const PatchSnapshot &snapshot);
 
 private:
   megatoy::system::PathService &directories_;
+  AudioManager &audio_;
   PatchRepository repository_;
+  ChannelAllocator channel_allocator_;
   ym2612::Patch current_patch_;
   std::string current_patch_path_;
 };
-
-// Global function for file drop handling (for compatibility)
-PatchDropResult load_patch_from_path(const std::filesystem::path &path);
-
-// Setup file drop handling for a window
-void setup_file_drop_handling(GLFWwindow *window, AppState *app_state);
 
 } // namespace patches

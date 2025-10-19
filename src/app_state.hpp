@@ -4,8 +4,7 @@
 #include "core/types.hpp"
 #include "gui/gui_manager.hpp"
 #include "history/history_manager.hpp"
-#include "patches/patch_editing_session.hpp"
-#include "patches/patch_manager.hpp"
+#include "patches/patch_session.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
@@ -73,8 +72,8 @@ public:
   GuiManager &gui() { return gui_manager_; }
   const GuiManager &gui() const { return gui_manager_; }
 
-  PatchEditingSession &patch_session() { return patch_session_; }
-  const PatchEditingSession &patch_session() const { return patch_session_; }
+  patches::PatchSession &patch_session() { return patch_session_; }
+  const patches::PatchSession &patch_session() const { return patch_session_; }
 
   megatoy::system::PathService &path_service() { return path_service_; }
   const megatoy::system::PathService &path_service() const {
@@ -100,12 +99,6 @@ public:
   }
   const patches::PatchRepository &patch_repository() const {
     return patch_session_.repository();
-  }
-  patches::PatchManager &patch_manager() {
-    return patch_session_.patch_manager();
-  }
-  const patches::PatchManager &patch_manager() const {
-    return patch_session_.patch_manager();
   }
 
   history::HistoryManager &history() { return history_; }
@@ -143,7 +136,7 @@ public:
 private:
   static constexpr UINT32 kSampleRate = 44100;
 
-  using PatchSnapshot = PatchEditingSession::PatchSnapshot;
+  using PatchSnapshot = patches::PatchSession::PatchSnapshot;
 
   PatchSnapshot capture_patch_snapshot() const;
   void apply_patch_snapshot(const PatchSnapshot &snapshot);
@@ -155,7 +148,7 @@ private:
   PreferenceManager preference_manager_;
   AudioManager audio_manager_;
   GuiManager gui_manager_;
-  PatchEditingSession patch_session_;
+  patches::PatchSession patch_session_;
   InputState input_state_;
   UIState ui_state_;
   history::HistoryManager history_;
