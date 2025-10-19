@@ -2,7 +2,7 @@
 
 #include "audio/audio_manager.hpp"
 #include "core/types.hpp"
-#include "gui/gui_subsystem.hpp"
+#include "gui/gui_manager.hpp"
 #include "history/history_manager.hpp"
 #include "patches/patch_editing_session.hpp"
 #include "patches/patch_manager.hpp"
@@ -71,8 +71,8 @@ public:
   AudioManager &audio() { return audio_manager_; }
   const AudioManager &audio() const { return audio_manager_; }
 
-  GuiSubsystem &gui() { return gui_subsystem_; }
-  const GuiSubsystem &gui() const { return gui_subsystem_; }
+  GuiManager &gui() { return gui_manager_; }
+  const GuiManager &gui() const { return gui_manager_; }
 
   PatchEditingSession &patch_session() { return patch_session_; }
   const PatchEditingSession &patch_session() const { return patch_session_; }
@@ -157,7 +157,7 @@ private:
   megatoy::system::DirectoryService directory_service_;
   PreferenceManager preference_manager_;
   AudioManager audio_manager_;
-  GuiSubsystem gui_subsystem_;
+  GuiManager gui_manager_;
   PatchEditingSession patch_session_;
   InputState input_state_;
   UIState ui_state_;

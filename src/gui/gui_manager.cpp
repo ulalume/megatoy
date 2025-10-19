@@ -19,10 +19,12 @@
 #pragma comment(lib, "legacy_stdio_definitions")
 #endif
 
-GuiManager::GuiManager()
-    : window(nullptr), initialized(false), fullscreen(false), windowed_pos_x(0),
-      windowed_pos_y(0), windowed_width(0), windowed_height(0),
-      pending_imgui_ini_update_(false), imgui_ini_file_path_() {}
+GuiManager::GuiManager(PreferenceManager &preferences)
+    : preferences_(preferences), window_(nullptr), initialized_(false),
+      fullscreen_(false), windowed_pos_x_(0), windowed_pos_y_(0),
+      windowed_width_(0), windowed_height_(0), first_frame_(true),
+      pending_imgui_ini_update_(false), imgui_ini_file_path_(),
+      theme_(ui::styles::ThemeId::MegatoyDark) {}
 
 GuiManager::~GuiManager() { shutdown(); }
 
@@ -30,8 +32,9 @@ void GuiManager::glfw_error_callback(int error, const char *description) {
   std::cerr << "GLFW Error " << error << ": " << description << std::endl;
 }
 
-bool GuiManager::init(const std::string &window_title, int width, int height) {
-  if (initialized) {
+bool GuiManager::initialize(const std::string &window_title, int width,
+                            int height) {
+  if (initialized_) {
     return true;
   }
 
@@ -64,19 +67,19 @@ bool GuiManager::init(const std::string &window_title, int width, int height) {
 #endif
 
   // Create window with graphics context
-  window =
+  window_ =
       glfwCreateWindow(width, height, window_title.c_str(), nullptr, nullptr);
-  if (window == nullptr) {
+  if (window_ == nullptr) {
     std::cerr << "Failed to create GLFW window" << std::endl;
     glfwTerminate();
     return false;
   }
 
-  glfwMakeContextCurrent(window);
+  glfwMakeContextCurrent(window_);
   glfwSwapInterval(1); // Enable vsync
 
-  glfwGetWindowPos(window, &windowed_pos_x, &windowed_pos_y);
-  glfwGetWindowSize(window, &windowed_width, &windowed_height);
+  glfwGetWindowPos(window_, &windowed_pos_x_, &windowed_pos_y_);
+  glfwGetWindowSize(window_, &windowed_width_, &windowed_height_);
 
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
@@ -98,67 +101,56 @@ bool GuiManager::init(const std::string &window_title, int width, int height) {
   style.ScrollbarPadding = 0;
   style.SeparatorTextBorderSize = 1;
   style.FramePadding = ImVec2(4, 2);
-  set_theme(theme_);
+
+  // Apply theme from preferences
+  set_theme(preferences_.theme());
 
   // Setup Platform/Renderer backends
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
+  ImGui_ImplGlfw_InitForOpenGL(window_, true);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
-  pending_imgui_ini_update_ = true;
-  apply_imgui_ini_binding();
+  // Initialize file dialog
+  if (!preferences_.initialize_file_dialog()) {
+    std::cerr << "Native File Dialog unavailable; directory picker disabled\n";
+  }
 
-  initialized = true;
+  // Sync ImGui ini file
+  sync_imgui_ini();
+
+  initialized_ = true;
   return true;
 }
 
-void GuiManager::set_imgui_ini_file(const std::string &path) {
-  imgui_ini_file_path_ = path;
-  if (imgui_ini_file_path_.empty()) {
-    first_frame = true;
-  } else {
-    first_frame = !std::filesystem::exists(imgui_ini_file_path_);
-  }
-  pending_imgui_ini_update_ = true;
-  apply_imgui_ini_binding();
-}
-
-void GuiManager::reset_layout() { first_frame = true; }
-
-void GuiManager::set_theme(ui::styles::ThemeId theme) {
-  theme_ = theme;
-  ui::styles::apply_theme(theme_);
-  if (ImGui::GetCurrentContext() != nullptr) {
-    ui::reset_algorithm_preview_textures();
-    ui::reset_ssg_preview_textures();
-  }
-}
-
 void GuiManager::shutdown() {
-  if (!initialized) {
+  if (!initialized_) {
     return;
   }
+
+  // Reset preview textures
+  ui::reset_algorithm_preview_textures();
+  ui::reset_ssg_preview_textures();
 
   // Cleanup
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
 
-  if (window) {
-    glfwDestroyWindow(window);
-    window = nullptr;
+  if (window_) {
+    glfwDestroyWindow(window_);
+    window_ = nullptr;
   }
   glfwTerminate();
 
-  fullscreen = false;
-  initialized = false;
+  fullscreen_ = false;
+  initialized_ = false;
 }
 
 bool GuiManager::should_close() const {
-  return window ? glfwWindowShouldClose(window) : true;
+  return window_ ? glfwWindowShouldClose(window_) : true;
 }
 
 void GuiManager::begin_frame() {
-  if (!initialized) {
+  if (!initialized_) {
     return;
   }
 
@@ -172,8 +164,8 @@ void GuiManager::begin_frame() {
 
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
 
-  if (first_frame) {
-    first_frame = false;
+  if (first_frame_) {
+    first_frame_ = false;
 
     std::cout << "First frame" << std::endl;
 
@@ -212,39 +204,51 @@ void GuiManager::begin_frame() {
 }
 
 void GuiManager::end_frame() {
-  if (!initialized) {
+  if (!initialized_) {
     return;
   }
 
   // Rendering
   ImGui::Render();
   int display_w, display_h;
-  glfwGetFramebufferSize(window, &display_w, &display_h);
+  glfwGetFramebufferSize(window_, &display_w, &display_h);
   glViewport(0, 0, display_w, display_h);
   glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
   glClear(GL_COLOR_BUFFER_BIT);
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-  glfwSwapBuffers(window);
+  glfwSwapBuffers(window_);
 }
 
 void GuiManager::poll_events() {
-  if (initialized) {
+  if (initialized_) {
     glfwPollEvents();
   }
 }
 
+void GuiManager::sync_imgui_ini() {
+  const auto ini_path = preferences_.get_imgui_ini_file();
+  set_imgui_ini_file(ini_path.generic_string());
+}
+
+void GuiManager::apply_theme() {
+  set_theme(preferences_.theme());
+  preferences_.set_theme(theme_);
+}
+
+void GuiManager::reset_layout() { first_frame_ = true; }
+
 void GuiManager::set_fullscreen(bool enable) {
-  if (!initialized || !window) {
+  if (!initialized_ || !window_) {
     return;
   }
 
-  if (enable == fullscreen) {
+  if (enable == fullscreen_) {
     return;
   }
 
   if (enable) {
-    GLFWmonitor *monitor = glfwGetWindowMonitor(window);
+    GLFWmonitor *monitor = glfwGetWindowMonitor(window_);
     if (monitor == nullptr) {
       monitor = glfwGetPrimaryMonitor();
     }
@@ -252,26 +256,46 @@ void GuiManager::set_fullscreen(bool enable) {
       return;
     }
 
-    glfwGetWindowPos(window, &windowed_pos_x, &windowed_pos_y);
-    glfwGetWindowSize(window, &windowed_width, &windowed_height);
+    glfwGetWindowPos(window_, &windowed_pos_x_, &windowed_pos_y_);
+    glfwGetWindowSize(window_, &windowed_width_, &windowed_height_);
 
     const GLFWvidmode *mode = glfwGetVideoMode(monitor);
     if (mode == nullptr) {
       return;
     }
 
-    glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height,
+    glfwSetWindowMonitor(window_, monitor, 0, 0, mode->width, mode->height,
                          mode->refreshRate);
-    fullscreen = true;
+    fullscreen_ = true;
   } else {
-    glfwSetWindowMonitor(window, nullptr, windowed_pos_x, windowed_pos_y,
-                         windowed_width > 0 ? windowed_width : 800,
-                         windowed_height > 0 ? windowed_height : 600, 0);
-    fullscreen = false;
+    glfwSetWindowMonitor(window_, nullptr, windowed_pos_x_, windowed_pos_y_,
+                         windowed_width_ > 0 ? windowed_width_ : 800,
+                         windowed_height_ > 0 ? windowed_height_ : 600, 0);
+    fullscreen_ = false;
   }
 }
 
-void GuiManager::toggle_fullscreen() { set_fullscreen(!fullscreen); }
+void GuiManager::toggle_fullscreen() { set_fullscreen(!fullscreen_); }
+
+void GuiManager::set_theme(ui::styles::ThemeId theme) {
+  theme_ = theme;
+  ui::styles::apply_theme(theme_);
+  if (ImGui::GetCurrentContext() != nullptr) {
+    ui::reset_algorithm_preview_textures();
+    ui::reset_ssg_preview_textures();
+  }
+}
+
+void GuiManager::set_imgui_ini_file(const std::string &path) {
+  imgui_ini_file_path_ = path;
+  if (imgui_ini_file_path_.empty()) {
+    first_frame_ = true;
+  } else {
+    first_frame_ = !std::filesystem::exists(imgui_ini_file_path_);
+  }
+  pending_imgui_ini_update_ = true;
+  apply_imgui_ini_binding();
+}
 
 void GuiManager::apply_imgui_ini_binding() {
   if (!pending_imgui_ini_update_) {

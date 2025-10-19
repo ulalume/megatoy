@@ -2,6 +2,7 @@
 
 #include "app_state.hpp"
 #include "history_entry.hpp"
+#include <imgui.h>
 #include <utility>
 
 namespace history {
@@ -54,6 +55,35 @@ void HistoryManager::redo(AppState &app_state) {
   redo_stack_.pop_back();
   entry->redo(app_state);
   undo_stack_.push_back(std::move(entry));
+}
+
+void HistoryManager::handle_shortcuts(AppState &app_state) {
+  ImGuiIO &io = ImGui::GetIO();
+
+  if (io.WantTextInput || app_state.input_state().text_input_focused) {
+    return;
+  }
+
+  const bool primary_modifier = io.KeyCtrl || io.KeySuper;
+  if (!primary_modifier) {
+    return;
+  }
+
+  const bool shift = io.KeyShift;
+
+  if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+    if (shift) {
+      if (can_redo()) {
+        redo(app_state);
+      }
+    } else if (can_undo()) {
+      undo(app_state);
+    }
+  } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+    if (can_redo()) {
+      redo(app_state);
+    }
+  }
 }
 
 void HistoryManager::begin_transaction(std::string label, std::string merge_key,

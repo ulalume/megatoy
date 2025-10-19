@@ -1,7 +1,7 @@
 #include "preferences.hpp"
-#include "preferences/preference_manager.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
+#include "preferences/preference_manager.hpp"
 #include <imgui.h>
 
 namespace ui {
@@ -69,7 +69,7 @@ void render_preferences_window(AppState &app_state) {
           current_theme_index = i;
           auto selected_id = themes[i].id;
           prefs.set_theme(selected_id);
-          app_state.gui().manager().set_theme(selected_id);
+          app_state.gui().set_theme(selected_id);
         }
         if (is_selected) {
           ImGui::SetItemDefaultFocus();

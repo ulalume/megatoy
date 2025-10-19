@@ -9,7 +9,7 @@
 
 AppState::AppState()
     : directory_service_(), preference_manager_(directory_service_),
-      audio_manager_(), gui_subsystem_(preference_manager_),
+      audio_manager_(), gui_manager_(preference_manager_),
       patch_session_(directory_service_, audio_manager_), input_state_(),
       ui_state_(), history_(), connected_midi_inputs_() {}
 
@@ -24,10 +24,10 @@ void AppState::init() {
     patch_session_.apply_patch_to_audio();
   }
 
-  if (!gui_subsystem_.initialize("megatoy", 1000, 700)) {
-    std::cerr << "GUI subsystem failed to start; shutting down\n";
+  if (!gui_manager_.initialize("megatoy", 1000, 700)) {
+    std::cerr << "GUI manager failed to start; shutting down\n";
   } else {
-    gui_subsystem_.sync_imgui_ini();
+    gui_manager_.sync_imgui_ini();
   }
 
   ui_state_.prefs = preference_manager_.ui_preferences();
@@ -37,7 +37,7 @@ void AppState::init() {
 void AppState::shutdown() {
   patch_session_.release_all_notes();
   audio_manager_.shutdown();
-  gui_subsystem_.shutdown();
+  gui_manager_.shutdown();
 }
 
 void AppState::update_all_settings() { patch_session_.apply_patch_to_audio(); }
@@ -95,7 +95,7 @@ void AppState::sync_patch_directories() {
   patch_session_.refresh_directories();
 }
 
-void AppState::sync_imgui_ini_file() { gui_subsystem_.sync_imgui_ini(); }
+void AppState::sync_imgui_ini_file() { gui_manager_.sync_imgui_ini(); }
 
 void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
   auto &drop = ui_state_.drop_state;

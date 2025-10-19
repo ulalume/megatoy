@@ -29,6 +29,12 @@ public:
   void undo(AppState &app_state);
   void redo(AppState &app_state);
 
+  /**
+   * Handle keyboard shortcuts for undo/redo
+   * Should be called after polling events but before UI rendering
+   */
+  void handle_shortcuts(AppState &app_state);
+
   using EntryFactory = std::function<std::unique_ptr<HistoryEntry>(AppState &)>;
 
   void begin_transaction(std::string label, std::string merge_key,

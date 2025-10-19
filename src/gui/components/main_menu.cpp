@@ -49,9 +49,9 @@ void render_main_menu(AppState &app_state) {
     if (ImGui::BeginMenu("View")) {
       auto &ui_state = app_state.ui_state();
 
-      bool fullscreen = app_state.gui().manager().is_fullscreen();
+      bool fullscreen = app_state.gui().is_fullscreen();
       if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
-        app_state.gui().manager().set_fullscreen(!fullscreen);
+        app_state.gui().set_fullscreen(!fullscreen);
       }
 
       ImGui::Separator();
@@ -76,8 +76,8 @@ void render_main_menu(AppState &app_state) {
         const auto &ui_prefs = app_state.preference_manager().ui_preferences();
         ui_state.prefs = ui_prefs;
         ui_state.open_directory_dialog = false;
-        app_state.gui().manager().reset_layout();
-        app_state.gui().manager().set_theme(ui::styles::ThemeId::MegatoyDark);
+        app_state.gui().reset_layout();
+        app_state.gui().set_theme(ui::styles::ThemeId::MegatoyDark);
       }
       ImGui::EndMenu();
     }

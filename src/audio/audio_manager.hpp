@@ -8,14 +8,7 @@
 #include <vector>
 
 /**
- * AudioManager - Unified audio system management
- *
- * Consolidates AudioSubsystem, AudioRuntime, and AudioManager into a single
- * class that handles all audio-related functionality including:
- * - Audio system initialization and cleanup
- * - Audio driver selection and management
- * - Real-time audio streaming with YM2612 device integration
- * - Sample buffer management and wave sampling
+ * AudioManager - audio system management
  */
 class AudioManager {
 public:
