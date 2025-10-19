@@ -1,21 +1,22 @@
 #include "audio/audio_manager.hpp"
+#include "ym2612/channel.hpp"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
 
 AudioManager::AudioManager()
-    : aud_drv(nullptr), driver_index(0), smpl_size(0), smpl_alloc(0),
-      sample_rate(44100), callback(nullptr), initialized(false),
-      running(false) {}
+    : aud_drv_(nullptr), driver_index_(0), smpl_size_(0), smpl_alloc_(0),
+      sample_rate_(44100), device_(), wave_sampler_(), initialized_(false),
+      running_(false) {}
 
 AudioManager::~AudioManager() { shutdown(); }
 
-bool AudioManager::init(UINT32 sample_rate_param) {
-  if (initialized) {
+bool AudioManager::initialize(UINT32 sample_rate) {
+  if (initialized_) {
     return true;
   }
 
-  sample_rate = sample_rate_param;
+  sample_rate_ = sample_rate;
 
   // Initialize audio system
   UINT8 ret_val = Audio_Init();
@@ -33,10 +34,10 @@ bool AudioManager::init(UINT32 sample_rate_param) {
   AUDDRV_INFO *drv_info = nullptr;
   bool driver_initialized = false;
   for (UINT32 candidate : driver_order_) {
-    ret_val = AudioDrv_Init(candidate, &aud_drv);
+    ret_val = AudioDrv_Init(candidate, &aud_drv_);
     if (ret_val == 0) {
-      driver_index = candidate;
-      Audio_GetDriverInfo(driver_index, &drv_info);
+      driver_index_ = candidate;
+      Audio_GetDriverInfo(driver_index_, &drv_info);
       driver_initialized = true;
       break;
     }
@@ -52,87 +53,91 @@ bool AudioManager::init(UINT32 sample_rate_param) {
   std::cout << "Using audio driver: " << drv_info->drvName << std::endl;
 
   // Configure audio options
-  AUDIO_OPTS *opts = AudioDrv_GetOptions(aud_drv);
+  AUDIO_OPTS *opts = AudioDrv_GetOptions(aud_drv_);
   const bool allow_custom_sample_rate =
       !(drv_info->drvName != nullptr &&
         strstr(drv_info->drvName, "WASAPI") != nullptr);
 
-  if (allow_custom_sample_rate && sample_rate_param != 0) {
-    opts->sampleRate = sample_rate_param;
+  if (allow_custom_sample_rate && sample_rate != 0) {
+    opts->sampleRate = sample_rate;
   }
   opts->numChannels = 2;
   opts->numBitsPerSmpl = 16;
 
-  sample_rate = opts->sampleRate;
-  smpl_size = opts->numChannels * opts->numBitsPerSmpl / 8;
+  sample_rate_ = opts->sampleRate;
+  smpl_size_ = opts->numChannels * opts->numBitsPerSmpl / 8;
 
-  // Set up audio callback
-  AudioDrv_SetCallback(aud_drv, fill_buffer_static, this);
+  // Initialize YM2612 device
+  wave_sampler_.clear();
+  device_.stop();
+  device_.init(sample_rate_);
 
-  initialized = true;
+  // Set up audio callback with YM2612 device integration
+  AudioDrv_SetCallback(aud_drv_, fill_buffer_static, this);
+
+  if (sample_rate_ != sample_rate) {
+    std::cout << "Audio sample rate set to " << sample_rate_ << " Hz\n";
+  }
+
+  // Start audio streaming
+  ret_val = AudioDrv_Start(aud_drv_, 0);
+  if (ret_val) {
+    std::cerr << "AudioDrv_Start failed: " << (int)ret_val << std::endl;
+    if (aud_drv_) {
+      AudioDrv_Deinit(&aud_drv_);
+      aud_drv_ = nullptr;
+    }
+    Audio_Deinit();
+    return false;
+  }
+
+  // Allocate sample buffers
+  smpl_alloc_ = AudioDrv_GetBufferSize(aud_drv_) / smpl_size_;
+  smpl_data_[0].resize(smpl_alloc_);
+  smpl_data_[1].resize(smpl_alloc_);
+
+  initialized_ = true;
+  running_ = true;
   return true;
 }
 
 void AudioManager::shutdown() {
-  if (!initialized) {
+  if (!initialized_) {
     return;
   }
 
-  stop();
+  if (running_ && aud_drv_) {
+    AudioDrv_Stop(aud_drv_);
+  }
 
-  if (aud_drv) {
-    AudioDrv_Deinit(&aud_drv);
-    aud_drv = nullptr;
+  device_.stop();
+  wave_sampler_.clear();
+
+  if (aud_drv_) {
+    AudioDrv_Deinit(&aud_drv_);
+    aud_drv_ = nullptr;
   }
 
   Audio_Deinit();
 
   // Clear sample buffers
-  smpl_data[0].clear();
-  smpl_data[1].clear();
+  smpl_data_[0].clear();
+  smpl_data_[1].clear();
 
   driver_order_.clear();
 
-  initialized = false;
+  initialized_ = false;
+  running_ = false;
 }
 
-bool AudioManager::start() {
-  if (!initialized || running) {
-    return running;
+void AudioManager::apply_patch_to_all_channels(const ym2612::Patch &patch) {
+  device_.write_settings(patch.global);
+  for (ym2612::ChannelIndex channel_index : ym2612::all_channel_indices) {
+    auto channel = device_.channel(channel_index);
+    channel.write_settings(patch.channel);
+    channel.write_instrument(patch.instrument);
   }
-
-  UINT8 ret_val = AudioDrv_Start(aud_drv, 0);
-  if (ret_val) {
-    std::cerr << "AudioDrv_Start failed: " << (int)ret_val << std::endl;
-    return false;
-  }
-
-  // Allocate sample buffers
-  smpl_alloc = AudioDrv_GetBufferSize(aud_drv) / smpl_size;
-  smpl_data[0].resize(smpl_alloc);
-  smpl_data[1].resize(smpl_alloc);
-
-  running = true;
-  return true;
 }
-
-void AudioManager::stop() {
-  if (!running) {
-    return;
-  }
-
-  if (aud_drv) {
-    AudioDrv_Stop(aud_drv);
-  }
-
-  running = false;
-}
-
-void AudioManager::set_callback(AudioCallback callback_param) {
-  callback = std::move(callback_param);
-}
-
-void AudioManager::clear_callback() { callback = nullptr; }
 
 UINT32 AudioManager::fill_buffer_static(void *drv_struct, void *user_param,
                                         UINT32 buf_size, void *data) {
@@ -141,27 +146,28 @@ UINT32 AudioManager::fill_buffer_static(void *drv_struct, void *user_param,
 }
 
 UINT32 AudioManager::fill_buffer(UINT32 buf_size, void *data) {
-  if (!running || !callback) {
+  if (!running_) {
     memset(data, 0x00, buf_size);
     return buf_size;
   }
 
-  UINT32 smpl_count = buf_size / smpl_size;
+  UINT32 smpl_count = buf_size / smpl_size_;
 
   // Clear sample buffers
-  std::fill_n(smpl_data[0].data(), smpl_count, DEV_SMPL{});
-  std::fill_n(smpl_data[1].data(), smpl_count, DEV_SMPL{});
+  std::fill_n(smpl_data_[0].data(), smpl_count, DEV_SMPL{});
+  std::fill_n(smpl_data_[1].data(), smpl_count, DEV_SMPL{});
 
-  // Generate audio samples via callback
-  std::array<DEV_SMPL *, 2> outs{smpl_data[0].data(), smpl_data[1].data()};
-  callback(smpl_count, outs);
+  // Generate audio samples from YM2612 device
+  std::array<DEV_SMPL *, 2> outputs{smpl_data_[0].data(), smpl_data_[1].data()};
+  device_.update(smpl_count, outputs);
+  wave_sampler_.push_samples(outputs[0], outputs[1], smpl_count);
 
   // Convert to output format (16-bit stereo)
   INT16 *smpl_ptr_16 = (INT16 *)data;
   for (UINT32 cur_smpl = 0; cur_smpl < smpl_count;
        cur_smpl++, smpl_ptr_16 += 2) {
-    smpl_ptr_16[0] = std::clamp(smpl_data[0][cur_smpl], -32768, 32767);
-    smpl_ptr_16[1] = std::clamp(smpl_data[1][cur_smpl], -32768, 32767);
+    smpl_ptr_16[0] = std::clamp(smpl_data_[0][cur_smpl], -32768, 32767);
+    smpl_ptr_16[1] = std::clamp(smpl_data_[1][cur_smpl], -32768, 32767);
   }
 
   return buf_size;
@@ -238,6 +244,6 @@ bool AudioManager::find_suitable_driver() {
     return false;
   }
 
-  driver_index = driver_order_.front();
+  driver_index_ = driver_order_.front();
   return true;
 }

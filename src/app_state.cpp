@@ -9,17 +9,17 @@
 
 AppState::AppState()
     : directory_service_(), preference_manager_(directory_service_),
-      audio_subsystem_(), gui_subsystem_(preference_manager_),
-      patch_session_(directory_service_, audio_subsystem_), input_state_(),
+      audio_manager_(), gui_subsystem_(preference_manager_),
+      patch_session_(directory_service_, audio_manager_), input_state_(),
       ui_state_(), history_(), connected_midi_inputs_() {}
 
 void AppState::init() {
   directory_service_.ensure_directories();
   patch_session_.initialize_patch_defaults();
 
-  if (!audio_subsystem_.initialize(kSampleRate)) {
+  if (!audio_manager_.initialize(kSampleRate)) {
     std::cerr
-        << "Audio subsystem failed to start; functionality will be limited\n";
+        << "Audio manager failed to start; functionality will be limited\n";
   } else {
     patch_session_.apply_patch_to_audio();
   }
@@ -36,7 +36,7 @@ void AppState::init() {
 
 void AppState::shutdown() {
   patch_session_.release_all_notes();
-  audio_subsystem_.shutdown();
+  audio_manager_.shutdown();
   gui_subsystem_.shutdown();
 }
 

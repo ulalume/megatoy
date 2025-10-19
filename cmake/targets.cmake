@@ -23,8 +23,6 @@ target_link_libraries(imgui_lib PUBLIC
 set(MEGATOY_CORE_SOURCES
   src/app_state.cpp
   src/audio/audio_manager.cpp
-  src/audio/audio_runtime.cpp
-  src/audio/audio_subsystem.cpp
   src/channel_allocator.cpp
   src/formats/common.cpp
   src/formats/ctrmml.cpp
@@ -179,7 +177,7 @@ if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
     set(MEGATOY_PRESETS_DESTINATION "$<TARGET_FILE_DIR:megatoy>/presets")
   endif()
 
-add_custom_command(
+  add_custom_command(
       TARGET megatoy POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E remove_directory
               "${MEGATOY_PRESETS_DESTINATION}"

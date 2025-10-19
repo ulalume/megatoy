@@ -1,4 +1,4 @@
-#include "audio/audio_subsystem.hpp"
+#include "audio/audio_manager.hpp"
 #include "patches/patch_editing_session.hpp"
 #include "preferences/preference_manager.hpp"
 #include "preferences/preferences_data.hpp"
@@ -15,12 +15,12 @@ struct TestEnvironment {
   std::filesystem::path root;
   megatoy::system::DirectoryService directories;
   PreferenceManager preferences;
-  AudioSubsystem audio;
+  AudioManager audio;
   PatchEditingSession session;
 
   TestEnvironment()
       : root(std::filesystem::temp_directory_path() /
-              "megatoy_subsystem_tests"),
+             "megatoy_subsystem_tests"),
         directories(), preferences(directories), audio(),
         session(directories, audio) {
     std::filesystem::remove_all(root);

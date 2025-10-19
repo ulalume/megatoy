@@ -1,27 +1,24 @@
 #pragma once
 
-#include <array>
+#include "ym2612/device.hpp"
+#include "ym2612/patch.hpp"
+#include "ym2612/wave_sampler.hpp"
 #include <audio/AudioStream.h>
 #include <emu/EmuStructs.h>
-#include <functional>
 #include <vector>
 
 /**
- * AudioManager - Manages real-time audio output using libvgm audio system
+ * AudioManager - Unified audio system management
  *
- * This class encapsulates all audio-related functionality including:
+ * Consolidates AudioSubsystem, AudioRuntime, and AudioManager into a single
+ * class that handles all audio-related functionality including:
  * - Audio system initialization and cleanup
  * - Audio driver selection and management
- * - Real-time audio streaming with callback mechanism
- * - Sample buffer management
+ * - Real-time audio streaming with YM2612 device integration
+ * - Sample buffer management and wave sampling
  */
 class AudioManager {
 public:
-  // Callback function type for audio generation
-  // Parameters: sampleCount, outputBuffers[left, right]
-  using AudioCallback = std::function<void(UINT32 sample_count,
-                                           std::array<DEV_SMPL *, 2> &outputs)>;
-
   AudioManager();
   ~AudioManager();
 
@@ -32,53 +29,43 @@ public:
   AudioManager &operator=(AudioManager &&) = delete;
 
   /**
-   * Initialize the audio system
+   * Initialize and start the complete audio system
    * @param sample_rate Target sample rate
    * @return true on success, false on failure
    */
-  bool init(UINT32 sample_rate);
+  bool initialize(UINT32 sample_rate);
 
   /**
-   * Shutdown and cleanup audio system
+   * Shutdown and cleanup complete audio system
    */
   void shutdown();
 
   /**
-   * Start audio streaming
-   * @return true on success, false on failure
+   * Direct access to YM2612 device
    */
-  bool start();
+  ym2612::Device &device() { return device_; }
+  const ym2612::Device &device() const { return device_; }
 
   /**
-   * Stop audio streaming
+   * Direct access to wave sampler
    */
-  void stop();
+  ym2612::WaveSampler &wave_sampler() { return wave_sampler_; }
+  const ym2612::WaveSampler &wave_sampler() const { return wave_sampler_; }
 
   /**
-   * Set the audio generation callback
-   * @param callback Function to call for generating audio samples
+   * Apply patch settings to all channels
    */
-  void set_callback(AudioCallback callback);
+  void apply_patch_to_all_channels(const ym2612::Patch &patch);
 
   /**
-   * Clear the audio generation callback
+   * Check if audio system is running
    */
-  void clear_callback();
-
-  /**
-   * Check if audio system is initialized
-   */
-  bool is_initialized() const { return initialized; }
-
-  /**
-   * Check if audio streaming is active
-   */
-  bool is_running() const { return running; }
+  bool is_running() const { return running_; }
 
   /**
    * Get current sample rate
    */
-  UINT32 get_sample_rate() const { return sample_rate; }
+  UINT32 sample_rate() const { return sample_rate_; }
 
 private:
   // Static callback wrapper for C API
@@ -91,21 +78,22 @@ private:
   // Find and select a suitable real-time audio driver
   bool find_suitable_driver();
 
-  // Audio system state
-  void *aud_drv;
-  UINT32 driver_index;
+  // Core audio system
+  void *aud_drv_;
+  UINT32 driver_index_;
   std::vector<UINT32> driver_order_;
-  UINT32 smpl_size;
-  UINT32 smpl_alloc;
-  UINT32 sample_rate;
+  UINT32 smpl_size_;
+  UINT32 smpl_alloc_;
+  UINT32 sample_rate_;
 
   // Sample buffers
-  std::vector<DEV_SMPL> smpl_data[2];
+  std::vector<DEV_SMPL> smpl_data_[2];
 
-  // User callback
-  AudioCallback callback;
+  // YM2612 device and wave sampler
+  ym2612::Device device_;
+  ym2612::WaveSampler wave_sampler_;
 
   // State flags
-  bool initialized;
-  bool running;
+  bool initialized_;
+  bool running_;
 };

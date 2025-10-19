@@ -1,6 +1,6 @@
 #include "patch_editing_session.hpp"
 
-#include "audio/audio_subsystem.hpp"
+#include "audio/audio_manager.hpp"
 #include "formats/dmp.hpp"
 #include "preferences/preference_manager.hpp"
 #include "ym2612/channel.hpp"
@@ -12,7 +12,7 @@
 using megatoy::system::DirectoryService;
 
 PatchEditingSession::PatchEditingSession(DirectoryService &directories,
-                                         AudioSubsystem &audio)
+                                         AudioManager &audio)
     : directories_(directories), audio_(audio), patch_manager_(directories_),
       channel_allocator_() {}
 

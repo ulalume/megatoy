@@ -10,11 +10,11 @@
 #include <filesystem>
 #include <string>
 
-class AudioSubsystem;
+class AudioManager;
 class PatchEditingSession {
 public:
   PatchEditingSession(megatoy::system::DirectoryService &directories,
-                      AudioSubsystem &audio);
+                      AudioManager &audio);
 
   ym2612::Patch &current_patch();
   const ym2612::Patch &current_patch() const;
@@ -58,7 +58,7 @@ public:
 
 private:
   megatoy::system::DirectoryService &directories_;
-  AudioSubsystem &audio_;
+  AudioManager &audio_;
   patches::PatchManager patch_manager_;
   ChannelAllocator channel_allocator_;
 };

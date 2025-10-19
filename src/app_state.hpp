@@ -1,6 +1,6 @@
 #pragma once
 
-#include "audio/audio_subsystem.hpp"
+#include "audio/audio_manager.hpp"
 #include "core/types.hpp"
 #include "gui/gui_subsystem.hpp"
 #include "history/history_manager.hpp"
@@ -68,8 +68,8 @@ public:
   void init();
   void shutdown();
 
-  AudioSubsystem &audio() { return audio_subsystem_; }
-  const AudioSubsystem &audio() const { return audio_subsystem_; }
+  AudioManager &audio() { return audio_manager_; }
+  const AudioManager &audio() const { return audio_manager_; }
 
   GuiSubsystem &gui() { return gui_subsystem_; }
   const GuiSubsystem &gui() const { return gui_subsystem_; }
@@ -114,11 +114,9 @@ public:
   history::HistoryManager &history() { return history_; }
   const history::HistoryManager &history() const { return history_; }
 
-  ym2612::WaveSampler &wave_sampler() {
-    return audio_subsystem_.wave_sampler();
-  }
+  ym2612::WaveSampler &wave_sampler() { return audio_manager_.wave_sampler(); }
   const ym2612::WaveSampler &wave_sampler() const {
-    return audio_subsystem_.wave_sampler();
+    return audio_manager_.wave_sampler();
   }
 
   void update_all_settings();
@@ -158,7 +156,7 @@ private:
 
   megatoy::system::DirectoryService directory_service_;
   PreferenceManager preference_manager_;
-  AudioSubsystem audio_subsystem_;
+  AudioManager audio_manager_;
   GuiSubsystem gui_subsystem_;
   PatchEditingSession patch_session_;
   InputState input_state_;
