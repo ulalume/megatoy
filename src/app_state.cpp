@@ -7,13 +7,13 @@
 #include <iostream>
 
 AppState::AppState()
-    : directory_service_(), preference_manager_(directory_service_),
-      audio_manager_(), gui_manager_(preference_manager_),
-      patch_session_(directory_service_, audio_manager_), input_state_(),
+    : path_service_(), preference_manager_(path_service_), audio_manager_(),
+      gui_manager_(preference_manager_),
+      patch_session_(path_service_, audio_manager_), input_state_(),
       ui_state_(), history_(), connected_midi_inputs_() {}
 
 void AppState::init() {
-  directory_service_.ensure_directories();
+  path_service_.ensure_directories();
   patch_session_.initialize_patch_defaults();
 
   if (!audio_manager_.initialize(kSampleRate)) {
@@ -90,7 +90,7 @@ bool AppState::load_patch(const patches::PatchEntry &patch_info) {
 }
 
 void AppState::sync_patch_directories() {
-  directory_service_.ensure_directories();
+  path_service_.ensure_directories();
   patch_session_.refresh_directories();
 }
 

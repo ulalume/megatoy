@@ -2,13 +2,10 @@
 
 #include "platform/file_dialog.hpp"
 #include "preference_storage.hpp"
-#include "system/path_resolver.hpp"
 #include <cstdlib>
 #include <iostream>
 
-using megatoy::system::PathResolver;
-
-PreferenceManager::PreferenceManager(megatoy::system::DirectoryService &paths)
+PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
     : paths_(paths), directories_initialized(false),
       theme_(ui::styles::ThemeId::MegatoyDark),
       storage_(make_json_preference_storage(get_preferences_file_path())) {
@@ -20,7 +17,7 @@ PreferenceManager::PreferenceManager(megatoy::system::DirectoryService &paths)
 PreferenceManager::~PreferenceManager() { platform::file_dialog::shutdown(); }
 
 std::filesystem::path PreferenceManager::get_default_data_directory() const {
-  return PathResolver::default_data_directory();
+  return megatoy::system::PathService::default_data_directory();
 }
 
 void PreferenceManager::set_data_directory(const std::filesystem::path &path) {

@@ -4,7 +4,7 @@
 
 #include "patches/patch_manager.hpp"
 #include "preferences/preference_manager.hpp"
-#include "system/directory_service.hpp"
+#include "system/path_service.hpp"
 #include "ym2612/note.hpp"
 #include <array>
 #include <filesystem>
@@ -13,7 +13,7 @@
 class AudioManager;
 class PatchEditingSession {
 public:
-  PatchEditingSession(megatoy::system::DirectoryService &directories,
+  PatchEditingSession(megatoy::system::PathService &directories,
                       AudioManager &audio);
 
   ym2612::Patch &current_patch();
@@ -57,7 +57,7 @@ public:
   void restore_snapshot(const PatchSnapshot &snapshot);
 
 private:
-  megatoy::system::DirectoryService &directories_;
+  megatoy::system::PathService &directories_;
   AudioManager &audio_;
   patches::PatchManager patch_manager_;
   ChannelAllocator channel_allocator_;

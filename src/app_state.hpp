@@ -7,7 +7,7 @@
 #include "patches/patch_editing_session.hpp"
 #include "patches/patch_manager.hpp"
 #include "preferences/preference_manager.hpp"
-#include "system/directory_service.hpp"
+#include "system/path_service.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
 #include <array>
@@ -76,11 +76,9 @@ public:
   PatchEditingSession &patch_session() { return patch_session_; }
   const PatchEditingSession &patch_session() const { return patch_session_; }
 
-  megatoy::system::DirectoryService &directory_service() {
-    return directory_service_;
-  }
-  const megatoy::system::DirectoryService &directory_service() const {
-    return directory_service_;
+  megatoy::system::PathService &path_service() { return path_service_; }
+  const megatoy::system::PathService &path_service() const {
+    return path_service_;
   }
 
   PreferenceManager &preference_manager() { return preference_manager_; }
@@ -153,7 +151,7 @@ private:
                            const PatchSnapshot &before,
                            const PatchSnapshot &after);
 
-  megatoy::system::DirectoryService directory_service_;
+  megatoy::system::PathService path_service_;
   PreferenceManager preference_manager_;
   AudioManager audio_manager_;
   GuiManager gui_manager_;

@@ -1,8 +1,9 @@
-#include "path_resolver.hpp"
+#include "path_service.hpp"
 
 #include <array>
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -18,9 +19,9 @@
 #endif
 
 namespace megatoy::system {
-namespace {
 
-std::filesystem::path executable_directory_impl() {
+// Static implementations
+std::filesystem::path PathService::executable_directory_impl() {
 #if defined(_WIN32)
   std::wstring buffer(MAX_PATH, L'\0');
   DWORD length = ::GetModuleFileNameW(nullptr, buffer.data(),
@@ -50,7 +51,8 @@ std::filesystem::path executable_directory_impl() {
 #endif
 }
 
-std::filesystem::path canonical_or_normal(const std::filesystem::path &path) {
+std::filesystem::path
+PathService::canonical_or_normal(const std::filesystem::path &path) {
   try {
     return std::filesystem::weakly_canonical(path);
   } catch (const std::filesystem::filesystem_error &) {
@@ -58,20 +60,40 @@ std::filesystem::path canonical_or_normal(const std::filesystem::path &path) {
   }
 }
 
-} // namespace
+std::filesystem::path
+PathService::normalize(const std::filesystem::path &path) {
+  return path.lexically_normal();
+}
 
-std::filesystem::path PathResolver::executable_directory() {
-  static const std::filesystem::path kExecutableDir = executable_directory_impl();
+std::filesystem::path
+PathService::patches_directory(const std::filesystem::path &root) {
+  return root / "patches";
+}
+
+std::filesystem::path
+PathService::user_patches_directory(const std::filesystem::path &root) {
+  return root / "patches" / "user";
+}
+
+std::filesystem::path
+PathService::export_directory(const std::filesystem::path &root) {
+  return root / "export";
+}
+
+// Public static methods
+std::filesystem::path PathService::executable_directory() {
+  static const std::filesystem::path kExecutableDir =
+      executable_directory_impl();
   return kExecutableDir;
 }
 
-std::filesystem::path PathResolver::builtin_presets_directory() {
+std::filesystem::path PathService::builtin_presets_directory() {
   const auto executable_dir = executable_directory();
   const auto combined = executable_dir / MEGATOY_PRESETS_RELATIVE_PATH;
   return canonical_or_normal(combined);
 }
 
-std::filesystem::path PathResolver::default_data_directory() {
+std::filesystem::path PathService::default_data_directory() {
 #if defined(_WIN32)
   if (const char *userprofile = std::getenv("USERPROFILE")) {
     return std::filesystem::path(userprofile) / "Documents" / "megatoy";
@@ -84,7 +106,7 @@ std::filesystem::path PathResolver::default_data_directory() {
   return std::filesystem::current_path() / "megatoy";
 }
 
-std::filesystem::path PathResolver::preferences_file_path() {
+std::filesystem::path PathService::preferences_file_path() {
 #if defined(_WIN32)
   if (const char *appdata = std::getenv("APPDATA")) {
     return std::filesystem::path(appdata) / "megatoy" / "preferences.json";
@@ -98,7 +120,7 @@ std::filesystem::path PathResolver::preferences_file_path() {
   return std::filesystem::current_path() / "preferences.json";
 }
 
-std::filesystem::path PathResolver::imgui_ini_file_path() {
+std::filesystem::path PathService::imgui_ini_file_path() {
 #if defined(_WIN32)
   if (const char *appdata = std::getenv("APPDATA")) {
     return std::filesystem::path(appdata) / "megatoy" / "imgui.ini";
@@ -109,6 +131,35 @@ std::filesystem::path PathResolver::imgui_ini_file_path() {
   }
 #endif
   return std::filesystem::current_path() / "imgui.ini";
+}
+
+// Constructor and instance methods
+PathService::PathService() {
+  set_data_root(default_data_directory());
+  paths_.builtin_presets_root = builtin_presets_directory();
+  paths_.preferences_file = preferences_file_path();
+  paths_.imgui_ini_file = imgui_ini_file_path();
+}
+
+void PathService::set_data_root(const std::filesystem::path &root) {
+  paths_.data_root = normalize(root);
+  paths_.patches_root = patches_directory(paths_.data_root);
+  paths_.user_patches_root = user_patches_directory(paths_.data_root);
+  paths_.export_root = export_directory(paths_.data_root);
+}
+
+bool PathService::ensure_directories() const {
+  try {
+    std::filesystem::create_directories(paths_.data_root);
+    std::filesystem::create_directories(paths_.patches_root);
+    std::filesystem::create_directories(paths_.user_patches_root);
+    std::filesystem::create_directories(paths_.export_root);
+    return true;
+  } catch (const std::filesystem::filesystem_error &e) {
+    std::cerr << "Failed to create application directories: " << e.what()
+              << '\n';
+    return false;
+  }
 }
 
 } // namespace megatoy::system

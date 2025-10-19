@@ -1,7 +1,7 @@
 #pragma once
 
 #include "patch_repository.hpp"
-#include "system/directory_service.hpp"
+#include "system/path_service.hpp"
 #include "ym2612/patch.hpp"
 #include <GLFW/glfw3.h>
 #include <filesystem>
@@ -97,7 +97,7 @@ enum class ExportFormat {
 
 class PatchManager {
 public:
-  explicit PatchManager(megatoy::system::DirectoryService &directories);
+  explicit PatchManager(megatoy::system::PathService &directories);
 
   ym2612::Patch &current_patch();
   const ym2612::Patch &current_patch() const;
@@ -123,7 +123,7 @@ public:
                                         const char **paths);
 
 private:
-  megatoy::system::DirectoryService &directories_;
+  megatoy::system::PathService &directories_;
   PatchRepository repository_;
   ym2612::Patch current_patch_;
   std::string current_patch_path_;

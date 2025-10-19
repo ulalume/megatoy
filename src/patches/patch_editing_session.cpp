@@ -9,9 +9,9 @@
 #include <filesystem>
 #include <iostream>
 
-using megatoy::system::DirectoryService;
+using megatoy::system::PathService;
 
-PatchEditingSession::PatchEditingSession(DirectoryService &directories,
+PatchEditingSession::PatchEditingSession(PathService &directories,
                                          AudioManager &audio)
     : directories_(directories), audio_(audio), patch_manager_(directories_),
       channel_allocator_() {}

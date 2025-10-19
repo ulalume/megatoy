@@ -8,7 +8,7 @@ namespace ui {
 
 void render_preferences_window(const char *title, AppState &app_state) {
   auto &prefs = app_state.preference_manager();
-  const auto &paths = app_state.directory_service().paths();
+  const auto &paths = app_state.path_service().paths();
 
   auto &ui_state = app_state.ui_state();
   if (!ui_state.prefs.show_preferences) {

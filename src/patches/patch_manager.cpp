@@ -10,7 +10,7 @@
 
 namespace patches {
 
-PatchManager::PatchManager(megatoy::system::DirectoryService &directories)
+PatchManager::PatchManager(megatoy::system::PathService &directories)
     : directories_(directories),
       repository_(directories_.paths().patches_root,
                   directories_.paths().builtin_presets_root) {}

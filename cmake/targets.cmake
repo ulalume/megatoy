@@ -61,8 +61,7 @@ set(MEGATOY_CORE_SOURCES
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
-  src/system/directory_service.cpp
-  src/system/path_resolver.cpp
+  src/system/path_service.cpp
   src/ym2612/channel.cpp
   src/ym2612/device.cpp
   src/ym2612/operator.cpp

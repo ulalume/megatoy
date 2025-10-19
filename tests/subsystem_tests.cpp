@@ -1,7 +1,7 @@
 #include "audio/audio_manager.hpp"
 #include "patches/patch_editing_session.hpp"
 #include "preferences/preference_manager.hpp"
-#include "system/directory_service.hpp"
+#include "system/path_service.hpp"
 #include "ym2612/note.hpp"
 
 #include <cassert>
@@ -12,7 +12,7 @@ namespace {
 
 struct TestEnvironment {
   std::filesystem::path root;
-  megatoy::system::DirectoryService directories;
+  megatoy::system::PathService directories;
   PreferenceManager preferences;
   AudioManager audio;
   PatchEditingSession session;
