@@ -1,7 +1,6 @@
 #include "audio/audio_manager.hpp"
 #include "patches/patch_editing_session.hpp"
 #include "preferences/preference_manager.hpp"
-#include "preferences/preferences_data.hpp"
 #include "system/directory_service.hpp"
 #include "ym2612/note.hpp"
 

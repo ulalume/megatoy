@@ -1,8 +1,6 @@
 #include "app_state.hpp"
-#include "core/types.hpp"
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
-#include "ym2612/channel.hpp"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <imgui.h>
@@ -44,9 +42,6 @@ int main(int argc, char *argv[]) {
   MidiInputManager midi;
   midi.init();
 
-  // Create UI renderer (UI rendering only)
-  ui::UIRenderer ui_renderer(app_state);
-
   std::cout << "Application initialized. Use the button in the window to play "
                "C4 note.\n";
 
@@ -59,16 +54,15 @@ int main(int argc, char *argv[]) {
     midi.poll();
     midi.dispatch(app_state);
 
-    // Begin frame
-    app_state.gui().begin_frame();
-
-    // Handle history shortcuts
-    app_state.history().handle_shortcuts(app_state);
-
     // Render UI
-    ui_renderer.render();
+    app_state.gui().begin_frame();
+    app_state.history().handle_shortcuts(app_state);
+    ui::render_all(app_state);
 
-    // End frame
+    // Update preferences from UI state
+    app_state.preference_manager().set_ui_preferences(
+        app_state.ui_state().prefs);
+
     app_state.gui().end_frame();
   }
 

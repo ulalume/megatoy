@@ -1,9 +1,9 @@
 #include "patch_editor.hpp"
-#include "patches/patch_manager.hpp"
-#include "patches/patch_repository.hpp"
+#include "gui/components/preview/algorithm_preview.hpp"
 #include "history_helpers.hpp"
 #include "operator_editor.hpp"
-#include "gui/components/preview/algorithm_preview.hpp"
+#include "patches/patch_manager.hpp"
+#include "patches/patch_repository.hpp"
 #include <cctype>
 #include <cstring>
 #include <imgui.h>
@@ -98,9 +98,6 @@ void render_patch_name_field(AppState &app_state, ym2612::Patch &patch,
   }
 
   track_patch_history(app_state, "Patch Name", "meta.name");
-  if (ImGui::IsItemActive()) {
-    app_state.input_state().text_input_focused = true;
-  }
 
   if (!name_valid && !patch.name.empty()) {
     ImGui::SameLine();
@@ -332,7 +329,7 @@ void render_operator_section(AppState &app_state, ym2612::Patch &patch,
 } // namespace
 
 // Function to render instrument settings panel
-void render_patch_editor(AppState &app_state) {
+void render_patch_editor(const char *title, AppState &app_state) {
   auto &patch = app_state.patch();
   auto &ui_state = app_state.ui_state();
   auto &editor_state = ui_state.patch_editor;
@@ -344,7 +341,7 @@ void render_patch_editor(AppState &app_state) {
   ImGui::SetNextWindowPos(ImVec2(400, 50), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
-  if (!ImGui::Begin("Patch Editor", &ui_state.prefs.show_patch_editor)) {
+  if (!ImGui::Begin(title, &ui_state.prefs.show_patch_editor)) {
     ImGui::End();
     return;
   }

@@ -10,14 +10,14 @@
 
 namespace ui {
 
-void render_waveform(AppState &app_state) {
+void render_waveform(const char *title, AppState &app_state) {
   auto &ui_state = app_state.ui_state();
   if (!ui_state.prefs.show_waveform) {
     return;
   }
 
   ImGui::SetNextWindowSize(ImVec2(420.0f, 240.0f), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("Waveform", &ui_state.prefs.show_waveform)) {
+  if (!ImGui::Begin(title, &ui_state.prefs.show_waveform)) {
     ImGui::End();
     return;
   }

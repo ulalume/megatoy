@@ -6,7 +6,7 @@
 
 namespace ui {
 
-void render_preferences_window(AppState &app_state) {
+void render_preferences_window(const char *title, AppState &app_state) {
   auto &prefs = app_state.preference_manager();
   const auto &paths = app_state.directory_service().paths();
 
@@ -17,7 +17,7 @@ void render_preferences_window(AppState &app_state) {
 
   ImGui::SetNextWindowSize(ImVec2(480, 260), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Preferences", &ui_state.prefs.show_preferences)) {
+  if (ImGui::Begin(title, &ui_state.prefs.show_preferences)) {
     auto &ui_prefs = ui_state.prefs;
 
     // Show the current directory

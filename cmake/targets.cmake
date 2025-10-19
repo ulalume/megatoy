@@ -54,7 +54,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/styles/theme.cpp
   src/history/history_manager.cpp
   src/midi/midi_input_manager.cpp
-  src/patches/patch_drop_service.cpp
+
   src/patches/patch_editing_session.cpp
   src/patches/patch_manager.cpp
   src/patches/patch_repository.cpp

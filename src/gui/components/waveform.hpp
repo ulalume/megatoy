@@ -4,6 +4,6 @@ class AppState;
 
 namespace ui {
 
-void render_waveform(AppState &app_state);
+void render_waveform(const char *title, AppState &app_state);
 
 }

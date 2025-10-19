@@ -5,6 +5,6 @@
 
 namespace ui {
 // Function to render the instrument settings panel
-void render_patch_editor(AppState &app_state);
+void render_patch_editor(const char *title, AppState &app_state);
 
 } // namespace ui

@@ -1,6 +1,5 @@
 #pragma once
 #include "note.hpp"
-#include "core/types.hpp"
 #include "ym2612/types.hpp"
 #include <emu/EmuCores.h>
 #include <emu/EmuStructs.h>

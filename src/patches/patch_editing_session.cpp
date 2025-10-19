@@ -123,7 +123,7 @@ void PatchEditingSession::apply_patch_to_audio() {
 
 patches::PatchDropResult
 PatchEditingSession::load_patch_from_path(const std::filesystem::path &path) {
-  return patches::load_patch_from_path(path);
+  return patch_manager_.load_patch_from_path(path);
 }
 
 bool PatchEditingSession::note_on(

@@ -113,7 +113,7 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
 } // namespace
 
-void render_patch_selector(AppState &app_state) {
+void render_patch_selector(const char *title, AppState &app_state) {
   auto &ui_state = app_state.ui_state();
   if (!ui_state.prefs.show_patch_selector) {
     return;
@@ -122,7 +122,7 @@ void render_patch_selector(AppState &app_state) {
   ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Patch Browser", &ui_state.prefs.show_patch_selector)) {
+  if (ImGui::Begin(title, &ui_state.prefs.show_patch_selector)) {
     if (ImGui::Button("Refresh")) {
       app_state.patch_repository().refresh();
     }
@@ -143,9 +143,6 @@ void render_patch_selector(AppState &app_state) {
     if (ImGui::InputTextWithHint("##Search", "Type to filter patches",
                                  search_buffer, sizeof(search_buffer))) {
       ui_state.prefs.patch_search_query = std::string(search_buffer);
-    }
-    if (ImGui::IsItemActive()) {
-      app_state.input_state().text_input_focused = true;
     }
 
     auto preset_tree = preset_repository.tree();

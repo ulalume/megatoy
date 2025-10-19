@@ -5,14 +5,14 @@
 
 namespace ui {
 
-void render_mml_console(AppState &app_state) {
+void render_mml_console(const char *title, AppState &app_state) {
   auto &ui_state = app_state.ui_state();
   ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiCond_FirstUseEver);
 
   if (!ui_state.prefs.show_mml_console) {
     return;
   }
-  if (!ImGui::Begin("MML Console", &ui_state.prefs.show_mml_console)) {
+  if (!ImGui::Begin(title, &ui_state.prefs.show_mml_console)) {
     ImGui::End();
     return;
   }

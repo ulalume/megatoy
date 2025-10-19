@@ -2,6 +2,7 @@
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/styles/theme.hpp"
+#include "gui/window_title.hpp"
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -167,12 +168,8 @@ void GuiManager::begin_frame() {
   if (first_frame_) {
     first_frame_ = false;
 
-    std::cout << "First frame" << std::endl;
-
-    // default layout
-    ImGui::DockBuilderRemoveNode(dockspace_id); // clear
-    ImGui::DockBuilderAddNode(dockspace_id,
-                              ImGuiDockNodeFlags_DockSpace); // new DockSpace
+    ImGui::DockBuilderRemoveNode(dockspace_id);
+    ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
     ImGuiID dock_main_id = dockspace_id;
@@ -191,12 +188,12 @@ void GuiManager::begin_frame() {
     dock_id_right_down = ImGui::DockBuilderSplitNode(
         dock_main_id, ImGuiDir_Down, 0.2f, nullptr, &dock_main_id);
 
-    ImGui::DockBuilderDockWindow("Patch Browser", dock_id_left);
-    ImGui::DockBuilderDockWindow("Keyboard Typing", dock_id_left_down);
-    ImGui::DockBuilderDockWindow("Patch Editor", dock_main_id);
-    ImGui::DockBuilderDockWindow("Soft Keyboard", dock_id_right_down);
-    ImGui::DockBuilderDockWindow("MML Console", dock_id_right_down);
-    ImGui::DockBuilderDockWindow("Waveform", dock_id_left_down_down);
+    ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
+    ImGui::DockBuilderDockWindow(ui::KEYBOARD_TYPING_TITLE, dock_id_left_down);
+    ImGui::DockBuilderDockWindow(ui::PATCH_EDITOR_TITLE, dock_main_id);
+    ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, dock_id_right_down);
+    ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, dock_id_right_down);
+    ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, dock_id_left_down_down);
 
     // Finish the dockspace
     ImGui::DockBuilderFinish(dockspace_id);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "channel_allocator.hpp"
-#include "patches/patch_drop_service.hpp"
+
 #include "patches/patch_manager.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/directory_service.hpp"

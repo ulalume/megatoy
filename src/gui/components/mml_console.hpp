@@ -4,6 +4,6 @@
 #include <imgui.h>
 
 namespace ui {
-void render_mml_console(AppState &app_state);
+void render_mml_console(const char *title, AppState &app_state);
 
 } // namespace ui

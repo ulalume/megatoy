@@ -9,7 +9,7 @@
 
 namespace ui {
 
-void render_midi_keyboard(AppState &app_state) {
+void render_midi_keyboard(const char *title, AppState &app_state) {
   const ImU32 black_key_col =
       styles::color_u32(styles::MegatoyCol::PianoBlackKey);
   const ImU32 black_key_pressed_col =
@@ -31,7 +31,7 @@ void render_midi_keyboard(AppState &app_state) {
   }
 
   ImGui::SetNextWindowSize(ImVec2(400, 180), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("Soft Keyboard", &ui_state.prefs.show_midi_keyboard)) {
+  if (!ImGui::Begin(title, &ui_state.prefs.show_midi_keyboard)) {
     ImGui::End();
     return;
   }

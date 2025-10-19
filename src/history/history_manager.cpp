@@ -58,9 +58,8 @@ void HistoryManager::redo(AppState &app_state) {
 }
 
 void HistoryManager::handle_shortcuts(AppState &app_state) {
-  ImGuiIO &io = ImGui::GetIO();
-
-  if (io.WantTextInput || app_state.input_state().text_input_focused) {
+  auto &io = ImGui::GetIO();
+  if (io.WantTextInput) {
     return;
   }
 

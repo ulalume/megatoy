@@ -8,46 +8,25 @@
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
 #include "gui/components/waveform.hpp"
+#include "gui/window_title.hpp"
 #include <imgui.h>
+#include <imgui_internal.h>
 
 namespace ui {
 
-UIRenderer::UIRenderer(AppState &app_state) : app_state_(app_state) {}
+void render_all(AppState &app_state) {
+  ui::render_main_menu(app_state);
 
-void UIRenderer::render() {
-  render_main_menu();
-  render_patch_components();
-  render_input_components();
-  render_utility_components();
-  update_ui_state();
-}
+  ui::render_patch_drop_feedback(app_state);
+  ui::render_patch_editor(PATCH_EDITOR_TITLE, app_state);
+  ui::render_patch_selector(PATCH_BROWSER_TITLE, app_state);
 
-void UIRenderer::render_main_menu() { ui::render_main_menu(app_state_); }
+  ui::render_midi_keyboard(SOFT_KEYBOARD_TITLE, app_state);
+  ui::render_keyboard_typing(KEYBOARD_TYPING_TITLE, app_state);
 
-void UIRenderer::render_patch_components() {
-  ui::render_patch_drop_feedback(app_state_);
-  ui::render_patch_editor(app_state_);
-  ui::render_patch_selector(app_state_);
-}
-
-void UIRenderer::render_input_components() {
-  ui::render_midi_keyboard(app_state_);
-  ui::render_keyboard_typing(app_state_);
-}
-
-void UIRenderer::render_utility_components() {
-  ui::render_preferences_window(app_state_);
-  ui::render_mml_console(app_state_);
-  ui::render_waveform(app_state_);
-}
-
-void UIRenderer::update_ui_state() {
-  // Reset text input focus state after frame
-  app_state_.input_state().text_input_focused = false;
-
-  // Update preferences from UI state
-  app_state_.preference_manager().set_ui_preferences(
-      app_state_.ui_state().prefs);
+  ui::render_preferences_window(PREFERENCES_TITLE, app_state);
+  ui::render_mml_console(MML_CONSOLE_TITLE, app_state);
+  ui::render_waveform(WAVEFORM_TITLE, app_state);
 }
 
 } // namespace ui

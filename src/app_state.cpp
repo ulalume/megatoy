@@ -1,7 +1,6 @@
 #include "app_state.hpp"
 
 #include "history/snapshot_entry.hpp"
-#include "patches/patch_drop_service.hpp"
 
 #include <algorithm>
 #include <filesystem>

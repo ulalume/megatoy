@@ -9,7 +9,7 @@ namespace ui {
 static std::map<ImGuiKey, bool> key_pressed_last_frame;
 
 // Function to render the main audio control panel
-void render_keyboard_typing(AppState &app_state) {
+void render_keyboard_typing(const char *title, AppState &app_state) {
   // Create main window
   auto &ui_state = app_state.ui_state();
   if (!ui_state.prefs.show_audio_controls) {
@@ -19,7 +19,7 @@ void render_keyboard_typing(AppState &app_state) {
   ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
 
-  if (!ImGui::Begin("Keyboard Typing", &ui_state.prefs.show_audio_controls)) {
+  if (!ImGui::Begin(title, &ui_state.prefs.show_audio_controls)) {
     ImGui::End();
     return;
   }
@@ -60,7 +60,7 @@ void render_keyboard_typing(AppState &app_state) {
   ImGui::Text("Octave:      , (down)    . (up)");
   ImGui::Spacing();
 
-  if (!input.text_input_focused) {
+  if (!ImGui::GetIO().WantTextInput) {
     // Handle octave changes with comma and period keys
     bool comma_pressed_now = ImGui::IsKeyDown(ImGuiKey_Comma);
     bool comma_was_pressed = key_pressed_last_frame[ImGuiKey_Comma];

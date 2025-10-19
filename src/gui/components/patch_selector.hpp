@@ -5,6 +5,6 @@
 namespace ui {
 
 // Function to render patch browser panel
-void render_patch_selector(AppState &app_state);
+void render_patch_selector(const char *title, AppState &app_state);
 
 } // namespace ui

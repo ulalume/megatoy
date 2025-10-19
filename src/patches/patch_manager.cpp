@@ -1,7 +1,9 @@
 #include "patch_manager.hpp"
 #include "formats/ctrmml.hpp"
 #include "formats/dmp.hpp"
+#include "formats/fui.hpp"
 #include "formats/gin.hpp"
+#include "formats/rym2612.hpp"
 #include "platform/file_dialog.hpp"
 #include <iostream>
 #include <utility>
@@ -132,6 +134,68 @@ SaveResult PatchManager::export_current_patch_as(ExportFormat format) {
   default:
     return SaveResult::error("Unknown export format");
   }
+}
+
+PatchDropResult
+PatchManager::load_patch_from_path(const std::filesystem::path &path) {
+  return patches::load_patch_from_path(path);
+}
+
+PatchDropResult load_patch_from_path(const std::filesystem::path &path) {
+  PatchDropResult result;
+  result.source_path = path;
+
+  if (!std::filesystem::exists(path)) {
+    result.status = PatchDropResult::Status::Error;
+    result.error_message = "File does not exist: " + path.string();
+    return result;
+  }
+
+  const auto extension = path.extension().string();
+  std::vector<ym2612::Patch> patches;
+
+  try {
+    if (extension == ".dmp") {
+      patches = formats::dmp::read_file(path);
+      result.history_label = "Load DMP: " + path.filename().string();
+    } else if (extension == ".gin") {
+      patches = formats::gin::read_file(path);
+      result.history_label = "Load GIN: " + path.filename().string();
+    } else if (extension == ".fui") {
+      patches = formats::fui::read_file(path);
+      result.history_label = "Load FUI: " + path.filename().string();
+    } else if (extension == ".rym2612") {
+      patches = formats::rym2612::read_file(path);
+      result.history_label = "Load RYM2612: " + path.filename().string();
+    } else if (extension == ".mml") {
+      patches = formats::ctrmml::read_file(path);
+      result.history_label = "Load MML: " + path.filename().string();
+      if (patches.size() > 1) {
+        result.status = PatchDropResult::Status::MultiInstrument;
+        result.instruments = patches;
+        return result;
+      }
+    } else {
+      result.status = PatchDropResult::Status::Error;
+      result.error_message = "Unsupported file format: " + extension;
+      return result;
+    }
+
+    if (patches.empty()) {
+      result.status = PatchDropResult::Status::Error;
+      result.error_message = "No patches found in file";
+      return result;
+    }
+
+    result.patch = patches[0];
+    result.status = PatchDropResult::Status::Loaded;
+
+  } catch (const std::exception &e) {
+    result.status = PatchDropResult::Status::Error;
+    result.error_message = "Failed to load patch: " + std::string(e.what());
+  }
+
+  return result;
 }
 
 } // namespace patches

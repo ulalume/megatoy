@@ -4,6 +4,6 @@
 
 namespace ui {
 
-void render_preferences_window(AppState &app_state);
+void render_preferences_window(const char *title, AppState &app_state);
 
 } // namespace ui

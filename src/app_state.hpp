@@ -21,7 +21,6 @@ struct MidiKeyboardSettings {
 };
 
 struct InputState {
-  bool text_input_focused = false;
   uint8_t keyboard_typing_octave = 3;
   MidiKeyboardSettings midi_keyboard_settings;
 
