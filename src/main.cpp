@@ -1,5 +1,4 @@
 #include "app_state.hpp"
-#include "midi/midi_input_manager.hpp"
 #include "core/types.hpp"
 #include "gui/components/keyboard_typing.hpp"
 #include "gui/components/main_menu.hpp"
@@ -10,6 +9,7 @@
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
 #include "gui/components/waveform.hpp"
+#include "midi/midi_input_manager.hpp"
 #include "ym2612/channel.hpp"
 #include <GLFW/glfw3.h>
 #include <filesystem>
@@ -68,8 +68,6 @@ void handle_file_drop(GLFWwindow *window, int count, const char **paths) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-  std::cout << "VGM Real-time Audio Test with Dear ImGui\n";
-
   AppState app_state;
   app_state.init();
 
@@ -99,8 +97,8 @@ int main(int argc, char *argv[]) {
     app_state.gui().manager().begin_frame();
 
     // Midi USB update
-  midi.poll();
-  midi.dispatch(app_state);
+    midi.poll();
+    midi.dispatch(app_state);
 
     // ImGui::ShowDemoWindow();
 
