@@ -179,35 +179,6 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
   return SaveResult::error("Unknown export format");
 }
 
-PatchDropResult
-PatchSession::load_patch_from_path(const std::filesystem::path &path) {
-  PatchDropResult result;
-
-  auto load_result = formats::load_patch_from_file(path);
-
-  switch (load_result.status) {
-  case formats::PatchLoadStatus::Success:
-    result.status = PatchDropResult::Status::Loaded;
-    result.patch = load_result.patches[0];
-    result.source_path = path;
-    result.history_label = "Load: " + path.filename().string();
-    break;
-
-  case formats::PatchLoadStatus::MultiInstrument:
-    result.status = PatchDropResult::Status::MultiInstrument;
-    result.instruments = std::move(load_result.patches);
-    result.source_path = path;
-    break;
-
-  case formats::PatchLoadStatus::Failure:
-    result.status = PatchDropResult::Status::Error;
-    result.error_message = load_result.message;
-    break;
-  }
-
-  return result;
-}
-
 bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
                            const PreferenceManager::UIPreferences &prefs) {
   const uint8_t clamped_velocity =

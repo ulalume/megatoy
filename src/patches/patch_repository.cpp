@@ -97,7 +97,6 @@ bool PatchRepository::load_patch(const PatchEntry &entry,
               << e.what() << std::endl;
     return false;
   }
-
   return false;
 }
 

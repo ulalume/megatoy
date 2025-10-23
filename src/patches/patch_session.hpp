@@ -44,21 +44,6 @@ struct SaveResult {
   bool is_duplicated() const { return status == Status::Duplicated; }
 };
 
-struct PatchDropResult {
-  enum class Status {
-    Loaded,
-    MultiInstrument,
-    Error,
-  };
-
-  Status status = Status::Error;
-  std::string history_label;
-  ym2612::Patch patch;
-  std::filesystem::path source_path;
-  std::vector<ym2612::Patch> instruments; // For multi-instrument files
-  std::string error_message;
-};
-
 enum class ExportFormat {
   DMP,
   MML,
@@ -129,7 +114,6 @@ public:
   // File operations
   SaveResult save_current_patch(bool force_overwrite = false);
   SaveResult export_current_patch_as(ExportFormat format);
-  PatchDropResult load_patch_from_path(const std::filesystem::path &path);
 
   // Note management
   bool note_on(ym2612::Note note, uint8_t velocity,

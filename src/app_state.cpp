@@ -1,5 +1,6 @@
 #include "app_state.hpp"
 
+#include "formats/patch_loader.hpp"
 #include "history/snapshot_entry.hpp"
 
 #include <algorithm>
@@ -106,13 +107,14 @@ void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
   auto &drop = ui_state_.drop_state;
   drop.error_message.clear();
 
-  const auto result = patch_session_.load_patch_from_path(path);
+  const auto result = formats::load_patch_from_file(path);
+
   switch (result.status) {
-  case patches::PatchDropResult::Status::Loaded: {
+  case formats::PatchLoadStatus::Success: {
     const auto before = capture_patch_snapshot();
-    patch_session_.set_current_patch(result.patch, result.source_path);
+    patch_session_.set_current_patch(result.patches[0], path);
     const auto after = capture_patch_snapshot();
-    record_patch_change(result.history_label, before, after);
+    record_patch_change("Load: " + path.filename().string(), before, after);
     drop.instruments.clear();
     drop.pending_instruments_path.clear();
     drop.selected_instrument = 0;
@@ -121,21 +123,21 @@ void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
     drop.error_message.clear();
     break;
   }
-  case patches::PatchDropResult::Status::MultiInstrument:
-    drop.instruments = result.instruments;
-    drop.pending_instruments_path = result.source_path;
+  case formats::PatchLoadStatus::MultiInstrument:
+    drop.instruments = result.patches;
+    drop.pending_instruments_path = path;
     drop.selected_instrument = 0;
     drop.show_picker_for_multiple_instruments = true;
     drop.show_error_popup = false;
     drop.error_message.clear();
     break;
-  case patches::PatchDropResult::Status::Error:
+  case formats::PatchLoadStatus::Failure:
   default:
     drop.instruments.clear();
     drop.pending_instruments_path.clear();
     drop.selected_instrument = 0;
     drop.show_picker_for_multiple_instruments = false;
-    drop.error_message = result.error_message;
+    drop.error_message = result.message;
     drop.show_error_popup = true;
     break;
   }
