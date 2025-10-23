@@ -167,10 +167,20 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
   }
 
   std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) {
-    if (a.is_directory() != b.is_directory()) {
-      return a.is_directory();
-    }
-    return a.path().filename().string() < b.path().filename().string();
+    const std::string filename_a = a.path().filename().string();
+    const std::string filename_b = b.path().filename().string();
+    if (filename_a == "user")
+      return true;
+    if (filename_a == "presets")
+      return false;
+    if (filename_b == "user")
+      return false;
+    if (filename_b == "presets")
+      return true;
+    return std::lexicographical_compare(
+        filename_a.begin(), filename_a.end(), filename_b.begin(),
+        filename_b.end(),
+        [](char a, char b) { return std::tolower(a) < std::tolower(b); });
   });
 
   for (const auto &entry : entries) {

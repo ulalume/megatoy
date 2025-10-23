@@ -146,23 +146,6 @@ void render_patch_selector(const char *title, AppState &app_state) {
     }
 
     auto preset_tree = preset_repository.tree();
-    std::sort(preset_tree.begin(), preset_tree.end(),
-              [](const patches::PatchEntry &a, const patches::PatchEntry &b) {
-                if (a.name == "user") {
-                  return true;
-                }
-                if (b.name == "user") {
-                  return false;
-                }
-                if (a.name == "presets") {
-                  return false;
-                }
-                if (b.name == "presets") {
-                  return true;
-                }
-                return a.name < b.name;
-              });
-
     bool has_query =
         std::any_of(ui_state.prefs.patch_search_query.begin(),
                     ui_state.prefs.patch_search_query.end(),
