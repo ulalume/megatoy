@@ -2,9 +2,11 @@
 
 #include "core/types.hpp"
 #include <cstdint>
-#include <iostream>
+#include <sstream>
 
 namespace ym2612 {
+struct Note;
+std::ostream &operator<<(std::ostream &os, const Note &note);
 
 inline uint16_t fnote_from_key(Key key) {
   switch (key) {
@@ -58,8 +60,15 @@ struct Note {
     uint8_t note = midi_note % 12;
     return Note{block, all_keys[note]};
   }
+  uint8_t midi_note() const {
+    return (octave + 1) * 12 + static_cast<uint8_t>(key);
+  }
+  std::string name() const {
+    std::stringstream key_name;
+    key_name << *this;
+    return key_name.str();
+  }
 };
-
 inline std::ostream &operator<<(std::ostream &os, const Note &note) {
   return os << note.key << static_cast<int>(note.octave);
 }

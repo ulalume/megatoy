@@ -1,5 +1,6 @@
 #include "main_menu.hpp"
 
+#include "../window_title.hpp"
 #include <imgui.h>
 #include <string>
 #include <string_view>
@@ -56,17 +57,17 @@ void render_main_menu(AppState &app_state) {
 
       ImGui::Separator();
 
-      ImGui::MenuItem("Patch Editor", nullptr,
+      ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr,
                       &ui_state.prefs.show_patch_editor);
-      ImGui::MenuItem("Keyboard Typing", nullptr,
-                      &ui_state.prefs.show_audio_controls);
-      ImGui::MenuItem("Soft Keyboard", nullptr,
+      ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
                       &ui_state.prefs.show_midi_keyboard);
-      ImGui::MenuItem("Patch Browser", nullptr,
+      ImGui::MenuItem(PATCH_BROWSER_TITLE, nullptr,
                       &ui_state.prefs.show_patch_selector);
-      ImGui::MenuItem("Waveform", nullptr, &ui_state.prefs.show_waveform);
-      ImGui::MenuItem("MML Console", nullptr, &ui_state.prefs.show_mml_console);
-      ImGui::MenuItem("Preferences", nullptr, &ui_state.prefs.show_preferences);
+      ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_state.prefs.show_waveform);
+      ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr,
+                      &ui_state.prefs.show_mml_console);
+      ImGui::MenuItem(PREFERENCES_TITLE, nullptr,
+                      &ui_state.prefs.show_preferences);
 
       ImGui::Separator();
 
