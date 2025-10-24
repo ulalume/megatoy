@@ -7,6 +7,7 @@
 #include "patches/patch_session.hpp"
 #include <cctype>
 #include <cstring>
+#include <filesystem>
 #include <imgui.h>
 
 namespace ui {
@@ -45,12 +46,10 @@ void render_save_export_buttons(AppState &app_state, bool name_valid,
 
   ImVec2 pos = ImGui::GetCursorPos();
   if (ImGui::Button(is_user_patch ? "Overwrite" : "Save to 'user'")) {
-    auto result = patch_session.save_current_patch(false);
+    auto result = patch_session.save_current_patch(is_user_patch);
     if (result.is_duplicated()) {
       state.last_export_path = result.path.string();
       ImGui::OpenPopup("Overwrite Confirmation");
-      patch_session.set_current_patch_path(
-          repository.to_relative_path(result.path));
     } else if (result.is_success()) {
       state.last_export_path = result.path.string();
       ImGui::OpenPopup("Save Success");
@@ -148,6 +147,8 @@ void render_save_export_popups(AppState &app_state, const ym2612::Patch &patch,
       auto result = app_state.patch_session().save_current_patch(true);
       if (result.is_success()) {
         state.last_export_path = result.path.string();
+        app_state.patch_session().set_current_patch_path(
+            app_state.patch_repository().to_relative_path(result.path));
         ImGui::OpenPopup("Save Success");
       } else if (result.is_error()) {
         state.last_export_error = result.error_message;
