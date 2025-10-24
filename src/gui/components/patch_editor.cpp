@@ -357,7 +357,7 @@ void render_patch_editor(const char *title, AppState &app_state) {
   ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
   auto title_with_id =
-      std::string(title) + (is_modified ? "* ###" : "###") + std::string(title);
+      std::string(title) + (is_modified ? " *###" : "###") + std::string(title);
   if (!ImGui::Begin(title_with_id.c_str(), &ui_state.prefs.show_patch_editor)) {
     ImGui::End();
     return;
