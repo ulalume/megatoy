@@ -347,6 +347,7 @@ void render_patch_editor(const char *title, AppState &app_state) {
   auto &patch = app_state.patch();
   auto &ui_state = app_state.ui_state();
   auto &editor_state = ui_state.patch_editor;
+  auto is_modified = app_state.patch_session().is_modified();
 
   if (!ui_state.prefs.show_patch_editor) {
     return;
@@ -355,7 +356,9 @@ void render_patch_editor(const char *title, AppState &app_state) {
   ImGui::SetNextWindowPos(ImVec2(400, 50), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
-  if (!ImGui::Begin(title, &ui_state.prefs.show_patch_editor)) {
+  auto title_with_id =
+      std::string(title) + (is_modified ? "* ###" : "###") + std::string(title);
+  if (!ImGui::Begin(title_with_id.c_str(), &ui_state.prefs.show_patch_editor)) {
     ImGui::End();
     return;
   }
