@@ -139,7 +139,6 @@ private:
   using PatchSnapshot = patches::PatchSession::PatchSnapshot;
 
   PatchSnapshot capture_patch_snapshot() const;
-  void apply_patch_snapshot(const PatchSnapshot &snapshot);
   void record_patch_change(const std::string &label,
                            const PatchSnapshot &before,
                            const PatchSnapshot &after);

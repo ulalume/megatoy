@@ -190,10 +190,6 @@ AppState::PatchSnapshot AppState::capture_patch_snapshot() const {
   return patch_session_.capture_snapshot();
 }
 
-void AppState::apply_patch_snapshot(const PatchSnapshot &snapshot) {
-  patch_session_.restore_snapshot(snapshot);
-}
-
 void AppState::record_patch_change(const std::string &label,
                                    const PatchSnapshot &before,
                                    const PatchSnapshot &after) {
