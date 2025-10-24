@@ -139,6 +139,8 @@ public:
   PatchSnapshot capture_snapshot() const;
   void restore_snapshot(const PatchSnapshot &snapshot);
 
+  bool current_patch_is_user_patch() const;
+
 private:
   megatoy::system::PathService &directories_;
   AudioManager &audio_;

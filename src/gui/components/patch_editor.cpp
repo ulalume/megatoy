@@ -33,19 +33,18 @@ void render_save_export_buttons(AppState &app_state, bool name_valid,
   auto &patch_session = app_state.patch_session();
   auto &repository = app_state.patch_repository();
 
-  if (!name_valid) {
-    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
-    ImGui::Button("Save");
-    ImGui::SameLine();
-    ImGui::Button("Export...");
-    ImGui::PopStyleVar();
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Enter a valid patch name to save");
-    }
-    return;
+  auto is_user_patch = patch_session.current_patch_is_user_patch();
+  auto is_patch_modified = patch_session.is_modified();
+
+  auto save_button_is_disabled =
+      !name_valid || (is_user_patch && !is_patch_modified);
+
+  if (save_button_is_disabled) {
+    ImGui::BeginDisabled(true);
   }
 
-  if (ImGui::Button("Save")) {
+  ImVec2 pos = ImGui::GetCursorPos();
+  if (ImGui::Button(is_user_patch ? "Overwrite" : "Save to 'user'")) {
     auto result = patch_session.save_current_patch(false);
     if (result.is_duplicated()) {
       state.last_export_path = result.path.string();
@@ -63,9 +62,39 @@ void render_save_export_buttons(AppState &app_state, bool name_valid,
       ImGui::OpenPopup("Error##SaveOrExport");
     }
   }
+
+  // for hover
+  if (save_button_is_disabled) {
+    ImGui::SetCursorPos(pos);
+    ImGui::EndDisabled();
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
+    ImGui::Button(is_user_patch ? "Overwrite##dummy" : "Save to 'user'##dummy");
+    ImGui::PopStyleVar();
+    ImGui::BeginDisabled(true);
+  }
+  if (ImGui::IsItemHovered()) {
+    if (!name_valid) {
+      ImGui::SetTooltip("Enter a valid patch name to save");
+    } else if (!is_user_patch) {
+      ImGui::SetTooltip("Save to user/%s.gin",
+                        patch_session.current_patch().name.c_str());
+    } else if (!is_patch_modified) {
+      ImGui::SetTooltip("Patch is not modified");
+    }
+  }
+  if (save_button_is_disabled) {
+    ImGui::EndDisabled();
+  }
+
+  if (!name_valid) {
+    ImGui::BeginDisabled(true);
+  }
   ImGui::SameLine();
   if (ImGui::Button("Export...")) {
     ImGui::OpenPopup("Export Options");
+  }
+  if (!name_valid) {
+    ImGui::EndDisabled();
   }
 }
 

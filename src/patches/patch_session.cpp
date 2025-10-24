@@ -243,4 +243,11 @@ void PatchSession::restore_snapshot(const PatchSnapshot &snapshot) {
   apply_patch_to_audio();
 }
 
+bool PatchSession::current_patch_is_user_patch() const {
+  return !current_patch_path_.empty() &&
+         current_patch_path_.starts_with("user/") &&
+         current_patch_path_.ends_with(".gin") &&
+         original_patch_.name == current_patch_.name;
+}
+
 } // namespace patches
