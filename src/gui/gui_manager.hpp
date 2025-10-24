@@ -45,7 +45,12 @@ public:
   /**
    * Check if window should close
    */
-  bool should_close() const;
+  bool get_should_close() const;
+
+  /**
+   * Set the should close flag
+   */
+  void set_should_close(bool value);
 
   /**
    * Begin new frame

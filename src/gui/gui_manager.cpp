@@ -146,8 +146,14 @@ void GuiManager::shutdown() {
   initialized_ = false;
 }
 
-bool GuiManager::should_close() const {
+bool GuiManager::get_should_close() const {
   return window_ ? glfwWindowShouldClose(window_) : true;
+}
+
+void GuiManager::set_should_close(bool value) {
+  if (window_) {
+    glfwSetWindowShouldClose(window_, value ? GLFW_TRUE : GLFW_FALSE);
+  }
 }
 
 void GuiManager::begin_frame() {
@@ -190,7 +196,9 @@ void GuiManager::begin_frame() {
 
     ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
     ImGui::DockBuilderDockWindow(ui::KEYBOARD_TYPING_TITLE, dock_id_left_down);
-    ImGui::DockBuilderDockWindow(ui::PATCH_EDITOR_TITLE, dock_main_id);
+    auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
+                              std::string(ui::PATCH_EDITOR_TITLE);
+    ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
     ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, dock_id_right_down);
     ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, dock_id_right_down);
     ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, dock_id_left_down_down);

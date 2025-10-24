@@ -42,6 +42,9 @@ struct UIState {
     std::filesystem::path pending_instruments_path;
     std::vector<ym2612::Patch> instruments;
     int selected_instrument = 0;
+    bool show_drop_confirmation = false;
+    ym2612::Patch pending_dropped_patch;
+    std::filesystem::path pending_dropped_path;
   } drop_state;
 
   struct EnvelopeState {
@@ -57,6 +60,46 @@ struct UIState {
     SliderState sustain_rate = SliderState::None;
     SliderState release_rate = SliderState::None;
   } envelope_states[4];
+
+  struct ConfirmationState {
+    bool show_unsaved_changes_dialog = false;
+    patches::PatchEntry pending_patch_entry;
+    std::string dialog_message;
+    enum class Operation {
+      Load,
+      Drop,
+      Exit,
+    } operation;
+
+    static ConfirmationState load(patches::PatchEntry patch_entry) {
+      ConfirmationState state;
+      state.show_unsaved_changes_dialog = true;
+      state.pending_patch_entry = patch_entry;
+      state.dialog_message =
+          "You have unsaved changes. Loading a new patch will discard "
+          "them.\n\nContinue?";
+      state.operation = UIState::ConfirmationState::Operation::Load;
+      return state;
+    }
+    static ConfirmationState drop() {
+      ConfirmationState state;
+      state.show_unsaved_changes_dialog = true;
+      state.dialog_message =
+          "You have unsaved changes. Dropping a new patch will discard "
+          "them.\n\nContinue?";
+      state.operation = UIState::ConfirmationState::Operation::Drop;
+      return state;
+    }
+    static ConfirmationState exit() {
+      ConfirmationState state;
+      state.show_unsaved_changes_dialog = true;
+      state.dialog_message =
+          "You have unsaved changes. Do you want to discard them and exit?";
+      state.operation = UIState::ConfirmationState::Operation::Exit;
+      return state;
+    }
+
+  } confirmation_state;
 };
 
 class AppState {
@@ -125,6 +168,10 @@ public:
 
   // bool load_user_patch(const std::string &patch_name);
   bool load_patch(const patches::PatchEntry &preset_info);
+  void safe_load_patch(const patches::PatchEntry &preset_info);
+  void
+  load_dropped_patch_with_history(const ym2612::Patch &patch,
+                                  const std::filesystem::path &source_path);
 
   void sync_patch_directories();
   void sync_imgui_ini_file();

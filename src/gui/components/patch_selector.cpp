@@ -97,7 +97,7 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       auto format_string_selectable =
           ImGui::Selectable(item.format.c_str(), false);
       if (name_string_selectable || format_string_selectable) {
-        app_state.load_patch(item);
+        app_state.safe_load_patch(item);
       }
       ImGui::PopStyleColor();
       begin_popup_context(app_state, item.relative_path);
@@ -184,7 +184,7 @@ void render_patch_selector(const char *title, AppState &app_state) {
           std::string label = "[" + entry->format + "] " + entry->name + "##" +
                               entry->relative_path;
           if (ImGui::Selectable(label.c_str(), is_current)) {
-            app_state.load_patch(*entry);
+            app_state.safe_load_patch(*entry);
           }
 
           if (is_current) {
