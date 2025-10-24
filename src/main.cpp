@@ -42,11 +42,20 @@ int main(int argc, char *argv[]) {
   MidiInputManager midi;
   midi.init();
 
-  std::cout << "Application initialized. Use the button in the window to play "
-               "C4 note.\n";
-
   // Main application loop
-  while (!app_state.gui().should_close()) {
+  while (true) {
+    // Check if window close was requested
+    if (app_state.gui().get_should_close()) {
+      // Check if there are unsaved changes
+      if (app_state.patch_session().is_modified()) {
+        app_state.ui_state().confirmation_state =
+            UIState::ConfirmationState::exit();
+        app_state.gui().set_should_close(false);
+      } else {
+        break;
+      }
+    }
+
     // Poll events
     app_state.gui().poll_events();
 

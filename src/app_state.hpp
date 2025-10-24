@@ -65,7 +65,40 @@ struct UIState {
     bool show_unsaved_changes_dialog = false;
     patches::PatchEntry pending_patch_entry;
     std::string dialog_message;
-    bool is_drop_confirmation = false;
+    enum class Operation {
+      Load,
+      Drop,
+      Exit,
+    } operation;
+
+    static ConfirmationState load(patches::PatchEntry patch_entry) {
+      ConfirmationState state;
+      state.show_unsaved_changes_dialog = true;
+      state.pending_patch_entry = patch_entry;
+      state.dialog_message =
+          "You have unsaved changes. Loading a new patch will discard "
+          "them.\n\nContinue?";
+      state.operation = UIState::ConfirmationState::Operation::Load;
+      return state;
+    }
+    static ConfirmationState drop() {
+      ConfirmationState state;
+      state.show_unsaved_changes_dialog = true;
+      state.dialog_message =
+          "You have unsaved changes. Dropping a new patch will discard "
+          "them.\n\nContinue?";
+      state.operation = UIState::ConfirmationState::Operation::Drop;
+      return state;
+    }
+    static ConfirmationState exit() {
+      ConfirmationState state;
+      state.show_unsaved_changes_dialog = true;
+      state.dialog_message =
+          "You have unsaved changes. Do you want to discard them and exit?";
+      state.operation = UIState::ConfirmationState::Operation::Exit;
+      return state;
+    }
+
   } confirmation_state;
 };
 

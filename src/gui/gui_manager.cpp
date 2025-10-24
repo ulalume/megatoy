@@ -146,8 +146,14 @@ void GuiManager::shutdown() {
   initialized_ = false;
 }
 
-bool GuiManager::should_close() const {
+bool GuiManager::get_should_close() const {
   return window_ ? glfwWindowShouldClose(window_) : true;
+}
+
+void GuiManager::set_should_close(bool value) {
+  if (window_) {
+    glfwSetWindowShouldClose(window_, value ? GLFW_TRUE : GLFW_FALSE);
+  }
 }
 
 void GuiManager::begin_frame() {

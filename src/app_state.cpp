@@ -100,12 +100,8 @@ bool AppState::load_patch(const patches::PatchEntry &patch_info) {
 void AppState::safe_load_patch(const patches::PatchEntry &preset_info) {
   if (patch_session_.is_modified()) {
     // Show confirmation dialog
-    ui_state_.confirmation_state.show_unsaved_changes_dialog = true;
-    ui_state_.confirmation_state.pending_patch_entry = preset_info;
-    ui_state_.confirmation_state.dialog_message =
-        "You have unsaved changes. Loading a new patch will discard "
-        "them.\n\nContinue?";
-    ui_state_.confirmation_state.is_drop_confirmation = false;
+    ui_state_.confirmation_state =
+        UIState::ConfirmationState::load(preset_info);
   } else {
     // Load directly if no modifications
     load_patch(preset_info);
@@ -138,11 +134,7 @@ void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
   case formats::PatchLoadStatus::Success: {
     if (patch_session_.is_modified()) {
       // Show confirmation dialog for file drop
-      ui_state_.confirmation_state.show_unsaved_changes_dialog = true;
-      ui_state_.confirmation_state.dialog_message =
-          "You have unsaved changes. Loading the dropped patch will discard "
-          "them.\n\nContinue?";
-      ui_state_.confirmation_state.is_drop_confirmation = true;
+      ui_state_.confirmation_state = UIState::ConfirmationState::drop();
       // Store the dropped patch for later use
       drop.pending_dropped_patch = result.patches[0];
       drop.pending_dropped_path = path;
