@@ -1,14 +1,20 @@
 #include "midi_keyboard.hpp"
 #include "core/types.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "keyboard_typing.hpp"
 #include "util.hpp"
 #include <algorithm>
 #include <cstring>
 #include <imgui.h>
-#include <sstream>
 #include <vector>
 
 namespace ui {
+struct NoteHash {
+  std::size_t operator()(const ym2612::Note &note) const {
+    return std::hash<int>()(note.octave) * 12 +
+           std::hash<int>()(static_cast<int>(note.key));
+  }
+};
 
 void render_midi_keyboard(const char *title, AppState &app_state) {
   const ImU32 black_key_col =
@@ -26,9 +32,23 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   const ImU32 key_border_col =
       styles::color_u32(styles::MegatoyCol::PianoKeyBorder);
 
+  auto &input = app_state.input_state();
+  auto &keyboard_settings = input.midi_keyboard_settings;
+  const auto key_mappings =
+      create_key_mappings(keyboard_settings.scale, keyboard_settings.key,
+                          input.keyboard_typing_octave);
+  if (!ImGui::GetIO().WantTextInput) {
+    check_keyboard_typing(app_state, key_mappings);
+  }
+
   auto &ui_state = app_state.ui_state();
   if (!ui_state.prefs.show_midi_keyboard) {
     return;
+  }
+
+  std::map<ym2612::Note, ImGuiKey> key_mappings_2;
+  for (const auto &pair : key_mappings) {
+    key_mappings_2[pair.second] = pair.first;
   }
 
   ImGui::SetNextWindowSize(ImVec2(400, 180), ImGuiCond_FirstUseEver);
@@ -38,9 +58,6 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   }
 
   ImGui::Columns(2, "settings_columns", false);
-
-  auto &input = app_state.input_state();
-  auto &keyboard_settings = input.midi_keyboard_settings;
 
   // Scale selector
   int current_scale = static_cast<int>(keyboard_settings.scale);
@@ -64,6 +81,16 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   if (keyboard_settings.scale == Scale::CHROMATIC)
     ImGui::EndDisabled();
 
+  ImGui::NextColumn();
+
+  int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
+  std::string key_text = key_mappings.at(ImGuiKey_A).name() + "-" +
+                         key_mappings.at(ImGuiKey_Semicolon).name();
+  if (ImGui::SliderInt("Keyboard Typing", &current_key_octave, 0, 7,
+                       key_text.c_str())) {
+    input.keyboard_typing_octave = current_key_octave;
+  }
+
   ImGui::Columns(1);
   ImGui::Spacing();
 
@@ -77,7 +104,6 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   // Create the scrollable child window
   if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), true,
                         ImGuiWindowFlags_HorizontalScrollbar)) {
-
     std::vector<ym2612::Note> notes;
     for (int midi_note = ui::midi_note_start; midi_note <= ui::midi_note_end;
          ++midi_note) {
@@ -101,6 +127,8 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
     float x = cursor.x;
 
     for (auto note : notes) {
+      bool is_key_mapped = key_mappings_2.find(note) != key_mappings_2.end();
+
       bool is_white = ui::is_white_key(note.key);
       bool is_pressed = app_state.key_is_pressed(note);
 
@@ -130,11 +158,22 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
       draw_list->AddRectFilled(key_min, key_max, col);
       draw_list->AddRect(key_min, key_max, key_border_col, 0, 0, 1.0f);
 
+      if (is_key_mapped) {
+        ImVec2 key_max_mapped(x + key_width, y + 2);
+        draw_list->AddRectFilled(key_min, key_max_mapped,
+                                 white_key_pressed_col);
+        ImU32 text_color = is_white ? white_key_text_col : black_key_text_col;
+        std::string key_text = key_mappings_2[note] == ImGuiKey_Semicolon
+                                   ? ";"
+                                   : ImGui::GetKeyName(key_mappings_2[note]);
+        ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
+        ImVec2 text_pos(key_min.x + (key_width - text_size.x) * 0.5f,
+                        key_max_mapped.y);
+        draw_list->AddText(text_pos, text_color, key_text.c_str());
+      }
       if (note.key == keyboard_settings.key) {
         ImU32 text_color = is_white ? white_key_text_col : black_key_text_col;
-        std::stringstream key_name;
-        key_name << note;
-        std::string key_text = key_name.str();
+        std::string key_text = note.name();
         ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
         ImVec2 text_pos(key_min.x + (key_width - text_size.x) * 0.5f,
                         key_max.y - text_size.y - 5.0f);

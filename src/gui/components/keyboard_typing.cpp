@@ -17,7 +17,7 @@ static constexpr ImGuiKey none_chromatic_keyboard_keys[] = {
     ImGuiKey_G, ImGuiKey_H,         ImGuiKey_J,   ImGuiKey_K,
     ImGuiKey_L, ImGuiKey_Semicolon, ImGuiKey_None};
 
-static const std::map<ImGuiKey, ym2612::Note>
+const std::map<ImGuiKey, ym2612::Note>
 create_key_mappings(Scale scale, Key key, uint8_t selected_octave) {
   const ImGuiKey *keyboard_keys = scale == Scale::CHROMATIC
                                       ? chromatic_keyboard_keys
@@ -45,11 +45,9 @@ create_key_mappings(Scale scale, Key key, uint8_t selected_octave) {
 // Static variables to track key states
 static std::map<ImGuiKey, bool> key_pressed_last_frame;
 
-void check_keyboard_typing(AppState &app_state) {
+void check_keyboard_typing(
+    AppState &app_state, const std::map<ImGuiKey, ym2612::Note> key_mappings) {
   auto &input = app_state.input_state();
-  const std::map<ImGuiKey, ym2612::Note> key_mappings = create_key_mappings(
-      input.midi_keyboard_settings.scale, input.midi_keyboard_settings.key,
-      input.keyboard_typing_octave);
 
   // Handle octave changes with comma and period keys
   bool comma_pressed_now = ImGui::IsKeyDown(ImGuiKey_Comma);
@@ -124,12 +122,6 @@ void render_keyboard_typing(const char *title, AppState &app_state) {
     ImGui::Text("Keys: A S D F G H J K L ;");
   }
   ImGui::Text("Octave:      , (down)    . (up)");
-  ImGui::Spacing();
-
-  if (!ImGui::GetIO().WantTextInput) {
-    check_keyboard_typing(app_state);
-  }
-
   ImGui::Spacing();
   ImGui::Separator();
 
