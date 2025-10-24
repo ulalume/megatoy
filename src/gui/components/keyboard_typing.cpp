@@ -64,7 +64,7 @@ void check_keyboard_typing(
 
   // Period key: increase octave
   if (period_pressed_now && !period_was_pressed) {
-    if (input.keyboard_typing_octave < 6) { // 6 corresponds to C7 (last octave)
+    if (input.keyboard_typing_octave < 7) {
       input.keyboard_typing_octave++;
     }
   }
@@ -88,59 +88,6 @@ void check_keyboard_typing(
     }
     key_pressed_last_frame[imgui_key] = key_pressed_now;
   }
-}
-
-// Function to render the main audio control panel
-void render_keyboard_typing(const char *title, AppState &app_state) {
-  // Create main window
-  auto &ui_state = app_state.ui_state();
-  if (!ui_state.prefs.show_audio_controls) {
-    return;
-  }
-
-  ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
-
-  if (!ImGui::Begin(title, &ui_state.prefs.show_audio_controls)) {
-    ImGui::End();
-    return;
-  }
-
-  const char *key_octave_names[] = {"0", "1", "2", "3", "4", "5", "6", "7"};
-  auto &input = app_state.input_state();
-
-  int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
-  if (ImGui::Combo("Octave", &current_key_octave, key_octave_names,
-                   IM_ARRAYSIZE(key_octave_names))) {
-    input.keyboard_typing_octave = current_key_octave;
-  };
-
-  if (input.midi_keyboard_settings.scale == Scale::CHROMATIC) {
-    ImGui::Text("Black keys:  W E   T Y U   O P");
-    ImGui::Text("White keys: A S D F G H J K L ;");
-  } else {
-    ImGui::Text("Keys: A S D F G H J K L ;");
-  }
-  ImGui::Text("Octave:      , (down)    . (up)");
-  ImGui::Spacing();
-  ImGui::Separator();
-
-  ImGui::Text("Active channels:");
-  int active_count = 0;
-  const auto &channels = app_state.active_channels();
-  for (int i = 0; i < 6; i++) {
-    if (channels[i]) {
-      active_count++;
-      ImGui::SameLine();
-      ImGui::Text("CH%d", i + 1);
-    }
-  }
-  if (active_count == 0) {
-    ImGui::SameLine();
-    ImGui::Text("None");
-  }
-
-  ImGui::End();
 }
 
 } // namespace ui

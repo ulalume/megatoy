@@ -57,10 +57,9 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
     return;
   }
 
-  ImGui::Columns(2, "settings_columns", false);
-
   // Scale selector
   int current_scale = static_cast<int>(keyboard_settings.scale);
+  ImGui::SetNextItemWidth(100);
   if (ImGui::Combo("Scale", &current_scale, scale_names,
                    IM_ARRAYSIZE(scale_names))) {
     keyboard_settings.scale = static_cast<Scale>(current_scale);
@@ -69,32 +68,34 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
     }
   }
 
-  ImGui::NextColumn();
+  ImGui::SameLine(0, 16);
 
   if (keyboard_settings.scale == Scale::CHROMATIC)
     ImGui::BeginDisabled();
   // Key selector
   int current_key = static_cast<int>(keyboard_settings.key);
+  ImGui::SetNextItemWidth(60);
   if (ImGui::Combo("Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
     keyboard_settings.key = static_cast<Key>(current_key);
   }
   if (keyboard_settings.scale == Scale::CHROMATIC)
     ImGui::EndDisabled();
 
-  ImGui::NextColumn();
+  ImGui::SameLine(0, 32);
 
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
   std::string key_text = key_mappings.at(ImGuiKey_A).name() + "-" +
                          key_mappings.at(ImGuiKey_Semicolon).name();
+  ImGui::SetNextItemWidth(200);
   if (ImGui::SliderInt("Keyboard Typing", &current_key_octave, 0, 7,
                        key_text.c_str())) {
     input.keyboard_typing_octave = current_key_octave;
   }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("'<' key: down\n'>' key: up");
+  }
 
-  ImGui::Columns(1);
-  ImGui::Spacing();
-
-  // === Scrollable keyboard area ===
+  // Scrollable keyboard area
   auto keys =
       keys_from_scale_and_key(keyboard_settings.scale, keyboard_settings.key);
 

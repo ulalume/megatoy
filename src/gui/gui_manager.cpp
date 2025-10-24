@@ -184,24 +184,19 @@ void GuiManager::begin_frame() {
 
     ImGuiID dock_id_left_down;
     dock_id_left_down = ImGui::DockBuilderSplitNode(
-        dock_id_left, ImGuiDir_Down, 0.36f, nullptr, &dock_id_left);
-
-    ImGuiID dock_id_left_down_down;
-    dock_id_left_down_down = ImGui::DockBuilderSplitNode(
-        dock_id_left_down, ImGuiDir_Down, 0.45f, nullptr, &dock_id_left_down);
+        dock_id_left, ImGuiDir_Down, 0.25f, nullptr, &dock_id_left);
 
     ImGuiID dock_id_right_down;
     dock_id_right_down = ImGui::DockBuilderSplitNode(
-        dock_main_id, ImGuiDir_Down, 0.2f, nullptr, &dock_main_id);
+        dock_main_id, ImGuiDir_Down, 0.20f, nullptr, &dock_main_id);
 
     ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
-    ImGui::DockBuilderDockWindow(ui::KEYBOARD_TYPING_TITLE, dock_id_left_down);
     auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
                               std::string(ui::PATCH_EDITOR_TITLE);
     ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
     ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, dock_id_right_down);
     ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, dock_id_right_down);
-    ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, dock_id_left_down_down);
+    ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, dock_id_left_down);
 
     // Finish the dockspace
     ImGui::DockBuilderFinish(dockspace_id);

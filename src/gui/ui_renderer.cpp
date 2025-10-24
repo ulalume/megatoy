@@ -1,6 +1,5 @@
 #include "ui_renderer.hpp"
 #include "gui/components/confirmation_dialog.hpp"
-#include "gui/components/keyboard_typing.hpp"
 #include "gui/components/main_menu.hpp"
 #include "gui/components/midi_keyboard.hpp"
 #include "gui/components/mml_console.hpp"
@@ -25,7 +24,6 @@ void render_all(AppState &app_state) {
   ui::render_patch_selector(PATCH_BROWSER_TITLE, app_state);
 
   ui::render_midi_keyboard(SOFT_KEYBOARD_TITLE, app_state);
-  ui::render_keyboard_typing(KEYBOARD_TYPING_TITLE, app_state);
 
   ui::render_preferences_window(PREFERENCES_TITLE, app_state);
   ui::render_mml_console(MML_CONSOLE_TITLE, app_state);
