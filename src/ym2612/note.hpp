@@ -58,6 +58,9 @@ struct Note {
     uint8_t note = midi_note % 12;
     return Note{block, all_keys[note]};
   }
+  uint8_t midi_note() const {
+    return (octave + 1) * 12 + static_cast<uint8_t>(key);
+  }
 };
 
 inline std::ostream &operator<<(std::ostream &os, const Note &note) {

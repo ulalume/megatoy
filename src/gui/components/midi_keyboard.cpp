@@ -6,6 +6,7 @@
 #include <cstring>
 #include <imgui.h>
 #include <sstream>
+#include <vector>
 
 namespace ui {
 
@@ -46,15 +47,22 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   if (ImGui::Combo("Scale", &current_scale, scale_names,
                    IM_ARRAYSIZE(scale_names))) {
     keyboard_settings.scale = static_cast<Scale>(current_scale);
+    if (keyboard_settings.scale == Scale::CHROMATIC) {
+      keyboard_settings.key = Key::C;
+    }
   }
 
   ImGui::NextColumn();
 
+  if (keyboard_settings.scale == Scale::CHROMATIC)
+    ImGui::BeginDisabled();
   // Key selector
   int current_key = static_cast<int>(keyboard_settings.key);
   if (ImGui::Combo("Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
     keyboard_settings.key = static_cast<Key>(current_key);
   }
+  if (keyboard_settings.scale == Scale::CHROMATIC)
+    ImGui::EndDisabled();
 
   ImGui::Columns(1);
   ImGui::Spacing();
@@ -63,10 +71,6 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   auto keys =
       keys_from_scale_and_key(keyboard_settings.scale, keyboard_settings.key);
 
-  // Compute total keyboard width
-  const float key_width = 18.0f;
-  float total_keyboard_width = keys.size() * key_width;
-
   // Query available region
   ImVec2 available_region = ImGui::GetContentRegionAvail();
 
@@ -74,32 +78,37 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), true,
                         ImGuiWindowFlags_HorizontalScrollbar)) {
 
-    const float key_height = ImGui::GetContentRegionAvail().y;
+    std::vector<ym2612::Note> notes;
+    for (int midi_note = ui::midi_note_start; midi_note <= ui::midi_note_end;
+         ++midi_note) {
+      ym2612::Note note = ym2612::Note::from_midi_note(midi_note);
+      bool has_key =
+          std::find(keys.begin(), keys.end(), note.key) != keys.end();
+      if (has_key)
+        notes.push_back(note);
+    }
+    const float key_width =
+        std::max(14.0f, (available_region.x - 16) / notes.size());
+
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     ImVec2 cursor = ImGui::GetCursorScreenPos();
 
+    auto i = static_cast<int>(midi_note_start);
     // Reserve space for the child content
-    ImGui::Dummy(ImVec2(total_keyboard_width, key_height));
 
+    float key_height = ImGui::GetContentRegionAvail().y;
+    float y = ImGui::GetCursorScreenPos().y;
     float x = cursor.x;
 
-    for (int midi_note = ui::midi_note_start; midi_note < ui::midi_note_end;
-         ++midi_note) {
-      ym2612::Note note = ym2612::Note::from_midi_note(midi_note);
-
-      bool has_key =
-          std::find(keys.begin(), keys.end(), note.key) != keys.end();
-      if (!has_key)
-        continue;
-
+    for (auto note : notes) {
       bool is_white = ui::is_white_key(note.key);
       bool is_pressed = app_state.key_is_pressed(note);
 
-      ImVec2 key_min(x, cursor.y);
-      ImVec2 key_max(x + key_width, cursor.y + key_height);
+      ImVec2 key_min(x, y);
+      ImVec2 key_max(x + key_width, y + key_height);
 
       ImGui::SetCursorScreenPos(key_min);
-      ImGui::PushID(midi_note);
+      ImGui::PushID(note.midi_note());
 
       ImGui::InvisibleButton("white_key", ImVec2(key_width, key_height));
 

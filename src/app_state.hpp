@@ -20,7 +20,7 @@ struct MidiKeyboardSettings {
 };
 
 struct InputState {
-  uint8_t keyboard_typing_octave = 3;
+  uint8_t keyboard_typing_octave = 4;
   MidiKeyboardSettings midi_keyboard_settings;
 
   std::map<int, ym2612::Note> active_keyboard_notes;
