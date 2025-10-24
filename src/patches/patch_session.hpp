@@ -10,7 +10,6 @@
 #include <array>
 #include <filesystem>
 #include <string>
-#include <vector>
 
 // Forward declaration
 class AudioManager;
@@ -92,6 +91,10 @@ public:
   ym2612::Patch &current_patch();
   const ym2612::Patch &current_patch() const;
 
+  // Modification tracking
+  bool is_modified() const;
+  void mark_as_clean();
+
   // Path management
   const std::string &current_patch_path() const;
   void set_current_patch_path(const std::filesystem::path &path);
@@ -125,6 +128,7 @@ public:
 
   // Snapshot functionality for undo/redo
   struct PatchSnapshot {
+    ym2612::Patch original_patch;
     ym2612::Patch patch;
     std::string path;
     bool operator==(const PatchSnapshot &other) const {
@@ -142,6 +146,7 @@ private:
   ChannelAllocator channel_allocator_;
   ym2612::Patch current_patch_;
   std::string current_patch_path_;
+  ym2612::Patch original_patch_; // For tracking modifications
 };
 
 } // namespace patches

@@ -91,9 +91,34 @@ bool AppState::load_patch(const patches::PatchEntry &patch_info) {
   patch_session_.apply_patch_to_audio();
 
   const auto after = capture_patch_snapshot();
-  record_patch_change("Load Patch: " + patch_info.name, before, after);
+  record_patch_change("Load: " + patch_info.name, before, after);
+  patch_session_.mark_as_clean(); // Mark as clean after successful load
   std::cout << "Loaded preset patch: " << patch_info.name << std::endl;
   return true;
+}
+
+void AppState::safe_load_patch(const patches::PatchEntry &preset_info) {
+  if (patch_session_.is_modified()) {
+    // Show confirmation dialog
+    ui_state_.confirmation_state.show_unsaved_changes_dialog = true;
+    ui_state_.confirmation_state.pending_patch_entry = preset_info;
+    ui_state_.confirmation_state.dialog_message =
+        "You have unsaved changes. Loading a new patch will discard "
+        "them.\n\nContinue?";
+    ui_state_.confirmation_state.is_drop_confirmation = false;
+  } else {
+    // Load directly if no modifications
+    load_patch(preset_info);
+  }
+}
+
+void AppState::load_dropped_patch_with_history(
+    const ym2612::Patch &patch, const std::filesystem::path &source_path) {
+  const auto before = capture_patch_snapshot();
+  patch_session_.set_current_patch(patch, source_path);
+  const auto after = capture_patch_snapshot();
+  record_patch_change("Load: " + source_path.filename().string(), before,
+                      after);
 }
 
 void AppState::sync_patch_directories() {
@@ -111,10 +136,19 @@ void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
 
   switch (result.status) {
   case formats::PatchLoadStatus::Success: {
-    const auto before = capture_patch_snapshot();
-    patch_session_.set_current_patch(result.patches[0], path);
-    const auto after = capture_patch_snapshot();
-    record_patch_change("Load: " + path.filename().string(), before, after);
+    if (patch_session_.is_modified()) {
+      // Show confirmation dialog for file drop
+      ui_state_.confirmation_state.show_unsaved_changes_dialog = true;
+      ui_state_.confirmation_state.dialog_message =
+          "You have unsaved changes. Loading the dropped patch will discard "
+          "them.\n\nContinue?";
+      ui_state_.confirmation_state.is_drop_confirmation = true;
+      // Store the dropped patch for later use
+      drop.pending_dropped_patch = result.patches[0];
+      drop.pending_dropped_path = path;
+    } else {
+      load_dropped_patch_with_history(result.patches[0], path);
+    }
     drop.instruments.clear();
     drop.pending_instruments_path.clear();
     drop.selected_instrument = 0;
@@ -158,15 +192,8 @@ void AppState::apply_mml_instrument_selection(size_t index) {
     patch_to_apply.name = drop.pending_instruments_path.stem().string();
   }
 
-  const auto before = capture_patch_snapshot();
-  patch_session_.set_current_patch(patch_to_apply,
-                                   drop.pending_instruments_path);
-  const auto after = capture_patch_snapshot();
-  std::string label = "Select Instrument";
-  if (!selected.name.empty()) {
-    label += ": " + selected.name;
-  }
-  record_patch_change(label, before, after);
+  load_dropped_patch_with_history(patch_to_apply,
+                                  drop.pending_instruments_path);
 
   drop.instruments.clear();
   drop.pending_instruments_path.clear();
@@ -199,6 +226,8 @@ void AppState::record_patch_change(const std::string &label,
             label, std::string{}, before, after,
             [](AppState &target, const PatchSnapshot &snapshot) {
               target.patch_session_.restore_snapshot(snapshot);
+
+              std::cout << "Patch restored" << std::endl;
             });
       });
   history_.commit_transaction(*this);

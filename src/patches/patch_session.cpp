@@ -9,7 +9,6 @@
 #include "ym2612/channel.hpp"
 #include <algorithm>
 #include <filesystem>
-#include <iostream>
 #include <utility>
 
 namespace patches {
@@ -43,52 +42,52 @@ PatchRepository &PatchSession::repository() { return repository_; }
 
 const PatchRepository &PatchSession::repository() const { return repository_; }
 
+bool PatchSession::is_modified() const {
+  return original_patch_ != current_patch_;
+}
+void PatchSession::mark_as_clean() { original_patch_ = current_patch_; }
+
 void PatchSession::initialize_patch_defaults() {
   const auto &paths = directories_.paths();
   const auto init_patch_path = paths.builtin_presets_root / "init.dmp";
 
-  bool loaded_builtin = false;
   if (!paths.builtin_presets_root.empty() &&
       std::filesystem::exists(init_patch_path)) {
     auto load_result = formats::load_patch_from_file(init_patch_path);
     if (load_result.status == formats::PatchLoadStatus::Success) {
       set_current_patch_path(init_patch_path);
       current_patch_ = std::move(load_result.patches[0]);
-      loaded_builtin = true;
-    } else {
-      std::cerr << "Failed to load builtin init patch: " << init_patch_path
-                << " - " << load_result.message << "\n";
+      mark_as_clean();
+      return;
     }
   }
+  current_patch_.name = "init";
+  current_patch_.global = {
+      .dac_enable = false,
+      .lfo_enable = false,
+      .lfo_frequency = 0,
+  };
 
-  if (!loaded_builtin) {
-    current_patch_.name = "init";
-    current_patch_.global = {
-        .dac_enable = false,
-        .lfo_enable = false,
-        .lfo_frequency = 0,
-    };
+  current_patch_.channel = {
+      .left_speaker = true,
+      .right_speaker = true,
+      .amplitude_modulation_sensitivity = 0,
+      .frequency_modulation_sensitivity = 0,
+  };
 
-    current_patch_.channel = {
-        .left_speaker = true,
-        .right_speaker = true,
-        .amplitude_modulation_sensitivity = 0,
-        .frequency_modulation_sensitivity = 0,
-    };
-
-    current_patch_.instrument = {
-        .feedback = 7,
-        .algorithm = 3,
-        .operators =
-            {
-                {31, 0, 0, 5, 0, 48, 0, 1, 3, 0, false, false},
-                {31, 0, 0, 5, 0, 24, 0, 1, 1, 0, false, false},
-                {31, 0, 0, 5, 0, 36, 0, 1, 2, 0, false, false},
-                {31, 0, 0, 5, 0, 12, 0, 1, 4, 0, false, false},
-            },
-    };
-    set_current_patch_path({});
-  }
+  current_patch_.instrument = {
+      .feedback = 7,
+      .algorithm = 3,
+      .operators =
+          {
+              {31, 0, 0, 5, 0, 48, 0, 1, 3, 0, false, false},
+              {31, 0, 0, 5, 0, 24, 0, 1, 1, 0, false, false},
+              {31, 0, 0, 5, 0, 36, 0, 1, 2, 0, false, false},
+              {31, 0, 0, 5, 0, 12, 0, 1, 4, 0, false, false},
+          },
+  };
+  set_current_patch_path({});
+  mark_as_clean();
 }
 
 void PatchSession::refresh_directories() {
@@ -100,6 +99,7 @@ void PatchSession::set_current_patch(const ym2612::Patch &patch,
                                      const std::filesystem::path &source_path) {
   current_patch_ = patch;
   set_current_patch_path(source_path);
+  mark_as_clean(); // New patch loaded, not modified yet
   apply_patch_to_audio();
 }
 
@@ -120,6 +120,7 @@ SaveResult PatchSession::save_current_patch(bool force_overwrite) {
     auto result = formats::gin::save_patch(patches_dir, current_patch_,
                                            current_patch_.name);
     if (result.has_value()) {
+      mark_as_clean(); // Patch saved, no longer modified
       return SaveResult::success(result.value());
     } else {
       return SaveResult::error("Failed to save patch");
@@ -225,6 +226,7 @@ const std::array<bool, 6> &PatchSession::active_channels() const {
 
 PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {
   PatchSnapshot snapshot;
+  snapshot.original_patch = original_patch_;
   snapshot.patch = current_patch_;
   snapshot.path = current_patch_path_;
   return snapshot;
@@ -232,6 +234,7 @@ PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {
 
 void PatchSession::restore_snapshot(const PatchSnapshot &snapshot) {
   current_patch_ = snapshot.patch;
+  original_patch_ = snapshot.original_patch;
   if (snapshot.path.empty()) {
     set_current_patch_path({});
   } else {

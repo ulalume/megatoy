@@ -1,4 +1,5 @@
 #include "ui_renderer.hpp"
+#include "gui/components/confirmation_dialog.hpp"
 #include "gui/components/keyboard_typing.hpp"
 #include "gui/components/main_menu.hpp"
 #include "gui/components/midi_keyboard.hpp"
@@ -18,6 +19,8 @@ void render_all(AppState &app_state) {
   ui::render_main_menu(app_state);
 
   ui::render_patch_drop_feedback(app_state);
+  ui::render_confirmation_dialog(app_state);
+
   ui::render_patch_editor(PATCH_EDITOR_TITLE, app_state);
   ui::render_patch_selector(PATCH_BROWSER_TITLE, app_state);
 
