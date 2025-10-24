@@ -72,15 +72,42 @@ inline std::ostream &operator<<(std::ostream &os, const Key &key) {
 }
 
 enum class Scale {
+  CHROMATIC,
   MAJOR,
   MINOR,
-  CHROMATIC,
+
+  HARMONIC_MINOR,
+
+  DORIAN,
+  PHRYGIAN,
+  LYDIAN,
+  MIXOLYDIAN,
+  LOCRIAN,
+
+  MAJAR_BLUES,
+  MINOR_BLUES,
+
+  MAJAR_PENTATONIC,
+  MINOR_PENTATONIC,
+  WHOLE_TONE,
+  RYUKYU,
 };
 
-inline const char *scale_names[] = {"Major", "Minor", "Chromatic"};
+inline const char *scale_names[] = {
+    "Chromatic",        "Major",       "Minor",       "Harmonic Minor",
+    "Dorian",           "Phrygian",    "Lydian",      "Mixolydian",
+    "Locrian",          "Major Blues", "Minor Blues", "Major Pentatonic",
+    "Minor Pentatonic", "Whole Tone",  "Ryukyu",
+};
 
 inline std::vector<Key> keys_from_scale_and_key(Scale scale, Key key) {
   switch (scale) {
+  case Scale::CHROMATIC:
+  default:
+    return {Key::C,       Key::C_SHARP, Key::D,       Key::D_SHARP,
+            Key::E,       Key::F,       Key::F_SHARP, Key::G,
+            Key::G_SHARP, Key::A,       Key::A_SHARP, Key::B};
+
   case Scale::MAJOR:
     return {
         shift_key(Key::C, static_cast<uint8_t>(key)),
@@ -102,10 +129,116 @@ inline std::vector<Key> keys_from_scale_and_key(Scale scale, Key key) {
         shift_key(Key::G_SHARP, static_cast<uint8_t>(key)),
         shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
     };
-  case Scale::CHROMATIC:
-  default:
-    return {Key::C,       Key::C_SHARP, Key::D,       Key::D_SHARP,
-            Key::E,       Key::F,       Key::F_SHARP, Key::G,
-            Key::G_SHARP, Key::A,       Key::A_SHARP, Key::B};
-  }
-};
+  case Scale::HARMONIC_MINOR:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D, static_cast<uint8_t>(key)),
+        shift_key(Key::D_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::F, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::G_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::B, static_cast<uint8_t>(key)),
+    };
+  case Scale::DORIAN:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D, static_cast<uint8_t>(key)),
+        shift_key(Key::D_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::F, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::A, static_cast<uint8_t>(key)),
+        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+    };
+  case Scale::PHRYGIAN:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::C_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::D_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::F, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::G_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+    };
+  case Scale::LYDIAN:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D, static_cast<uint8_t>(key)),
+        shift_key(Key::E, static_cast<uint8_t>(key)),
+        shift_key(Key::F_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::A, static_cast<uint8_t>(key)),
+        shift_key(Key::B, static_cast<uint8_t>(key)),
+    };
+  case Scale::MIXOLYDIAN:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D, static_cast<uint8_t>(key)),
+        shift_key(Key::E, static_cast<uint8_t>(key)),
+        shift_key(Key::F, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::A, static_cast<uint8_t>(key)),
+        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+    };
+  case Scale::LOCRIAN:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::C_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::D_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::F, static_cast<uint8_t>(key)),
+        shift_key(Key::F_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::G_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+    };
+  case Scale::MAJAR_BLUES:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D, static_cast<uint8_t>(key)),
+        shift_key(Key::D_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::E, static_cast<uint8_t>(key)),
+        shift_key(Key::G_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+    };
+  case Scale::MINOR_BLUES:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::F, static_cast<uint8_t>(key)),
+        shift_key(Key::F_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+    };
+  case Scale::MAJAR_PENTATONIC:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D, static_cast<uint8_t>(key)),
+        shift_key(Key::E, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::A, static_cast<uint8_t>(key)),
+    };
+  case Scale::MINOR_PENTATONIC:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::F, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+    };
+  case Scale::WHOLE_TONE:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::D, static_cast<uint8_t>(key)),
+        shift_key(Key::E, static_cast<uint8_t>(key)),
+        shift_key(Key::F_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::G_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+    };
+  case Scale::RYUKYU:
+    return {
+        shift_key(Key::C, static_cast<uint8_t>(key)),
+        shift_key(Key::E, static_cast<uint8_t>(key)),
+        shift_key(Key::F, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::B, static_cast<uint8_t>(key)),
+    };
+  };
+}
