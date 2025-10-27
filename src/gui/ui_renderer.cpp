@@ -14,7 +14,7 @@
 
 namespace ui {
 
-void render_all(AppState &app_state) {
+void render_all(AppState &app_state, ym2612::FFTAnalyzer &analyzer) {
   ui::render_main_menu(app_state);
 
   ui::render_patch_drop_feedback(app_state);
@@ -27,7 +27,7 @@ void render_all(AppState &app_state) {
 
   ui::render_preferences_window(PREFERENCES_TITLE, app_state);
   ui::render_mml_console(MML_CONSOLE_TITLE, app_state);
-  ui::render_waveform(WAVEFORM_TITLE, app_state);
+  ui::render_waveform(WAVEFORM_TITLE, app_state, analyzer);
 }
 
 } // namespace ui

@@ -49,25 +49,23 @@ void WaveSampler::push_samples(const int32_t *left, const int32_t *right,
 }
 
 void WaveSampler::latest_samples(std::size_t sample_count,
-                                 std::vector<float> &left,
-                                 std::vector<float> &right) const {
+                                 std::vector<float> &samples,
+                                 bool is_left) const {
   const uint32_t valid = valid_count_.load(std::memory_order_acquire);
   if (valid == 0) {
-    left.clear();
-    right.clear();
+    samples.clear();
     return;
   }
 
   const std::size_t count = std::min<std::size_t>(sample_count, valid);
-  left.resize(count);
-  right.resize(count);
+  samples.resize(count);
 
   const uint32_t write_index = write_index_.load(std::memory_order_acquire);
+  auto &buffer = is_left ? left_buffer_ : right_buffer_;
   for (std::size_t i = 0; i < count; ++i) {
     const std::size_t offset =
         (write_index + kBufferSize - count + i) % kBufferSize;
-    left[i] = left_buffer_[offset];
-    right[i] = right_buffer_[offset];
+    samples[i] = buffer[offset];
   }
 }
 bool WaveSampler::is_volume_warning() const {

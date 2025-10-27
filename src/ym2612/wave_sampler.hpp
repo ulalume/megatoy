@@ -17,8 +17,8 @@ public:
   void push_samples(const int32_t *left, const int32_t *right,
                     std::size_t sample_count);
 
-  void latest_samples(std::size_t sample_count, std::vector<float> &left,
-                      std::vector<float> &right) const;
+  void latest_samples(std::size_t sample_count, std::vector<float> &samples,
+                      bool is_left) const;
 
   static constexpr std::size_t buffer_size() { return kBufferSize; }
 

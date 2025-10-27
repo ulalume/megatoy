@@ -89,3 +89,16 @@ FetchContent_Declare(
   GIT_TAG        v0.0.2
 )
 FetchContent_MakeAvailable(chord_detector)
+
+# kissfft
+FetchContent_Declare(
+  kissfft
+  GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
+  GIT_TAG        master
+)
+
+set(KISSFFT_PKGCONFIG OFF CACHE BOOL "" FORCE)
+set(KISSFFT_TEST     OFF CACHE BOOL "" FORCE)
+set(KISSFFT_TOOLS    OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(kissfft)

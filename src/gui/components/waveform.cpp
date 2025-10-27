@@ -4,13 +4,15 @@
 // #include "../channel_allocator.hpp"
 // #include <algorithm>
 #include "gui/styles/megatoy_style.hpp"
+#include "ym2612/fft_analyzer.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <vector>
 
 namespace ui {
 
-void render_waveform(const char *title, AppState &app_state) {
+void render_waveform(const char *title, AppState &app_state,
+                     ym2612::FFTAnalyzer &analyzer) {
   auto &ui_state = app_state.ui_state();
   if (!ui_state.prefs.show_waveform) {
     return;
@@ -22,20 +24,18 @@ void render_waveform(const char *title, AppState &app_state) {
     return;
   }
 
-  static int sample_count = 512;
-  // sample_count = std::clamp(
-  //     sample_count, 32,
-  //     static_cast<int>(ym2612::WaveSampler::buffer_size()));
+  static const int sample_count = 1024;
 
-  // ImGui::SliderInt("Samples", &sample_count, 64,
-  //                  static_cast<int>(ym2612::WaveSampler::buffer_size()));
-
-  std::vector<float> left;
-  std::vector<float> right;
+  std::vector<float> samples;
   auto &sampler = app_state.wave_sampler();
-  sampler.latest_samples(static_cast<std::size_t>(sample_count), left, right);
-  bool is_warning = sampler.is_volume_warning();
 
+  bool has_samples = app_state.patch().channel.left_speaker ||
+                     app_state.patch().channel.right_speaker;
+  if (has_samples)
+    sampler.latest_samples(static_cast<std::size_t>(sample_count), samples,
+                           app_state.patch().channel.left_speaker);
+
+  bool is_warning = sampler.is_volume_warning();
   if (is_warning) {
     ImGui::PushStyleColor(ImGuiCol_PlotLines,
                           styles::color_u32(styles::MegatoyCol::StatusWarning));
@@ -46,41 +46,60 @@ void render_waveform(const char *title, AppState &app_state) {
       (available_region.x - ImGui::GetStyle().ItemSpacing.x) / 2,
       available_region.y);
   ImGui::Columns(2, "waves", false);
-  if (!left.empty()) {
-    ImGui::PlotLines("Left", left.data(), static_cast<int>(left.size()), 0,
-                     nullptr, -1.0f, 1.0f, plot_size);
+  if (has_samples) {
+    ImGui::PlotLines("Wave", samples.data(),
+                     static_cast<int>(samples.size() / 2), 0, nullptr, -1.0f,
+                     1.0f, plot_size);
   } else {
     ImGui::Dummy(plot_size);
   }
+
   ImGui::NextColumn();
-  if (!right.empty()) {
-    ImGui::PlotLines("Right", right.data(), static_cast<int>(right.size()), 0,
-                     nullptr, -1.0f, 1.0f, plot_size);
+
+  if (has_samples) {
+    analyzer.compute(samples);
+    const auto &mags = analyzer.magnitudes();
+
+    // Create logarithmic frequency bins with interpolation
+    const size_t num_display_bins = 256;
+    std::vector<float> log_bins(num_display_bins, -60.0f);
+
+    // Frequency-aware logarithmic mapping
+    const float sample_rate = 44100.0f; // Assuming standard sample rate
+    const float nyquist_freq = sample_rate / 2.0f;
+    const float min_freq = 20.0f;        // 20 Hz
+    const float max_freq = nyquist_freq; // Up to Nyquist
+
+    for (size_t i = 0; i < num_display_bins; ++i) {
+      // Logarithmic frequency interpolation
+      float t = (float)i / (num_display_bins - 1);
+      float log_freq = min_freq * std::pow(max_freq / min_freq, t);
+
+      // Convert frequency to FFT bin with fractional indexing
+      float fft_bin_f = (log_freq / nyquist_freq) * (mags.size() - 1);
+
+      // Linear interpolation between adjacent FFT bins
+      size_t bin_low = (size_t)std::floor(fft_bin_f);
+      size_t bin_high = std::min(bin_low + 1, mags.size() - 1);
+      float frac = fft_bin_f - bin_low;
+
+      if (bin_low < mags.size()) {
+        float mag_low = mags[bin_low];
+        float mag_high = (bin_high < mags.size()) ? mags[bin_high] : mag_low;
+        log_bins[i] = mag_low + frac * (mag_high - mag_low);
+      }
+    }
+    ImGui::PlotLines("Spectrum", log_bins.data(), log_bins.size(), 0, nullptr,
+                     -50.0f, 35.0f, plot_size);
   } else {
     ImGui::Dummy(plot_size);
   }
+
   ImGui::Columns(1);
 
   if (is_warning) {
     ImGui::PopStyleColor();
   }
-
-  // ImGui::Separator();
-
-  // const auto &channel_usage = app_state.channel_allocator().channel_usage();
-  // ImGui::TextUnformatted("Channel Status");
-
-  // const ImVec4 active_color(0.2f, 0.8f, 0.3f, 1.0f);
-  // const ImVec4 inactive_color(0.6f, 0.6f, 0.6f, 1.0f);
-
-  // ImGui::Columns(6, "channel_status", false);
-  // for (std::size_t i = 0; i < channel_usage.size(); ++i) {
-  //   const bool active = channel_usage[i];
-  //   ImGui::TextColored(active ? active_color : inactive_color, "CH%zu\n%s",
-  //                      i + 1, active ? "ON" : "OFF");
-  //   ImGui::NextColumn();
-  // }
-  // ImGui::Columns(1);
 
   ImGui::End();
 }
