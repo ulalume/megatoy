@@ -1,6 +1,7 @@
 #include "app_state.hpp"
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
+#include "ym2612/fft_analyzer.hpp"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <imgui.h>
@@ -31,6 +32,8 @@ int main(int argc, char *argv[]) {
   // Initialize application state
   AppState app_state;
   app_state.init();
+
+  ym2612::FFTAnalyzer analyzer = ym2612::FFTAnalyzer(1024);
 
   // Setup window callbacks
   if (GLFWwindow *window = app_state.gui().get_window()) {
@@ -66,7 +69,7 @@ int main(int argc, char *argv[]) {
     // Render UI
     app_state.gui().begin_frame();
     app_state.history().handle_shortcuts(app_state);
-    ui::render_all(app_state);
+    ui::render_all(app_state, analyzer);
 
     // Update preferences from UI state
     app_state.preference_manager().set_ui_preferences(

@@ -66,6 +66,7 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
   src/ym2612/wave_sampler.cpp
+  src/ym2612/fft_analyzer.cpp
 )
 add_library(megatoy_core ${MEGATOY_CORE_SOURCES})
 
@@ -95,6 +96,7 @@ target_link_libraries(megatoy_core PUBLIC
   nfd
   rtmidi
   chord_detector::chord_detector
+  kissfft
 )
 
 set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "presets")
