@@ -95,6 +95,11 @@ void render_save_export_buttons(AppState &app_state, bool name_valid,
   if (!name_valid) {
     ImGui::EndDisabled();
   }
+
+  ImGui::SameLine();
+  ImGui::Text(
+      "%s",
+      repository.to_relative_path(patch_session.current_patch_path()).c_str());
 }
 
 void render_patch_name_field(AppState &app_state, ym2612::Patch &patch,
