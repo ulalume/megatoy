@@ -60,7 +60,7 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
 
   // Scale selector
   int current_scale = static_cast<int>(keyboard_settings.scale);
-  ImGui::SetNextItemWidth(100);
+  ImGui::SetNextItemWidth(150);
   if (ImGui::Combo("Scale", &current_scale, scale_names,
                    IM_ARRAYSIZE(scale_names))) {
     keyboard_settings.scale = static_cast<Scale>(current_scale);
@@ -87,9 +87,8 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
   std::string key_text = key_mappings.at(ImGuiKey_A).name() + "-" +
                          key_mappings.at(ImGuiKey_Semicolon).name();
-  ImGui::SetNextItemWidth(200);
-  if (ImGui::SliderInt("Keyboard Typing", &current_key_octave, 0, 7,
-                       key_text.c_str())) {
+  ImGui::SetNextItemWidth(100);
+  if (ImGui::SliderInt("Typing", &current_key_octave, 0, 7, key_text.c_str())) {
     input.keyboard_typing_octave = current_key_octave;
   }
   if (ImGui::IsItemHovered()) {
