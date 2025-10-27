@@ -4,6 +4,7 @@
 #include "keyboard_typing.hpp"
 #include "util.hpp"
 #include <algorithm>
+#include <chord_detector.h>
 #include <cstring>
 #include <imgui.h>
 #include <vector>
@@ -94,6 +95,20 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   if (ImGui::IsItemHovered()) {
     ImGui::SetTooltip("'<' key: down\n'>' key: up");
   }
+
+  ImGui::SameLine(0, 16);
+
+  const auto &active_notes = app_state.active_notes();
+  const size_t num_active_notes = active_notes.size();
+  std::string chord_name = "";
+  if (num_active_notes >= 2) {
+    std::vector<int> midi_notes;
+    for (auto &note : active_notes) {
+      midi_notes.push_back(static_cast<int>(note.midi_note()));
+    }
+    chord_name = get_chord_name(midi_notes, false, true);
+  }
+  ImGui::Text("%s", chord_name.c_str());
 
   // Scrollable keyboard area
   auto keys =

@@ -81,3 +81,11 @@ FetchContent_Declare(
   GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(stb)
+
+# chord_detector
+FetchContent_Declare(
+  chord_detector
+  GIT_REPOSITORY https://github.com/ulalume/chord_detector
+  GIT_TAG        v0.0.2
+)
+FetchContent_MakeAvailable(chord_detector)

@@ -125,6 +125,7 @@ public:
   bool note_is_active(const ym2612::Note &note) const;
   void release_all_notes();
   const std::array<bool, 6> &active_channels() const;
+  const std::vector<ym2612::Note> active_notes() const;
 
   // Snapshot functionality for undo/redo
   struct PatchSnapshot {

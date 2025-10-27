@@ -161,6 +161,8 @@ public:
   bool key_is_pressed(const ym2612::Note &note) const;
 
   const std::array<bool, 6> &active_channels() const;
+  const std::vector<ym2612::Note> active_notes() const;
+
   const std::vector<std::string> &connected_midi_inputs() const {
     return connected_midi_inputs_;
   }

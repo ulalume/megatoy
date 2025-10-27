@@ -224,6 +224,16 @@ const std::array<bool, 6> &PatchSession::active_channels() const {
   return channel_allocator_.channel_usage();
 }
 
+const std::vector<ym2612::Note> PatchSession::active_notes() const {
+  const std::map<ym2612::Note, ym2612::ChannelIndex> &active_notes =
+      channel_allocator_.active_notes();
+  std::vector<ym2612::Note> notes;
+  for (const auto &note : active_notes) {
+    notes.push_back(note.first);
+  }
+  return notes;
+}
+
 PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {
   PatchSnapshot snapshot;
   snapshot.original_patch = original_patch_;

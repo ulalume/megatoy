@@ -94,6 +94,7 @@ target_link_libraries(megatoy_core PUBLIC
   nlohmann_json::nlohmann_json
   nfd
   rtmidi
+  chord_detector::chord_detector
 )
 
 set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "presets")

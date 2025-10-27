@@ -71,6 +71,9 @@ bool AppState::key_is_pressed(const ym2612::Note &note) const {
 const std::array<bool, 6> &AppState::active_channels() const {
   return patch_session_.active_channels();
 }
+const std::vector<ym2612::Note> AppState::active_notes() const {
+  return patch_session_.active_notes();
+}
 
 void AppState::set_connected_midi_inputs(std::vector<std::string> devices) {
   connected_midi_inputs_ = std::move(devices);
