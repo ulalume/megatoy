@@ -1,9 +1,8 @@
 #include "operator_editor.hpp"
-#include "app_state.hpp"
 #include "envelope_image.hpp"
 #include "formats/common.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
-#include "history_helpers.hpp"
+#include "patch_editor.hpp"
 #include "ym2612/types.hpp"
 #include <imgui.h>
 #include <string>
@@ -32,7 +31,7 @@ update_slider_state(UIState::EnvelopeState::SliderState &slider_state) {
   }
 }
 
-void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
+void render_envelope(PatchEditorContext &context, ym2612::OperatorSettings &op,
                      UIState::EnvelopeState &envelope_state,
                      std::string op_label, std::string key_prefix) {
 
@@ -61,7 +60,7 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
   bool total_changed =
       ImGui::VSliderInt("##Total Level", vslider_size, &total_level, 127, 0);
   update_slider_state(envelope_state.total_level);
-  track_patch_history(app_state, op_label + " Total Level",
+  track_patch_history(context, op_label + " Total Level",
                       key_prefix + ".total_level");
   if (total_changed) {
     op.total_level = static_cast<uint8_t>(total_level);
@@ -76,7 +75,7 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
   bool attack_changed =
       ImGui::VSliderInt("##Attack Rate", vslider_size, &attack_rate, 31, 0);
   update_slider_state(envelope_state.attack_rate);
-  track_patch_history(app_state, op_label + " Attack Rate",
+  track_patch_history(context, op_label + " Attack Rate",
                       key_prefix + ".attack_rate");
   if (attack_changed) {
     op.attack_rate = static_cast<uint8_t>(attack_rate);
@@ -91,7 +90,7 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
   bool decay_changed =
       ImGui::VSliderInt("##Decay Rate", vslider_size, &decay_rate, 31, 0);
   update_slider_state(envelope_state.decay_rate);
-  track_patch_history(app_state, op_label + " Decay Rate",
+  track_patch_history(context, op_label + " Decay Rate",
                       key_prefix + ".decay_rate");
   if (decay_changed) {
     op.decay_rate = static_cast<uint8_t>(decay_rate);
@@ -106,7 +105,7 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
   bool sustain_level_changed =
       ImGui::VSliderInt("##Sustain Level", vslider_size, &sustain_level, 15, 0);
   update_slider_state(envelope_state.sustain_level);
-  track_patch_history(app_state, op_label + " Sustain Level",
+  track_patch_history(context, op_label + " Sustain Level",
                       key_prefix + ".sustain_level");
   if (sustain_level_changed) {
     op.sustain_level = static_cast<uint8_t>(sustain_level);
@@ -121,7 +120,7 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
   bool sustain_rate_changed =
       ImGui::VSliderInt("##Sustain Rate", vslider_size, &sustain_rate, 31, 0);
   update_slider_state(envelope_state.sustain_rate);
-  track_patch_history(app_state, op_label + " Sustain Rate",
+  track_patch_history(context, op_label + " Sustain Rate",
                       key_prefix + ".sustain_rate");
   if (sustain_rate_changed) {
     op.sustain_rate = static_cast<uint8_t>(sustain_rate);
@@ -136,7 +135,7 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
   bool release_changed =
       ImGui::VSliderInt("##Release Rate", vslider_size, &release_rate, 15, 0);
   update_slider_state(envelope_state.release_rate);
-  track_patch_history(app_state, op_label + " Release Rate",
+  track_patch_history(context, op_label + " Release Rate",
                       key_prefix + ".release_rate");
   if (release_changed) {
     op.release_rate = static_cast<uint8_t>(release_rate);
@@ -150,8 +149,9 @@ void render_envelope(AppState &app_state, ym2612::OperatorSettings &op,
 }
 
 // Helper function to render operator settings
-bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
-                            int op_index) {
+bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
+                            ym2612::OperatorSettings &op, int op_index,
+                            UIState::EnvelopeState &envelope_state) {
   bool setting_changed = false;
 
   const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
@@ -159,7 +159,7 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   ym2612::OperatorIndex op_enum = ym2612::all_operator_indices[op_index];
   auto is_modulator =
       static_cast<int>(op_enum) <
-      ym2612::algorithm_modulator_count[app_state.patch().instrument.algorithm];
+      ym2612::algorithm_modulator_count[patch.instrument.algorithm];
   std::string op_label = "Operator " + std::to_string(op_index + 1) +
                          (is_modulator ? "" : " (Carrier)");
   std::string key_prefix = "instrument.op" + std::to_string(op_index);
@@ -180,8 +180,7 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
     op.enable = operator_enable;
     setting_changed = true;
   }
-  track_patch_history(app_state, op_label + " Enable",
-                      key_prefix + ".op_enable");
+  track_patch_history(context, op_label + " Enable", key_prefix + ".op_enable");
 
   if (!is_modulator) {
     ImGui::PopStyleColor();
@@ -195,12 +194,11 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
 
   if (op_index == 0) {
     // Feedback (0-7)
-    int feedback = app_state.patch().instrument.feedback;
+    int feedback = patch.instrument.feedback;
     bool feedback_changed = ImGui::SliderInt("Feedback", &feedback, 0, 7);
-    track_patch_history(app_state, "Operator 1 Feedback",
-                        "instrument.feedback");
+    track_patch_history(context, "Operator 1 Feedback", "instrument.feedback");
     if (feedback_changed) {
-      app_state.patch().instrument.feedback = static_cast<uint8_t>(feedback);
+      patch.instrument.feedback = static_cast<uint8_t>(feedback);
       setting_changed = true;
     }
   } else if (op_index == 1) {
@@ -214,12 +212,11 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
     op.amplitude_modulation_enable = amplitude_mod;
     setting_changed = true;
   }
-  track_patch_history(app_state, op_label + " Amplitude Modulation",
+  track_patch_history(context, op_label + " Amplitude Modulation",
                       key_prefix + ".am_enable");
   ImGui::Spacing();
 
-  render_envelope(app_state, op, app_state.ui_state().envelope_states[op_index],
-                  op_label, key_prefix);
+  render_envelope(context, op, envelope_state, op_label, key_prefix);
 
   if (column_layout) {
     ImGui::SameLine();
@@ -247,7 +244,7 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
     op.ssg_enable = ssg_enable;
     setting_changed = true;
   }
-  track_patch_history(app_state, op_label + " SSG EG Enable",
+  track_patch_history(context, op_label + " SSG EG Enable",
                       key_prefix + ".ssg_enable");
 
   if (!ssg_enable) {
@@ -255,7 +252,7 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   }
 
   bool ssg_type_changed = ImGui::SliderInt("SSG EG Type", &ssg_type, 0, 7);
-  track_patch_history(app_state, op_label + " SSG EG Type",
+  track_patch_history(context, op_label + " SSG EG Type",
                       key_prefix + ".ssg_type");
   if (ssg_type_changed) {
     op.ssg_type_envelope_control = static_cast<uint8_t>(ssg_type);
@@ -275,7 +272,7 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   // Key Scale (0-3)
   int key_scale = op.key_scale;
   bool key_scale_changed = ImGui::SliderInt("Key Scale", &key_scale, 0, 3);
-  track_patch_history(app_state, op_label + " Key Scale",
+  track_patch_history(context, op_label + " Key Scale",
                       key_prefix + ".key_scale");
   if (key_scale_changed) {
     op.key_scale = static_cast<uint8_t>(key_scale);
@@ -289,7 +286,7 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   int multiple = op.multiple;
   bool multiple_changed =
       ImGui::SliderInt("Multiple", &multiple, 0, 15, multiple_labels[multiple]);
-  track_patch_history(app_state, op_label + " Multiple",
+  track_patch_history(context, op_label + " Multiple",
                       key_prefix + ".multiple");
   if (multiple_changed) {
     op.multiple = static_cast<uint8_t>(multiple);
@@ -303,7 +300,7 @@ bool render_operator_editor(AppState &app_state, ym2612::OperatorSettings &op,
   int detune = formats::detune_from_patch_to_dmp(op.detune);
   bool detune_changed =
       ImGui::SliderInt("Detune", &detune, 0, 6, detune_labels[detune]);
-  track_patch_history(app_state, op_label + " Detune", key_prefix + ".detune");
+  track_patch_history(context, op_label + " Detune", key_prefix + ".detune");
   if (detune_changed) {
     op.detune = static_cast<uint8_t>(formats::detune_from_dmp_to_patch(detune));
     setting_changed = true;

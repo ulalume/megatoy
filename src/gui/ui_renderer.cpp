@@ -9,8 +9,10 @@
 #include "gui/components/preferences.hpp"
 #include "gui/components/waveform.hpp"
 #include "gui/window_title.hpp"
+#include "history/snapshot_entry.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <utility>
 
 namespace ui {
 
@@ -20,7 +22,31 @@ void render_all(AppState &app_state, ym2612::FFTAnalyzer &analyzer) {
   ui::render_patch_drop_feedback(app_state);
   ui::render_confirmation_dialog(app_state);
 
-  ui::render_patch_editor(PATCH_EDITOR_TITLE, app_state);
+  static PatchEditorState patch_editor_state;
+  auto &ui_state = app_state.ui_state();
+  PatchEditorContext patch_editor_context{
+      app_state.patch_session(), ui_state.prefs, ui_state.envelope_states,
+      [&app_state](const std::string &label, const std::string &merge_key,
+                   const ym2612::Patch &before) {
+        auto label_copy = label;
+        auto key_copy = merge_key;
+        auto before_copy = before;
+        app_state.history().begin_transaction(
+            label_copy, key_copy,
+            [label_copy = std::move(label_copy), key_copy = std::move(key_copy),
+             before_copy = std::move(before_copy)](AppState &state) mutable {
+              return history::make_snapshot_entry<ym2612::Patch>(
+                  label_copy, key_copy, before_copy, state.patch(),
+                  [](AppState &target, const ym2612::Patch &value) {
+                    target.patch() = value;
+                    target.apply_patch_to_device();
+                  });
+            });
+      },
+      [&app_state]() { app_state.history().commit_transaction(app_state); }};
+
+  ui::render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
+                          patch_editor_state);
   ui::render_patch_selector(PATCH_BROWSER_TITLE, app_state);
 
   ui::render_midi_keyboard(SOFT_KEYBOARD_TITLE, app_state);

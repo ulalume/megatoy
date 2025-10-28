@@ -30,11 +30,6 @@ struct UIState {
   PreferenceManager::UIPreferences prefs;
   bool open_directory_dialog = false;
 
-  struct PatchEditorState {
-    std::string last_export_path;
-    std::string last_export_error;
-  } patch_editor;
-
   struct DropState {
     bool show_error_popup = false;
     std::string error_message;
