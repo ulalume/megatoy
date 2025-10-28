@@ -1,7 +1,5 @@
 #include "history_manager.hpp"
-
-#include "app_state.hpp"
-#include "history_entry.hpp"
+#include "app_context.hpp"
 #include <imgui.h>
 #include <utility>
 
@@ -31,7 +29,7 @@ std::string_view HistoryManager::redo_label() const {
   return can_redo() ? redo_stack_.back()->label() : std::string_view{};
 }
 
-void HistoryManager::undo(AppState &app_state) {
+void HistoryManager::undo(AppContext &app_context) {
   if (!can_undo()) {
     return;
   }
@@ -40,11 +38,11 @@ void HistoryManager::undo(AppState &app_state) {
 
   auto entry = std::move(undo_stack_.back());
   undo_stack_.pop_back();
-  entry->undo(app_state);
+  entry->undo(app_context);
   redo_stack_.push_back(std::move(entry));
 }
 
-void HistoryManager::redo(AppState &app_state) {
+void HistoryManager::redo(AppContext &app_context) {
   if (!can_redo()) {
     return;
   }
@@ -53,11 +51,11 @@ void HistoryManager::redo(AppState &app_state) {
 
   auto entry = std::move(redo_stack_.back());
   redo_stack_.pop_back();
-  entry->redo(app_state);
+  entry->redo(app_context);
   undo_stack_.push_back(std::move(entry));
 }
 
-void HistoryManager::handle_shortcuts(AppState &app_state) {
+void HistoryManager::handle_shortcuts(AppContext &app_context) {
   auto &io = ImGui::GetIO();
   if (io.WantTextInput) {
     return;
@@ -73,14 +71,14 @@ void HistoryManager::handle_shortcuts(AppState &app_state) {
   if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
     if (shift) {
       if (can_redo()) {
-        redo(app_state);
+        redo(app_context);
       }
     } else if (can_undo()) {
-      undo(app_state);
+      undo(app_context);
     }
   } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
     if (can_redo()) {
-      redo(app_state);
+      redo(app_context);
     }
   }
 }
@@ -95,7 +93,7 @@ void HistoryManager::begin_transaction(std::string label, std::string merge_key,
   });
 }
 
-void HistoryManager::commit_transaction(AppState &app_state) {
+void HistoryManager::commit_transaction(AppContext &app_context) {
   if (!active_transaction_) {
     return;
   }
@@ -106,7 +104,7 @@ void HistoryManager::commit_transaction(AppState &app_state) {
     return;
   }
 
-  auto entry = factory(app_state);
+  auto entry = factory(app_context);
   if (!entry) {
     return;
   }

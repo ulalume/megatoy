@@ -21,6 +21,7 @@ target_link_libraries(imgui_lib PUBLIC
 )
 
 set(MEGATOY_CORE_SOURCES
+  src/app_context.cpp
   src/app_state.cpp
   src/audio/audio_manager.cpp
   src/channel_allocator.cpp

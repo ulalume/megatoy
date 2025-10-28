@@ -7,8 +7,7 @@
 
 namespace ui {
 
-void render_waveform(const char *title, WaveformContext &context,
-                     ym2612::FFTAnalyzer &analyzer) {
+void render_waveform(const char *title, WaveformContext &context) {
   auto &ui_prefs = context.ui_prefs;
   if (!ui_prefs.show_waveform) {
     return;
@@ -53,8 +52,8 @@ void render_waveform(const char *title, WaveformContext &context,
   ImGui::NextColumn();
 
   if (has_samples) {
-    analyzer.compute(samples);
-    const auto &mags = analyzer.magnitudes();
+    context.analyzer.compute(samples);
+    const auto &mags = context.analyzer.magnitudes();
 
     // Create logarithmic frequency bins with interpolation
     const size_t num_display_bins = 256;

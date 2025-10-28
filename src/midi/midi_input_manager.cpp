@@ -1,9 +1,6 @@
 #include "midi/midi_input_manager.hpp"
-
-#include "app_state.hpp"
-#include "note_actions.hpp"
+#include "app_context.hpp"
 #include "ym2612/note.hpp"
-
 #include <RtMidi.h>
 #include <algorithm>
 #include <iostream>
@@ -243,16 +240,16 @@ struct MidiInputManager::Impl {
     }
   }
 
-  void dispatch(AppState &app_state) {
+  void dispatch(AppContext &context) {
     if (ports_dirty) {
-      app_state.set_connected_midi_inputs(available_ports);
+      context.app_state().set_connected_midi_inputs(available_ports);
       ports_dirty = false;
     }
 
     for (const auto &event : pending_events) {
       switch (event.type) {
       case MidiEvent::Type::NoteOn:
-        if (!input::note_on(app_state, event.note, event.velocity)) {
+        if (!context.note_on(event.note, event.velocity)) {
           std::clog
               << "MIDI note-on ignored (no free channel or already active): "
               << event.note << " velocity " << static_cast<int>(event.velocity)
@@ -260,7 +257,7 @@ struct MidiInputManager::Impl {
         }
         break;
       case MidiEvent::Type::NoteOff:
-        if (!input::note_off(app_state, event.note)) {
+        if (!context.note_off(event.note)) {
           std::clog << "MIDI note-off ignored (note not active): " << event.note
                     << " (" << event.port_name << ")\n";
         }
@@ -293,6 +290,6 @@ void MidiInputManager::shutdown() { impl_->shutdown(); }
 
 void MidiInputManager::poll() { impl_->poll(); }
 
-void MidiInputManager::dispatch(AppState &app_state) {
-  impl_->dispatch(app_state);
+void MidiInputManager::dispatch(AppContext &context) {
+  impl_->dispatch(context);
 }

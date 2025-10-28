@@ -3,7 +3,7 @@
 
 #include <memory>
 
-class AppState;
+struct AppContext;
 
 class MidiInputManager {
 public:
@@ -14,7 +14,7 @@ public:
   void shutdown();
 
   void poll();
-  void dispatch(AppState &app_state);
+  void dispatch(AppContext &context);
 
 private:
   struct Impl;

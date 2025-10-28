@@ -9,7 +9,7 @@
 #include <string_view>
 #include <vector>
 
-class AppState;
+struct AppContext;
 
 namespace history {
 
@@ -26,20 +26,21 @@ public:
   std::string_view undo_label() const;
   std::string_view redo_label() const;
 
-  void undo(AppState &app_state);
-  void redo(AppState &app_state);
+  void undo(AppContext &app_context);
+  void redo(AppContext &app_context);
 
   /**
    * Handle keyboard shortcuts for undo/redo
    * Should be called after polling events but before UI rendering
    */
-  void handle_shortcuts(AppState &app_state);
+  void handle_shortcuts(AppContext &app_context);
 
-  using EntryFactory = std::function<std::unique_ptr<HistoryEntry>(AppState &)>;
+  using EntryFactory =
+      std::function<std::unique_ptr<HistoryEntry>(AppContext &)>;
 
   void begin_transaction(std::string label, std::string merge_key,
                          EntryFactory factory);
-  void commit_transaction(AppState &app_state);
+  void commit_transaction(AppContext &app_context);
   void cancel_transaction();
 
 private:
