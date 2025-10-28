@@ -4,6 +4,7 @@
 #include "drop_actions.hpp"
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
+#include "patch_actions.hpp"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <imgui.h>
@@ -22,9 +23,18 @@ void handle_file_drop(GLFWwindow *window, int count, const char **paths) {
   }
 
   for (int i = 0; i < count; ++i) {
-    if (paths[i] != nullptr) {
-      drop_actions::handle_drop(*context, std::filesystem::path(paths[i]));
+    if (paths[i] == nullptr) {
+      continue;
     }
+
+    drop_actions::Environment env{context->services, context->ui_state(),
+                                  [context](const ym2612::Patch &patch,
+                                            const std::filesystem::path &path) {
+                                    patch_actions::load_dropped_patch(
+                                        *context, patch, path);
+                                  }};
+
+    drop_actions::handle_drop(env, std::filesystem::path(paths[i]));
   }
 }
 

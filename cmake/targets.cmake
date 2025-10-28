@@ -55,6 +55,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/styles/megatoy_style.cpp
   src/gui/styles/theme.cpp
   src/history/history_manager.cpp
+  src/drop_actions.cpp
   src/midi/midi_input_manager.cpp
 
   src/patches/patch_session.cpp

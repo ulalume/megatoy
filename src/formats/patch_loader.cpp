@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <unordered_map>
+#include <utility>
 
 namespace formats {
 
@@ -65,13 +67,13 @@ PatchLoadResult load_patch_from_file(const std::filesystem::path &path) {
     } else if (patches_size == 1) {
       ensure_patch_name(patches[0], path);
       result.status = PatchLoadStatus::Success;
-      result.patches = patches;
+      result.patches = std::move(patches);
     } else {
       for (auto &patch : patches) {
         ensure_patch_name(patch, path);
       }
       result.status = PatchLoadStatus::MultiInstrument;
-      result.patches = patches;
+      result.patches = std::move(patches);
     }
   } else {
     result.message = "Unsupported file extension: " + ext;
