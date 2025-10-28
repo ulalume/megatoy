@@ -133,21 +133,10 @@ public:
     return audio_manager_.wave_sampler();
   }
 
-  void update_all_settings();
-  void apply_patch_to_device();
-
   const std::vector<std::string> &connected_midi_inputs() const {
     return connected_midi_inputs_;
   }
   void set_connected_midi_inputs(std::vector<std::string> devices);
-
-  // bool load_user_patch(const std::string &patch_name);
-  void sync_patch_directories();
-  void sync_imgui_ini_file();
-
-  void handle_patch_file_drop(const std::filesystem::path &path);
-  void apply_mml_instrument_selection(size_t index);
-  void cancel_instrument_selection();
 
 private:
   static constexpr UINT32 kSampleRate = 44100;

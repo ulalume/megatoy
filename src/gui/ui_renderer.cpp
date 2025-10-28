@@ -1,4 +1,5 @@
 #include "ui_renderer.hpp"
+#include "drop_actions.hpp"
 #include "gui/components/confirmation_dialog.hpp"
 #include "gui/components/file_manager.hpp"
 #include "gui/components/main_menu.hpp"
@@ -43,9 +44,9 @@ MainMenuContext make_main_menu_context(AppState &app_state) {
 PatchDropContext make_patch_drop_context(AppState &app_state) {
   auto &ui_state = app_state.ui_state();
   return {ui_state.drop_state,
-          [&app_state]() { app_state.cancel_instrument_selection(); },
+          [&app_state]() { drop_actions::cancel_selection(app_state); },
           [&app_state](size_t index) {
-            app_state.apply_mml_instrument_selection(index);
+            drop_actions::apply_selection(app_state, index);
           }};
 }
 
@@ -82,7 +83,7 @@ PatchEditorContext make_patch_editor_context(AppState &app_state) {
                   label_copy, key_copy, before_copy, state.patch(),
                   [](AppState &target, const ym2612::Patch &value) {
                     target.patch() = value;
-                    target.apply_patch_to_device();
+                    target.patch_session().apply_patch_to_audio();
                   });
             });
       },
@@ -125,7 +126,10 @@ PreferencesContext make_preferences_context(AppState &app_state) {
           ui_state.open_directory_dialog,
           app_state.path_service().paths(),
           app_state.connected_midi_inputs(),
-          [&app_state]() { app_state.sync_patch_directories(); },
+          [&app_state]() {
+            app_state.path_service().ensure_directories();
+            app_state.patch_session().refresh_directories();
+          },
           [&app_state](ui::styles::ThemeId theme_id) {
             app_state.gui().set_theme(theme_id);
           }};

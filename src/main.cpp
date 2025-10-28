@@ -2,6 +2,7 @@
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "ym2612/fft_analyzer.hpp"
+#include "drop_actions.hpp"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <imgui.h>
@@ -21,7 +22,7 @@ void handle_file_drop(GLFWwindow *window, int count, const char **paths) {
 
   for (int i = 0; i < count; ++i) {
     if (paths[i] != nullptr) {
-      state->handle_patch_file_drop(std::filesystem::path(paths[i]));
+      drop_actions::handle_drop(*state, std::filesystem::path(paths[i]));
     }
   }
 }
