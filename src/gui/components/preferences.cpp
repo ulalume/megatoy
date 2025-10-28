@@ -1,38 +1,36 @@
 #include "preferences.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
-#include "preferences/preference_manager.hpp"
 #include <imgui.h>
 
 namespace ui {
 
-void render_preferences_window(const char *title, AppState &app_state) {
-  auto &prefs = app_state.preference_manager();
-  const auto &paths = app_state.path_service().paths();
-
-  auto &ui_state = app_state.ui_state();
-  if (!ui_state.prefs.show_preferences) {
+void render_preferences_window(const char *title, PreferencesContext &context) {
+  auto &prefs = context.preferences;
+  auto &ui_prefs = context.ui_prefs;
+  if (!ui_prefs.show_preferences) {
     return;
   }
 
   ImGui::SetNextWindowSize(ImVec2(480, 260), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin(title, &ui_state.prefs.show_preferences)) {
-    auto &ui_prefs = ui_state.prefs;
+  if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
 
     // Show the current directory
     ImGui::SeparatorText("Data Directory");
-    ImGui::TextWrapped("%s", paths.data_root.c_str());
+    ImGui::TextWrapped("%s", context.paths.data_root.c_str());
     ImGui::Spacing();
 
     if (ImGui::Button("Select Directory...")) {
-      ui_state.open_directory_dialog = true;
+      context.open_directory_dialog = true;
     }
 
     ImGui::SameLine();
     if (ImGui::Button("Reset to Default")) {
       prefs.reset_data_directory();
-      app_state.sync_patch_directories();
+      if (context.sync_patch_directories) {
+        context.sync_patch_directories();
+      }
     }
 
     if (prefs.is_initialized()) {
@@ -43,7 +41,9 @@ void render_preferences_window(const char *title, AppState &app_state) {
                          "Directory initialization failed");
       if (ImGui::Button("Retry Directory Creation")) {
         if (prefs.ensure_directories_exist()) {
-          app_state.sync_patch_directories();
+          if (context.sync_patch_directories) {
+            context.sync_patch_directories();
+          }
         }
       }
     }
@@ -69,7 +69,9 @@ void render_preferences_window(const char *title, AppState &app_state) {
           current_theme_index = i;
           auto selected_id = themes[i].id;
           prefs.set_theme(selected_id);
-          app_state.gui().set_theme(selected_id);
+          if (context.apply_theme) {
+            context.apply_theme(selected_id);
+          }
         }
         if (is_selected) {
           ImGui::SetItemDefaultFocus();
@@ -88,13 +90,13 @@ void render_preferences_window(const char *title, AppState &app_state) {
     ImGui::Checkbox("Steal oldest note when all 6 channels are busy",
                     &ui_prefs.steal_oldest_note_when_full);
 
-    const auto &devices = app_state.connected_midi_inputs();
-    if (devices.empty()) {
+    if (context.connected_midi_devices.empty()) {
       ImGui::TextUnformatted("No MIDI devices detected.");
     } else {
-      ImGui::Text("Connected devices (%zu)", devices.size());
+      ImGui::Text("Connected devices (%zu)",
+                  context.connected_midi_devices.size());
       ImGui::Indent();
-      for (const auto &name : devices) {
+      for (const auto &name : context.connected_midi_devices) {
         ImGui::BulletText("%s", name.c_str());
       }
       ImGui::Unindent();
@@ -103,10 +105,12 @@ void render_preferences_window(const char *title, AppState &app_state) {
 
   ImGui::End();
 
-  if (ui_state.open_directory_dialog) {
-    ui_state.open_directory_dialog = false;
+  if (context.open_directory_dialog) {
+    context.open_directory_dialog = false;
     if (prefs.select_data_directory()) {
-      app_state.sync_patch_directories();
+      if (context.sync_patch_directories) {
+        context.sync_patch_directories();
+      }
     }
   }
 }

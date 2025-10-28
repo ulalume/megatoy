@@ -1,8 +1,6 @@
 #include "patch_selector.hpp"
-#include "app_state.hpp"
 #include "common.hpp"
 #include "file_manager.hpp"
-#include "patches/patch_repository.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -46,13 +44,14 @@ void collect_leaf_patches(const std::vector<patches::PatchEntry> &tree,
   }
 }
 
-void begin_popup_context(const AppState &app_state,
+void begin_popup_context(PatchSelectorContext &context,
                          const std::string &relative_path) {
   if (ImGui::BeginPopupContextItem(nullptr)) {
     if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
-      ui::reveal_in_file_manager(app_state.patch_repository()
-                                     .to_absolute_path(relative_path)
-                                     .string());
+      if (context.reveal_in_file_manager) {
+        context.reveal_in_file_manager(
+            context.repository.to_absolute_path(relative_path));
+      }
     }
     ImGui::EndPopup();
   }
@@ -66,21 +65,21 @@ void is_item_hovered(const std::string &format,
 }
 
 void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
-                       AppState &app_state, int depth = 0) {
+                       PatchSelectorContext &context, int depth = 0) {
   for (const auto &item : tree) {
     ImGui::PushID(item.relative_path.c_str());
 
     if (item.is_directory) {
       if (ImGui::TreeNode(item.name.c_str())) {
-        begin_popup_context(app_state, item.relative_path);
-        render_patch_tree(item.children, app_state, depth + 1);
+        begin_popup_context(context, item.relative_path);
+        render_patch_tree(item.children, context, depth + 1);
         ImGui::TreePop();
       }
     } else {
       ImGui::Indent(INDENT * depth);
 
-      bool is_current = (item.relative_path ==
-                         app_state.patch_session().current_patch_path());
+      bool is_current =
+          (item.relative_path == context.session.current_patch_path());
       if (is_current) {
         ImGui::PushStyleColor(ImGuiCol_Text,
                               styles::color(styles::MegatoyCol::TextHighlight));
@@ -88,7 +87,7 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       std::string name_string = item.name;
       auto name_string_selectable =
           ImGui::Selectable(name_string.c_str(), false);
-      begin_popup_context(app_state, item.relative_path);
+      begin_popup_context(context, item.relative_path);
       is_item_hovered(item.format, item.relative_path);
       ImGui::SameLine();
       ImGui::PushStyleColor(
@@ -97,10 +96,12 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       auto format_string_selectable =
           ImGui::Selectable(item.format.c_str(), false);
       if (name_string_selectable || format_string_selectable) {
-        app_state.safe_load_patch(item);
+        if (context.safe_load_patch) {
+          context.safe_load_patch(item);
+        }
       }
       ImGui::PopStyleColor();
-      begin_popup_context(app_state, item.relative_path);
+      begin_popup_context(context, item.relative_path);
       is_item_hovered(item.format, item.relative_path);
       if (is_current) {
         ImGui::PopStyleColor();
@@ -113,21 +114,21 @@ void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
 } // namespace
 
-void render_patch_selector(const char *title, AppState &app_state) {
-  auto &ui_state = app_state.ui_state();
-  if (!ui_state.prefs.show_patch_selector) {
+void render_patch_selector(const char *title, PatchSelectorContext &context) {
+  auto &prefs = context.prefs;
+  if (!prefs.show_patch_selector) {
     return;
   }
 
   ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin(title, &ui_state.prefs.show_patch_selector)) {
+  if (ImGui::Begin(title, &prefs.show_patch_selector)) {
     if (ImGui::Button("Refresh")) {
-      app_state.patch_repository().refresh();
+      context.repository.refresh();
     }
 
-    auto &preset_repository = app_state.patch_repository();
+    auto &preset_repository = context.repository;
     if (preset_repository.has_directory_changed()) {
       preset_repository.refresh();
     }
@@ -135,21 +136,20 @@ void render_patch_selector(const char *title, AppState &app_state) {
     ImGui::Spacing();
 
     char search_buffer[128];
-    std::strncpy(search_buffer, ui_state.prefs.patch_search_query.c_str(),
+    std::strncpy(search_buffer, prefs.patch_search_query.c_str(),
                  sizeof(search_buffer));
     search_buffer[sizeof(search_buffer) - 1] = '\0';
 
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     if (ImGui::InputTextWithHint("##Search", "Type to filter patches",
                                  search_buffer, sizeof(search_buffer))) {
-      ui_state.prefs.patch_search_query = std::string(search_buffer);
+      prefs.patch_search_query = std::string(search_buffer);
     }
 
     auto preset_tree = preset_repository.tree();
-    bool has_query =
-        std::any_of(ui_state.prefs.patch_search_query.begin(),
-                    ui_state.prefs.patch_search_query.end(),
-                    [](unsigned char ch) { return !std::isspace(ch); });
+    bool has_query = std::any_of(
+        prefs.patch_search_query.begin(), prefs.patch_search_query.end(),
+        [](unsigned char ch) { return !std::isspace(ch); });
 
     if (preset_tree.empty()) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
@@ -158,7 +158,7 @@ void render_patch_selector(const char *title, AppState &app_state) {
       std::vector<const patches::PatchEntry *> all_patches;
       collect_leaf_patches(preset_tree, all_patches);
 
-      std::string query_lower = to_lower(ui_state.prefs.patch_search_query);
+      std::string query_lower = to_lower(prefs.patch_search_query);
 
       if (ImGui::BeginChild("PresetSearchResults",
                             ImGui::GetContentRegionAvail(), true)) {
@@ -173,8 +173,8 @@ void render_patch_selector(const char *title, AppState &app_state) {
           match_count++;
           ImGui::PushID(entry->relative_path.c_str());
 
-          bool is_current = (entry->relative_path ==
-                             app_state.patch_session().current_patch_path());
+          bool is_current =
+              (entry->relative_path == context.session.current_patch_path());
           if (is_current) {
             ImGui::PushStyleColor(
                 ImGuiCol_Text,
@@ -184,14 +184,16 @@ void render_patch_selector(const char *title, AppState &app_state) {
           std::string label = "[" + entry->format + "] " + entry->name + "##" +
                               entry->relative_path;
           if (ImGui::Selectable(label.c_str(), is_current)) {
-            app_state.safe_load_patch(*entry);
+            if (context.safe_load_patch) {
+              context.safe_load_patch(*entry);
+            }
           }
 
           if (is_current) {
             ImGui::PopStyleColor();
           }
 
-          begin_popup_context(app_state, entry->relative_path);
+          begin_popup_context(context, entry->relative_path);
           if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Format: %s\nPath: %s", entry->format.c_str(),
                               entry->relative_path.c_str());
@@ -203,14 +205,14 @@ void render_patch_selector(const char *title, AppState &app_state) {
         if (match_count == 0) {
           ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                              "No results for '%s'",
-                             ui_state.prefs.patch_search_query.c_str());
+                             prefs.patch_search_query.c_str());
         }
       }
       ImGui::EndChild();
     } else {
       if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
                             true)) {
-        render_patch_tree(preset_tree, app_state);
+        render_patch_tree(preset_tree, context);
       }
       ImGui::EndChild();
     }
