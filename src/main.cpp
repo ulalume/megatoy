@@ -30,8 +30,8 @@ void handle_file_drop(GLFWwindow *window, int count, const char **paths) {
 
 int main(int argc, char *argv[]) {
   AppServices services;
-  AppState app_state{services};
-  app_state.init();
+  AppState app_state{};
+  services.initialize_app(app_state);
   AppContext app_context{services, app_state};
 
   // Setup window callbacks
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Shutdown
-  app_state.shutdown();
+  services.shutdown_app();
   std::cout << "Goodbye!\n";
   return 0;
 }

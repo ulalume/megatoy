@@ -1,7 +1,8 @@
 #pragma once
 
-#include "app_services.hpp"
 #include "input_state.hpp"
+#include "patches/patch_repository.hpp"
+#include "preferences/preference_manager.hpp"
 #include "ym2612/patch.hpp"
 #include <filesystem>
 #include <string>
@@ -80,10 +81,7 @@ struct UIState {
 
 class AppState {
 public:
-  explicit AppState(AppServices &services);
-
-  void init();
-  void shutdown();
+  AppState() = default;
 
   InputState &input_state() { return input_state_; }
   const InputState &input_state() const { return input_state_; }
@@ -97,7 +95,6 @@ public:
   void set_connected_midi_inputs(std::vector<std::string> devices);
 
 private:
-  AppServices &services_;
   InputState input_state_;
   UIState ui_state_;
   std::vector<std::string> connected_midi_inputs_;

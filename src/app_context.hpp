@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app_services.hpp"
 #include "app_state.hpp"
 #include <filesystem>
 #include <vector>

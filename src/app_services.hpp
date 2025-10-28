@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <string>
 
+class AppState;
+
 struct AppServices {
   static constexpr std::uint32_t SampleRate = 44100;
 
@@ -21,6 +23,9 @@ struct AppServices {
   bool initialize_gui(const std::string &title, int width, int height) {
     return gui_manager.initialize(title, width, height);
   }
+
+  void initialize_app(AppState &state);
+  void shutdown_app();
 
   megatoy::system::PathService path_service;
   PreferenceManager preference_manager;
