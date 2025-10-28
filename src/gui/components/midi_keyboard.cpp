@@ -1,4 +1,5 @@
 #include "midi_keyboard.hpp"
+#include "app_state.hpp"
 #include "core/types.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "keyboard_typing.hpp"
@@ -10,14 +11,8 @@
 #include <vector>
 
 namespace ui {
-struct NoteHash {
-  std::size_t operator()(const ym2612::Note &note) const {
-    return std::hash<int>()(note.octave) * 12 +
-           std::hash<int>()(static_cast<int>(note.key));
-  }
-};
 
-void render_midi_keyboard(const char *title, AppState &app_state) {
+void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   const ImU32 black_key_col =
       styles::color_u32(styles::MegatoyCol::PianoBlackKey);
   const ImU32 black_key_pressed_col =
@@ -33,17 +28,19 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   const ImU32 key_border_col =
       styles::color_u32(styles::MegatoyCol::PianoKeyBorder);
 
-  auto &input = app_state.input_state();
+  auto &input = context.input_state;
   auto &keyboard_settings = input.midi_keyboard_settings;
   const auto key_mappings =
       create_key_mappings(keyboard_settings.scale, keyboard_settings.key,
                           input.keyboard_typing_octave);
   if (!ImGui::GetIO().WantTextInput) {
-    check_keyboard_typing(app_state, key_mappings);
+    KeyboardTypingContext typing_context{context.input_state, context.key_on,
+                                         context.key_off};
+    check_keyboard_typing(typing_context, key_mappings);
   }
 
-  auto &ui_state = app_state.ui_state();
-  if (!ui_state.prefs.show_midi_keyboard) {
+  auto &ui_prefs = context.ui_prefs;
+  if (!ui_prefs.show_midi_keyboard) {
     return;
   }
 
@@ -53,7 +50,7 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
   }
 
   ImGui::SetNextWindowSize(ImVec2(400, 180), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin(title, &ui_state.prefs.show_midi_keyboard)) {
+  if (!ImGui::Begin(title, &ui_prefs.show_midi_keyboard)) {
     ImGui::End();
     return;
   }
@@ -97,7 +94,9 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
 
   ImGui::SameLine(0, 16);
 
-  const auto &active_notes = app_state.active_notes();
+  std::vector<ym2612::Note> active_notes = context.active_notes
+                                               ? context.active_notes()
+                                               : std::vector<ym2612::Note>{};
   const size_t num_active_notes = active_notes.size();
   std::string chord_name = "";
   if (num_active_notes >= 2) {
@@ -145,7 +144,8 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
       bool is_key_mapped = key_mappings_2.find(note) != key_mappings_2.end();
 
       bool is_white = ui::is_white_key(note.key);
-      bool is_pressed = app_state.key_is_pressed(note);
+      bool is_pressed =
+          context.key_is_pressed ? context.key_is_pressed(note) : false;
 
       ImVec2 key_min(x, y);
       ImVec2 key_max(x + key_width, y + key_height);
@@ -158,11 +158,15 @@ void render_midi_keyboard(const char *title, AppState &app_state) {
       bool key_is_active = ImGui::IsItemActive();
       bool key_was_deactivated = ImGui::IsItemDeactivated();
       if (key_is_active && !is_pressed) {
-        app_state.key_on(note, 127);
+        if (context.key_on) {
+          context.key_on(note, 127);
+        }
       }
 
       if (key_was_deactivated && is_pressed) {
-        app_state.key_off(note);
+        if (context.key_off) {
+          context.key_off(note);
+        }
       }
 
       ImGui::PopID();

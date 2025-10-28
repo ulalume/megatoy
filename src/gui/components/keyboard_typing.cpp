@@ -46,8 +46,9 @@ create_key_mappings(Scale scale, Key key, uint8_t selected_octave) {
 static std::map<ImGuiKey, bool> key_pressed_last_frame;
 
 void check_keyboard_typing(
-    AppState &app_state, const std::map<ImGuiKey, ym2612::Note> key_mappings) {
-  auto &input = app_state.input_state();
+    KeyboardTypingContext &context,
+    const std::map<ImGuiKey, ym2612::Note> key_mappings) {
+  auto &input = context.input_state;
 
   // Handle octave changes with comma and period keys
   bool comma_pressed_now = ImGui::IsKeyDown(ImGuiKey_Comma);
@@ -77,12 +78,16 @@ void check_keyboard_typing(
     bool key_was_pressed = key_pressed_last_frame[imgui_key];
 
     if (key_pressed_now && !key_was_pressed) {
-      app_state.key_on(note, 127);
+      if (context.key_on) {
+        context.key_on(note, 127);
+      }
       input.active_keyboard_notes[static_cast<int>(imgui_key)] = note;
     } else if (!key_pressed_now && key_was_pressed) {
       auto it = input.active_keyboard_notes.find(static_cast<int>(imgui_key));
       if (it != input.active_keyboard_notes.end()) {
-        app_state.key_off(it->second);         // Use the recorded note
+        if (context.key_off) {
+          context.key_off(it->second);
+        }
         input.active_keyboard_notes.erase(it); // Remove from active notes
       }
     }

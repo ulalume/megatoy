@@ -1,6 +1,4 @@
 #include "patch_drop.hpp"
-
-#include "app_state.hpp"
 #include <algorithm>
 #include <imgui.h>
 
@@ -11,8 +9,8 @@ constexpr const char *kInstrumentPopupTitle = "Select Instrument";
 constexpr const char *kFallbackErrorMessage = "Unsupported file format.";
 } // namespace
 
-void render_patch_drop_feedback(AppState &app_state) {
-  auto &drop = app_state.ui_state().drop_state;
+void render_patch_drop_feedback(PatchDropContext &context) {
+  auto &drop = context.drop_state;
 
   if (drop.show_error_popup) {
     ImGui::OpenPopup(kErrorPopupTitle);
@@ -65,19 +63,25 @@ void render_patch_drop_feedback(AppState &app_state) {
       }
 
       if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-        app_state.cancel_instrument_selection();
+        if (context.cancel_selection) {
+          context.cancel_selection();
+        }
         ImGui::CloseCurrentPopup();
       }
       ImGui::SameLine();
       if (ImGui::Button("Load", ImVec2(120, 0))) {
-        app_state.apply_mml_instrument_selection(
-            static_cast<size_t>(drop.selected_instrument));
+        if (context.apply_selection) {
+          context.apply_selection(
+              static_cast<size_t>(drop.selected_instrument));
+        }
         ImGui::CloseCurrentPopup();
       }
     } else {
       ImGui::TextUnformatted(kFallbackErrorMessage);
       if (ImGui::Button("OK", ImVec2(120, 0))) {
-        app_state.cancel_instrument_selection();
+        if (context.cancel_selection) {
+          context.cancel_selection();
+        }
         ImGui::CloseCurrentPopup();
       }
     }
@@ -85,7 +89,9 @@ void render_patch_drop_feedback(AppState &app_state) {
     ImGui::EndPopup();
   } else if (!drop.instruments.empty() &&
              !ImGui::IsPopupOpen(kInstrumentPopupTitle)) {
-    app_state.cancel_instrument_selection();
+    if (context.cancel_selection) {
+      context.cancel_selection();
+    }
   }
 }
 
