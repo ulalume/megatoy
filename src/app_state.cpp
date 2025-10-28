@@ -1,9 +1,7 @@
 #include "app_state.hpp"
-
 #include "formats/patch_loader.hpp"
 #include "history/snapshot_entry.hpp"
-
-#include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 
@@ -41,39 +39,6 @@ void AppState::shutdown() {
 }
 
 void AppState::update_all_settings() { patch_session_.apply_patch_to_audio(); }
-
-bool AppState::key_on(ym2612::Note note, uint8_t velocity) {
-  const bool success = patch_session_.note_on(note, velocity, ui_state_.prefs);
-  if (success) {
-    const uint8_t effective_velocity =
-        ui_state_.prefs.use_velocity
-            ? std::min<uint8_t>(velocity, static_cast<uint8_t>(127))
-            : static_cast<uint8_t>(127);
-    std::cout << "Key ON - " << note << " (velocity "
-              << static_cast<int>(effective_velocity) << ")\n"
-              << std::flush;
-  }
-  return success;
-}
-
-bool AppState::key_off(ym2612::Note note) {
-  if (patch_session_.note_off(note)) {
-    std::cout << "Key OFF - " << note << "\n" << std::flush;
-    return true;
-  }
-  return false;
-}
-
-bool AppState::key_is_pressed(const ym2612::Note &note) const {
-  return patch_session_.note_is_active(note);
-}
-
-const std::array<bool, 6> &AppState::active_channels() const {
-  return patch_session_.active_channels();
-}
-const std::vector<ym2612::Note> AppState::active_notes() const {
-  return patch_session_.active_notes();
-}
 
 void AppState::set_connected_midi_inputs(std::vector<std::string> devices) {
   connected_midi_inputs_ = std::move(devices);

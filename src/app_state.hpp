@@ -1,16 +1,13 @@
 #pragma once
 
 #include "audio/audio_manager.hpp"
-#include "core/types.hpp"
 #include "gui/gui_manager.hpp"
 #include "history/history_manager.hpp"
+#include "input_state.hpp"
 #include "patches/patch_session.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
-#include "input_state.hpp"
-#include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
-#include <array>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -138,14 +135,6 @@ public:
 
   void update_all_settings();
   void apply_patch_to_device();
-
-  bool key_on(ym2612::Note note, uint8_t velocity);
-  bool key_on(ym2612::Note note) { return key_on(note, 127); }
-  bool key_off(ym2612::Note note);
-  bool key_is_pressed(const ym2612::Note &note) const;
-
-  const std::array<bool, 6> &active_channels() const;
-  const std::vector<ym2612::Note> active_notes() const;
 
   const std::vector<std::string> &connected_midi_inputs() const {
     return connected_midi_inputs_;

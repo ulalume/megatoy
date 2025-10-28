@@ -6,7 +6,6 @@
 #include "util.hpp"
 #include <algorithm>
 #include <chord_detector.h>
-#include <cstring>
 #include <imgui.h>
 #include <string>
 #include <vector>
@@ -87,8 +86,12 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   const auto &key_mappings = context.state.key_mappings;
 
   if (!ImGui::GetIO().WantTextInput && !key_mappings.empty()) {
-    KeyboardTypingContext typing_context{context.input_state, context.key_on,
-                                         context.key_off};
+    KeyboardTypingContext typing_context{
+        context.input_state,
+        [&context](ym2612::Note note, uint8_t velocity) {
+          context.key_on(note, velocity);
+        },
+        [&context](ym2612::Note note) { context.key_off(note); }};
     check_keyboard_typing(typing_context, key_mappings);
   }
 

@@ -11,6 +11,7 @@
 #include "gui/components/waveform.hpp"
 #include "gui/window_title.hpp"
 #include "history/snapshot_entry.hpp"
+#include "note_actions.hpp"
 #include <filesystem>
 #include <utility>
 
@@ -49,8 +50,7 @@ PatchDropContext make_patch_drop_context(AppState &app_state) {
 
 ConfirmationDialogContext make_confirmation_context(AppState &app_state) {
   auto &ui_state = app_state.ui_state();
-  return {ui_state.confirmation_state,
-          ui_state.drop_state,
+  return {ui_state.confirmation_state, ui_state.drop_state,
           [&app_state](const patches::PatchEntry &entry) {
             app_state.load_patch(entry);
           },
@@ -66,34 +66,31 @@ ConfirmationDialogContext make_confirmation_context(AppState &app_state) {
 
 PatchEditorContext make_patch_editor_context(AppState &app_state) {
   auto &ui_state = app_state.ui_state();
-  return {app_state.patch_session(),
-          ui_state.prefs,
-          ui_state.envelope_states,
-          [&app_state](const std::string &label, const std::string &merge_key,
-                       const ym2612::Patch &before) {
-            auto label_copy = label;
-            auto key_copy = merge_key;
-            auto before_copy = before;
-            app_state.history().begin_transaction(
-                label_copy, key_copy,
-                [label_copy = std::move(label_copy),
-                 key_copy = std::move(key_copy),
-                 before_copy = std::move(before_copy)](AppState &state) mutable {
-                  return history::make_snapshot_entry<ym2612::Patch>(
-                      label_copy, key_copy, before_copy, state.patch(),
-                      [](AppState &target, const ym2612::Patch &value) {
-                        target.patch() = value;
-                        target.apply_patch_to_device();
-                      });
-                });
-          },
-          [&app_state]() { app_state.history().commit_transaction(app_state); }};
+  return {
+      app_state.patch_session(), ui_state.prefs, ui_state.envelope_states,
+      [&app_state](const std::string &label, const std::string &merge_key,
+                   const ym2612::Patch &before) {
+        auto label_copy = label;
+        auto key_copy = merge_key;
+        auto before_copy = before;
+        app_state.history().begin_transaction(
+            label_copy, key_copy,
+            [label_copy = std::move(label_copy), key_copy = std::move(key_copy),
+             before_copy = std::move(before_copy)](AppState &state) mutable {
+              return history::make_snapshot_entry<ym2612::Patch>(
+                  label_copy, key_copy, before_copy, state.patch(),
+                  [](AppState &target, const ym2612::Patch &value) {
+                    target.patch() = value;
+                    target.apply_patch_to_device();
+                  });
+            });
+      },
+      [&app_state]() { app_state.history().commit_transaction(app_state); }};
 }
 
 PatchSelectorContext make_patch_selector_context(AppState &app_state) {
   auto &ui_state = app_state.ui_state();
-  return {app_state.patch_repository(),
-          app_state.patch_session(),
+  return {app_state.patch_repository(), app_state.patch_session(),
           ui_state.prefs,
           [&app_state](const patches::PatchEntry &entry) {
             app_state.safe_load_patch(entry);
@@ -109,15 +106,15 @@ MidiKeyboardContext make_midi_keyboard_context(AppState &app_state) {
           app_state.input_state(),
           midi_keyboard_state(),
           [&app_state](ym2612::Note note, uint8_t velocity) {
-            return app_state.key_on(note, velocity);
+            return input::note_on(app_state, note, velocity);
           },
           [&app_state](ym2612::Note note) {
-            return app_state.key_off(note);
+            return input::note_off(app_state, note);
           },
           [&app_state](const ym2612::Note &note) {
-            return app_state.key_is_pressed(note);
+            return input::note_is_pressed(app_state, note);
           },
-          [&app_state]() { return app_state.active_notes(); }};
+          [&app_state]() { return input::active_notes(app_state); }};
 }
 
 PreferencesContext make_preferences_context(AppState &app_state) {
@@ -135,15 +132,16 @@ PreferencesContext make_preferences_context(AppState &app_state) {
 
 MmlConsoleContext make_mml_console_context(AppState &app_state) {
   auto &ui_state = app_state.ui_state();
-  return {ui_state.prefs,
-          [&app_state]() -> const ym2612::Patch & { return app_state.patch(); }};
+  return {ui_state.prefs, [&app_state]() -> const ym2612::Patch & {
+            return app_state.patch();
+          }};
 }
 
 WaveformContext make_waveform_context(AppState &app_state) {
   auto &ui_state = app_state.ui_state();
-  return {ui_state.prefs,
-          app_state.wave_sampler(),
-          [&app_state]() -> const ym2612::Patch & { return app_state.patch(); }};
+  return {
+      ui_state.prefs, app_state.wave_sampler(),
+      [&app_state]() -> const ym2612::Patch & { return app_state.patch(); }};
 }
 
 } // namespace

@@ -1,6 +1,7 @@
 #include "midi/midi_input_manager.hpp"
 
 #include "app_state.hpp"
+#include "note_actions.hpp"
 #include "ym2612/note.hpp"
 
 #include <RtMidi.h>
@@ -61,8 +62,7 @@ struct MidiInputManager::Impl {
 
   void close_connection(Connection &connection) {
     if (connection.midi_in && connection.midi_in->isPortOpen()) {
-      std::cout << "Closing MIDI input port: " << connection.port_name
-                << "\n";
+      std::cout << "Closing MIDI input port: " << connection.port_name << "\n";
       connection.midi_in->closePort();
     }
   }
@@ -107,8 +107,7 @@ struct MidiInputManager::Impl {
 
   void sync_connections(const std::vector<std::string> &ports) {
     for (auto it = connections.begin(); it != connections.end();) {
-      if (std::find(ports.begin(), ports.end(), it->port_name) ==
-          ports.end()) {
+      if (std::find(ports.begin(), ports.end(), it->port_name) == ports.end()) {
         std::cout << "MIDI input disconnected: " << it->port_name << "\n";
         close_connection(*it);
         it = connections.erase(it);
@@ -253,17 +252,17 @@ struct MidiInputManager::Impl {
     for (const auto &event : pending_events) {
       switch (event.type) {
       case MidiEvent::Type::NoteOn:
-        if (!app_state.key_on(event.note, event.velocity)) {
-          std::clog << "MIDI note-on ignored (no free channel or already active): "
-                    << event.note << " velocity "
-                    << static_cast<int>(event.velocity) << " ("
-                    << event.port_name << ")\n";
+        if (!input::note_on(app_state, event.note, event.velocity)) {
+          std::clog
+              << "MIDI note-on ignored (no free channel or already active): "
+              << event.note << " velocity " << static_cast<int>(event.velocity)
+              << " (" << event.port_name << ")\n";
         }
         break;
       case MidiEvent::Type::NoteOff:
-        if (!app_state.key_off(event.note)) {
-          std::clog << "MIDI note-off ignored (note not active): "
-                    << event.note << " (" << event.port_name << ")\n";
+        if (!input::note_off(app_state, event.note)) {
+          std::clog << "MIDI note-off ignored (note not active): " << event.note
+                    << " (" << event.port_name << ")\n";
         }
         break;
       }
