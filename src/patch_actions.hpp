@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_context.hpp"
+#include "app_services.hpp"
 #include "app_state.hpp"
 #include "history/history_manager.hpp"
 #include "history/snapshot_entry.hpp"

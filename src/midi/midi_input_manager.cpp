@@ -1,11 +1,13 @@
 #include "midi/midi_input_manager.hpp"
 #include "app_context.hpp"
+#include "app_services.hpp"
 #include "ym2612/note.hpp"
 #include <RtMidi.h>
 #include <algorithm>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -19,7 +21,7 @@ struct MidiEvent {
 
   ym2612::Note note;
   uint8_t velocity = 0;
-  std::string port_name;
+  std::string_view port_name;
 };
 
 } // namespace
@@ -134,10 +136,10 @@ struct MidiInputManager::Impl {
       return;
     }
 
-    const auto ports = enumerate_ports();
+    auto ports = enumerate_ports();
 
     const bool had_ports = !available_ports.empty();
-    available_ports = ports;
+    available_ports = std::move(ports);
     ports_dirty = true;
 
     if (available_ports.empty()) {
@@ -249,7 +251,8 @@ struct MidiInputManager::Impl {
     for (const auto &event : pending_events) {
       switch (event.type) {
       case MidiEvent::Type::NoteOn:
-        if (!context.note_on(event.note, event.velocity)) {
+        if (!context.services.patch_session.note_on(event.note, event.velocity,
+                                                    context.ui_state().prefs)) {
           std::clog
               << "MIDI note-on ignored (no free channel or already active): "
               << event.note << " velocity " << static_cast<int>(event.velocity)
@@ -257,7 +260,7 @@ struct MidiInputManager::Impl {
         }
         break;
       case MidiEvent::Type::NoteOff:
-        if (!context.note_off(event.note)) {
+        if (!context.services.patch_session.note_off(event.note)) {
           std::clog << "MIDI note-off ignored (note not active): " << event.note
                     << " (" << event.port_name << ")\n";
         }

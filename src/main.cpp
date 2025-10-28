@@ -1,5 +1,7 @@
 #include "app_context.hpp"
+#include "app_services.hpp"
 #include "app_state.hpp"
+#include "drop_actions.hpp"
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
 #include <GLFW/glfw3.h>
@@ -21,7 +23,7 @@ void handle_file_drop(GLFWwindow *window, int count, const char **paths) {
 
   for (int i = 0; i < count; ++i) {
     if (paths[i] != nullptr) {
-      context->handle_drop(std::filesystem::path(paths[i]));
+      drop_actions::handle_drop(*context, std::filesystem::path(paths[i]));
     }
   }
 }

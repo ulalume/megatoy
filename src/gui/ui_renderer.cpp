@@ -1,5 +1,6 @@
 #include "ui_renderer.hpp"
 
+#include "drop_actions.hpp"
 #include "gui/components/confirmation_dialog.hpp"
 #include "gui/components/file_manager.hpp"
 #include "gui/components/main_menu.hpp"
@@ -12,6 +13,7 @@
 #include "gui/components/waveform.hpp"
 #include "gui/window_title.hpp"
 #include "history/snapshot_entry.hpp"
+#include "patch_actions.hpp"
 #include <filesystem>
 #include <iostream>
 #include <utility>
@@ -44,8 +46,9 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
 PatchDropContext make_patch_drop_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  return {ui_state.drop_state, [&ctx]() { ctx.cancel_instrument_selection(); },
-          [&ctx](size_t index) { ctx.apply_instrument_selection(index); }};
+  return {ui_state.drop_state,
+          [&ctx]() { drop_actions::cancel_selection(ctx); },
+          [&ctx](size_t index) { drop_actions::apply_selection(ctx, index); }};
 }
 
 ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
@@ -53,9 +56,11 @@ ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
   auto &ui_state = state.ui_state();
   return {
       ui_state.confirmation_state, ui_state.drop_state,
-      [&ctx](const patches::PatchEntry &entry) { ctx.load_patch(entry); },
+      [&ctx](const patches::PatchEntry &entry) {
+        patch_actions::load(ctx, entry);
+      },
       [&ctx](const ym2612::Patch &patch, const std::filesystem::path &path) {
-        ctx.load_dropped_patch(patch, path);
+        patch_actions::load_dropped_patch(ctx, patch, path);
       },
       [&ctx]() {
         ctx.services.gui_manager.set_should_close(true);
@@ -97,7 +102,9 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
   auto &ui_state = state.ui_state();
   return {ctx.services.patch_session.repository(), ctx.services.patch_session,
           ui_state.prefs,
-          [&ctx](const patches::PatchEntry &entry) { ctx.safe_load(entry); },
+          [&ctx](const patches::PatchEntry &entry) {
+            patch_actions::safe_load(ctx, entry);
+          },
           [](const std::filesystem::path &path) {
             reveal_in_file_manager(path.string());
           }};
@@ -111,11 +118,16 @@ MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
       state.input_state(),
       midi_keyboard_state(),
       [&ctx](ym2612::Note note, uint8_t velocity) {
-        return ctx.note_on(note, velocity);
+        return ctx.services.patch_session.note_on(note, velocity,
+                                                  ctx.ui_state().prefs);
       },
-      [&ctx](ym2612::Note note) { return ctx.note_off(note); },
-      [&ctx](const ym2612::Note &note) { return ctx.note_is_active(note); },
-      [&ctx]() { return ctx.active_notes(); },
+      [&ctx](ym2612::Note note) {
+        return ctx.services.patch_session.note_off(note);
+      },
+      [&ctx](const ym2612::Note &note) {
+        return ctx.services.patch_session.note_is_active(note);
+      },
+      [&ctx]() { return ctx.services.patch_session.active_notes(); },
   };
 }
 

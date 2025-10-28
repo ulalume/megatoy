@@ -1,11 +1,12 @@
 #pragma once
 
 #include "app_context.hpp"
+#include "app_services.hpp"
 #include "app_state.hpp"
 #include "formats/patch_loader.hpp"
 #include "patch_actions.hpp"
-
 #include <filesystem>
+#include <utility>
 
 namespace drop_actions {
 
@@ -33,10 +34,10 @@ inline void handle_success(AppContext &context, const ym2612::Patch &patch,
 }
 
 inline void handle_multi(AppContext &context,
-                         const std::vector<ym2612::Patch> &patches,
+                         std::vector<ym2612::Patch> patches,
                          const std::filesystem::path &path) {
   auto &drop = context.state.ui_state().drop_state;
-  drop.instruments = patches;
+  drop.instruments = std::move(patches);
   drop.pending_instruments_path = path;
   drop.selected_instrument = 0;
   drop.show_picker_for_multiple_instruments = true;
@@ -65,7 +66,7 @@ inline void handle_drop(AppContext &context,
     handle_success(context, result.patches[0], path);
     break;
   case formats::PatchLoadStatus::MultiInstrument:
-    handle_multi(context, result.patches, path);
+    handle_multi(context, std::move(result.patches), path);
     break;
   case formats::PatchLoadStatus::Failure:
   default:
@@ -81,11 +82,8 @@ inline void apply_selection(AppContext &context, size_t index) {
     return;
   }
 
-  auto selected = drop.instruments[index];
-  ym2612::Patch patch_to_apply = selected;
-  if (!selected.name.empty()) {
-    patch_to_apply.name = selected.name;
-  } else if (patch_to_apply.name.empty()) {
+  ym2612::Patch patch_to_apply = std::move(drop.instruments[index]);
+  if (patch_to_apply.name.empty()) {
     patch_to_apply.name = drop.pending_instruments_path.stem().string();
   }
 

@@ -21,7 +21,6 @@ target_link_libraries(imgui_lib PUBLIC
 )
 
 set(MEGATOY_CORE_SOURCES
-  src/app_context.cpp
   src/app_services.cpp
   src/app_state.cpp
   src/audio/audio_manager.cpp
