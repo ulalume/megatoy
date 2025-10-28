@@ -89,9 +89,11 @@ void render_all(AppState &app_state, ym2612::FFTAnalyzer &analyzer) {
       }};
   ui::render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);
 
+  static MidiKeyboardState midi_keyboard_state;
   MidiKeyboardContext midi_keyboard_context{
       ui_state.prefs,
       app_state.input_state(),
+      midi_keyboard_state,
       [&app_state](ym2612::Note note, uint8_t velocity) {
         return app_state.key_on(note, velocity);
       },

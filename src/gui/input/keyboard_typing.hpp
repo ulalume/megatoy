@@ -1,12 +1,11 @@
 #pragma once
 
 #include "core/types.hpp"
+#include "input_state.hpp"
 #include "ym2612/note.hpp"
 #include <functional>
 #include <imgui.h>
 #include <map>
-
-struct InputState;
 
 namespace ui {
 const std::map<ImGuiKey, ym2612::Note>

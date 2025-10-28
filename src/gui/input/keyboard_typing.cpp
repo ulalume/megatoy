@@ -1,5 +1,4 @@
 #include "keyboard_typing.hpp"
-#include "app_state.hpp"
 #include <cstring>
 #include <imgui.h>
 #include <map>

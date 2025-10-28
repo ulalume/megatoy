@@ -7,24 +7,13 @@
 #include "patches/patch_session.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
+#include "input_state.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
 #include <array>
 #include <filesystem>
 #include <string>
 #include <vector>
-
-struct MidiKeyboardSettings {
-  Key key = Key::C;
-  Scale scale = Scale::CHROMATIC;
-};
-
-struct InputState {
-  uint8_t keyboard_typing_octave = 4;
-  MidiKeyboardSettings midi_keyboard_settings;
-
-  std::map<int, ym2612::Note> active_keyboard_notes;
-};
 
 struct UIState {
   PreferenceManager::UIPreferences prefs;

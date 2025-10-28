@@ -33,7 +33,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/rym2612.cpp
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
-  src/gui/components/keyboard_typing.cpp
+  src/gui/input/keyboard_typing.cpp
   src/gui/components/main_menu.cpp
   src/gui/components/midi_keyboard.cpp
   src/gui/components/mml_console.cpp
