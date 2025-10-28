@@ -36,6 +36,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Define M_PI for Windows builds
+if(WIN32)
+  add_compile_definitions(_USE_MATH_DEFINES)
+endif()
+
 include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 include(cmake/targets.cmake)
