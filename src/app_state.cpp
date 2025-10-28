@@ -1,7 +1,6 @@
 #include "app_state.hpp"
 #include "formats/patch_loader.hpp"
-#include "history/snapshot_entry.hpp"
-#include <cstring>
+#include "patch_actions.hpp"
 #include <filesystem>
 #include <iostream>
 
@@ -44,47 +43,6 @@ void AppState::set_connected_midi_inputs(std::vector<std::string> devices) {
   connected_midi_inputs_ = std::move(devices);
 }
 
-bool AppState::load_patch(const patches::PatchEntry &patch_info) {
-  const auto before = capture_patch_snapshot();
-
-  ym2612::Patch loaded_patch;
-  if (!patch_session_.repository().load_patch(patch_info, loaded_patch)) {
-    std::cerr << "Failed to load preset patch: " << patch_info.name
-              << std::endl;
-    return false;
-  }
-
-  patch_session_.current_patch() = loaded_patch;
-  patch_session_.set_current_patch_path(patch_info.relative_path);
-  patch_session_.apply_patch_to_audio();
-
-  const auto after = capture_patch_snapshot();
-  record_patch_change("Load: " + patch_info.name, before, after);
-  patch_session_.mark_as_clean(); // Mark as clean after successful load
-  std::cout << "Loaded preset patch: " << patch_info.name << std::endl;
-  return true;
-}
-
-void AppState::safe_load_patch(const patches::PatchEntry &preset_info) {
-  if (patch_session_.is_modified()) {
-    // Show confirmation dialog
-    ui_state_.confirmation_state =
-        UIState::ConfirmationState::load(preset_info);
-  } else {
-    // Load directly if no modifications
-    load_patch(preset_info);
-  }
-}
-
-void AppState::load_dropped_patch_with_history(
-    const ym2612::Patch &patch, const std::filesystem::path &source_path) {
-  const auto before = capture_patch_snapshot();
-  patch_session_.set_current_patch(patch, source_path);
-  const auto after = capture_patch_snapshot();
-  record_patch_change("Load: " + source_path.filename().string(), before,
-                      after);
-}
-
 void AppState::sync_patch_directories() {
   path_service_.ensure_directories();
   patch_session_.refresh_directories();
@@ -107,7 +65,7 @@ void AppState::handle_patch_file_drop(const std::filesystem::path &path) {
       drop.pending_dropped_patch = result.patches[0];
       drop.pending_dropped_path = path;
     } else {
-      load_dropped_patch_with_history(result.patches[0], path);
+      patch_actions::load_dropped_patch(*this, result.patches[0], path);
     }
     drop.instruments.clear();
     drop.pending_instruments_path.clear();
@@ -152,8 +110,8 @@ void AppState::apply_mml_instrument_selection(size_t index) {
     patch_to_apply.name = drop.pending_instruments_path.stem().string();
   }
 
-  load_dropped_patch_with_history(patch_to_apply,
-                                  drop.pending_instruments_path);
+  patch_actions::load_dropped_patch(*this, patch_to_apply,
+                                    drop.pending_instruments_path);
 
   drop.instruments.clear();
   drop.pending_instruments_path.clear();
@@ -171,26 +129,6 @@ void AppState::cancel_instrument_selection() {
   drop.show_picker_for_multiple_instruments = false;
   drop.error_message.clear();
   drop.show_error_popup = false;
-}
-
-AppState::PatchSnapshot AppState::capture_patch_snapshot() const {
-  return patch_session_.capture_snapshot();
-}
-
-void AppState::record_patch_change(const std::string &label,
-                                   const PatchSnapshot &before,
-                                   const PatchSnapshot &after) {
-  history_.begin_transaction(
-      label, {}, [label, before, after](AppState &state) {
-        return history::make_snapshot_entry<PatchSnapshot>(
-            label, std::string{}, before, after,
-            [](AppState &target, const PatchSnapshot &snapshot) {
-              target.patch_session_.restore_snapshot(snapshot);
-
-              std::cout << "Patch restored" << std::endl;
-            });
-      });
-  history_.commit_transaction(*this);
 }
 
 void AppState::apply_patch_to_device() {

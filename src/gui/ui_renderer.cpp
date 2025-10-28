@@ -12,6 +12,7 @@
 #include "gui/window_title.hpp"
 #include "history/snapshot_entry.hpp"
 #include "note_actions.hpp"
+#include "patch_actions.hpp"
 #include <filesystem>
 #include <utility>
 
@@ -52,11 +53,11 @@ ConfirmationDialogContext make_confirmation_context(AppState &app_state) {
   auto &ui_state = app_state.ui_state();
   return {ui_state.confirmation_state, ui_state.drop_state,
           [&app_state](const patches::PatchEntry &entry) {
-            app_state.load_patch(entry);
+            patch_actions::load(app_state, entry);
           },
           [&app_state](const ym2612::Patch &patch,
                        const std::filesystem::path &path) {
-            app_state.load_dropped_patch_with_history(patch, path);
+            patch_actions::load_dropped_patch(app_state, patch, path);
           },
           [&app_state]() {
             app_state.gui().set_should_close(true);
@@ -93,7 +94,7 @@ PatchSelectorContext make_patch_selector_context(AppState &app_state) {
   return {app_state.patch_repository(), app_state.patch_session(),
           ui_state.prefs,
           [&app_state](const patches::PatchEntry &entry) {
-            app_state.safe_load_patch(entry);
+            patch_actions::safe_load(app_state, entry);
           },
           [](const std::filesystem::path &path) {
             reveal_in_file_manager(path.string());

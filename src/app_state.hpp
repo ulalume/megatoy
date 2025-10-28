@@ -142,12 +142,6 @@ public:
   void set_connected_midi_inputs(std::vector<std::string> devices);
 
   // bool load_user_patch(const std::string &patch_name);
-  bool load_patch(const patches::PatchEntry &preset_info);
-  void safe_load_patch(const patches::PatchEntry &preset_info);
-  void
-  load_dropped_patch_with_history(const ym2612::Patch &patch,
-                                  const std::filesystem::path &source_path);
-
   void sync_patch_directories();
   void sync_imgui_ini_file();
 
@@ -157,13 +151,6 @@ public:
 
 private:
   static constexpr UINT32 kSampleRate = 44100;
-
-  using PatchSnapshot = patches::PatchSession::PatchSnapshot;
-
-  PatchSnapshot capture_patch_snapshot() const;
-  void record_patch_change(const std::string &label,
-                           const PatchSnapshot &before,
-                           const PatchSnapshot &after);
 
   megatoy::system::PathService path_service_;
   PreferenceManager preference_manager_;
