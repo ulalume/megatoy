@@ -32,9 +32,14 @@ const std::string &PatchSession::current_patch_path() const {
 void PatchSession::set_current_patch_path(const std::filesystem::path &path) {
   if (path.empty()) {
     current_patch_path_.clear();
-  } else {
-    current_patch_path_ = path.generic_string();
+    return;
   }
+  if (!path.is_absolute()) {
+    current_patch_path_ = path.generic_string();
+    return;
+  }
+  const auto relative = repository_.to_relative_path(path);
+  current_patch_path_ = relative.generic_string();
 }
 
 PatchRepository &PatchSession::repository() { return repository_; }
