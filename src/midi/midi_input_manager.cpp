@@ -1,13 +1,13 @@
 #include "midi/midi_input_manager.hpp"
-
-#include "app_state.hpp"
+#include "app_context.hpp"
+#include "app_services.hpp"
 #include "ym2612/note.hpp"
-
 #include <RtMidi.h>
 #include <algorithm>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,7 +21,7 @@ struct MidiEvent {
 
   ym2612::Note note;
   uint8_t velocity = 0;
-  std::string port_name;
+  std::string_view port_name;
 };
 
 } // namespace
@@ -61,8 +61,7 @@ struct MidiInputManager::Impl {
 
   void close_connection(Connection &connection) {
     if (connection.midi_in && connection.midi_in->isPortOpen()) {
-      std::cout << "Closing MIDI input port: " << connection.port_name
-                << "\n";
+      std::cout << "Closing MIDI input port: " << connection.port_name << "\n";
       connection.midi_in->closePort();
     }
   }
@@ -107,8 +106,7 @@ struct MidiInputManager::Impl {
 
   void sync_connections(const std::vector<std::string> &ports) {
     for (auto it = connections.begin(); it != connections.end();) {
-      if (std::find(ports.begin(), ports.end(), it->port_name) ==
-          ports.end()) {
+      if (std::find(ports.begin(), ports.end(), it->port_name) == ports.end()) {
         std::cout << "MIDI input disconnected: " << it->port_name << "\n";
         close_connection(*it);
         it = connections.erase(it);
@@ -138,10 +136,10 @@ struct MidiInputManager::Impl {
       return;
     }
 
-    const auto ports = enumerate_ports();
+    auto ports = enumerate_ports();
 
     const bool had_ports = !available_ports.empty();
-    available_ports = ports;
+    available_ports = std::move(ports);
     ports_dirty = true;
 
     if (available_ports.empty()) {
@@ -244,26 +242,27 @@ struct MidiInputManager::Impl {
     }
   }
 
-  void dispatch(AppState &app_state) {
+  void dispatch(AppContext &context) {
     if (ports_dirty) {
-      app_state.set_connected_midi_inputs(available_ports);
+      context.app_state().set_connected_midi_inputs(available_ports);
       ports_dirty = false;
     }
 
     for (const auto &event : pending_events) {
       switch (event.type) {
       case MidiEvent::Type::NoteOn:
-        if (!app_state.key_on(event.note, event.velocity)) {
-          std::clog << "MIDI note-on ignored (no free channel or already active): "
-                    << event.note << " velocity "
-                    << static_cast<int>(event.velocity) << " ("
-                    << event.port_name << ")\n";
+        if (!context.services.patch_session.note_on(event.note, event.velocity,
+                                                    context.ui_state().prefs)) {
+          std::clog
+              << "MIDI note-on ignored (no free channel or already active): "
+              << event.note << " velocity " << static_cast<int>(event.velocity)
+              << " (" << event.port_name << ")\n";
         }
         break;
       case MidiEvent::Type::NoteOff:
-        if (!app_state.key_off(event.note)) {
-          std::clog << "MIDI note-off ignored (note not active): "
-                    << event.note << " (" << event.port_name << ")\n";
+        if (!context.services.patch_session.note_off(event.note)) {
+          std::clog << "MIDI note-off ignored (note not active): " << event.note
+                    << " (" << event.port_name << ")\n";
         }
         break;
       }
@@ -294,6 +293,6 @@ void MidiInputManager::shutdown() { impl_->shutdown(); }
 
 void MidiInputManager::poll() { impl_->poll(); }
 
-void MidiInputManager::dispatch(AppState &app_state) {
-  impl_->dispatch(app_state);
+void MidiInputManager::dispatch(AppContext &context) {
+  impl_->dispatch(context);
 }

@@ -5,19 +5,18 @@
 
 namespace ui {
 
-void render_mml_console(const char *title, AppState &app_state) {
-  auto &ui_state = app_state.ui_state();
+void render_mml_console(const char *title, MmlConsoleContext &context) {
   ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiCond_FirstUseEver);
 
-  if (!ui_state.prefs.show_mml_console) {
+  if (!context.ui_prefs.show_mml_console) {
     return;
   }
-  if (!ImGui::Begin(title, &ui_state.prefs.show_mml_console)) {
+  if (!ImGui::Begin(title, &context.ui_prefs.show_mml_console)) {
     ImGui::End();
     return;
   }
 
-  auto mml = formats::ctrmml::patch_to_string(app_state.patch());
+  auto mml = formats::ctrmml::patch_to_string(context.current_patch());
   auto mml_c = mml.c_str();
 
   // copy to clipboard button

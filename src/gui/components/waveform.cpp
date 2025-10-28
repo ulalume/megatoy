@@ -1,8 +1,4 @@
 #include "waveform.hpp"
-
-#include "app_state.hpp"
-// #include "../channel_allocator.hpp"
-// #include <algorithm>
 #include "gui/styles/megatoy_style.hpp"
 #include "ym2612/fft_analyzer.hpp"
 #include <imgui.h>
@@ -11,15 +7,14 @@
 
 namespace ui {
 
-void render_waveform(const char *title, AppState &app_state,
-                     ym2612::FFTAnalyzer &analyzer) {
-  auto &ui_state = app_state.ui_state();
-  if (!ui_state.prefs.show_waveform) {
+void render_waveform(const char *title, WaveformContext &context) {
+  auto &ui_prefs = context.ui_prefs;
+  if (!ui_prefs.show_waveform) {
     return;
   }
 
   ImGui::SetNextWindowSize(ImVec2(420.0f, 240.0f), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin(title, &ui_state.prefs.show_waveform)) {
+  if (!ImGui::Begin(title, &ui_prefs.show_waveform)) {
     ImGui::End();
     return;
   }
@@ -27,13 +22,13 @@ void render_waveform(const char *title, AppState &app_state,
   static const int sample_count = 1024;
 
   std::vector<float> samples;
-  auto &sampler = app_state.wave_sampler();
+  auto &sampler = context.sampler;
+  const auto &patch = context.current_patch();
 
-  bool has_samples = app_state.patch().channel.left_speaker ||
-                     app_state.patch().channel.right_speaker;
+  bool has_samples = patch.channel.left_speaker || patch.channel.right_speaker;
   if (has_samples)
     sampler.latest_samples(static_cast<std::size_t>(sample_count), samples,
-                           app_state.patch().channel.left_speaker);
+                           patch.channel.left_speaker);
 
   bool is_warning = sampler.is_volume_warning();
   if (is_warning) {
@@ -57,8 +52,8 @@ void render_waveform(const char *title, AppState &app_state,
   ImGui::NextColumn();
 
   if (has_samples) {
-    analyzer.compute(samples);
-    const auto &mags = analyzer.magnitudes();
+    context.analyzer.compute(samples);
+    const auto &mags = context.analyzer.magnitudes();
 
     // Create logarithmic frequency bins with interpolation
     const size_t num_display_bins = 256;

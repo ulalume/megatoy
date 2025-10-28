@@ -1,5 +1,4 @@
 #include "patch_session.hpp"
-
 #include "audio/audio_manager.hpp"
 #include "formats/ctrmml.hpp"
 #include "formats/dmp.hpp"
@@ -228,6 +227,7 @@ const std::vector<ym2612::Note> PatchSession::active_notes() const {
   const std::map<ym2612::Note, ym2612::ChannelIndex> &active_notes =
       channel_allocator_.active_notes();
   std::vector<ym2612::Note> notes;
+  notes.reserve(active_notes.size());
   for (const auto &note : active_notes) {
     notes.push_back(note.first);
   }

@@ -4,8 +4,8 @@
 
 namespace ui {
 
-void render_confirmation_dialog(AppState &app_state) {
-  auto &confirmation_state = app_state.ui_state().confirmation_state;
+void render_confirmation_dialog(ConfirmationDialogContext &context) {
+  auto &confirmation_state = context.state;
 
   // Unsaved changes confirmation dialog
   center_next_window();
@@ -30,21 +30,25 @@ void render_confirmation_dialog(AppState &app_state) {
 
       switch (confirmation_state.operation) {
       case UIState::ConfirmationState::Operation::Load:
-        app_state.load_patch(confirmation_state.pending_patch_entry);
+        if (context.load_patch_entry) {
+          context.load_patch_entry(confirmation_state.pending_patch_entry);
+        }
         confirmation_state.show_unsaved_changes_dialog = false;
         ImGui::CloseCurrentPopup();
         break;
       case UIState::ConfirmationState::Operation::Drop: {
-        auto &drop_state = app_state.ui_state().drop_state;
-        app_state.load_dropped_patch_with_history(
-            drop_state.pending_dropped_patch, drop_state.pending_dropped_path);
+        if (context.apply_dropped_patch) {
+          context.apply_dropped_patch(context.drop_state.pending_dropped_patch,
+                                      context.drop_state.pending_dropped_path);
+        }
         confirmation_state.show_unsaved_changes_dialog = false;
         ImGui::CloseCurrentPopup();
         break;
       }
       case UIState::ConfirmationState::Operation::Exit:
-        app_state.gui().set_should_close(true);
-        app_state.patch_session().mark_as_clean();
+        if (context.confirm_exit) {
+          context.confirm_exit();
+        }
         confirmation_state.show_unsaved_changes_dialog = false;
         ImGui::CloseCurrentPopup();
         break;

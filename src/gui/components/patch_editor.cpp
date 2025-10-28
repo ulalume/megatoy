@@ -2,15 +2,29 @@
 #include "common.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/styles/megatoy_style.hpp"
-#include "history_helpers.hpp"
 #include "operator_editor.hpp"
-#include "patches/patch_session.hpp"
 #include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <imgui.h>
 
 namespace ui {
+
+void track_patch_history(PatchEditorContext &context, const std::string &label,
+                         const std::string &merge_key) {
+  const std::string key = merge_key.empty() ? label : merge_key;
+  if (ImGui::IsItemActivated()) {
+    auto before = context.session.current_patch();
+    if (context.begin_history) {
+      context.begin_history(label, key, before);
+    }
+  }
+  if (ImGui::IsItemDeactivatedAfterEdit()) {
+    if (context.commit_history) {
+      context.commit_history();
+    }
+  }
+}
 
 // ImGui callback to block invalid characters
 static int filename_input_callback(ImGuiInputTextCallbackData *data) {
@@ -29,10 +43,10 @@ bool is_patch_name_valid(const ym2612::Patch &patch) {
          patches::sanitize_filename(patch.name) == patch.name;
 }
 
-void render_save_export_buttons(AppState &app_state, bool name_valid,
-                                UIState::PatchEditorState &state) {
-  auto &patch_session = app_state.patch_session();
-  auto &repository = app_state.patch_repository();
+void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
+                                PatchEditorState &state) {
+  auto &patch_session = context.session;
+  auto &repository = patch_session.repository();
 
   auto is_user_patch = patch_session.current_patch_is_user_patch();
   auto is_patch_modified = patch_session.is_modified();
@@ -102,7 +116,7 @@ void render_save_export_buttons(AppState &app_state, bool name_valid,
       repository.to_relative_path(patch_session.current_patch_path()).c_str());
 }
 
-void render_patch_name_field(AppState &app_state, ym2612::Patch &patch,
+void render_patch_name_field(PatchEditorContext &context, ym2612::Patch &patch,
                              bool name_valid) {
   ImGui::PushItemWidth(200);
   char name_buffer[64];
@@ -115,7 +129,7 @@ void render_patch_name_field(AppState &app_state, ym2612::Patch &patch,
     patch.name = std::string(name_buffer);
   }
 
-  track_patch_history(app_state, "Patch Name", "meta.name");
+  track_patch_history(context, "Patch Name", "meta.name");
 
   if (!name_valid && !patch.name.empty()) {
     ImGui::SameLine();
@@ -125,8 +139,9 @@ void render_patch_name_field(AppState &app_state, ym2612::Patch &patch,
   ImGui::PopItemWidth();
 }
 
-void render_save_export_popups(AppState &app_state, const ym2612::Patch &patch,
-                               UIState::PatchEditorState &state) {
+void render_save_export_popups(PatchEditorContext &context,
+                               const ym2612::Patch &patch,
+                               PatchEditorState &state) {
   center_next_window();
   if (ImGui::BeginPopupModal("Overwrite Confirmation", nullptr,
                              ImGuiWindowFlags_NoMove |
@@ -149,11 +164,11 @@ void render_save_export_popups(AppState &app_state, const ym2612::Patch &patch,
     ImGui::EndPopup();
 
     if (overwrite_button) {
-      auto result = app_state.patch_session().save_current_patch(true);
+      auto result = context.session.save_current_patch(true);
       if (result.is_success()) {
         state.last_export_path = result.path.string();
-        app_state.patch_session().set_current_patch_path(
-            app_state.patch_repository().to_relative_path(result.path));
+        context.session.set_current_patch_path(
+            context.session.repository().to_relative_path(result.path));
         ImGui::OpenPopup("Save Success");
       } else if (result.is_error()) {
         state.last_export_error = result.error_message;
@@ -208,11 +223,11 @@ void render_save_export_popups(AppState &app_state, const ym2612::Patch &patch,
   }
 }
 
-void render_patch_metadata(AppState &app_state, ym2612::Patch &patch,
-                           UIState::PatchEditorState &state) {
+void render_patch_metadata(PatchEditorContext &context, ym2612::Patch &patch,
+                           PatchEditorState &state) {
   const bool name_valid = is_patch_name_valid(patch);
 
-  render_save_export_buttons(app_state, name_valid, state);
+  render_save_export_buttons(context, name_valid, state);
 
   bool export_mml = false;
   bool export_dmp = false;
@@ -225,8 +240,7 @@ void render_patch_metadata(AppState &app_state, ym2612::Patch &patch,
   if (export_mml || export_dmp) {
     const auto export_format =
         export_mml ? patches::ExportFormat::MML : patches::ExportFormat::DMP;
-    auto result =
-        app_state.patch_session().export_current_patch_as(export_format);
+    auto result = context.session.export_current_patch_as(export_format);
     if (result.is_success()) {
       state.last_export_path = result.path.string();
       ImGui::OpenPopup("Export Success");
@@ -236,12 +250,12 @@ void render_patch_metadata(AppState &app_state, ym2612::Patch &patch,
     }
   }
 
-  render_patch_name_field(app_state, patch, name_valid);
+  render_patch_name_field(context, patch, name_valid);
 
-  render_save_export_popups(app_state, patch, state);
+  render_save_export_popups(context, patch, state);
 }
 
-void render_lfo_section(AppState &app_state, ym2612::Patch &patch,
+void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
                         bool &settings_changed) {
   ImGui::SeparatorText("Low Frequency Oscillator");
   bool lfo_enable = patch.global.lfo_enable;
@@ -249,7 +263,7 @@ void render_lfo_section(AppState &app_state, ym2612::Patch &patch,
     patch.global.lfo_enable = lfo_enable;
     settings_changed = true;
   }
-  track_patch_history(app_state, "LFO Enable", "global.lfo_enable");
+  track_patch_history(context, "LFO Enable", "global.lfo_enable");
 
   ImGui::PushItemWidth(hslider_width);
 
@@ -259,7 +273,7 @@ void render_lfo_section(AppState &app_state, ym2612::Patch &patch,
     ImGui::BeginDisabled(true);
   bool lfo_freq_changed = ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7);
 
-  track_patch_history(app_state, "LFO Frequency", "global.lfo_frequency");
+  track_patch_history(context, "LFO Frequency", "global.lfo_frequency");
   if (lfo_freq_changed) {
     patch.global.lfo_frequency = static_cast<uint8_t>(lfo_freq);
     settings_changed = true;
@@ -270,7 +284,7 @@ void render_lfo_section(AppState &app_state, ym2612::Patch &patch,
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed =
       ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3);
-  track_patch_history(app_state, "Amplitude Modulation Sensitivity",
+  track_patch_history(context, "Amplitude Modulation Sensitivity",
                       "channel.am_sensitivity");
   if (ams_changed) {
     patch.channel.amplitude_modulation_sensitivity = static_cast<uint8_t>(ams);
@@ -280,7 +294,7 @@ void render_lfo_section(AppState &app_state, ym2612::Patch &patch,
   int fms = patch.channel.frequency_modulation_sensitivity;
   bool fms_changed =
       ImGui::SliderInt("Frequency Modulation Sensitivity", &fms, 0, 7);
-  track_patch_history(app_state, "Frequency Modulation Sensitivity",
+  track_patch_history(context, "Frequency Modulation Sensitivity",
                       "channel.fm_sensitivity");
   if (fms_changed) {
     patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(fms);
@@ -293,7 +307,7 @@ void render_lfo_section(AppState &app_state, ym2612::Patch &patch,
   ImGui::Spacing();
 }
 
-void render_channel_section(AppState &app_state, ym2612::Patch &patch,
+void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
                             bool &settings_changed) {
   ImGui::SeparatorText("Channel");
   bool left_speaker = patch.channel.left_speaker;
@@ -301,7 +315,7 @@ void render_channel_section(AppState &app_state, ym2612::Patch &patch,
     patch.channel.left_speaker = left_speaker;
     settings_changed = true;
   }
-  track_patch_history(app_state, "Left Speaker", "channel.left_speaker");
+  track_patch_history(context, "Left Speaker", "channel.left_speaker");
 
   ImGui::SameLine();
 
@@ -310,7 +324,7 @@ void render_channel_section(AppState &app_state, ym2612::Patch &patch,
     patch.channel.right_speaker = right_speaker;
     settings_changed = true;
   }
-  track_patch_history(app_state, "Right Speaker", "channel.right_speaker");
+  track_patch_history(context, "Right Speaker", "channel.right_speaker");
 
   ImGui::PushItemWidth(hslider_width);
 
@@ -321,7 +335,7 @@ void render_channel_section(AppState &app_state, ym2612::Patch &patch,
 
   int algorithm = patch.instrument.algorithm;
   bool algorithm_changed = ImGui::SliderInt("Algorithm", &algorithm, 0, 7);
-  track_patch_history(app_state, "Algorithm", "instrument.algorithm");
+  track_patch_history(context, "Algorithm", "instrument.algorithm");
   if (algorithm_changed) {
     patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
     settings_changed = true;
@@ -331,14 +345,15 @@ void render_channel_section(AppState &app_state, ym2612::Patch &patch,
   ImGui::Spacing();
 }
 
-void render_operator_section(AppState &app_state, ym2612::Patch &patch,
+void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
                              bool &settings_changed) {
   ImGui::Columns(2, "operation_columns", false);
   for (auto i = 0; i < 4; i++) {
     auto op_index = static_cast<int>(ym2612::all_operator_indices[i]);
 
     settings_changed |= render_operator_editor(
-        app_state, patch.instrument.operators[op_index], i);
+        context, patch, patch.instrument.operators[op_index], i,
+        context.envelope_states[i]);
 
     ImGui::Spacing();
     ImGui::NextColumn();
@@ -349,13 +364,12 @@ void render_operator_section(AppState &app_state, ym2612::Patch &patch,
 } // namespace
 
 // Function to render instrument settings panel
-void render_patch_editor(const char *title, AppState &app_state) {
-  auto &patch = app_state.patch();
-  auto &ui_state = app_state.ui_state();
-  auto &editor_state = ui_state.patch_editor;
-  auto is_modified = app_state.patch_session().is_modified();
+void render_patch_editor(const char *title, PatchEditorContext &context,
+                         PatchEditorState &state) {
+  auto &patch = context.session.current_patch();
+  auto is_modified = context.session.is_modified();
 
-  if (!ui_state.prefs.show_patch_editor) {
+  if (!context.prefs.show_patch_editor) {
     return;
   }
 
@@ -364,23 +378,23 @@ void render_patch_editor(const char *title, AppState &app_state) {
 
   auto title_with_id =
       std::string(title) + (is_modified ? " *###" : "###") + std::string(title);
-  if (!ImGui::Begin(title_with_id.c_str(), &ui_state.prefs.show_patch_editor)) {
+  if (!ImGui::Begin(title_with_id.c_str(), &context.prefs.show_patch_editor)) {
     ImGui::End();
     return;
   }
 
   bool settings_changed = false;
 
-  render_patch_metadata(app_state, patch, editor_state);
+  render_patch_metadata(context, patch, state);
   ImGui::Spacing();
 
-  render_lfo_section(app_state, patch, settings_changed);
-  render_channel_section(app_state, patch, settings_changed);
-  render_operator_section(app_state, patch, settings_changed);
+  render_lfo_section(context, patch, settings_changed);
+  render_channel_section(context, patch, settings_changed);
+  render_operator_section(context, patch, settings_changed);
 
   // Apply settings if changed
   if (settings_changed) {
-    app_state.update_all_settings();
+    context.session.apply_patch_to_audio();
   }
 
   ImGui::End();

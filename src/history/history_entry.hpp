@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-class AppState;
+struct AppContext;
 
 namespace history {
 
@@ -10,8 +10,8 @@ class HistoryEntry {
 public:
   virtual ~HistoryEntry() = default;
 
-  virtual void undo(AppState &app_state) = 0;
-  virtual void redo(AppState &app_state) = 0;
+  virtual void undo(AppContext &app_context) = 0;
+  virtual void redo(AppContext &app_context) = 0;
 
   virtual std::string_view label() const = 0;
   virtual std::string_view merge_key() const = 0;

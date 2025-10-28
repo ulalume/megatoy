@@ -7,13 +7,13 @@
 #include <string_view>
 #include <utility>
 
-class AppState;
+struct AppContext;
 
 namespace history {
 
 template <typename Value> class SnapshotEntry : public HistoryEntry {
 public:
-  using ApplyFn = std::function<void(AppState &, const Value &)>;
+  using ApplyFn = std::function<void(AppContext &, const Value &)>;
 
   SnapshotEntry(std::string label, std::string merge_key, Value before,
                 Value after, ApplyFn apply)
@@ -21,9 +21,9 @@ public:
         before_(std::move(before)), after_(std::move(after)),
         apply_(std::move(apply)) {}
 
-  void undo(AppState &app_state) override { apply_(app_state, before_); }
+  void undo(AppContext &app_context) override { apply_(app_context, before_); }
 
-  void redo(AppState &app_state) override { apply_(app_state, after_); }
+  void redo(AppContext &app_context) override { apply_(app_context, after_); }
 
   std::string_view label() const override { return label_; }
   std::string_view merge_key() const override { return merge_key_; }

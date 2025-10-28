@@ -1,7 +1,10 @@
+#include "app_context.hpp"
+#include "app_services.hpp"
 #include "app_state.hpp"
+#include "drop_actions.hpp"
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
-#include "ym2612/fft_analyzer.hpp"
+#include "patch_actions.hpp"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <imgui.h>
@@ -14,30 +17,38 @@ void handle_file_drop(GLFWwindow *window, int count, const char **paths) {
     return;
   }
 
-  auto *state = static_cast<AppState *>(glfwGetWindowUserPointer(window));
-  if (state == nullptr) {
+  auto *context = static_cast<AppContext *>(glfwGetWindowUserPointer(window));
+  if (context == nullptr) {
     return;
   }
 
   for (int i = 0; i < count; ++i) {
-    if (paths[i] != nullptr) {
-      state->handle_patch_file_drop(std::filesystem::path(paths[i]));
+    if (paths[i] == nullptr) {
+      continue;
     }
+
+    drop_actions::Environment env{context->services, context->ui_state(),
+                                  [context](const ym2612::Patch &patch,
+                                            const std::filesystem::path &path) {
+                                    patch_actions::load_dropped_patch(
+                                        *context, patch, path);
+                                  }};
+
+    drop_actions::handle_drop(env, std::filesystem::path(paths[i]));
   }
 }
 
 } // namespace
 
 int main(int argc, char *argv[]) {
-  // Initialize application state
-  AppState app_state;
-  app_state.init();
-
-  ym2612::FFTAnalyzer analyzer = ym2612::FFTAnalyzer(1024);
+  AppServices services;
+  AppState app_state{};
+  services.initialize_app(app_state);
+  AppContext app_context{services, app_state};
 
   // Setup window callbacks
-  if (GLFWwindow *window = app_state.gui().get_window()) {
-    glfwSetWindowUserPointer(window, &app_state);
+  if (GLFWwindow *window = services.gui_manager.get_window()) {
+    glfwSetWindowUserPointer(window, &app_context);
     glfwSetDropCallback(window, handle_file_drop);
   }
 
@@ -48,38 +59,37 @@ int main(int argc, char *argv[]) {
   // Main application loop
   while (true) {
     // Check if window close was requested
-    if (app_state.gui().get_should_close()) {
+    if (services.gui_manager.get_should_close()) {
       // Check if there are unsaved changes
-      if (app_state.patch_session().is_modified()) {
+      if (services.patch_session.is_modified()) {
         app_state.ui_state().confirmation_state =
             UIState::ConfirmationState::exit();
-        app_state.gui().set_should_close(false);
+        services.gui_manager.set_should_close(false);
       } else {
         break;
       }
     }
 
     // Poll events
-    app_state.gui().poll_events();
+    services.gui_manager.poll_events();
 
     // Update MIDI
     midi.poll();
-    midi.dispatch(app_state);
+    midi.dispatch(app_context);
 
     // Render UI
-    app_state.gui().begin_frame();
-    app_state.history().handle_shortcuts(app_state);
-    ui::render_all(app_state, analyzer);
+    services.gui_manager.begin_frame();
+    services.history.handle_shortcuts(app_context);
+    ui::render_all(app_context);
 
     // Update preferences from UI state
-    app_state.preference_manager().set_ui_preferences(
-        app_state.ui_state().prefs);
+    services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);
 
-    app_state.gui().end_frame();
+    services.gui_manager.end_frame();
   }
 
   // Shutdown
-  app_state.shutdown();
+  services.shutdown_app();
   std::cout << "Goodbye!\n";
   return 0;
 }

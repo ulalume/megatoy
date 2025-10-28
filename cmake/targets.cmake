@@ -21,6 +21,7 @@ target_link_libraries(imgui_lib PUBLIC
 )
 
 set(MEGATOY_CORE_SOURCES
+  src/app_services.cpp
   src/app_state.cpp
   src/audio/audio_manager.cpp
   src/channel_allocator.cpp
@@ -33,7 +34,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/rym2612.cpp
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
-  src/gui/components/keyboard_typing.cpp
+  src/gui/input/keyboard_typing.cpp
   src/gui/components/main_menu.cpp
   src/gui/components/midi_keyboard.cpp
   src/gui/components/mml_console.cpp
@@ -54,6 +55,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/styles/megatoy_style.cpp
   src/gui/styles/theme.cpp
   src/history/history_manager.cpp
+  src/drop_actions.cpp
   src/midi/midi_input_manager.cpp
 
   src/patches/patch_session.cpp
@@ -193,5 +195,6 @@ if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
     DESTINATION "$<IF:$<PLATFORM_ID:Darwin>,Resources/presets,presets>"
   )
 else()
-  message(WARNING "Presets directory not found at ${MEGATOY_PRESETS_SOURCE_DIR}")
+  message(WARNING
+    "Presets directory not found at ${MEGATOY_PRESETS_SOURCE_DIR}")
 endif()

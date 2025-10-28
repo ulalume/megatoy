@@ -1,10 +1,9 @@
 #pragma once
 
-#include "../app_state.hpp"
-#include "../ym2612/fft_analyzer.hpp"
+#include "../app_context.hpp"
 
 namespace ui {
 
-void render_all(AppState &app_state, ym2612::FFTAnalyzer &analyzer);
+void render_all(AppContext &context);
 
 } // namespace ui

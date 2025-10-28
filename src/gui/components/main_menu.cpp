@@ -1,16 +1,16 @@
 #include "main_menu.hpp"
 
-#include "../window_title.hpp"
+#include "gui/window_title.hpp"
 #include <imgui.h>
 #include <string>
 #include <string_view>
 
 namespace ui {
 
-void render_main_menu(AppState &app_state) {
+void render_main_menu(MainMenuContext &context) {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("Edit")) {
-      auto &history = app_state.history();
+      auto &history = context.history;
       const ImGuiIO &io = ImGui::GetIO();
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
       const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
@@ -27,7 +27,9 @@ void render_main_menu(AppState &app_state) {
 
       if (ImGui::MenuItem(undo_label.c_str(), undo_shortcut, false,
                           history.can_undo())) {
-        history.undo(app_state);
+        if (context.undo) {
+          context.undo();
+        }
       }
 
       std::string redo_label = "Redo";
@@ -41,44 +43,42 @@ void render_main_menu(AppState &app_state) {
 
       if (ImGui::MenuItem(redo_label.c_str(), redo_shortcut, false,
                           history.can_redo())) {
-        history.redo(app_state);
+        if (context.redo) {
+          context.redo();
+        }
       }
 
       ImGui::EndMenu();
     }
 
     if (ImGui::BeginMenu("View")) {
-      auto &ui_state = app_state.ui_state();
+      auto &ui_prefs = context.ui_prefs;
 
-      bool fullscreen = app_state.gui().is_fullscreen();
+      bool fullscreen = context.gui.is_fullscreen();
       if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
-        app_state.gui().set_fullscreen(!fullscreen);
+        context.gui.set_fullscreen(!fullscreen);
       }
 
       ImGui::Separator();
 
-      ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr,
-                      &ui_state.prefs.show_patch_editor);
+      ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
       ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
-                      &ui_state.prefs.show_midi_keyboard);
+                      &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(PATCH_BROWSER_TITLE, nullptr,
-                      &ui_state.prefs.show_patch_selector);
-      ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_state.prefs.show_waveform);
-      ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr,
-                      &ui_state.prefs.show_mml_console);
-      ImGui::MenuItem(PREFERENCES_TITLE, nullptr,
-                      &ui_state.prefs.show_preferences);
+                      &ui_prefs.show_patch_selector);
+      ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
+      ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);
+      ImGui::MenuItem(PREFERENCES_TITLE, nullptr, &ui_prefs.show_preferences);
 
       ImGui::Separator();
 
       // Reset buttons
       if (ImGui::MenuItem("Reset to Default View")) {
-        app_state.preference_manager().reset_ui_preferences();
-        const auto &ui_prefs = app_state.preference_manager().ui_preferences();
-        ui_state.prefs = ui_prefs;
-        ui_state.open_directory_dialog = false;
-        app_state.gui().reset_layout();
-        app_state.gui().set_theme(ui::styles::ThemeId::MegatoyDark);
+        context.preferences.reset_ui_preferences();
+        context.ui_prefs = context.preferences.ui_preferences();
+        context.open_directory_dialog = false;
+        context.gui.reset_layout();
+        context.gui.set_theme(ui::styles::ThemeId::MegatoyDark);
       }
       ImGui::EndMenu();
     }
