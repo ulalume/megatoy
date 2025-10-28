@@ -193,5 +193,6 @@ if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
     DESTINATION "$<IF:$<PLATFORM_ID:Darwin>,Resources/presets,presets>"
   )
 else()
-  message(WARNING "Presets directory not found at ${MEGATOY_PRESETS_SOURCE_DIR}")
+  message(WARNING
+    "Presets directory not found at ${MEGATOY_PRESETS_SOURCE_DIR}")
 endif()
