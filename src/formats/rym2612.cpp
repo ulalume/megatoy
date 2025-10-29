@@ -131,9 +131,6 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
       patch.name = name;
     }
 
-    std::string category = extract_attribute("category");
-    patch.category = category.empty() ? "RYM2612" : category;
-
     // Global settings
     patch.global.dac_enable = false; // rym2612 does not expose DAC settings
     patch.global.lfo_enable =

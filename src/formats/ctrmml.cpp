@@ -247,8 +247,6 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
       op.ssg_type_envelope_control = ssg_value & 0b0111;
     }
 
-    patch.category = "ctrmml";
-
     std::string instrument_name = comment;
     if (instrument_name.empty()) {
       instrument_name = file_stem + "_" + std::to_string(instrument_number);

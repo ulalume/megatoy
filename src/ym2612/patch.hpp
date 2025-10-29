@@ -9,7 +9,6 @@ namespace ym2612 {
 
 struct Patch {
   std::string name = "";
-  std::string category = "";
 
   GlobalSettings global;
   ChannelSettings channel;
@@ -71,9 +70,8 @@ inline bool operator!=(const ChannelInstrument &lhs,
 }
 
 inline bool operator==(const Patch &lhs, const Patch &rhs) {
-  return lhs.name == rhs.name && lhs.category == rhs.category &&
-         lhs.global == rhs.global && lhs.channel == rhs.channel &&
-         lhs.instrument == rhs.instrument;
+  return lhs.name == rhs.name && lhs.global == rhs.global &&
+         lhs.channel == rhs.channel && lhs.instrument == rhs.instrument;
 }
 
 inline bool operator!=(const Patch &lhs, const Patch &rhs) {
@@ -166,7 +164,6 @@ inline void from_json(const nlohmann::json &j, ChannelInstrument &instrument) {
 
 inline void to_json(nlohmann::json &j, const Patch &patch) {
   j = nlohmann::json{{"name", patch.name},
-                     {"category", patch.category},
                      {"device", patch.global},
                      {"channel", patch.channel},
                      {"instrument", patch.instrument}};
@@ -174,7 +171,6 @@ inline void to_json(nlohmann::json &j, const Patch &patch) {
 
 inline void from_json(const nlohmann::json &j, Patch &patch) {
   j.at("name").get_to(patch.name);
-  j.at("category").get_to(patch.category);
   j.at("device").get_to(patch.global);
   j.at("channel").get_to(patch.channel);
   j.at("instrument").get_to(patch.instrument);
