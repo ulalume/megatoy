@@ -10,50 +10,29 @@ bool ChannelAllocator::is_note_active(const ym2612::Note &note) const {
 
 std::optional<ChannelAllocator::ChannelClaim>
 ChannelAllocator::note_on(const ym2612::Note &note, bool allow_voice_steal) {
-  if (is_note_active(note)) {
+  if (is_note_active(note))
     return std::nullopt;
-  }
 
-  auto claim_channel = [&](uint8_t index) {
-    ym2612::ChannelIndex channel = ym2612::all_channel_indices[index];
-    channel_key_on_[index] = true;
-    channel_to_note_[index] = note;
-    note_to_channel_[note] = channel;
-    channel_order_[index] = ++allocation_counter_;
-    return ChannelClaim{channel, std::nullopt};
-  };
+  const auto oldest_it =
+      std::min_element(channel_order_.begin(), channel_order_.end());
+  const uint8_t oldest_index =
+      static_cast<uint8_t>(oldest_it - channel_order_.begin());
+  const bool in_use = channel_key_on_[oldest_index];
+  const auto replaced_note = channel_to_note_[oldest_index];
 
-  for (uint8_t i = 0; i < channel_key_on_.size(); ++i) {
-    if (!channel_key_on_[i]) {
-      return claim_channel(i);
-    }
-  }
-
-  if (!allow_voice_steal) {
+  if (in_use && !allow_voice_steal)
     return std::nullopt;
-  }
 
-  uint8_t oldest_index = 0;
-  uint64_t oldest_order = channel_order_[0];
-  for (uint8_t i = 1; i < channel_order_.size(); ++i) {
-    if (channel_order_[i] < oldest_order) {
-      oldest_order = channel_order_[i];
-      oldest_index = i;
-    }
-  }
-
-  ym2612::ChannelIndex channel = ym2612::all_channel_indices[oldest_index];
-  std::optional<ym2612::Note> replaced_note = channel_to_note_[oldest_index];
-  if (replaced_note) {
+  if (in_use && replaced_note)
     note_to_channel_.erase(*replaced_note);
-  }
 
+  auto channel = ym2612::all_channel_indices[oldest_index];
+  channel_key_on_[oldest_index] = true;
   channel_to_note_[oldest_index] = note;
   note_to_channel_[note] = channel;
   channel_order_[oldest_index] = ++allocation_counter_;
-  channel_key_on_[oldest_index] = true;
 
-  return ChannelClaim{channel, replaced_note};
+  return ChannelClaim{channel, (in_use ? replaced_note : std::nullopt)};
 }
 
 bool ChannelAllocator::note_off(const ym2612::Note &note,
@@ -69,7 +48,6 @@ bool ChannelAllocator::note_off(const ym2612::Note &note,
   auto channel_idx = static_cast<uint8_t>(channel);
   channel_key_on_[channel_idx] = false;
   channel_to_note_[channel_idx].reset();
-  channel_order_[channel_idx] = 0;
   note_to_channel_.erase(it);
   return true;
 }
