@@ -60,6 +60,8 @@ set(MEGATOY_CORE_SOURCES
 
   src/patches/patch_session.cpp
   src/patches/patch_repository.cpp
+  src/patches/patch_hash.cpp
+  src/patches/patch_metadata.cpp
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
@@ -77,6 +79,7 @@ target_include_directories(megatoy_core PUBLIC
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${stb_SOURCE_DIR}
+  ${SQLiteCpp_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_BINARY_DIR}
 )
@@ -99,6 +102,7 @@ target_link_libraries(megatoy_core PUBLIC
   rtmidi
   chord_detector::chord_detector
   kissfft
+  SQLiteCpp
 )
 
 set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "presets")

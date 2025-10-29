@@ -12,6 +12,7 @@ struct DirectoryPaths {
   std::filesystem::path builtin_presets_root;
   std::filesystem::path preferences_file;
   std::filesystem::path imgui_ini_file;
+  std::filesystem::path patch_metadata_db;
 };
 
 class PathService {
@@ -31,6 +32,7 @@ public:
   static std::filesystem::path default_data_directory();
   static std::filesystem::path preferences_file_path();
   static std::filesystem::path imgui_ini_file_path();
+  static std::filesystem::path patch_metadata_db_path();
 
 private:
   DirectoryPaths paths_;

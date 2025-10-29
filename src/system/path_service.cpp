@@ -133,12 +133,27 @@ std::filesystem::path PathService::imgui_ini_file_path() {
   return std::filesystem::current_path() / "imgui.ini";
 }
 
+std::filesystem::path PathService::patch_metadata_db_path() {
+#if defined(_WIN32)
+  if (const char *appdata = std::getenv("APPDATA")) {
+    return std::filesystem::path(appdata) / "megatoy" / "patch_metadata.db";
+  }
+#else
+  if (const char *home = std::getenv("HOME")) {
+    return std::filesystem::path(home) / ".config" / "megatoy" /
+           "patch_metadata.db";
+  }
+#endif
+  return std::filesystem::current_path() / "patch_metadata.db";
+}
+
 // Constructor and instance methods
 PathService::PathService() {
   set_data_root(default_data_directory());
   paths_.builtin_presets_root = builtin_presets_directory();
   paths_.preferences_file = preferences_file_path();
   paths_.imgui_ini_file = imgui_ini_file_path();
+  paths_.patch_metadata_db = patch_metadata_db_path();
 }
 
 void PathService::set_data_root(const std::filesystem::path &root) {
@@ -154,6 +169,8 @@ bool PathService::ensure_directories() const {
     std::filesystem::create_directories(paths_.patches_root);
     std::filesystem::create_directories(paths_.user_patches_root);
     std::filesystem::create_directories(paths_.export_root);
+    // Ensure config directory exists for metadata database
+    std::filesystem::create_directories(paths_.patch_metadata_db.parent_path());
     return true;
   } catch (const std::filesystem::filesystem_error &e) {
     std::cerr << "Failed to create application directories: " << e.what()

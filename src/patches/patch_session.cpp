@@ -16,7 +16,8 @@ PatchSession::PatchSession(megatoy::system::PathService &directories,
                            AudioManager &audio)
     : directories_(directories), audio_(audio),
       repository_(directories_.paths().patches_root,
-                  directories_.paths().builtin_presets_root),
+                  directories_.paths().builtin_presets_root,
+                  directories_.paths().patch_metadata_db),
       channel_allocator_() {}
 
 ym2612::Patch &PatchSession::current_patch() { return current_patch_; }
@@ -96,7 +97,8 @@ void PatchSession::initialize_patch_defaults() {
 
 void PatchSession::refresh_directories() {
   repository_ = PatchRepository(directories_.paths().patches_root,
-                                directories_.paths().builtin_presets_root);
+                                directories_.paths().builtin_presets_root,
+                                directories_.paths().patch_metadata_db);
 }
 
 void PatchSession::set_current_patch(const ym2612::Patch &patch,

@@ -234,6 +234,7 @@ MmlConsoleContext make_mml_console_context(AppContext &ctx) {
 WaveformContext make_waveform_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = ctx.app_state().ui_state();
+  auto midi_actions = MidiActions{ctx};
   return {
       ui_state.prefs,
       ctx.services.audio_manager.wave_sampler(),
@@ -241,6 +242,7 @@ WaveformContext make_waveform_context(AppContext &ctx) {
       [&ctx]() -> const ym2612::Patch & {
         return ctx.services.patch_session.current_patch();
       },
+      [midi_actions]() { return midi_actions.active_notes(); },
   };
 }
 
