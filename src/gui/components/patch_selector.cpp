@@ -74,6 +74,50 @@ void collect_leaf_patches(const std::vector<patches::PatchEntry> &tree,
   }
 }
 
+bool entry_passes_star_filter(const patches::PatchEntry &entry,
+                              int min_star_rating) {
+  if (min_star_rating <= 0) {
+    return true;
+  }
+  const int rating = entry.metadata ? entry.metadata->star_rating : 0;
+  return rating >= min_star_rating;
+}
+
+bool directory_has_visible_children(const patches::PatchEntry &directory,
+                                    int min_star_rating) {
+  for (const auto &child : directory.children) {
+    if (child.is_directory) {
+      if (directory_has_visible_children(child, min_star_rating)) {
+        return true;
+      }
+    } else if (entry_passes_star_filter(child, min_star_rating)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void show_patch_tooltip(const patches::PatchEntry &entry) {
+  if (!ImGui::IsItemHovered()) {
+    return;
+  }
+
+  std::string tooltip =
+      "Format: " + entry.format + "\nPath: " + entry.relative_path;
+
+  if (entry.metadata) {
+    tooltip += "\nStars: " + std::to_string(entry.metadata->star_rating) + "/4";
+    if (!entry.metadata->category.empty()) {
+      tooltip += "\nCategory: " + entry.metadata->category;
+    }
+    if (!entry.metadata->notes.empty()) {
+      tooltip += "\nNotes: " + entry.metadata->notes;
+    }
+  }
+
+  ImGui::SetTooltip("%s", tooltip.c_str());
+}
+
 void begin_popup_context(PatchSelectorContext &context,
                          const std::string &relative_path) {
   if (ImGui::BeginPopupContextItem(nullptr)) {
@@ -86,60 +130,72 @@ void begin_popup_context(PatchSelectorContext &context,
     ImGui::EndPopup();
   }
 }
-void is_item_hovered(const std::string &format,
-                     const std::string &relative_path) {
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Format: %s\nPath: %s", format.c_str(),
-                      relative_path.c_str());
-  }
-}
 
-void render_patch_tree(const std::vector<patches::PatchEntry> &tree,
-                       PatchSelectorContext &context, int depth = 0) {
+bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
+                       PatchSelectorContext &context, int min_star_rating,
+                       int depth = 0) {
+  bool any_rendered = false;
+
   for (const auto &item : tree) {
-    ImGui::PushID(item.relative_path.c_str());
-
     if (item.is_directory) {
-      if (ImGui::TreeNode(item.name.c_str())) {
-        begin_popup_context(context, item.relative_path);
-        render_patch_tree(item.children, context, depth + 1);
+      if (!directory_has_visible_children(item, min_star_rating)) {
+        continue;
+      }
+
+      ImGui::PushID(item.relative_path.c_str());
+      bool open = ImGui::TreeNode(item.name.c_str());
+      begin_popup_context(context, item.relative_path);
+      if (open) {
+        render_patch_tree(item.children, context, min_star_rating, depth + 1);
         ImGui::TreePop();
       }
-    } else {
-      ImGui::Indent(INDENT * depth);
-
-      bool is_current =
-          (item.relative_path == context.session.current_patch_path());
-      if (is_current) {
-        ImGui::PushStyleColor(ImGuiCol_Text,
-                              styles::color(styles::MegatoyCol::TextHighlight));
-      }
-      std::string name_string = item.name;
-      auto name_string_selectable =
-          ImGui::Selectable(name_string.c_str(), false);
-      begin_popup_context(context, item.relative_path);
-      is_item_hovered(item.format, item.relative_path);
-      ImGui::SameLine();
-      ImGui::PushStyleColor(
-          ImGuiCol_Text,
-          color_with_alpha_vec4(ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f));
-      auto format_string_selectable =
-          ImGui::Selectable(item.format.c_str(), false);
-      if (name_string_selectable || format_string_selectable) {
-        if (context.safe_load_patch) {
-          context.safe_load_patch(item);
-        }
-      }
-      ImGui::PopStyleColor();
-      begin_popup_context(context, item.relative_path);
-      is_item_hovered(item.format, item.relative_path);
-      if (is_current) {
-        ImGui::PopStyleColor();
-      }
-      ImGui::Unindent(INDENT * depth);
+      ImGui::PopID();
+      any_rendered = true;
+      continue;
     }
+
+    if (!entry_passes_star_filter(item, min_star_rating)) {
+      continue;
+    }
+
+    ImGui::PushID(item.relative_path.c_str());
+
+    ImGui::Indent(INDENT * depth);
+
+    bool is_current =
+        (item.relative_path == context.session.current_patch_path());
+    if (is_current) {
+      ImGui::PushStyleColor(ImGuiCol_Text,
+                            styles::color(styles::MegatoyCol::TextHighlight));
+    }
+    std::string name_string = item.name;
+    auto name_string_selectable = ImGui::Selectable(name_string.c_str(), false);
+    begin_popup_context(context, item.relative_path);
+    show_patch_tooltip(item);
+    ImGui::SameLine();
+    ImGui::PushStyleColor(
+        ImGuiCol_Text,
+        color_with_alpha_vec4(ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f));
+    auto format_string_selectable =
+        ImGui::Selectable(item.format.c_str(), false);
+    if (name_string_selectable || format_string_selectable) {
+      if (context.safe_load_patch) {
+        context.safe_load_patch(item);
+      }
+    }
+    ImGui::PopStyleColor();
+    begin_popup_context(context, item.relative_path);
+    show_patch_tooltip(item);
+    if (is_current) {
+      ImGui::PopStyleColor();
+    }
+    ImGui::Unindent(INDENT * depth);
+
     ImGui::PopID();
+    any_rendered = true;
   }
+
+  return any_rendered;
 }
 
 void render_metadata_table(PatchSelectorContext &context) {
@@ -449,182 +505,160 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin(title, &prefs.show_patch_selector)) {
-    auto &preset_repository = context.repository;
-    if (preset_repository.has_directory_changed()) {
-      preset_repository.refresh();
-    }
+  if (!ImGui::Begin(title, &prefs.show_patch_selector)) {
+    ImGui::End();
+    return;
+  }
 
-    ImGui::SameLine();
+  auto &preset_repository = context.repository;
+  if (preset_repository.has_directory_changed()) {
+    preset_repository.refresh();
+  }
 
-    // View mode buttons with active state indication
-    PatchViewMode current_mode = context.get_view_mode();
-    bool tree_query_active = has_search_text(prefs.patch_search_query);
-    if (current_mode == PatchViewMode::Search && !tree_query_active) {
+  ImGui::Spacing();
+
+  // Shared search/filter controls
+  std::string &search_query = context.prefs.metadata_search_query;
+  prefs.patch_search_query = search_query;
+
+  char search_buffer[32];
+  std::strncpy(search_buffer, search_query.c_str(), sizeof(search_buffer));
+  search_buffer[sizeof(search_buffer) - 1] = '\0';
+
+  ImGui::SetNextItemWidth(120);
+  if (ImGui::InputTextWithHint("##Search", "Search patches", search_buffer,
+                               sizeof(search_buffer))) {
+    search_query = std::string(search_buffer);
+    prefs.patch_search_query = search_query;
+  }
+
+  bool tree_query_active = has_search_text(search_query);
+
+  ImGui::SameLine();
+
+  ImGui::SetNextItemWidth(60);
+  if (ImGui::SliderInt("Stars", &context.prefs.metadata_star_filter, 0, 4,
+                       "%d★")) {
+    // value applied immediately
+  }
+
+  ImGui::SameLine();
+  if (ImGui::Button("Clear")) {
+    search_query.clear();
+    prefs.patch_search_query.clear();
+    context.prefs.metadata_star_filter = 0;
+    tree_query_active = false;
+  }
+
+  ImGui::Spacing();
+
+  // Update tree/search mode based on query
+  PatchViewMode current_mode = context.get_view_mode();
+  if (current_mode != PatchViewMode::Table) {
+    if (tree_query_active) {
+      context.set_view_mode(PatchViewMode::Search);
+    } else if (current_mode == PatchViewMode::Search) {
       context.set_view_mode(PatchViewMode::Tree);
-      current_mode = PatchViewMode::Tree;
     }
+  }
 
-    const bool tree_button_active = current_mode == PatchViewMode::Tree ||
-                                    current_mode == PatchViewMode::Search;
+  current_mode = context.get_view_mode();
 
-    if (tree_button_active) {
-      ImGui::PushStyleColor(ImGuiCol_Button,
-                            ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+  bool is_tree_mode = (current_mode == PatchViewMode::Tree ||
+                       current_mode == PatchViewMode::Search);
+  bool is_table_mode = (current_mode == PatchViewMode::Table);
+
+  if (ImGui::RadioButton("Tree", is_tree_mode)) {
+    context.set_view_mode(PatchViewMode::Tree);
+  }
+
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Table", is_table_mode)) {
+    context.set_view_mode(PatchViewMode::Table);
+  }
+
+  current_mode = context.get_view_mode();
+
+  ImGui::Spacing();
+
+  tree_query_active = has_search_text(search_query);
+
+  auto preset_tree = preset_repository.tree();
+
+  // Determine which view to render
+  if (context.get_view_mode() == PatchViewMode::Table) {
+    if (ImGui::BeginChild("MetadataTable", ImGui::GetContentRegionAvail(),
+                          true)) {
+      render_metadata_table(context);
     }
-    if (ImGui::Button("Tree")) {
-      context.set_view_mode(PatchViewMode::Tree);
-    }
-    if (tree_button_active) {
-      ImGui::PopStyleColor();
-    }
-
-    current_mode = context.get_view_mode();
-
-    ImGui::SameLine();
-    if (current_mode == PatchViewMode::Table) {
-      ImGui::PushStyleColor(ImGuiCol_Button,
-                            ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-    }
-    if (ImGui::Button("Table")) {
-      context.set_view_mode(PatchViewMode::Table);
-    }
-    if (current_mode == PatchViewMode::Table) {
-      ImGui::PopStyleColor();
-    }
-
-    current_mode = context.get_view_mode();
-
-    ImGui::SameLine();
-
-    if (ImGui::TextLink("Refresh directory")) {
-      context.repository.refresh();
-    }
-
-    ImGui::Spacing();
-
-    // Search input (used for all modes)
-    char search_buffer[128];
-    const bool table_mode = (current_mode == PatchViewMode::Table);
-    const char *search_hint =
-        table_mode ? "Search patches and metadata" : "Type to filter patches";
-
-    if (table_mode) {
-      std::strncpy(search_buffer, context.prefs.metadata_search_query.c_str(),
-                   sizeof(search_buffer));
-    } else {
-      std::strncpy(search_buffer, prefs.patch_search_query.c_str(),
-                   sizeof(search_buffer));
-    }
-    search_buffer[sizeof(search_buffer) - 1] = '\0';
-
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-    if (ImGui::InputTextWithHint("##Search", search_hint, search_buffer,
-                                 sizeof(search_buffer))) {
-      if (table_mode) {
-        context.prefs.metadata_search_query = std::string(search_buffer);
-      } else {
-        prefs.patch_search_query = std::string(search_buffer);
-        bool has_query_now = has_search_text(prefs.patch_search_query);
-        context.set_view_mode(has_query_now ? PatchViewMode::Search
-                                            : PatchViewMode::Tree);
-        current_mode = context.get_view_mode();
-        tree_query_active = has_query_now;
-      }
-    }
-    tree_query_active = has_search_text(prefs.patch_search_query);
-
-    // Additional filters for table view
-    if (context.get_view_mode() == PatchViewMode::Table) {
-      ImGui::Spacing();
-
-      // Star rating filter
-      ImGui::SetNextItemWidth(100);
-      ImGui::SliderInt("Min Stars", &context.prefs.metadata_star_filter, 0, 4,
-                       "%d★");
-
-      ImGui::SameLine();
-      if (ImGui::Button("Clear Filters")) {
-        context.prefs.metadata_search_query.clear();
-        context.prefs.metadata_star_filter = 0;
-      }
-    }
-
-    ImGui::Spacing();
-
-    auto preset_tree = preset_repository.tree();
-
-    // Determine which view to render
-    if (context.get_view_mode() == PatchViewMode::Table) {
-      if (ImGui::BeginChild("MetadataTable", ImGui::GetContentRegionAvail(),
+    ImGui::EndChild();
+  } else {
+    if (tree_query_active || context.get_view_mode() == PatchViewMode::Search) {
+      if (ImGui::BeginChild("PresetSearch", ImGui::GetContentRegionAvail(),
                             true)) {
-        render_metadata_table(context);
+        std::vector<const patches::PatchEntry *> all_patches;
+        collect_leaf_patches(preset_tree, all_patches);
+
+        std::string query_lower = to_lower(search_query);
+        int star_filter = context.prefs.metadata_star_filter;
+
+        size_t match_count = 0;
+        for (const auto *entry : all_patches) {
+          if (!contains_case_insensitive(entry->name, query_lower) &&
+              (!entry->metadata ||
+               !contains_case_insensitive(entry->metadata->category,
+                                          query_lower))) {
+            continue;
+          }
+
+          if (!entry_passes_star_filter(*entry, star_filter)) {
+            continue;
+          }
+
+          match_count++;
+
+          ImGui::PushID(entry->relative_path.c_str());
+
+          bool is_current =
+              context.session.current_patch_path() == entry->relative_path;
+
+          if (is_current) {
+            ImGui::PushStyleColor(
+                ImGuiCol_Text,
+                styles::color(styles::MegatoyCol::TextHighlight));
+          }
+
+          std::string label = "[" + entry->format + "] " + entry->name + "##" +
+                              entry->relative_path;
+          if (ImGui::Selectable(label.c_str(), is_current)) {
+            if (context.safe_load_patch) {
+              context.safe_load_patch(*entry);
+            }
+          }
+
+          if (is_current) {
+            ImGui::PopStyleColor();
+          }
+
+          begin_popup_context(context, entry->relative_path);
+          show_patch_tooltip(*entry);
+
+          ImGui::PopID();
+        }
+
+        if (match_count == 0) {
+          ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                             "No results for '%s'", search_query.c_str());
+        }
       }
       ImGui::EndChild();
     } else {
-      if (tree_query_active ||
-          context.get_view_mode() == PatchViewMode::Search) {
-        if (ImGui::BeginChild("PresetSearch", ImGui::GetContentRegionAvail(),
-                              true)) {
-          std::vector<const patches::PatchEntry *> all_patches;
-          collect_leaf_patches(preset_tree, all_patches);
-
-          std::string query_lower = to_lower(prefs.patch_search_query);
-
-          size_t match_count = 0;
-          for (const auto *entry : all_patches) {
-            if (!contains_case_insensitive(entry->name, query_lower)) {
-              continue;
-            }
-
-            match_count++;
-
-            ImGui::PushID(entry->relative_path.c_str());
-
-            bool is_current =
-                context.session.current_patch_path() == entry->relative_path;
-
-            if (is_current) {
-              ImGui::PushStyleColor(
-                  ImGuiCol_Text,
-                  styles::color(styles::MegatoyCol::TextHighlight));
-            }
-
-            std::string label = "[" + entry->format + "] " + entry->name +
-                                "##" + entry->relative_path;
-            if (ImGui::Selectable(label.c_str(), is_current)) {
-              if (context.safe_load_patch) {
-                context.safe_load_patch(*entry);
-              }
-            }
-
-            if (is_current) {
-              ImGui::PopStyleColor();
-            }
-
-            begin_popup_context(context, entry->relative_path);
-            if (ImGui::IsItemHovered()) {
-              ImGui::SetTooltip("Format: %s\nPath: %s", entry->format.c_str(),
-                                entry->relative_path.c_str());
-            }
-
-            ImGui::PopID();
-          }
-
-          if (match_count == 0) {
-            ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
-                               "No results for '%s'",
-                               prefs.patch_search_query.c_str());
-          }
-        }
-        ImGui::EndChild();
-      } else {
-        if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
-                              true)) {
-          render_patch_tree(preset_tree, context);
-        }
-        ImGui::EndChild();
+      if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
+                            true)) {
+        render_patch_tree(preset_tree, context,
+                          context.prefs.metadata_star_filter);
       }
+      ImGui::EndChild();
     }
   }
 
