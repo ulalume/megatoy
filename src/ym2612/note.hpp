@@ -43,9 +43,7 @@ struct Note {
   Key key;
 
   bool operator<(const Note &other) const {
-    auto a = fnote_from_key(key) * (1 << octave);
-    auto b = fnote_from_key(other.key) * (1 << other.octave);
-    return a < b;
+    return this->frequency() < other.frequency();
   };
   bool operator>(const Note &other) const { return other < *this; };
   bool operator==(const Note &other) const {
@@ -68,6 +66,7 @@ struct Note {
     key_name << *this;
     return key_name.str();
   }
+  int frequency() const { return fnote_from_key(key) * (1 << octave); }
 };
 inline std::ostream &operator<<(std::ostream &os, const Note &note) {
   return os << note.key << static_cast<int>(note.octave);
