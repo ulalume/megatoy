@@ -5,25 +5,11 @@
 #include <SQLiteCpp/Transaction.h>
 #include <algorithm>
 #include <chrono>
-#include <cctype>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 
 namespace patches {
-
-namespace {
-
-constexpr const char kPatchMetadataTableColumns[] = R"(path TEXT PRIMARY KEY,
-  hash TEXT NOT NULL,
-  star_rating INTEGER DEFAULT 0 CHECK (star_rating >= 0 AND star_rating <= 5),
-  category TEXT DEFAULT '',
-  notes TEXT DEFAULT '',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-)";
-
-} // namespace
 
 class PatchMetadataManager::Impl {
 public:
@@ -47,11 +33,6 @@ public:
   }
 
   bool save_metadata(const PatchMetadata &metadata) {
-    return save_metadata_internal(metadata, /*allow_migration=*/true);
-  }
-
-  bool save_metadata_internal(const PatchMetadata &metadata,
-                              bool allow_migration) {
     try {
       auto now = get_current_timestamp();
 
@@ -81,18 +62,7 @@ public:
 
       return true;
     } catch (const SQLite::Exception &e) {
-      const std::string message = e.what();
-      if (allow_migration &&
-          message.find("CHECK constraint failed") != std::string::npos &&
-          message.find("star_rating") != std::string::npos) {
-        try {
-          db_->exec("ROLLBACK;");
-        } catch (const SQLite::Exception &) {
-        }
-        migrate_patch_metadata_star_limit();
-        return save_metadata_internal(metadata, /*allow_migration=*/false);
-      }
-      std::cerr << "Failed to save patch metadata: " << message << std::endl;
+      std::cerr << "Failed to save patch metadata: " << e.what() << std::endl;
       return false;
     }
   }
@@ -416,11 +386,24 @@ private:
   std::unique_ptr<SQLite::Database> db_;
 
   void create_tables() {
-    migrate_patch_metadata_star_limit();
+    db_->exec(R"(
+      CREATE TABLE IF NOT EXISTS patch_metadata (
+        path TEXT PRIMARY KEY,
+        hash TEXT NOT NULL,
+        star_rating INTEGER DEFAULT 0 CHECK (star_rating >= 0 AND star_rating <= 5),
+        category TEXT DEFAULT '',
+        notes TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    )");
 
-    db_->exec(std::string("CREATE TABLE IF NOT EXISTS patch_metadata (\n") +
-              kPatchMetadataTableColumns + "\n)");
-    create_patch_metadata_indexes();
+    db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_hash ON "
+              "patch_metadata(hash)");
+    db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_category ON "
+              "patch_metadata(category)");
+    db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_star_rating ON "
+              "patch_metadata(star_rating)");
 
     db_->exec(R"(
       CREATE TABLE IF NOT EXISTS patch_tags (
@@ -430,7 +413,8 @@ private:
         FOREIGN KEY (path) REFERENCES patch_metadata(path) ON DELETE CASCADE
       )
     )");
-    create_patch_tags_indexes();
+    db_->exec(
+        "CREATE INDEX IF NOT EXISTS idx_patch_tags_tag ON patch_tags(tag)");
   }
 
   std::string get_current_timestamp() {
@@ -484,80 +468,6 @@ private:
     return tags;
   }
 
-  void create_patch_metadata_indexes() {
-    try {
-      db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_hash ON "
-                "patch_metadata(hash)");
-      db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_category ON "
-                "patch_metadata(category)");
-      db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_star_rating ON "
-                "patch_metadata(star_rating)");
-    } catch (const SQLite::Exception &e) {
-      std::cerr << "Failed to create patch metadata indexes: " << e.what()
-                << std::endl;
-    }
-  }
-
-  void create_patch_tags_indexes() {
-    try {
-      db_->exec(
-          "CREATE INDEX IF NOT EXISTS idx_patch_tags_tag ON patch_tags(tag)");
-    } catch (const SQLite::Exception &e) {
-      std::cerr << "Failed to create patch tag indexes: " << e.what()
-                << std::endl;
-    }
-  }
-
-  void migrate_patch_metadata_star_limit() {
-    try {
-      SQLite::Statement stmt(
-          *db_, "SELECT sql FROM sqlite_master WHERE type='table' AND "
-                "name='patch_metadata'");
-      if (!stmt.executeStep()) {
-        return;
-      }
-      std::string table_sql = stmt.getColumn(0).getString();
-      stmt.reset();
-
-      std::string normalized;
-      normalized.reserve(table_sql.size());
-      for (char ch : table_sql) {
-        if (!std::isspace(static_cast<unsigned char>(ch))) {
-          normalized.push_back(static_cast<char>(std::tolower(ch)));
-        }
-      }
-
-      if (normalized.find("star_rating>=0andstar_rating<=4") ==
-          std::string::npos) {
-        return;
-      }
-
-      bool transaction_started = false;
-      try {
-        db_->exec("BEGIN IMMEDIATE TRANSACTION;");
-        transaction_started = true;
-        db_->exec("ALTER TABLE patch_metadata RENAME TO patch_metadata_old;");
-        db_->exec(std::string("CREATE TABLE patch_metadata (\n") +
-                  kPatchMetadataTableColumns + "\n)");
-        db_->exec(
-            "INSERT INTO patch_metadata (path, hash, star_rating, category, "
-            "notes, created_at, updated_at) "
-            "SELECT path, hash, star_rating, category, notes, created_at, "
-            "updated_at FROM patch_metadata_old");
-        db_->exec("DROP TABLE patch_metadata_old;");
-        create_patch_metadata_indexes();
-        db_->exec("COMMIT;");
-      } catch (const SQLite::Exception &) {
-        if (transaction_started) {
-          db_->exec("ROLLBACK;");
-        }
-        throw;
-      }
-    } catch (const SQLite::Exception &e) {
-      std::cerr << "Failed to migrate patch metadata table: " << e.what()
-                << std::endl;
-    }
-  }
 };
 
 // PatchMetadataManager implementation
