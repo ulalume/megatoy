@@ -10,11 +10,7 @@
 
 namespace ui {
 
-enum class PatchViewMode {
-  Tree,   // Hierarchical folder view
-  Search, // Flat search results
-  Table   // Metadata table view
-};
+enum class PatchViewMode { Tree, Table };
 
 enum class TableSortColumn { Name, Category, StarRating, Format, Path };
 
@@ -29,11 +25,12 @@ struct PatchSelectorContext {
 
   // Helper methods to convert between enum and int values
   PatchViewMode get_view_mode() const {
-    return static_cast<PatchViewMode>(prefs.patch_view_mode);
+    return prefs.patch_view_mode == 0 ? PatchViewMode::Tree
+                                      : PatchViewMode::Table;
   }
 
   void set_view_mode(PatchViewMode mode) {
-    prefs.patch_view_mode = static_cast<int>(mode);
+    prefs.patch_view_mode = (mode == PatchViewMode::Tree) ? 0 : 1;
   }
 
   TableSortColumn get_sort_column() const {

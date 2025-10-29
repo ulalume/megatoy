@@ -18,7 +18,7 @@ struct UIPreferences {
   std::string patch_search_query;
 
   // Patch selector view settings
-  int patch_view_mode = 0; // 0=Tree, 1=Search, 2=Table
+  int patch_view_mode = 0; // 0=Tree, 1=Table
   int patch_sort_column =
       0; // 0=Name, 1=Category, 2=StarRating, 3=Format, 4=Path
   int patch_sort_order = 0; // 0=Ascending, 1=Descending
