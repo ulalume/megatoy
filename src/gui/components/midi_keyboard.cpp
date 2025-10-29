@@ -82,6 +82,29 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   auto &input = context.input_state;
   auto &keyboard_settings = input.midi_keyboard_settings;
 
+  const auto clamp_scale = [](int value) {
+    return std::clamp(value, 0, static_cast<int>(Scale::RYUKYU));
+  };
+  const auto clamp_key = [](int value) {
+    return std::clamp(value, 0, static_cast<int>(Key::B));
+  };
+  const Scale pref_scale =
+      static_cast<Scale>(clamp_scale(context.ui_prefs.midi_keyboard_scale));
+  const Key pref_key =
+      static_cast<Key>(clamp_key(context.ui_prefs.midi_keyboard_key));
+  const int pref_octave =
+      std::clamp(context.ui_prefs.midi_keyboard_typing_octave, 0, 7);
+
+  if (keyboard_settings.scale != pref_scale) {
+    keyboard_settings.scale = pref_scale;
+  }
+  if (keyboard_settings.key != pref_key) {
+    keyboard_settings.key = pref_key;
+  }
+  if (input.keyboard_typing_octave != pref_octave) {
+    input.keyboard_typing_octave = static_cast<uint8_t>(pref_octave);
+  }
+
   refresh_state(context.state, input);
   const auto &key_mappings = context.state.key_mappings;
 
@@ -94,6 +117,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         [&context](ym2612::Note note) { context.key_off(note); }};
     check_keyboard_typing(typing_context, key_mappings);
   }
+  context.ui_prefs.midi_keyboard_typing_octave =
+      static_cast<int>(input.keyboard_typing_octave);
 
   auto &ui_prefs = context.ui_prefs;
   if (!ui_prefs.show_midi_keyboard) {
@@ -112,8 +137,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (ImGui::Combo("Scale", &current_scale, scale_names,
                    IM_ARRAYSIZE(scale_names))) {
     keyboard_settings.scale = static_cast<Scale>(current_scale);
+    context.ui_prefs.midi_keyboard_scale = current_scale;
     if (keyboard_settings.scale == Scale::CHROMATIC) {
       keyboard_settings.key = Key::C;
+      context.ui_prefs.midi_keyboard_key = static_cast<int>(Key::C);
     }
     refresh_state(context.state, input);
   }
@@ -124,9 +151,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     ImGui::BeginDisabled();
   // Key selector
   int current_key = static_cast<int>(keyboard_settings.key);
-  ImGui::SetNextItemWidth(60);
+  ImGui::SetNextItemWidth(40);
   if (ImGui::Combo("Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
     keyboard_settings.key = static_cast<Key>(current_key);
+    context.ui_prefs.midi_keyboard_key = current_key;
     refresh_state(context.state, input);
   }
   if (keyboard_settings.scale == Scale::CHROMATIC)
@@ -139,6 +167,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (ImGui::SliderInt("Typing", &current_key_octave, 0, 7,
                        typing_label(context.state))) {
     input.keyboard_typing_octave = current_key_octave;
+    context.ui_prefs.midi_keyboard_typing_octave = current_key_octave;
     refresh_state(context.state, input);
   }
   if (ImGui::IsItemHovered()) {

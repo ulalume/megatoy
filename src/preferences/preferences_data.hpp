@@ -1,7 +1,7 @@
 #pragma once
 
+#include "core/types.hpp"
 #include "gui/styles/theme.hpp"
-
 #include <filesystem>
 #include <string>
 
@@ -25,6 +25,10 @@ struct UIPreferences {
   std::string metadata_search_query;
   int metadata_star_filter = 0;
 
+  int midi_keyboard_scale = static_cast<int>(Scale::CHROMATIC);
+  int midi_keyboard_key = static_cast<int>(Key::C);
+  int midi_keyboard_typing_octave = 4;
+
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
     return lhs.show_patch_editor == rhs.show_patch_editor &&
            lhs.show_audio_controls == rhs.show_audio_controls &&
@@ -40,7 +44,10 @@ struct UIPreferences {
            lhs.patch_sort_column == rhs.patch_sort_column &&
            lhs.patch_sort_order == rhs.patch_sort_order &&
            lhs.metadata_search_query == rhs.metadata_search_query &&
-           lhs.metadata_star_filter == rhs.metadata_star_filter;
+           lhs.metadata_star_filter == rhs.metadata_star_filter &&
+           lhs.midi_keyboard_scale == rhs.midi_keyboard_scale &&
+           lhs.midi_keyboard_key == rhs.midi_keyboard_key &&
+           lhs.midi_keyboard_typing_octave == rhs.midi_keyboard_typing_octave;
   }
 
   friend bool operator!=(const UIPreferences &lhs, const UIPreferences &rhs) {
