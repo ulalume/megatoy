@@ -115,3 +115,11 @@ set(SQLITECPP_RUN_DOXYGEN OFF CACHE BOOL "" FORCE)
 set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SQLiteCpp)
+
+# FontAwesome Headers
+FetchContent_Declare(
+  IconFontCppHeaders
+  GIT_REPOSITORY https://github.com/juliettef/IconFontCppHeaders.git
+  GIT_TAG        main
+)
+FetchContent_MakeAvailable(IconFontCppHeaders)

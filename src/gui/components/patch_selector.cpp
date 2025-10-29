@@ -1,6 +1,8 @@
 #include "patch_selector.hpp"
 #include "common.hpp"
 #include "file_manager.hpp"
+#include "gui/styles/megatoy_style.hpp"
+#include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -11,8 +13,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#include "gui/styles/megatoy_style.hpp"
 
 namespace ui {
 namespace {
@@ -355,7 +355,7 @@ void render_metadata_table(PatchSelectorContext &context) {
 
     // Setup columns
     ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort, 0.3f);
-    ImGui::TableSetupColumn("★", ImGuiTableColumnFlags_None, 0.1f);
+    ImGui::TableSetupColumn(ICON_FA_STAR, ImGuiTableColumnFlags_None, 0.1f);
     ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_None, 0.2f);
     ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_None, 0.15f);
     ImGui::TableSetupColumn("Path", ImGuiTableColumnFlags_None, 0.25f);
@@ -431,7 +431,8 @@ void render_metadata_table(PatchSelectorContext &context) {
         star_rating = pending->second;
       }
       ImGui::SetNextItemWidth(-1);
-      bool star_changed = ImGui::SliderInt("##star", &star_rating, 0, 4, "%d★");
+      bool star_changed =
+          ImGui::SliderInt("##star", &star_rating, 0, 4, "%d" ICON_FA_STAR);
       if (star_changed) {
         pending_star_edits[entry->relative_path] = star_rating;
       }
@@ -541,38 +542,6 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     preset_repository.refresh();
   }
 
-  ImGui::Spacing();
-
-  char search_buffer[128];
-  std::strncpy(search_buffer, context.prefs.metadata_search_query.c_str(),
-               sizeof(search_buffer));
-  search_buffer[sizeof(search_buffer) - 1] = '\0';
-
-  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-  if (ImGui::InputTextWithHint("##SharedSearch", "Search patches and metadata",
-                               search_buffer, sizeof(search_buffer))) {
-    context.prefs.metadata_search_query = std::string(search_buffer);
-  }
-
-  prefs.patch_search_query = context.prefs.metadata_search_query;
-
-  ImGui::Spacing();
-
-  float available_width = ImGui::GetContentRegionAvail().x;
-  ImGui::SetNextItemWidth(std::max(0.0f, available_width - 100.0f -
-                                                ImGui::GetStyle().ItemSpacing.x));
-  ImGui::SliderInt("Min Stars", &context.prefs.metadata_star_filter, 0, 4,
-                   "%d★");
-
-  ImGui::SameLine();
-  if (ImGui::Button("Clear Filters")) {
-    context.prefs.metadata_search_query.clear();
-    context.prefs.metadata_star_filter = 0;
-    prefs.patch_search_query.clear();
-  }
-
-  ImGui::Spacing();
-
   PatchViewMode current_mode = context.get_view_mode();
   bool is_tree_mode = (current_mode == PatchViewMode::Tree);
   bool is_table_mode = (current_mode == PatchViewMode::Table);
@@ -581,22 +550,44 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     context.set_view_mode(PatchViewMode::Tree);
     current_mode = PatchViewMode::Tree;
   }
-
   ImGui::SameLine();
   if (ImGui::RadioButton("Table", is_table_mode)) {
     context.set_view_mode(PatchViewMode::Table);
     current_mode = PatchViewMode::Table;
   }
 
-  ImGui::Spacing();
+  char search_buffer[128];
+  std::strncpy(search_buffer, context.prefs.metadata_search_query.c_str(),
+               sizeof(search_buffer));
+  search_buffer[sizeof(search_buffer) - 1] = '\0';
+
+  ImGui::SetNextItemWidth(120);
+  if (ImGui::InputTextWithHint("##SharedSearch", "Search patches",
+                               search_buffer, sizeof(search_buffer))) {
+    context.prefs.metadata_search_query = std::string(search_buffer);
+  }
+
+  prefs.patch_search_query = context.prefs.metadata_search_query;
+
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(60);
+  ImGui::SliderInt("Stars", &context.prefs.metadata_star_filter, 0, 4,
+                   "%d " ICON_FA_STAR);
+
+  ImGui::SameLine();
+  if (ImGui::Button("Clear")) {
+    context.prefs.metadata_search_query.clear();
+    context.prefs.metadata_star_filter = 0;
+    prefs.patch_search_query.clear();
+  }
 
   auto preset_tree = preset_repository.tree();
 
   // Determine which view to render
   if (context.get_view_mode() == PatchViewMode::Table) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    if (ImGui::BeginChild("MetadataTable", ImGui::GetContentRegionAvail(),
-                          true, ImGuiWindowFlags_HorizontalScrollbar)) {
+    if (ImGui::BeginChild("MetadataTable", ImGui::GetContentRegionAvail(), true,
+                          ImGuiWindowFlags_HorizontalScrollbar)) {
       render_metadata_table(context);
     }
     ImGui::EndChild();
@@ -607,11 +598,10 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
                           ImGuiWindowFlags_HorizontalScrollbar)) {
       std::string tree_query_lower =
           to_lower(context.prefs.metadata_search_query);
-      bool rendered =
-          render_patch_tree(preset_tree, context, tree_query_lower,
-                            context.prefs.metadata_star_filter);
-      if (!rendered &&
-          (!tree_query_lower.empty() || context.prefs.metadata_star_filter > 0)) {
+      bool rendered = render_patch_tree(preset_tree, context, tree_query_lower,
+                                        context.prefs.metadata_star_filter);
+      if (!rendered && (!tree_query_lower.empty() ||
+                        context.prefs.metadata_star_filter > 0)) {
         ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                            "No results for current filters");
       }

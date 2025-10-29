@@ -81,6 +81,7 @@ target_include_directories(megatoy_core PUBLIC
   ${SQLiteCpp_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_BINARY_DIR}
+  ${iconfontcppheaders_SOURCE_DIR}
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -142,7 +143,7 @@ if(UNIX AND NOT APPLE)
 endif()
 
 add_embedded_assets(megatoy
-  EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/"
+  EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/" "\\.txt$"
 )
 
 target_include_directories(megatoy PRIVATE ${CMAKE_BINARY_DIR})
