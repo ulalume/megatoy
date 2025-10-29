@@ -19,9 +19,6 @@ namespace ui {
 namespace {
 #define INDENT (4.0f)
 
-constexpr std::string_view kBuiltinRootName{"presets"};
-constexpr std::string_view kBuiltinDisplayName{"Default Presets"};
-
 constexpr std::array<std::string_view, 6> kStarIconsLabels = {
     "",
     ICON_FA_STAR,
@@ -53,24 +50,6 @@ bool contains_case_insensitive(const std::string &haystack,
 bool has_search_text(const std::string &value) {
   return std::any_of(value.begin(), value.end(),
                      [](unsigned char ch) { return !std::isspace(ch); });
-}
-
-std::string format_display_path(const std::string &relative_path) {
-  if (relative_path.rfind(kBuiltinRootName, 0) != 0) {
-    return relative_path;
-  }
-
-  if (relative_path.size() == kBuiltinRootName.size()) {
-    return std::string(kBuiltinDisplayName);
-  }
-
-  if (relative_path.size() > kBuiltinRootName.size() &&
-      relative_path[kBuiltinRootName.size()] == '/') {
-    return std::string(kBuiltinDisplayName) +
-           relative_path.substr(kBuiltinRootName.size());
-  }
-
-  return relative_path;
 }
 
 void collect_leaf_patches(const std::vector<patches::PatchEntry> &tree,
@@ -133,7 +112,8 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
   }
 
   std::string tooltip =
-      "Format: " + entry.format + "\nPath: " + entry.relative_path;
+      "Format: " + entry.format +
+      "\nPath: " + display_preset_path(entry.relative_path);
 
   if (entry.metadata) {
     tooltip += "\nStars: " + std::to_string(entry.metadata->star_rating) + "/5";
@@ -178,7 +158,11 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       }
 
       ImGui::PushID(item.relative_path.c_str());
-      bool open = ImGui::TreeNode(item.name.c_str());
+      std::string display_name = item.name;
+      if (item.relative_path == kBuiltinPresetRoot) {
+        display_name = std::string(kBuiltinPresetDisplayName);
+      }
+      bool open = ImGui::TreeNode(display_name.c_str());
       begin_popup_context(context, item.relative_path);
       if (open) {
         render_patch_tree(item.children, context, query_lower, min_star_rating,
@@ -515,7 +499,7 @@ void render_metadata_table(PatchSelectorContext &context) {
       // Path column
       ImGui::TableSetColumnIndex(4);
       const std::string display_path =
-          format_display_path(entry->relative_path);
+          display_preset_path(entry->relative_path);
       if (is_current) {
         ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
                            "%s", display_path.c_str());
