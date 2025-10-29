@@ -171,7 +171,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
     if (item.is_directory) {
       bool has_children =
           directory_has_visible_children(item, query_lower, min_star_rating);
-      bool matches_self = entry_matches_query(item, query_lower);
+      bool matches_self =
+          !query_lower.empty() && entry_matches_query(item, query_lower);
       if (!has_children && !matches_self) {
         continue;
       }

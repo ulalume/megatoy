@@ -47,6 +47,11 @@ public:
   }
 
   bool save_metadata(const PatchMetadata &metadata) {
+    return save_metadata_internal(metadata, /*allow_migration=*/true);
+  }
+
+  bool save_metadata_internal(const PatchMetadata &metadata,
+                              bool allow_migration) {
     try {
       auto now = get_current_timestamp();
 
@@ -76,7 +81,18 @@ public:
 
       return true;
     } catch (const SQLite::Exception &e) {
-      std::cerr << "Failed to save patch metadata: " << e.what() << std::endl;
+      const std::string message = e.what();
+      if (allow_migration &&
+          message.find("CHECK constraint failed") != std::string::npos &&
+          message.find("star_rating") != std::string::npos) {
+        try {
+          db_->exec("ROLLBACK;");
+        } catch (const SQLite::Exception &) {
+        }
+        migrate_patch_metadata_star_limit();
+        return save_metadata_internal(metadata, /*allow_migration=*/false);
+      }
+      std::cerr << "Failed to save patch metadata: " << message << std::endl;
       return false;
     }
   }
@@ -501,6 +517,8 @@ private:
         return;
       }
       std::string table_sql = stmt.getColumn(0).getString();
+      stmt.reset();
+
       std::string normalized;
       normalized.reserve(table_sql.size());
       for (char ch : table_sql) {
@@ -509,13 +527,15 @@ private:
         }
       }
 
-      if (normalized.find("starrating>=0andstarrating<=4") ==
+      if (normalized.find("star_rating>=0andstar_rating<=4") ==
           std::string::npos) {
         return;
       }
 
-      db_->exec("BEGIN TRANSACTION;");
+      bool transaction_started = false;
       try {
+        db_->exec("BEGIN IMMEDIATE TRANSACTION;");
+        transaction_started = true;
         db_->exec("ALTER TABLE patch_metadata RENAME TO patch_metadata_old;");
         db_->exec(std::string("CREATE TABLE patch_metadata (\n") +
                   kPatchMetadataTableColumns + "\n)");
@@ -528,7 +548,9 @@ private:
         create_patch_metadata_indexes();
         db_->exec("COMMIT;");
       } catch (const SQLite::Exception &) {
-        db_->exec("ROLLBACK;");
+        if (transaction_started) {
+          db_->exec("ROLLBACK;");
+        }
         throw;
       }
     } catch (const SQLite::Exception &e) {
