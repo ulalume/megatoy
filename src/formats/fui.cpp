@@ -271,10 +271,6 @@ bool parse_old_fui(const std::vector<uint8_t> &bytes,
     op.key_scale = key_scale & 0x03;
   }
 
-  if (result.category.empty()) {
-    result.category = file_path.parent_path().filename().string();
-  }
-
   patch = std::move(result);
   return true;
 }
@@ -296,7 +292,7 @@ bool parse_new_fui(const std::vector<uint8_t> &bytes,
 
   ym2612::Patch result{};
   result.name.clear();
-  result.category.clear();
+
   result.global = {
       .dac_enable = false, .lfo_enable = false, .lfo_frequency = 0};
   result.channel.left_speaker = true;
@@ -346,11 +342,6 @@ bool parse_new_fui(const std::vector<uint8_t> &bytes,
 
   if (!name_loaded) {
     result.name = file_path.stem().string();
-  }
-
-  if (result.category.empty()) {
-    const auto parent = file_path.parent_path().filename().string();
-    result.category = parent;
   }
 
   if (fm_loaded) {

@@ -1,19 +1,22 @@
 #pragma once
 #include "ym2612/types.hpp"
 #include <algorithm>
+#include <functional>
 #include <iterator>
 #include <nlohmann/json.hpp>
+#include <sstream>
 #include <string>
 
 namespace ym2612 {
 
 struct Patch {
   std::string name = "";
-  std::string category = "";
 
   GlobalSettings global;
   ChannelSettings channel;
   ChannelInstrument instrument;
+
+  std::string hash() const;
 };
 
 inline bool operator==(const GlobalSettings &lhs, const GlobalSettings &rhs) {
@@ -71,9 +74,8 @@ inline bool operator!=(const ChannelInstrument &lhs,
 }
 
 inline bool operator==(const Patch &lhs, const Patch &rhs) {
-  return lhs.name == rhs.name && lhs.category == rhs.category &&
-         lhs.global == rhs.global && lhs.channel == rhs.channel &&
-         lhs.instrument == rhs.instrument;
+  return lhs.name == rhs.name && lhs.global == rhs.global &&
+         lhs.channel == rhs.channel && lhs.instrument == rhs.instrument;
 }
 
 inline bool operator!=(const Patch &lhs, const Patch &rhs) {
@@ -166,7 +168,6 @@ inline void from_json(const nlohmann::json &j, ChannelInstrument &instrument) {
 
 inline void to_json(nlohmann::json &j, const Patch &patch) {
   j = nlohmann::json{{"name", patch.name},
-                     {"category", patch.category},
                      {"device", patch.global},
                      {"channel", patch.channel},
                      {"instrument", patch.instrument}};
@@ -174,10 +175,23 @@ inline void to_json(nlohmann::json &j, const Patch &patch) {
 
 inline void from_json(const nlohmann::json &j, Patch &patch) {
   j.at("name").get_to(patch.name);
-  j.at("category").get_to(patch.category);
   j.at("device").get_to(patch.global);
   j.at("channel").get_to(patch.channel);
   j.at("instrument").get_to(patch.instrument);
+}
+
+inline std::string Patch::hash() const {
+  nlohmann::json patch_data;
+  patch_data["global"] = global;
+  patch_data["channel"] = channel;
+  patch_data["instrument"] = instrument;
+
+  std::string patch_str = patch_data.dump();
+
+  std::hash<std::string> hasher;
+  std::ostringstream ss;
+  ss << std::hex << hasher(patch_str);
+  return ss.str();
 }
 
 } // namespace ym2612

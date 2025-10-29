@@ -1,4 +1,5 @@
 #include "gui_manager.hpp"
+#include "fonts/icon_font.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/styles/theme.hpp"
@@ -114,6 +115,9 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   if (!preferences_.initialize_file_dialog()) {
     std::cerr << "Native File Dialog unavailable; directory picker disabled\n";
   }
+
+  // icon font
+  ui::init_icon_font();
 
   // Sync ImGui ini file
   sync_imgui_ini();

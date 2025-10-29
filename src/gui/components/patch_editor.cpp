@@ -111,9 +111,9 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
   }
 
   ImGui::SameLine();
-  ImGui::Text(
-      "%s",
-      repository.to_relative_path(patch_session.current_patch_path()).c_str());
+  auto relative_path =
+      repository.to_relative_path(patch_session.current_patch_path());
+  ImGui::Text("%s", display_preset_path(relative_path).c_str());
 }
 
 void render_patch_name_field(PatchEditorContext &context, ym2612::Patch &patch,

@@ -50,8 +50,6 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
     ym2612::Patch patch;
 
     patch.name = file_path.stem().string();
-    const auto parent = file_path.parent_path().filename().string();
-    patch.category = parent == "patches" ? "dmp" : parent;
 
     patch.global.dac_enable = false;
     patch.global.lfo_enable = false;

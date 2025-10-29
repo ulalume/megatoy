@@ -1,7 +1,9 @@
 #pragma once
 
+#include "patch_metadata.hpp"
 #include "ym2612/patch.hpp"
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -12,15 +14,21 @@ struct PatchEntry {
   std::string relative_path;
   std::filesystem::path full_path;
   std::string format;
-  std::string metadata;
   bool is_directory;
   std::vector<PatchEntry> children;
+
+  // Metadata (only valid for files, not directories)
+  std::optional<PatchMetadata> metadata;
+
+  // For ctrmml files: instrument index within the file
+  size_t ctrmml_index = 0;
 };
 
 class PatchRepository {
 public:
   PatchRepository(const std::filesystem::path &patches_root,
-                  const std::filesystem::path &builtin_dir = {});
+                  const std::filesystem::path &builtin_dir = {},
+                  const std::filesystem::path &metadata_db_path = {});
 
   void refresh();
   const std::vector<PatchEntry> &tree() const;
@@ -35,11 +43,26 @@ public:
   std::filesystem::path
   to_absolute_path(const std::filesystem::path &path) const;
 
+  // Metadata operations
+  bool save_patch_metadata(const std::string &relative_path,
+                           const ym2612::Patch &patch,
+                           const PatchMetadata &metadata);
+  bool update_patch_metadata(const std::string &relative_path,
+                             const PatchMetadata &metadata);
+  std::optional<PatchMetadata>
+  get_patch_metadata(const std::string &relative_path) const;
+
+  // Batch operations
+  std::vector<PatchEntry> get_patches_by_metadata_filter(
+      const std::function<bool(const PatchMetadata &)> &filter) const;
+  void cleanup_orphaned_metadata();
+
 private:
   static constexpr const char *kBuiltinRootName = "presets";
 
   std::filesystem::path patches_directory_;
   std::filesystem::path builtin_patch_directory_;
+  std::unique_ptr<PatchMetadataManager> metadata_manager_;
 
   std::vector<PatchEntry> tree_cache_;
   std::filesystem::file_time_type last_user_directory_check_time_{};
@@ -52,6 +75,7 @@ private:
   void scan_directory(const std::filesystem::path &dir_path,
                       std::vector<PatchEntry> &tree,
                       const std::string &relative_path = "");
+  void load_metadata_for_entry(PatchEntry &entry);
   std::string detect_format(const std::filesystem::path &file_path) const;
   bool is_supported_file(const std::filesystem::path &file_path) const;
 };

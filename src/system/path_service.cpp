@@ -20,129 +20,105 @@
 
 namespace megatoy::system {
 
-// Static implementations
-std::filesystem::path PathService::executable_directory_impl() {
+namespace fs = std::filesystem;
+
+static fs::path home_path() {
+#if defined(_WIN32)
+  if (const char *user = std::getenv("USERPROFILE"))
+    return user;
+  if (const char *appdata = std::getenv("APPDATA"))
+    return appdata;
+#else
+  if (const char *home = std::getenv("HOME"))
+    return home;
+#endif
+  return fs::current_path();
+}
+
+static fs::path config_path(std::string_view filename) {
+#if defined(_WIN32)
+  return home_path() / "megatoy" / filename;
+#else
+  return home_path() / ".config" / "megatoy" / filename;
+#endif
+}
+
+fs::path PathService::executable_directory_impl() {
 #if defined(_WIN32)
   std::wstring buffer(MAX_PATH, L'\0');
-  DWORD length = ::GetModuleFileNameW(nullptr, buffer.data(),
-                                      static_cast<DWORD>(buffer.size()));
-  if (length == 0 || length >= buffer.size()) {
-    return std::filesystem::current_path();
-  }
-  buffer.resize(length);
-  return std::filesystem::path(buffer).parent_path();
+  DWORD len = ::GetModuleFileNameW(nullptr, buffer.data(),
+                                   static_cast<DWORD>(buffer.size()));
+  if (len == 0 || len >= buffer.size())
+    return fs::current_path();
+  buffer.resize(len);
+  return fs::path(buffer).parent_path();
 #elif defined(__APPLE__)
   uint32_t size = 0;
   _NSGetExecutablePath(nullptr, &size);
   std::string buffer(size, '\0');
-  if (_NSGetExecutablePath(buffer.data(), &size) != 0) {
-    return std::filesystem::current_path();
-  }
-  return std::filesystem::path(buffer.c_str()).parent_path();
+  if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+    return fs::current_path();
+  return fs::path(buffer.c_str()).parent_path();
 #else
   std::array<char, PATH_MAX> buffer{};
-  ssize_t length = ::readlink("/proc/self/exe", buffer.data(),
-                              static_cast<ssize_t>(buffer.size() - 1));
-  if (length <= 0) {
-    return std::filesystem::current_path();
-  }
-  buffer[static_cast<size_t>(length)] = '\0';
-  return std::filesystem::path(buffer.data()).parent_path();
+  ssize_t len = ::readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+  if (len <= 0)
+    return fs::current_path();
+  buffer[static_cast<size_t>(len)] = '\0';
+  return fs::path(buffer.data()).parent_path();
 #endif
 }
 
-std::filesystem::path
-PathService::canonical_or_normal(const std::filesystem::path &path) {
+fs::path PathService::canonical_or_normal(const fs::path &p) {
   try {
-    return std::filesystem::weakly_canonical(path);
-  } catch (const std::filesystem::filesystem_error &) {
-    return path.lexically_normal();
+    return fs::weakly_canonical(p);
+  } catch (...) {
+    return p.lexically_normal();
   }
 }
 
-std::filesystem::path
-PathService::normalize(const std::filesystem::path &path) {
-  return path.lexically_normal();
+fs::path PathService::executable_directory() {
+  static const fs::path dir = executable_directory_impl();
+  return dir;
 }
 
-std::filesystem::path
-PathService::patches_directory(const std::filesystem::path &root) {
+fs::path PathService::builtin_presets_directory() {
+  return canonical_or_normal(executable_directory() /
+                             MEGATOY_PRESETS_RELATIVE_PATH);
+}
+
+fs::path PathService::default_data_directory() {
+  return home_path() / "Documents" / "megatoy";
+}
+
+fs::path PathService::preferences_file_path() {
+  return config_path("preferences.json");
+}
+fs::path PathService::imgui_ini_file_path() { return config_path("imgui.ini"); }
+fs::path PathService::patch_metadata_db_path() {
+  return config_path("patch_metadata.db");
+}
+
+fs::path PathService::patches_directory(const fs::path &root) {
   return root / "patches";
 }
-
-std::filesystem::path
-PathService::user_patches_directory(const std::filesystem::path &root) {
+fs::path PathService::user_patches_directory(const fs::path &root) {
   return root / "patches" / "user";
 }
-
-std::filesystem::path
-PathService::export_directory(const std::filesystem::path &root) {
+fs::path PathService::export_directory(const fs::path &root) {
   return root / "export";
 }
 
-// Public static methods
-std::filesystem::path PathService::executable_directory() {
-  static const std::filesystem::path kExecutableDir =
-      executable_directory_impl();
-  return kExecutableDir;
-}
-
-std::filesystem::path PathService::builtin_presets_directory() {
-  const auto executable_dir = executable_directory();
-  const auto combined = executable_dir / MEGATOY_PRESETS_RELATIVE_PATH;
-  return canonical_or_normal(combined);
-}
-
-std::filesystem::path PathService::default_data_directory() {
-#if defined(_WIN32)
-  if (const char *userprofile = std::getenv("USERPROFILE")) {
-    return std::filesystem::path(userprofile) / "Documents" / "megatoy";
-  }
-#else
-  if (const char *home = std::getenv("HOME")) {
-    return std::filesystem::path(home) / "Documents" / "megatoy";
-  }
-#endif
-  return std::filesystem::current_path() / "megatoy";
-}
-
-std::filesystem::path PathService::preferences_file_path() {
-#if defined(_WIN32)
-  if (const char *appdata = std::getenv("APPDATA")) {
-    return std::filesystem::path(appdata) / "megatoy" / "preferences.json";
-  }
-#else
-  if (const char *home = std::getenv("HOME")) {
-    return std::filesystem::path(home) / ".config" / "megatoy" /
-           "preferences.json";
-  }
-#endif
-  return std::filesystem::current_path() / "preferences.json";
-}
-
-std::filesystem::path PathService::imgui_ini_file_path() {
-#if defined(_WIN32)
-  if (const char *appdata = std::getenv("APPDATA")) {
-    return std::filesystem::path(appdata) / "megatoy" / "imgui.ini";
-  }
-#else
-  if (const char *home = std::getenv("HOME")) {
-    return std::filesystem::path(home) / ".config" / "megatoy" / "imgui.ini";
-  }
-#endif
-  return std::filesystem::current_path() / "imgui.ini";
-}
-
-// Constructor and instance methods
 PathService::PathService() {
   set_data_root(default_data_directory());
   paths_.builtin_presets_root = builtin_presets_directory();
   paths_.preferences_file = preferences_file_path();
   paths_.imgui_ini_file = imgui_ini_file_path();
+  paths_.patch_metadata_db = patch_metadata_db_path();
 }
 
-void PathService::set_data_root(const std::filesystem::path &root) {
-  paths_.data_root = normalize(root);
+void PathService::set_data_root(const fs::path &root) {
+  paths_.data_root = root.lexically_normal();
   paths_.patches_root = patches_directory(paths_.data_root);
   paths_.user_patches_root = user_patches_directory(paths_.data_root);
   paths_.export_root = export_directory(paths_.data_root);
@@ -150,14 +126,14 @@ void PathService::set_data_root(const std::filesystem::path &root) {
 
 bool PathService::ensure_directories() const {
   try {
-    std::filesystem::create_directories(paths_.data_root);
-    std::filesystem::create_directories(paths_.patches_root);
-    std::filesystem::create_directories(paths_.user_patches_root);
-    std::filesystem::create_directories(paths_.export_root);
+    fs::create_directories(paths_.data_root);
+    fs::create_directories(paths_.patches_root);
+    fs::create_directories(paths_.user_patches_root);
+    fs::create_directories(paths_.export_root);
+    fs::create_directories(paths_.patch_metadata_db.parent_path());
     return true;
-  } catch (const std::filesystem::filesystem_error &e) {
-    std::cerr << "Failed to create application directories: " << e.what()
-              << '\n';
+  } catch (const fs::filesystem_error &e) {
+    std::cerr << "Failed to create directories: " << e.what() << '\n';
     return false;
   }
 }
