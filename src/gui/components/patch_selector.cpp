@@ -4,6 +4,7 @@
 #include "gui/styles/megatoy_style.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstring>
 #include <imgui.h>
@@ -443,7 +444,7 @@ void render_metadata_table(PatchSelectorContext &context) {
 
       bool star_changed = ImGui::SliderInt(
           "##star", &star_rating, 0, 5,
-          star_rating == 0 ? "0" : kStarIconsLabels[star_rating].data());
+          star_rating == 0 ? "-" : kStarIconsLabels[star_rating].data());
       if (star_changed) {
         pending_star_edits[entry->relative_path] = star_rating;
       }
@@ -557,15 +558,17 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   bool is_tree_mode = (current_mode == PatchViewMode::Tree);
   bool is_table_mode = (current_mode == PatchViewMode::Table);
 
-  if (ImGui::RadioButton("Tree", is_tree_mode)) {
+  if (ImGui::RadioButton(ICON_FA_FOLDER_TREE " Tree view", is_tree_mode)) {
     context.set_view_mode(PatchViewMode::Tree);
     current_mode = PatchViewMode::Tree;
   }
   ImGui::SameLine();
-  if (ImGui::RadioButton("Table", is_table_mode)) {
+  if (ImGui::RadioButton(ICON_FA_TABLE " Table view", is_table_mode)) {
     context.set_view_mode(PatchViewMode::Table);
     current_mode = PatchViewMode::Table;
   }
+
+  ImGui::Spacing();
 
   char search_buffer[128];
   std::strncpy(search_buffer, context.prefs.metadata_search_query.c_str(),
@@ -582,31 +585,38 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
 
   ImGui::SameLine();
   ImGui::SetNextItemWidth(60);
-  ImGui::SliderInt("Stars", &context.prefs.metadata_star_filter, 0, 5,
-                   kStarIconsLabels[context.prefs.metadata_star_filter].data());
+  ImGui::SliderInt(
+      "##Stars", &context.prefs.metadata_star_filter, 0, 5,
+      context.prefs.metadata_star_filter == 0
+          ? "Stars"
+          : kStarIconsLabels[context.prefs.metadata_star_filter].data());
 
   ImGui::SameLine();
-  if (ImGui::Button("Clear")) {
-    context.prefs.metadata_search_query.clear();
-    context.prefs.metadata_star_filter = 0;
-    prefs.patch_search_query.clear();
+  const auto is_filtered = !(context.prefs.metadata_search_query.empty() &&
+                             context.prefs.metadata_star_filter == 0);
+  ImGui::BeginDisabled(!is_filtered);
+  if (is_filtered) {
+    if (ImGui::TextLink("Clear filters")) {
+      context.prefs.metadata_search_query.clear();
+      context.prefs.metadata_star_filter = 0;
+      prefs.patch_search_query.clear();
+    }
+  } else {
+    ImGui::Text("Clear filters");
   }
+  ImGui::EndDisabled();
 
   auto preset_tree = preset_repository.tree();
 
   // Determine which view to render
   if (context.get_view_mode() == PatchViewMode::Table) {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    if (ImGui::BeginChild("MetadataTable", ImGui::GetContentRegionAvail(), true,
-                          ImGuiWindowFlags_HorizontalScrollbar)) {
+    if (ImGui::BeginChild("MetadataTable", ImGui::GetContentRegionAvail(),
+                          true)) {
       render_metadata_table(context);
     }
     ImGui::EndChild();
-    ImGui::PopStyleVar();
   } else {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(), true,
-                          ImGuiWindowFlags_HorizontalScrollbar)) {
+    if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(), true)) {
       std::string tree_query_lower =
           to_lower(context.prefs.metadata_search_query);
       bool rendered = render_patch_tree(preset_tree, context, tree_query_lower,
@@ -618,7 +628,6 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
       }
     }
     ImGui::EndChild();
-    ImGui::PopStyleVar();
   }
 
   ImGui::End();

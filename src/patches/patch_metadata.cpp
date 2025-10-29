@@ -5,6 +5,7 @@
 #include <SQLiteCpp/Transaction.h>
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -499,8 +500,16 @@ private:
       if (!stmt.executeStep()) {
         return;
       }
-      const std::string table_sql = stmt.getColumn(0).getString();
-      if (table_sql.find("star_rating >= 0 AND star_rating <= 4") ==
+      std::string table_sql = stmt.getColumn(0).getString();
+      std::string normalized;
+      normalized.reserve(table_sql.size());
+      for (char ch : table_sql) {
+        if (!std::isspace(static_cast<unsigned char>(ch))) {
+          normalized.push_back(static_cast<char>(std::tolower(ch)));
+        }
+      }
+
+      if (normalized.find("starrating>=0andstarrating<=4") ==
           std::string::npos) {
         return;
       }
@@ -516,6 +525,7 @@ private:
             "SELECT path, hash, star_rating, category, notes, created_at, "
             "updated_at FROM patch_metadata_old");
         db_->exec("DROP TABLE patch_metadata_old;");
+        create_patch_metadata_indexes();
         db_->exec("COMMIT;");
       } catch (const SQLite::Exception &) {
         db_->exec("ROLLBACK;");
