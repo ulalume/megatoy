@@ -1,7 +1,6 @@
 #include "patch_selector.hpp"
 #include "common.hpp"
 #include "file_manager.hpp"
-#include "patches/patch_hash.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -259,7 +258,7 @@ void render_metadata_table(PatchSelectorContext &context) {
     if (metadata.hash.empty()) {
       ym2612::Patch patch;
       if (context.repository.load_patch(entry, patch)) {
-        metadata.hash = patches::calculate_patch_hash(patch);
+        metadata.hash = patch.hash();
       }
     }
     return metadata;

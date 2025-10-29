@@ -1,7 +1,6 @@
 #include "patch_repository.hpp"
 #include "formats/ctrmml.hpp"
 #include "formats/patch_loader.hpp"
-#include "patch_hash.hpp"
 #include "ym2612/patch.hpp"
 #include <algorithm>
 #include <functional>
@@ -350,7 +349,7 @@ bool PatchRepository::save_patch_metadata(const std::string &relative_path,
   }
 
   // Calculate hash for the patch
-  std::string hash = calculate_patch_hash(patch);
+  std::string hash = patch.hash();
 
   PatchMetadata metadata_with_hash = metadata;
   metadata_with_hash.path = relative_path;
