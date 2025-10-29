@@ -21,6 +21,15 @@ namespace {
 constexpr std::string_view kBuiltinRootName{"presets"};
 constexpr std::string_view kBuiltinDisplayName{"Default Presets"};
 
+constexpr std::array<std::string_view, 6> kStarIconsLabels = {
+    "",
+    ICON_FA_STAR,
+    ICON_FA_STAR ICON_FA_STAR,
+    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
+    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
+    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
+};
+
 std::string to_lower(const std::string &value) {
   std::string lowered;
   lowered.reserve(value.size());
@@ -126,7 +135,7 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
       "Format: " + entry.format + "\nPath: " + entry.relative_path;
 
   if (entry.metadata) {
-    tooltip += "\nStars: " + std::to_string(entry.metadata->star_rating) + "/4";
+    tooltip += "\nStars: " + std::to_string(entry.metadata->star_rating) + "/5";
     if (!entry.metadata->category.empty()) {
       tooltip += "\nCategory: " + entry.metadata->category;
     }
@@ -355,7 +364,7 @@ void render_metadata_table(PatchSelectorContext &context) {
 
     // Setup columns
     ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort, 0.3f);
-    ImGui::TableSetupColumn(ICON_FA_STAR, ImGuiTableColumnFlags_None, 0.1f);
+    ImGui::TableSetupColumn("Stars", ImGuiTableColumnFlags_None, 0.1f);
     ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_None, 0.2f);
     ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_None, 0.15f);
     ImGui::TableSetupColumn("Path", ImGuiTableColumnFlags_None, 0.25f);
@@ -431,8 +440,10 @@ void render_metadata_table(PatchSelectorContext &context) {
         star_rating = pending->second;
       }
       ImGui::SetNextItemWidth(-1);
-      bool star_changed =
-          ImGui::SliderInt("##star", &star_rating, 0, 4, "%d" ICON_FA_STAR);
+
+      bool star_changed = ImGui::SliderInt(
+          "##star", &star_rating, 0, 5,
+          star_rating == 0 ? "0" : kStarIconsLabels[star_rating].data());
       if (star_changed) {
         pending_star_edits[entry->relative_path] = star_rating;
       }
@@ -571,8 +582,8 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
 
   ImGui::SameLine();
   ImGui::SetNextItemWidth(60);
-  ImGui::SliderInt("Stars", &context.prefs.metadata_star_filter, 0, 4,
-                   "%d " ICON_FA_STAR);
+  ImGui::SliderInt("Stars", &context.prefs.metadata_star_filter, 0, 5,
+                   kStarIconsLabels[context.prefs.metadata_star_filter].data());
 
   ImGui::SameLine();
   if (ImGui::Button("Clear")) {

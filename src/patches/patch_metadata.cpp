@@ -3,12 +3,26 @@
 #include <SQLiteCpp/Exception.h>
 #include <SQLiteCpp/Statement.h>
 #include <SQLiteCpp/Transaction.h>
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 
 namespace patches {
+
+namespace {
+
+constexpr const char kPatchMetadataTableColumns[] = R"(path TEXT PRIMARY KEY,
+  hash TEXT NOT NULL,
+  star_rating INTEGER DEFAULT 0 CHECK (star_rating >= 0 AND star_rating <= 5),
+  category TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)";
+
+} // namespace
 
 class PatchMetadataManager::Impl {
 public:
@@ -43,9 +57,11 @@ public:
           "COALESCE((SELECT created_at FROM patch_metadata WHERE path = ?), "
           "?), ?)");
 
+      const int clamped_rating = std::clamp(metadata.star_rating, 0, 5);
+
       query.bind(1, metadata.path);
       query.bind(2, metadata.hash);
-      query.bind(3, metadata.star_rating);
+      query.bind(3, clamped_rating);
       query.bind(4, metadata.category);
       query.bind(5, metadata.notes);
       query.bind(6, metadata.path); // for COALESCE
@@ -383,24 +399,12 @@ private:
   std::unique_ptr<SQLite::Database> db_;
 
   void create_tables() {
-    // Create patch metadata table
-    db_->exec(R"(
-      CREATE TABLE IF NOT EXISTS patch_metadata (
-        path TEXT PRIMARY KEY,
-        hash TEXT NOT NULL,
-        star_rating INTEGER DEFAULT 0 CHECK (star_rating >= 0 AND star_rating <= 4),
-        category TEXT DEFAULT '',
-        notes TEXT DEFAULT '',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    )");
+    migrate_patch_metadata_star_limit();
 
-    // Create index on hash for fast lookups
-    db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_hash ON "
-              "patch_metadata(hash)");
+    db_->exec(std::string("CREATE TABLE IF NOT EXISTS patch_metadata (\n") +
+              kPatchMetadataTableColumns + "\n)");
+    create_patch_metadata_indexes();
 
-    // Create tags table for many-to-many relationship
     db_->exec(R"(
       CREATE TABLE IF NOT EXISTS patch_tags (
         path TEXT NOT NULL,
@@ -409,14 +413,7 @@ private:
         FOREIGN KEY (path) REFERENCES patch_metadata(path) ON DELETE CASCADE
       )
     )");
-
-    // Create indexes for common queries
-    db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_category ON "
-              "patch_metadata(category)");
-    db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_star_rating ON "
-              "patch_metadata(star_rating)");
-    db_->exec(
-        "CREATE INDEX IF NOT EXISTS idx_patch_tags_tag ON patch_tags(tag)");
+    create_patch_tags_indexes();
   }
 
   std::string get_current_timestamp() {
@@ -468,6 +465,66 @@ private:
       std::cerr << "Failed to get tags: " << e.what() << std::endl;
     }
     return tags;
+  }
+
+  void create_patch_metadata_indexes() {
+    try {
+      db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_hash ON "
+                "patch_metadata(hash)");
+      db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_category ON "
+                "patch_metadata(category)");
+      db_->exec("CREATE INDEX IF NOT EXISTS idx_patch_metadata_star_rating ON "
+                "patch_metadata(star_rating)");
+    } catch (const SQLite::Exception &e) {
+      std::cerr << "Failed to create patch metadata indexes: " << e.what()
+                << std::endl;
+    }
+  }
+
+  void create_patch_tags_indexes() {
+    try {
+      db_->exec(
+          "CREATE INDEX IF NOT EXISTS idx_patch_tags_tag ON patch_tags(tag)");
+    } catch (const SQLite::Exception &e) {
+      std::cerr << "Failed to create patch tag indexes: " << e.what()
+                << std::endl;
+    }
+  }
+
+  void migrate_patch_metadata_star_limit() {
+    try {
+      SQLite::Statement stmt(
+          *db_, "SELECT sql FROM sqlite_master WHERE type='table' AND "
+                "name='patch_metadata'");
+      if (!stmt.executeStep()) {
+        return;
+      }
+      const std::string table_sql = stmt.getColumn(0).getString();
+      if (table_sql.find("star_rating >= 0 AND star_rating <= 4") ==
+          std::string::npos) {
+        return;
+      }
+
+      db_->exec("BEGIN TRANSACTION;");
+      try {
+        db_->exec("ALTER TABLE patch_metadata RENAME TO patch_metadata_old;");
+        db_->exec(std::string("CREATE TABLE patch_metadata (\n") +
+                  kPatchMetadataTableColumns + "\n)");
+        db_->exec(
+            "INSERT INTO patch_metadata (path, hash, star_rating, category, "
+            "notes, created_at, updated_at) "
+            "SELECT path, hash, star_rating, category, notes, created_at, "
+            "updated_at FROM patch_metadata_old");
+        db_->exec("DROP TABLE patch_metadata_old;");
+        db_->exec("COMMIT;");
+      } catch (const SQLite::Exception &) {
+        db_->exec("ROLLBACK;");
+        throw;
+      }
+    } catch (const SQLite::Exception &e) {
+      std::cerr << "Failed to migrate patch metadata table: " << e.what()
+                << std::endl;
+    }
   }
 };
 

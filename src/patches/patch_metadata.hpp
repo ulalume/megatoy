@@ -9,7 +9,7 @@ namespace patches {
 struct PatchMetadata {
   std::string path;     // Relative path to the patch file
   std::string hash;     // Hash of patch content
-  int star_rating = 0;  // Star rating (0-4)
+  int star_rating = 0;  // Star rating (0-5)
   std::string category; // Category string (bass, guitar, strings, etc.)
 
   // Optional fields for future expansion
