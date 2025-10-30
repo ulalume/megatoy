@@ -41,6 +41,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/operator_editor.cpp
   src/gui/components/patch_drop.cpp
   src/gui/components/patch_editor.cpp
+  src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/preferences.cpp
   src/gui/components/preview/algorithm_preview.cpp
@@ -59,6 +60,7 @@ set(MEGATOY_CORE_SOURCES
   src/midi/midi_input_manager.cpp
 
   src/patches/patch_session.cpp
+  src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
   src/patches/patch_metadata.cpp
   src/platform/file_dialog.cpp

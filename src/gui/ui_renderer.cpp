@@ -7,6 +7,7 @@
 #include "gui/components/mml_console.hpp"
 #include "gui/components/patch_drop.hpp"
 #include "gui/components/patch_editor.hpp"
+#include "gui/components/patch_lab_window.hpp"
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
 #include "gui/components/waveform.hpp"
@@ -108,6 +109,11 @@ PatchEditorState &patch_editor_state() {
   return state;
 }
 
+PatchLabState &patch_lab_state() {
+  static PatchLabState state;
+  return state;
+}
+
 MidiKeyboardState &midi_keyboard_state() {
   static MidiKeyboardState state;
   return state;
@@ -161,6 +167,18 @@ PatchEditorContext make_patch_editor_context(AppContext &ctx) {
   auto &ui_state = state.ui_state();
   auto patch_history = PatchHistoryActions{ctx};
   return {ctx.services.patch_session, ui_state.prefs, ui_state.envelope_states,
+          [patch_history](const std::string &label,
+                          const std::string &merge_key, const ym2612::Patch &) {
+            patch_history.begin_snapshot(label, merge_key);
+          },
+          [patch_history]() { patch_history.commit(); }};
+}
+
+PatchLabContext make_patch_lab_context(AppContext &ctx) {
+  auto &state = ctx.app_state();
+  auto &ui_state = state.ui_state();
+  auto patch_history = PatchHistoryActions{ctx};
+  return {ctx.services.patch_session, ui_state.prefs,
           [patch_history](const std::string &label,
                           const std::string &merge_key, const ym2612::Patch &) {
             patch_history.begin_snapshot(label, merge_key);
@@ -261,6 +279,9 @@ void render_all(AppContext &ctx) {
   auto patch_editor_context = make_patch_editor_context(ctx);
   render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
                       patch_editor_state());
+
+  auto patch_lab_context = make_patch_lab_context(ctx);
+  render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
 
   auto patch_selector_context = make_patch_selector_context(ctx);
   render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);

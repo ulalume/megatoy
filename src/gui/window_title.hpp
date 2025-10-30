@@ -7,4 +7,5 @@ constexpr char SOFT_KEYBOARD_TITLE[] = "Soft Keyboard";
 constexpr char MML_CONSOLE_TITLE[] = "MML Console";
 constexpr char WAVEFORM_TITLE[] = "Waveform";
 constexpr char PREFERENCES_TITLE[] = "Preferences";
+constexpr char PATCH_LAB_TITLE[] = "Patch Lab";
 } // namespace ui

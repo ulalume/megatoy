@@ -65,6 +65,9 @@ public:
           data.ui_preferences.show_preferences =
               ui["show_preferences"].get<bool>();
         }
+        if (ui.contains("show_patch_lab")) {
+          data.ui_preferences.show_patch_lab = ui["show_patch_lab"].get<bool>();
+        }
         if (ui.contains("use_velocity")) {
           data.ui_preferences.use_velocity = ui["use_velocity"].get<bool>();
         }
@@ -114,6 +117,7 @@ public:
       ui["show_patch_selector"] = data.ui_preferences.show_patch_selector;
       ui["show_mml_console"] = data.ui_preferences.show_mml_console;
       ui["show_preferences"] = data.ui_preferences.show_preferences;
+      ui["show_patch_lab"] = data.ui_preferences.show_patch_lab;
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
       ui["use_velocity"] = data.ui_preferences.use_velocity;
       ui["steal_oldest_note_when_full"] =
