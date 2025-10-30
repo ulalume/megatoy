@@ -25,10 +25,8 @@ struct PatchLabState {
   int mode = static_cast<int>(Mode::Randomize);
 
   // Randomize
-  int random_mode = 0; // 0=wild,1=category
   int random_seed = -1;
-  std::string random_category_id;
-  int random_category_iterations = 2;
+  int random_template_iterations = 4;
   std::uint32_t random_last_seed = 0;
   bool random_has_result = false;
 
@@ -41,7 +39,7 @@ struct PatchLabState {
   std::string merge_error;
 
   float morph_mix = 0.5f;
-  bool morph_interpolate_algorithm = false;
+  bool morph_interpolate_algorithm = true;
   std::string morph_error;
 
   // Mutate

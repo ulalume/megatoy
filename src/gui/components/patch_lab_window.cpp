@@ -142,14 +142,13 @@ patch_lab::MutateResult mutate_patch(PatchLabContext &context,
 }
 
 void render_operation_selector(PatchLabState &state) {
-  ImGui::SeparatorText("Experiment");
   ImGui::RadioButton("Randomize", &state.mode,
                      static_cast<int>(PatchLabState::Mode::Randomize));
   ImGui::SameLine();
-  ImGui::RadioButton("Blend Merge", &state.mode,
+  ImGui::RadioButton("Blend merge", &state.mode,
                      static_cast<int>(PatchLabState::Mode::Merge));
   ImGui::SameLine();
-  ImGui::RadioButton("Morph Blend", &state.mode,
+  ImGui::RadioButton("Morph blend", &state.mode,
                      static_cast<int>(PatchLabState::Mode::Morph));
   ImGui::SameLine();
   ImGui::RadioButton("Mutate", &state.mode,
@@ -157,60 +156,17 @@ void render_operation_selector(PatchLabState &state) {
 }
 
 void render_random_section(PatchLabContext &context, PatchLabState &state) {
-  auto categories = patch_lab::available_categories();
-  if (state.random_category_id.empty() && !categories.empty()) {
-    state.random_category_id = categories.front().id;
-  }
-
-  ImGui::SeparatorText("Randomize");
-
-  ImGui::RadioButton("Wild Experiment", &state.random_mode, 0);
-  ImGui::SameLine();
-  ImGui::RadioButton("Preset Inspired", &state.random_mode, 1);
-
-  if (state.random_mode == 1) {
-    if (categories.empty()) {
-      ImGui::TextUnformatted("No preset categories available.");
-    } else {
-      int current_index = 0;
-      for (int i = 0; i < static_cast<int>(categories.size()); ++i) {
-        if (categories[i].id == state.random_category_id) {
-          current_index = i;
-          break;
-        }
-      }
-
-      const char *preview = categories[current_index].label.c_str();
-      if (ImGui::BeginCombo("Category", preview)) {
-        for (int i = 0; i < static_cast<int>(categories.size()); ++i) {
-          bool selected = (i == current_index);
-          if (ImGui::Selectable(categories[i].label.c_str(), selected)) {
-            state.random_category_id = categories[i].id;
-            current_index = i;
-          }
-          if (selected) {
-            ImGui::SetItemDefaultFocus();
-          }
-        }
-        ImGui::EndCombo();
-      }
-
-      ImGui::SliderInt("Variation steps", &state.random_category_iterations, 0,
-                       8);
-    }
-  }
-
+  ImGui::Separator();
   ImGui::SetNextItemWidth(120.0f);
   ImGui::InputInt("Seed (auto = -1)", &state.random_seed);
 
-  if (ImGui::Button("Apply Random Patch")) {
+  if (ImGui::Button("Apply to current patch")) {
+    state.random_template_iterations =
+        std::clamp(state.random_template_iterations, 0, 8);
     patch_lab::RandomOptions options;
     options.seed = state.random_seed;
-    options.mode = state.random_mode == 1
-                       ? patch_lab::RandomOptions::Mode::Category
-                       : patch_lab::RandomOptions::Mode::Wild;
-    options.category = state.random_category_id;
-    options.mutate_iterations = state.random_category_iterations;
+    options.mode = patch_lab::RandomOptions::Mode::Wild;
+    options.mutate_iterations = state.random_template_iterations;
 
     auto result = patch_lab::random_patch(options);
     apply_patch_result(context, "Patch Lab Randomize", "patch_lab.random",
@@ -226,8 +182,7 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
 
 void render_merge_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
-  ImGui::SeparatorText("Blend Merge");
-
+  ImGui::Separator();
   auto sanitized_a = sanitize_selection(state.source_a, entries);
   auto sanitized_b = sanitize_selection(state.source_b, entries);
   state.source_a = sanitized_a;
@@ -245,7 +200,7 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
   ImGui::InputInt("Seed (auto = -1)##merge", &state.merge_seed);
 
   if (!entries.empty()) {
-    if (ImGui::Button("Merge Into Current Patch")) {
+    if (ImGui::Button("Merge into current patch")) {
       ym2612::Patch patch_a;
       ym2612::Patch patch_b;
       auto &repository = context.session.repository();
@@ -283,8 +238,7 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
 
 void render_morph_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
-  ImGui::SeparatorText("Morph Blend");
-
+  ImGui::Separator();
   auto sanitized_a = sanitize_selection(state.source_a, entries);
   auto sanitized_b = sanitize_selection(state.source_b, entries);
   state.source_a = sanitized_a;
@@ -302,7 +256,7 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
   ImGui::Checkbox("Interpolate algorithm", &state.morph_interpolate_algorithm);
 
   if (!entries.empty()) {
-    if (ImGui::Button("Morph Into Current Patch")) {
+    if (ImGui::Button("Morph into current patch")) {
       ym2612::Patch patch_a;
       ym2612::Patch patch_b;
       auto &repository = context.session.repository();
@@ -336,8 +290,7 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
 }
 
 void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
-  ImGui::SeparatorText("Mutate");
-
+  ImGui::Separator();
   state.mutate_amount = std::clamp(state.mutate_amount, 0, 12);
   state.mutate_probability = std::clamp(state.mutate_probability, 0.0f, 1.0f);
 

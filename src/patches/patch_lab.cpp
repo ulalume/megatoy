@@ -545,23 +545,43 @@ OperationResult random_patch(const RandomOptions &options) {
   auto rng = make_rng(options.seed, result.seed);
 
   ym2612::Patch patch;
+  bool used_template = false;
   if (options.mode == RandomOptions::Mode::Category) {
     const auto *category = find_category(options.category);
-    if (!category) {
-      patch = make_wild_patch(rng);
-    } else {
+    if (category) {
       patch = make_template_patch(*category, rng);
-      MutateOptions mutate_options;
-      mutate_options.amount = 3;
-      mutate_options.probability = 0.6f;
-      mutate_options.allow_algorithm_variation = false;
-      int iterations = std::max(0, options.mutate_iterations);
-      for (int i = 0; i < iterations; ++i) {
-        mutate_in_place(patch, mutate_options);
-      }
+      used_template = true;
+    } else {
+      patch = make_wild_patch(rng);
     }
   } else {
-    patch = make_wild_patch(rng);
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+    double sample = dist(rng);
+
+    const CategoryDefinition *category = nullptr;
+    if (sample <= 0.25) {
+      category = find_category("bell");
+    } else if (sample <= 0.50) {
+      category = find_category("pad");
+    }
+
+    if (category) {
+      patch = make_template_patch(*category, rng);
+      used_template = true;
+    } else {
+      patch = make_wild_patch(rng);
+    }
+  }
+
+  if (used_template) {
+    MutateOptions mutate_options;
+    mutate_options.amount = 3;
+    mutate_options.probability = 0.6f;
+    mutate_options.allow_algorithm_variation = false;
+    int iterations = std::max(0, options.mutate_iterations);
+    for (int i = 0; i < iterations; ++i) {
+      mutate_in_place(patch, mutate_options);
+    }
   }
 
   result.patch = std::move(patch);

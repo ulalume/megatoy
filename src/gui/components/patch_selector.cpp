@@ -111,9 +111,8 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
     return;
   }
 
-  std::string tooltip =
-      "Format: " + entry.format +
-      "\nPath: " + display_preset_path(entry.relative_path);
+  std::string tooltip = "Format: " + entry.format +
+                        "\nPath: " + display_preset_path(entry.relative_path);
 
   if (entry.metadata) {
     tooltip += "\nStars: " + std::to_string(entry.metadata->star_rating) + "/5";
@@ -553,7 +552,7 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     current_mode = PatchViewMode::Table;
   }
 
-  ImGui::Spacing();
+  ImGui::Separator();
 
   char search_buffer[128];
   std::strncpy(search_buffer, context.prefs.metadata_search_query.c_str(),
