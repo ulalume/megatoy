@@ -66,6 +66,7 @@ void render_main_menu(MainMenuContext &context) {
                       &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(PATCH_BROWSER_TITLE, nullptr,
                       &ui_prefs.show_patch_selector);
+      ImGui::MenuItem(PATCH_LAB_TITLE, nullptr, &ui_prefs.show_patch_lab);
       ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
       ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);
       ImGui::MenuItem(PREFERENCES_TITLE, nullptr, &ui_prefs.show_preferences);

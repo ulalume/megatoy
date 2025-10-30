@@ -6,6 +6,18 @@
 
 A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sound chip. Designed for musicians, sound designers, and chiptune enthusiasts who want to create and experiment with FM synthesis patches.
 
+## Patch Lab (Experimental)
+
+![Patch Lab Screenshot](https://raw.githubusercontent.com/ulalume/megatoy/main/docs/patch_lab.png)
+
+Access via **View ▸ Patch Lab**.
+Changes apply directly to your active patch with full undo support.
+
+- **Randomize** – Generates a new patch each time.
+- **Blend merge** – Mixes two patches from your patches by randomly choosing parameters from Patch A and Patch B. You can pick both sources via combo boxes and reuse seeds.
+- **Morph blend** – Interpolates between two patches using a 0–1 blend slider with smooth parameter transitions.
+- **Mutate** – Applies subtle or extreme perturbations to the current patch. Adjust variation depth, probability, and algorithm-lock toggles to taste, or repeat with a fixed seed for reproducible tweaks.
+
 ## Key Features
 
 ### Patch Management
@@ -24,6 +36,7 @@ A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sou
 
 ### Advanced Editing
 
+- **Patch Lab (Experimental)** window for randomized patch design, blending existing sounds, and quick mutations
 - **Visual envelope editor** with interactive ADSR curves
 - **Undo/Redo history** for safe experimentation
 

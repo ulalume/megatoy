@@ -182,25 +182,28 @@ void GuiManager::begin_frame() {
     ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
-    ImGuiID dock_main_id = dockspace_id;
-    ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
-        dock_main_id, ImGuiDir_Left, 0.3f, nullptr, &dock_main_id);
-
-    ImGuiID dock_id_left_down;
-    dock_id_left_down = ImGui::DockBuilderSplitNode(
-        dock_id_left, ImGuiDir_Down, 0.25f, nullptr, &dock_id_left);
-
-    ImGuiID dock_id_right_down;
-    dock_id_right_down = ImGui::DockBuilderSplitNode(
-        dock_main_id, ImGuiDir_Down, 0.20f, nullptr, &dock_main_id);
-
-    ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
     auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
                               std::string(ui::PATCH_EDITOR_TITLE);
+
+    ImGuiID dock_main_id = dockspace_id;
+
+    ImGuiID doc_id_down = ImGui::DockBuilderSplitNode(
+        dock_main_id, ImGuiDir_Down, 0.23f, nullptr, &dock_main_id);
+
+    ImGuiID doc_id_down_left = ImGui::DockBuilderSplitNode(
+        doc_id_down, ImGuiDir_Left, 0.20f, nullptr, &doc_id_down);
+
+    ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
+        dock_main_id, ImGuiDir_Left, 0.35f, nullptr, &dock_main_id);
+
     ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
-    ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, dock_id_right_down);
-    ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, dock_id_right_down);
-    ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, dock_id_left_down);
+    ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
+
+    ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);
+    ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, doc_id_down);
+    ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
+
+    ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, doc_id_down_left);
 
     // Finish the dockspace
     ImGui::DockBuilderFinish(dockspace_id);
