@@ -14,12 +14,14 @@ A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sou
 - **Save patches** in custom format with full metadata
 - **Export patches** to DefleMask (`.dmp`) and ctrmml (`.mml`) formats
 - **Drag & drop** support for easy file loading
+- **Organize patches** with metadata (star ratings and categories) for quick retrieval and filtering
 
 ### Real-time Audio & MIDI
 
 - **Live audio playback** with built-in YM2612 emulation
 - **MIDI input support** with velocity sensitivity
 - **Software keyboard** for testing patches without MIDI hardware
+- **Computer keyboard typing** with selectable scale and key for intuitive playing without MIDI gear
 - **Real-time parameter adjustment** with immediate audio feedback
 
 ### Advanced Editing
@@ -29,10 +31,9 @@ A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sou
 
 ### MML Integration
 
-- **MML Console** for viewing current patch as ctrmml code
-- **One-click copy** to clipboard for easy integration with MML tools
-- **Real-time MML preview** updates as you edit parameters
-- Compatible with ctrmml
+- **Export to MML** for use with ctrmml
+- **Real-time code preview** shows MML as you edit
+- **One-click copy** to clipboard
 
 ## Build Instructions
 
@@ -54,11 +55,15 @@ cmake --build build-release --config Release --parallel
 
 Load patches by placing files in `~/megatoy/patches/` (created automatically) or drag-and-drop into the application.
 
-Recommended collections:
+Built-in patches:
 
-- **DefleMask Legacy** (https://www.deflemask.com/get_legacy/) - instruments/Genesis
-- **Furnace** (https://github.com/tildearrow/furnace) - instruments/OPN
-- **Rym2612 ReFill** (https://www.inphonik.com/press/press-release-rym2612-refill/) - free pack of 180 patches
+- [17 built-in CC0 patches](https://github.com/ulalume/megatoy/tree/main/assets/presets) - Contributions welcome! See [Issue #15](https://github.com/ulalume/megatoy/issues/15)
+
+Recommended external collections:
+
+- [DefleMask Legacy](https://www.deflemask.com/get_legacy/) - instruments/Genesis
+- [Furnace](https://github.com/tildearrow/furnace) - instruments/OPN
+- [Rym2612 ReFill](https://www.inphonik.com/press/press-release-rym2612-refill/) - free pack of 180 patches
 
 ## Thanks
 
