@@ -327,7 +327,7 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     return;
   }
 
-  ImGui::SetNextWindowSize(ImVec2(480, 460), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(400, 250), ImGuiCond_FirstUseEver);
 
   if (!ImGui::Begin(title, &context.prefs.show_patch_lab)) {
     ImGui::End();

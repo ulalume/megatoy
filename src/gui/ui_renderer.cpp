@@ -280,9 +280,6 @@ void render_all(AppContext &ctx) {
   render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
                       patch_editor_state());
 
-  auto patch_lab_context = make_patch_lab_context(ctx);
-  render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
-
   auto patch_selector_context = make_patch_selector_context(ctx);
   render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);
 
@@ -294,6 +291,9 @@ void render_all(AppContext &ctx) {
 
   auto mml_context = make_mml_console_context(ctx);
   render_mml_console(MML_CONSOLE_TITLE, mml_context);
+
+  auto patch_lab_context = make_patch_lab_context(ctx);
+  render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
 
   auto waveform_context = make_waveform_context(ctx);
   render_waveform(WAVEFORM_TITLE, waveform_context);

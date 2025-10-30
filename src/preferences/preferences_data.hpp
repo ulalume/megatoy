@@ -10,10 +10,10 @@ struct UIPreferences {
   bool show_audio_controls = true;
   bool show_midi_keyboard = true;
   bool show_patch_selector = true;
-  bool show_mml_console = false;
+  bool show_mml_console = true;
   bool show_preferences = false;
   bool show_waveform = true;
-  bool show_patch_lab = false;
+  bool show_patch_lab = true;
   bool use_velocity = true;
   bool steal_oldest_note_when_full = true;
   std::string patch_search_query;

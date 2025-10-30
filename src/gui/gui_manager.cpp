@@ -198,8 +198,11 @@ void GuiManager::begin_frame() {
     auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
                               std::string(ui::PATCH_EDITOR_TITLE);
     ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
+
     ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, dock_id_right_down);
     ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, dock_id_right_down);
+    ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, dock_id_right_down);
+
     ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, dock_id_left_down);
 
     // Finish the dockspace
