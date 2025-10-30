@@ -1,6 +1,7 @@
 #include "channel_allocator.hpp"
 #include "ym2612/channel.hpp"
 #include "ym2612/device.hpp"
+#include <algorithm>
 
 ChannelAllocator::ChannelAllocator() : channel_key_on_{} {}
 
