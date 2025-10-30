@@ -12,7 +12,7 @@ A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sou
 
 - **Load patches** from multiple formats: `.dmp`, `.fui`, `.rym2612`, `.mml`
 - **Save patches** in custom format with full metadata
-- **Export patches** to DefleMask (`.dmp`) and ctrmml (`.mml`) formats
+- **Export patches** to DefleMask (`.dmp`) and [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`) formats
 - **Organize patches** with metadata (star ratings and categories) for quick retrieval and filtering
 - **Drag & drop** support for easy file loading
 
@@ -29,7 +29,7 @@ A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sou
 
 ### MML Integration
 
-- **Export to MML** for use with ctrmml
+- **Export to MML** for use with [ctrmml](https://github.com/superctr/ctrmml)
 - **Real-time code preview** shows MML as you edit
 - **One-click copy** to clipboard
 
