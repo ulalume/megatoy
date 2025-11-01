@@ -34,7 +34,7 @@ jobs:
         include:
           - label: Linux (x64)
             os: linux
-            runner: ubuntu-latest
+            runner: ubuntu-20.04
             suffix: linux-x64
             cmake_args: ""
           - label: macOS (arm64)
