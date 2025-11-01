@@ -25,124 +25,117 @@ jobs:
             gh release create "$GITHUB_REF_NAME" --title "$TITLE" --generate-notes --latest
           fi
 
-  build:
+  build-linux:
     needs: create_release
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Linux (x64)
-            os: linux
-            runner: ubuntu-20.04
-            suffix: linux-x64
-            cmake_args: ""
-          - label: macOS (arm64)
-            os: macos
-            runner: macos-14
-            suffix: macos-arm64
-            cmake_args: "-DCMAKE_OSX_ARCHITECTURES=arm64"
-          - label: macOS (Intel)
-            os: macos
-            runner: macos-13
-            suffix: macos-x86_64
-            cmake_args: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
-          - label: Windows (x64)
-            os: windows
-            runner: windows-latest
-            suffix: windows-x64
-            cmake_args: ""
-
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04   # ← 古いglibc用
     env:
       BUILD_TYPE: Release
       VERSION: ${{ github.ref_name }}
-      PACKAGE_NAME: megatoy-${{ github.ref_name }}-${{ matrix.suffix }}
+      PACKAGE_NAME: megatoy-${{ github.ref_name }}-linux-x64
       INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies (Linux only)
-        if: matrix.os == 'linux'
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libgl1-mesa-dev libglu1-mesa-dev \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
-            libgtk-3-dev xorg-dev
-
+            libgtk-3-dev xorg-dev cmake pkg-config git
       - name: Configure CMake
-        shell: bash
-        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" ${{ matrix.cmake_args }}
-
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
       - name: Build
-        shell: bash
         run: cmake --build build-release --config $BUILD_TYPE --parallel
-
       - name: Install
-        shell: bash
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
-
-      - name: Package Artifact (Linux/macOS)
-        if: matrix.os != 'windows'
-        shell: bash
+      - name: Package Artifact
         run: |
-          set -euo pipefail
           mkdir -p dist
           DIST="dist/$PACKAGE_NAME"
           rm -rf "$DIST"
+          cp "$INSTALL_PREFIX/megatoy" "$DIST/"
+          chmod +x "$DIST/megatoy"
+          cp -a "$INSTALL_PREFIX/presets" "$DIST/presets"
+          (cd dist && zip -r "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
+      - name: Upload Artifact
+        run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
 
-          if [[ "${{ matrix.os }}" == "linux" ]]; then
-            STAGING="$INSTALL_PREFIX"
-            mkdir -p "$DIST"
+  build-macos-arm64:
+    needs: create_release
+    runs-on: macos-14
+    env:
+      BUILD_TYPE: Release
+      VERSION: ${{ github.ref_name }}
+      PACKAGE_NAME: megatoy-${{ github.ref_name }}-macos-arm64
+      INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure CMake
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+      - name: Build
+        run: cmake --build build-release --config $BUILD_TYPE --parallel
+      - name: Install
+        run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
+      - name: Package Artifact
+        run: |
+          APP="build-release/megatoy.app"
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" "dist/$PACKAGE_NAME.zip"
+      - name: Upload Artifact
+        run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
 
-            if [ -f "$STAGING/megatoy" ]; then
-              cp "$STAGING/megatoy" "$DIST/"
-            elif [ -f "$STAGING/bin/megatoy" ]; then
-              cp "$STAGING/bin/megatoy" "$DIST/"
-            else
-              echo "Executable not found under $STAGING" >&2
-              exit 1
-            fi
-            chmod +x "$DIST/megatoy"
+  build-macos-x86_64:
+    needs: create_release
+    runs-on: macos-13
+    env:
+      BUILD_TYPE: Release
+      VERSION: ${{ github.ref_name }}
+      PACKAGE_NAME: megatoy-${{ github.ref_name }}-macos-x86_64
+      INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure CMake
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+      - name: Build
+        run: cmake --build build-release --config $BUILD_TYPE --parallel
+      - name: Install
+        run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
+      - name: Package Artifact
+        run: |
+          APP="build-release/megatoy.app"
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" "dist/$PACKAGE_NAME.zip"
+      - name: Upload Artifact
+        run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
 
-            if [ -d "$STAGING/presets" ]; then
-              cp -a "$STAGING/presets" "$DIST/"
-            elif [ -d "$STAGING/bin/presets" ]; then
-              cp -a "$STAGING/bin/presets" "$DIST/presets"
-            fi
-
-            (cd dist && zip -r "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
-
-          else
-            APP="build-release/megatoy.app"
-            [ -d "$APP" ] || (echo "App bundle not found" && exit 1)
-            mkdir -p dist
-            ditto -c -k --keepParent "$APP" "dist/$PACKAGE_NAME.zip"
-          fi
-
-      - name: Package Artifact (Windows)
-        if: matrix.os == 'windows'
+  build-windows:
+    needs: create_release
+    runs-on: windows-latest
+    env:
+      BUILD_TYPE: Release
+      VERSION: ${{ github.ref_name }}
+      PACKAGE_NAME: megatoy-${{ github.ref_name }}-windows-x64
+      INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+      - name: Build
+        shell: pwsh
+        run: cmake --build build-release --config $BUILD_TYPE --parallel
+      - name: Install
+        shell: pwsh
+        run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
+      - name: Package Artifact
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $install = "$env:INSTALL_PREFIX"
           $dist = "dist/$env:PACKAGE_NAME"
           Remove-Item $dist -Recurse -Force -ErrorAction Ignore
           New-Item -ItemType Directory -Path $dist | Out-Null
-          $exe = Join-Path $install 'megatoy.exe'
-          if (-Not (Test-Path $exe)) {
-            throw "Executable not found: $exe"
-          }
-          Copy-Item $exe $dist -Force
-          $presets = Join-Path $install 'presets'
-          if (Test-Path $presets) {
-            Copy-Item $presets $dist -Recurse -Force
-          }
-          Push-Location dist
-          Compress-Archive -Path $env:PACKAGE_NAME -DestinationPath "$env:PACKAGE_NAME.zip" -Force
-          Pop-Location
-
+          Copy-Item "$env:INSTALL_PREFIX\megatoy.exe" $dist -Force
+          Copy-Item "$env:INSTALL_PREFIX\presets" $dist -Recurse -Force
+          Compress-Archive -Path $dist -DestinationPath "$dist.zip" -Force
       - name: Upload Artifact
         shell: bash
         run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
