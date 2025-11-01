@@ -9,24 +9,30 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Compiler-specific optimization settings
+set(MEGATOY_LINUX_X86_64 FALSE)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+  set(MEGATOY_LINUX_X86_64 TRUE)
+  option(MEGATOY_GENERAL_X86_64_LINUX "Build with generic x86-64 flags on Linux" OFF)
+endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   message(STATUS "Setting up Release build optimizations")
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-      option(MEGATOY_GENERAL_X86_64_LINUX "Build with generic x86-64 flags on Linux" OFF)
-    endif()
     set(OPTIMIZATION_FLAGS
         "-O3"
         "-DNDEBUG"
         "-ffast-math"
         "-funroll-loops"
     )
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+    if(MEGATOY_LINUX_X86_64)
       if(MEGATOY_GENERAL_X86_64_LINUX)
         message(STATUS "Using generic x86-64 tuning for Linux Release build")
         list(APPEND OPTIMIZATION_FLAGS
             "-march=x86-64"
             "-mtune=generic"
+            "-mno-avx"
+            "-mno-avx2"
+            "-mno-fma"
         )
       else()
         message(STATUS "Using native CPU optimizations for Linux Release build")
@@ -39,7 +45,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
         "-flto"
         "-fomit-frame-pointer"
     )
-    string(JOIN " " CMAKE_CXX_FLAGS_RELEASE ${OPTIMIZATION_FLAGS})
+    string(JOIN " " OPTIMIZATION_STRING ${OPTIMIZATION_FLAGS})
+    set(CMAKE_C_FLAGS_RELEASE "${OPTIMIZATION_STRING}")
+    set(CMAKE_CXX_FLAGS_RELEASE "${OPTIMIZATION_STRING}")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-flto")
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG /fp:fast /GL")
