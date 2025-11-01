@@ -4,39 +4,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build ${{ matrix.label }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Linux
-            os: Linux
-            runner: ubuntu-20.04
-            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
-            build: cmake --build build --config Release --parallel
-          - label: macOS (arm64)
-            os: macOS
-            runner: macos-14
-            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_INSTALL_PREFIX=install
-            build: cmake --build build --config Release --parallel
-          - label: macOS (Intel)
-            os: macOS
-            runner: macos-13
-            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_INSTALL_PREFIX=install
-            build: cmake --build build --config Release --parallel
-          - label: Windows
-            os: Windows
-            runner: windows-latest
-            configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=install
-            build: cmake --build build --config Release --parallel
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04   # ← 古いglibc（2.31）対応
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies (Linux)
-        if: matrix.os == 'Linux'
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -49,34 +25,65 @@ jobs:
             libxcursor-dev \
             libxi-dev \
             libgtk-3-dev \
-            xorg-dev
+            xorg-dev \
+            cmake pkg-config git
 
       - name: Configure
-        run: ${{ matrix.configure }}
-        shell: bash
-        if: matrix.os != 'Windows'
-
-      - name: Configure (Windows)
-        if: matrix.os == 'Windows'
-        shell: pwsh
-        run: ${{ matrix.configure }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
 
       - name: Build
-        run: ${{ matrix.build }}
-        shell: bash
-        if: matrix.os != 'Windows'
+        run: cmake --build build --config Release --parallel
 
-      - name: Build (Windows)
-        if: matrix.os == 'Windows'
-        shell: pwsh
-        run: ${{ matrix.build }}
-
-      - name: Install artifacts (Linux/macOS)
-        if: matrix.os != 'Windows'
-        shell: bash
+      - name: Install artifacts
         run: cmake --install build --config Release
 
-      - name: Install artifacts (Windows)
-        if: matrix.os == 'Windows'
+  build-macos-arm64:
+    name: Build macOS (arm64)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_INSTALL_PREFIX=install
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Install artifacts
+        run: cmake --install build --config Release
+
+  build-macos-x86_64:
+    name: Build macOS (Intel)
+    runs-on: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_INSTALL_PREFIX=install
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Install artifacts
+        run: cmake --install build --config Release
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=install
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Install artifacts
         shell: pwsh
         run: cmake --install build --config Release
