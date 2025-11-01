@@ -96,7 +96,7 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
   GIT_TAG        master
 )
-
+set(KISSFFT_STATIC ON CACHE BOOL "" FORCE)  
 set(KISSFFT_PKGCONFIG OFF CACHE BOOL "" FORCE)
 set(KISSFFT_TEST     OFF CACHE BOOL "" FORCE)
 set(KISSFFT_TOOLS    OFF CACHE BOOL "" FORCE)
