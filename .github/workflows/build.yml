@@ -14,6 +14,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          export DEBIAN_FRONTEND=noninteractive
+          export TZ=UTC
           apt-get update
           apt-get install -y \
             build-essential \
@@ -26,7 +28,7 @@ jobs:
             libxi-dev \
             libgtk-3-dev \
             xorg-dev \
-            cmake pkg-config git
+            cmake pkg-config git tzdata
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
