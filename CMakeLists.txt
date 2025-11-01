@@ -10,6 +10,7 @@ endif()
 
 # Compiler-specific optimization settings
 set(MEGATOY_LINUX_X86_64 FALSE)
+set(MEGATOY_RELEASE_CPU_FLAGS "")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
   set(MEGATOY_LINUX_X86_64 TRUE)
   option(MEGATOY_GENERAL_X86_64_LINUX "Build with generic x86-64 flags on Linux" OFF)
@@ -27,20 +28,15 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     if(MEGATOY_LINUX_X86_64)
       if(MEGATOY_GENERAL_X86_64_LINUX)
         message(STATUS "Using generic x86-64 tuning for Linux Release build")
-        list(APPEND OPTIMIZATION_FLAGS
-            "-march=x86-64"
-            "-mtune=generic"
-            "-mno-avx"
-            "-mno-avx2"
-            "-mno-fma"
-        )
+        set(MEGATOY_RELEASE_CPU_FLAGS "-march=x86-64" "-mtune=generic")
       else()
         message(STATUS "Using native CPU optimizations for Linux Release build")
-        list(APPEND OPTIMIZATION_FLAGS "-march=native")
+        set(MEGATOY_RELEASE_CPU_FLAGS "-march=native")
       endif()
     else()
-      list(APPEND OPTIMIZATION_FLAGS "-march=native")
+      set(MEGATOY_RELEASE_CPU_FLAGS "-march=native")
     endif()
+    list(APPEND OPTIMIZATION_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
     list(APPEND OPTIMIZATION_FLAGS
         "-flto"
         "-fomit-frame-pointer"

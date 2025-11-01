@@ -87,11 +87,16 @@ target_include_directories(megatoy_core PUBLIC
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(MEGATOY_CORE_RELEASE_FLAGS -O3 -ffast-math -funroll-loops)
+  if(MEGATOY_RELEASE_CPU_FLAGS)
+    list(APPEND MEGATOY_CORE_RELEASE_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
+  else()
+    list(APPEND MEGATOY_CORE_RELEASE_FLAGS -march=native)
+  endif()
   target_compile_options(megatoy_core PRIVATE
-        $<$<CXX_COMPILER_ID:GNU,Clang>:
-          -O3 -ffast-math -funroll-loops -march=native>
-        $<$<CXX_COMPILER_ID:MSVC>:/O2 /fp:fast>
-    )
+      $<$<CXX_COMPILER_ID:GNU,Clang>:${MEGATOY_CORE_RELEASE_FLAGS}>
+      $<$<CXX_COMPILER_ID:MSVC>:/O2 /fp:fast>
+  )
 endif()
 
 target_link_libraries(megatoy_core PUBLIC
