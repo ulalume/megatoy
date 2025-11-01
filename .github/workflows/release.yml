@@ -29,10 +29,20 @@ jobs:
     needs: create_release
     runs-on: ubuntu-latest
     container: ubuntu:20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: native
+            suffix: linux-x64
+            cmake_flags: ""
+          - variant: general
+            suffix: linux-x64-general
+            cmake_flags: "-DMEGATOY_GENERAL_X86_64_LINUX=ON"
     env:
       BUILD_TYPE: Release
       VERSION: ${{ github.ref_name }}
-      PACKAGE_NAME: megatoy-${{ github.ref_name }}-linux-x64
+      PACKAGE_NAME: megatoy-${{ github.ref_name }}-${{ matrix.suffix }}
       INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,7 +66,7 @@ jobs:
           apt-get update
           apt-get install -y cmake gh
       - name: Configure CMake
-        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" ${{ matrix.cmake_flags }}
       - name: Build
         run: cmake --build build-release --config $BUILD_TYPE --parallel
       - name: Install
