@@ -36,6 +36,7 @@ jobs:
       INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -98,6 +99,7 @@ jobs:
       INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure CMake
@@ -125,6 +127,7 @@ jobs:
       INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure CMake
@@ -152,6 +155,7 @@ jobs:
       INSTALL_PREFIX: ${{ github.workspace }}/build-release/install
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure
