@@ -76,6 +76,8 @@ cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --config Release --parallel
 ```
 
+For distribution-specific notes on dependencies and audio drivers, see the Linux guide at [docs/INSTALL_LINUX.md](docs/INSTALL_LINUX.md).
+
 ## Thanks
 
 - [libvgm](https://github.com/ValleyBell/libvgm/)
