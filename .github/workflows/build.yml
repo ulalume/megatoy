@@ -13,7 +13,7 @@ jobs:
         include:
           - label: Linux
             os: Linux
-            runner: ubuntu-latest
+            runner: ubuntu-20.04
             configure: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
             build: cmake --build build --config Release --parallel
           - label: macOS (arm64)
