@@ -14,26 +14,40 @@ ChannelAllocator::note_on(const ym2612::Note &note, bool allow_voice_steal) {
   if (is_note_active(note))
     return std::nullopt;
 
-  const auto oldest_it =
-      std::min_element(channel_order_.begin(), channel_order_.end());
-  const uint8_t oldest_index =
-      static_cast<uint8_t>(oldest_it - channel_order_.begin());
-  const bool in_use = channel_key_on_[oldest_index];
-  const auto replaced_note = channel_to_note_[oldest_index];
+  std::optional<size_t> free_index;
+  for (size_t idx = 0; idx < channel_key_on_.size(); ++idx) {
+    if (channel_key_on_[idx])
+      continue;
+    if (!free_index || channel_order_[idx] < channel_order_[*free_index]) {
+      free_index = idx;
+    }
+  }
 
-  if (in_use && !allow_voice_steal)
-    return std::nullopt;
+  size_t selected_index;
+  std::optional<ym2612::Note> replaced_note;
 
-  if (in_use && replaced_note)
-    note_to_channel_.erase(*replaced_note);
+  if (free_index) {
+    selected_index = *free_index;
+    replaced_note.reset();
+  } else {
+    if (!allow_voice_steal)
+      return std::nullopt;
 
-  auto channel = ym2612::all_channel_indices[oldest_index];
-  channel_key_on_[oldest_index] = true;
-  channel_to_note_[oldest_index] = note;
+    auto oldest_it =
+        std::min_element(channel_order_.begin(), channel_order_.end());
+    selected_index = static_cast<size_t>(oldest_it - channel_order_.begin());
+    replaced_note = channel_to_note_[selected_index];
+    if (replaced_note)
+      note_to_channel_.erase(*replaced_note);
+  }
+
+  auto channel = ym2612::all_channel_indices[selected_index];
+  channel_key_on_[selected_index] = true;
+  channel_to_note_[selected_index] = note;
   note_to_channel_[note] = channel;
-  channel_order_[oldest_index] = ++allocation_counter_;
+  channel_order_[selected_index] = ++allocation_counter_;
 
-  return ChannelClaim{channel, (in_use ? replaced_note : std::nullopt)};
+  return ChannelClaim{channel, replaced_note};
 }
 
 bool ChannelAllocator::note_off(const ym2612::Note &note,
