@@ -127,6 +127,13 @@ target_compile_definitions(megatoy_core PUBLIC
 set(MEGATOY_MAIN_SOURCES src/main.cpp)
 if(WIN32)
   list(APPEND MEGATOY_MAIN_SOURCES src/platform/windows_entry.cpp)
+  set(MEGATOY_ICON_RC "${CMAKE_BINARY_DIR}/megatoy_icon.rc")
+  configure_file(
+    "${CMAKE_SOURCE_DIR}/cmake/windows_icon.rc.in"
+    "${MEGATOY_ICON_RC}"
+    @ONLY
+  )
+  list(APPEND MEGATOY_MAIN_SOURCES "${MEGATOY_ICON_RC}")
 endif()
 
 if(APPLE)
@@ -138,6 +145,14 @@ else()
 endif()
 
 target_link_libraries(megatoy PRIVATE megatoy_core)
+
+if(APPLE)
+  set(MEGATOY_BUNDLE_ICON "${CMAKE_SOURCE_DIR}/dist/icon.icns")
+  set_source_files_properties(${MEGATOY_BUNDLE_ICON}
+    PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+  target_sources(megatoy PRIVATE ${MEGATOY_BUNDLE_ICON})
+  set_target_properties(megatoy PROPERTIES MACOSX_BUNDLE_ICON_FILE "icon.icns")
+endif()
 
 install(TARGETS megatoy
   BUNDLE DESTINATION .
@@ -208,4 +223,14 @@ if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
 else()
   message(WARNING
     "Presets directory not found at ${MEGATOY_PRESETS_SOURCE_DIR}")
+endif()
+
+if(UNIX AND NOT APPLE)
+  add_custom_command(
+      TARGET megatoy POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${CMAKE_SOURCE_DIR}/dist/icon.png"
+              "$<TARGET_FILE_DIR:megatoy>/icon.png"
+  )
+  install(FILES "${CMAKE_SOURCE_DIR}/dist/icon.png" DESTINATION .)
 endif()
