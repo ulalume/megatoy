@@ -2,6 +2,10 @@
 
 > ⚠️ **Early Development**: This project is in active development and features may be incomplete.
 
+<p align="center">
+  <img width="240" height="240" src="https://raw.githubusercontent.com/ulalume/megatoy/main/dist/icon.png" alt="app icon">
+</p>
+
 ![Screenshot](https://raw.githubusercontent.com/ulalume/megatoy/main/docs/screenshot.png)
 
 A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sound chip. Designed for musicians, sound designers, and chiptune enthusiasts who want to create and experiment with FM synthesis patches.
