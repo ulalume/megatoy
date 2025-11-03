@@ -96,6 +96,11 @@ jobs:
           elif [ -d "$STAGING/bin/presets" ]; then
             cp -a "$STAGING/bin/presets" "$DIST/presets"
           fi
+          if [ -f "$STAGING/icon.png" ]; then
+            cp "$STAGING/icon.png" "$DIST/"
+          elif [ -f "$STAGING/bin/icon.png" ]; then
+            cp "$STAGING/bin/icon.png" "$DIST/"
+          fi
           (cd dist && zip -r "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
       - name: Upload Artifact
         shell: bash
