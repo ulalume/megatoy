@@ -1,6 +1,7 @@
 #include "waveform.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "ym2612/fft_analyzer.hpp"
+#include <cstddef>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <vector>
@@ -64,6 +65,7 @@ void render_waveform(const char *title, WaveformContext &context) {
     const float nyquist_freq = sample_rate / 2.0f;
     const float min_freq = 20.0f;        // 20 Hz
     const float max_freq = nyquist_freq; // Up to Nyquist
+    const float offset = 50.0f;
 
     for (size_t i = 0; i < num_display_bins; ++i) {
       // Logarithmic frequency interpolation
@@ -81,11 +83,15 @@ void render_waveform(const char *title, WaveformContext &context) {
       if (bin_low < mags.size()) {
         float mag_low = mags[bin_low];
         float mag_high = (bin_high < mags.size()) ? mags[bin_high] : mag_low;
-        log_bins[i] = mag_low + frac * (mag_high - mag_low);
+        log_bins[i] = mag_low + frac * (mag_high - mag_low) + offset;
       }
     }
-    ImGui::PlotLines("Spectrum", log_bins.data(), log_bins.size(), 0, nullptr,
-                     -50.0f, 35.0f, plot_size);
+    ImGui::PushStyleVar(ImGuiStyleVar_DisabledAlpha, 1.0f);
+    ImGui::BeginDisabled(true);
+    ImGui::PlotHistogram("Spectrum", log_bins.data(), log_bins.size(), 0,
+                         nullptr, 0, 35.0f + offset, plot_size);
+    ImGui::EndDisabled();
+    ImGui::PopStyleVar();
   } else {
     ImGui::Dummy(plot_size);
   }
