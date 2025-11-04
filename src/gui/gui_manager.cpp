@@ -26,12 +26,22 @@ GuiManager::GuiManager(PreferenceManager &preferences)
       fullscreen_(false), windowed_pos_x_(0), windowed_pos_y_(0),
       windowed_width_(0), windowed_height_(0), first_frame_(true),
       pending_imgui_ini_update_(false), imgui_ini_file_path_(),
-      theme_(ui::styles::ThemeId::MegatoyDark) {}
+      theme_(ui::styles::ThemeId::MegatoyDark), drop_callback_(nullptr) {}
 
 GuiManager::~GuiManager() { shutdown(); }
 
 void GuiManager::glfw_error_callback(int error, const char *description) {
   std::cerr << "GLFW Error " << error << ": " << description << std::endl;
+}
+
+void GuiManager::glfw_drop_callback(GLFWwindow *window, int count,
+                                    const char **paths) {
+  auto *gui_manager =
+      static_cast<GuiManager *>(glfwGetWindowUserPointer(window));
+  if (gui_manager && gui_manager->drop_callback_ &&
+      gui_manager->drop_user_pointer_) {
+    gui_manager->drop_callback_(gui_manager->drop_user_pointer_, count, paths);
+  }
 }
 
 bool GuiManager::initialize(const std::string &window_title, int width,
@@ -317,4 +327,16 @@ void GuiManager::apply_imgui_ini_binding() {
   io.IniFilename =
       imgui_ini_file_path_.empty() ? nullptr : imgui_ini_file_path_.c_str();
   pending_imgui_ini_update_ = false;
+}
+
+void GuiManager::set_drop_callback(void *user_pointer,
+                                   void (*callback)(void *user_pointer,
+                                                    int count,
+                                                    const char **paths)) {
+  drop_user_pointer_ = user_pointer;
+  drop_callback_ = callback;
+  if (window_) {
+    glfwSetWindowUserPointer(window_, this);
+    glfwSetDropCallback(window_, glfw_drop_callback);
+  }
 }

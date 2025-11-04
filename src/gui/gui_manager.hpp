@@ -100,6 +100,13 @@ public:
   void set_theme(ui::styles::ThemeId theme);
   ui::styles::ThemeId theme() const { return theme_; }
 
+  /**
+   * File drop callback management
+   */
+  void set_drop_callback(void *user_pointer,
+                         void (*callback)(void *user_pointer, int count,
+                                          const char **paths));
+
 private:
   // Core GUI system
   PreferenceManager &preferences_;
@@ -125,4 +132,10 @@ private:
 
   // Static callbacks
   static void glfw_error_callback(int error, const char *description);
+  static void glfw_drop_callback(GLFWwindow *window, int count,
+                                 const char **paths);
+
+  // Drop callback state
+  void *drop_user_pointer_;
+  void (*drop_callback_)(void *user_pointer, int count, const char **paths);
 };

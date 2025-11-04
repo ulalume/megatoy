@@ -5,19 +5,18 @@
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
-#include <GLFW/glfw3.h>
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
 
 namespace {
 
-void handle_file_drop(GLFWwindow *window, int count, const char **paths) {
+void handle_file_drop(void *user_pointer, int count, const char **paths) {
   if (paths == nullptr || count <= 0) {
     return;
   }
 
-  auto *context = static_cast<AppContext *>(glfwGetWindowUserPointer(window));
+  auto *context = static_cast<AppContext *>(user_pointer);
   if (context == nullptr) {
     return;
   }
@@ -47,10 +46,7 @@ int main(int argc, char *argv[]) {
   AppContext app_context{services, app_state};
 
   // Setup window callbacks
-  if (GLFWwindow *window = services.gui_manager.get_window()) {
-    glfwSetWindowUserPointer(window, &app_context);
-    glfwSetDropCallback(window, handle_file_drop);
-  }
+  services.gui_manager.set_drop_callback(&app_context, handle_file_drop);
 
   // Initialize MIDI
   MidiInputManager midi;
