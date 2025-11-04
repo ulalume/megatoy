@@ -348,6 +348,7 @@ void render_metadata_table(PatchSelectorContext &context) {
                             ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg)) {
 
     // Setup columns
+    ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort, 0.3f);
     ImGui::TableSetupColumn("Stars", ImGuiTableColumnFlags_None, 0.1f);
     ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_None, 0.2f);
@@ -591,17 +592,13 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   }
   ImGui::EndDisabled();
 
-  auto preset_tree = preset_repository.tree();
-
   // Determine which view to render
   if (context.get_view_mode() == PatchViewMode::Table) {
-    if (ImGui::BeginChild("MetadataTable", ImGui::GetContentRegionAvail(),
-                          true)) {
-      render_metadata_table(context);
-    }
-    ImGui::EndChild();
+    render_metadata_table(context);
   } else {
     if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(), true)) {
+      auto preset_tree = preset_repository.tree();
+
       std::string tree_query_lower =
           to_lower(context.prefs.metadata_search_query);
       bool rendered = render_patch_tree(preset_tree, context, tree_query_lower,
