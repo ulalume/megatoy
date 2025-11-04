@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "patches/patch_lab.hpp"
+#include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <imgui.h>
 #include <vector>
@@ -142,16 +143,16 @@ patch_lab::MutateResult mutate_patch(PatchLabContext &context,
 }
 
 void render_operation_selector(PatchLabState &state) {
-  ImGui::RadioButton("Randomize", &state.mode,
+  ImGui::RadioButton(ICON_FA_DICE " Random", &state.mode,
                      static_cast<int>(PatchLabState::Mode::Randomize));
   ImGui::SameLine();
-  ImGui::RadioButton("Blend merge", &state.mode,
+  ImGui::RadioButton(ICON_FA_SHUFFLE " Mix", &state.mode,
                      static_cast<int>(PatchLabState::Mode::Merge));
   ImGui::SameLine();
-  ImGui::RadioButton("Morph blend", &state.mode,
+  ImGui::RadioButton(ICON_FA_FLASK_VIAL " Morph", &state.mode,
                      static_cast<int>(PatchLabState::Mode::Morph));
   ImGui::SameLine();
-  ImGui::RadioButton("Mutate", &state.mode,
+  ImGui::RadioButton(ICON_FA_VIRUS " Mutate", &state.mode,
                      static_cast<int>(PatchLabState::Mode::Mutate));
 }
 

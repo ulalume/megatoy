@@ -17,9 +17,9 @@ A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sou
 Access via **View ▸ Patch Lab**.
 Changes apply directly to your active patch with full undo support.
 
-- **Randomize** – Generates a new patch each time.
-- **Blend merge** – Mixes two patches from your patches by randomly choosing parameters from Patch A and Patch B. You can pick both sources via combo boxes and reuse seeds.
-- **Morph blend** – Interpolates between two patches using a 0–1 blend slider with smooth parameter transitions.
+- **Random** – Generates a new patch each time.
+- **Mix** – Mixes two patches from your patches by randomly choosing parameters from Patch A and Patch B. You can pick both sources via combo boxes and reuse seeds.
+- **Morph** – Interpolates between two patches using a 0–1 blend slider with smooth parameter transitions.
 - **Mutate** – Applies subtle or extreme perturbations to the current patch. Adjust variation depth, probability, and algorithm-lock toggles to taste, or repeat with a fixed seed for reproducible tweaks.
 
 ## Key Features
