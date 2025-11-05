@@ -2,7 +2,6 @@
 #include "common.hpp"
 #include "file_manager.hpp"
 #include "gui/styles/megatoy_style.hpp"
-#include "imgui_internal.h"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <array>

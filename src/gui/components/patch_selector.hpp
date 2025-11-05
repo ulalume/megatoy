@@ -3,10 +3,9 @@
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
 #include "preferences/preference_manager.hpp"
-#include <imgui.h>
-
 #include <filesystem>
 #include <functional>
+#include <imgui.h>
 
 namespace ui {
 
