@@ -1,6 +1,7 @@
 #include "patch_lab_window.hpp"
 
 #include "common.hpp"
+#include "imgui_internal.h"
 #include "patches/patch_lab.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
@@ -142,22 +143,7 @@ patch_lab::MutateResult mutate_patch(PatchLabContext &context,
   return result;
 }
 
-void render_operation_selector(PatchLabState &state) {
-  ImGui::RadioButton(ICON_FA_DICE " Random", &state.mode,
-                     static_cast<int>(PatchLabState::Mode::Randomize));
-  ImGui::SameLine();
-  ImGui::RadioButton(ICON_FA_SHUFFLE " Mix", &state.mode,
-                     static_cast<int>(PatchLabState::Mode::Merge));
-  ImGui::SameLine();
-  ImGui::RadioButton(ICON_FA_FLASK_VIAL " Morph", &state.mode,
-                     static_cast<int>(PatchLabState::Mode::Morph));
-  ImGui::SameLine();
-  ImGui::RadioButton(ICON_FA_VIRUS " Mutate", &state.mode,
-                     static_cast<int>(PatchLabState::Mode::Mutate));
-}
-
 void render_random_section(PatchLabContext &context, PatchLabState &state) {
-  ImGui::Separator();
   ImGui::SetNextItemWidth(120.0f);
   ImGui::InputInt("Seed (auto = -1)", &state.random_seed);
 
@@ -183,7 +169,6 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
 
 void render_merge_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
-  ImGui::Separator();
   auto sanitized_a = sanitize_selection(state.source_a, entries);
   auto sanitized_b = sanitize_selection(state.source_b, entries);
   state.source_a = sanitized_a;
@@ -239,7 +224,6 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
 
 void render_morph_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
-  ImGui::Separator();
   auto sanitized_a = sanitize_selection(state.source_a, entries);
   auto sanitized_b = sanitize_selection(state.source_b, entries);
   state.source_a = sanitized_a;
@@ -291,7 +275,6 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
 }
 
 void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
-  ImGui::Separator();
   state.mutate_amount = std::clamp(state.mutate_amount, 0, 12);
   state.mutate_probability = std::clamp(state.mutate_probability, 0.0f, 1.0f);
 
@@ -335,24 +318,27 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     return;
   }
 
-  render_operation_selector(state);
-
-  auto &repository = context.session.repository();
-  auto entries = build_entry_list(repository);
-
-  switch (static_cast<PatchLabState::Mode>(state.mode)) {
-  case PatchLabState::Mode::Randomize:
-    render_random_section(context, state);
-    break;
-  case PatchLabState::Mode::Merge:
-    render_merge_section(context, state, entries);
-    break;
-  case PatchLabState::Mode::Morph:
-    render_morph_section(context, state, entries);
-    break;
-  case PatchLabState::Mode::Mutate:
-    render_mutate_section(context, state);
-    break;
+  if (ImGui::BeginTabBar("##Patch Lab Operators",
+                         ImGuiTabBarFlags_SaveSettings)) {
+    auto &repository = context.session.repository();
+    auto entries = build_entry_list(repository);
+    if (ImGui::BeginTabItem(ICON_FA_DICE " Random")) {
+      render_random_section(context, state);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem(ICON_FA_SHUFFLE " Mix")) {
+      render_merge_section(context, state, entries);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem(ICON_FA_FLASK_VIAL " Morph")) {
+      render_morph_section(context, state, entries);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem(ICON_FA_VIRUS " Mutate")) {
+      render_mutate_section(context, state);
+      ImGui::EndTabItem();
+    }
+    ImGui::EndTabBar();
   }
 
   ImGui::End();

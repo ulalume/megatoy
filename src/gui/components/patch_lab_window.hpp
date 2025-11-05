@@ -20,9 +20,6 @@ struct PatchLabContext {
 };
 
 struct PatchLabState {
-  enum class Mode { Randomize = 0, Merge, Morph, Mutate };
-
-  int mode = static_cast<int>(Mode::Randomize);
 
   // Randomize
   int random_seed = -1;
