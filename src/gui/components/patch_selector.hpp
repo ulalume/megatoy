@@ -23,16 +23,6 @@ struct PatchSelectorContext {
   std::function<void(const patches::PatchEntry &)> safe_load_patch;
   std::function<void(const std::filesystem::path &)> reveal_in_file_manager;
 
-  // Helper methods to convert between enum and int values
-  PatchViewMode get_view_mode() const {
-    return prefs.patch_view_mode == 0 ? PatchViewMode::Tree
-                                      : PatchViewMode::Table;
-  }
-
-  void set_view_mode(PatchViewMode mode) {
-    prefs.patch_view_mode = (mode == PatchViewMode::Tree) ? 0 : 1;
-  }
-
   TableSortColumn get_sort_column() const {
     return static_cast<TableSortColumn>(prefs.patch_sort_column);
   }
