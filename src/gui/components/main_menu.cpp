@@ -9,6 +9,17 @@ namespace ui {
 
 void render_main_menu(MainMenuContext &context) {
   if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("megatoy")) {
+      if (ImGui::MenuItem("About megatoy")) {
+        ImGui::OpenPopup("About");
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Quit")) {
+        context.gui.set_should_close(true);
+      }
+      ImGui::EndMenu();
+    }
+
     if (ImGui::BeginMenu("Edit")) {
       auto &history = context.history;
       const ImGuiIO &io = ImGui::GetIO();
