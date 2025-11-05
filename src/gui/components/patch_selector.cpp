@@ -21,12 +21,20 @@ namespace {
 #define INDENT (4.0f)
 
 constexpr std::array<std::string_view, 6> kStarIconsLabels = {
-    "",
+    "-",
     ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
+};
+constexpr std::array<std::string_view, 6> kStarIconsLabelsMini = {
+    "-",
+    ICON_FA_STAR "1",
+    ICON_FA_STAR "2",
+    ICON_FA_STAR "3",
+    ICON_FA_STAR "4",
+    ICON_FA_STAR "5",
 };
 
 std::string to_lower(const std::string &value) {
@@ -428,9 +436,11 @@ void render_metadata_table(PatchSelectorContext &context) {
       }
       ImGui::SetNextItemWidth(-1);
 
+      auto available_width = ImGui::GetContentRegionAvail().x;
       bool star_changed = ImGui::SliderInt(
           "##star", &star_rating, 0, 5,
-          star_rating == 0 ? "-" : kStarIconsLabels[star_rating].data());
+          available_width > 60 ? kStarIconsLabels[star_rating].data()
+                               : kStarIconsLabelsMini[star_rating].data());
       if (star_changed) {
         pending_star_edits[entry->relative_path] = star_rating;
       }
