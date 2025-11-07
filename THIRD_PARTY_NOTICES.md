@@ -4,21 +4,21 @@ Megatoy bundles or links the following third-party components. Each component
 remains under its original license; please consult upstream projects for the
 complete license texts.
 
-| Component | Project URL | License(s) | Notes |
-| --- | --- | --- | --- |
-| libvgm | https://github.com/ValleyBell/libvgm | Mixed: GPL-2.0-or-later, LGPL-2.1-or-later, BSD-3-Clause, MIT | Megatoy uses the Nuked OPN2 YM2612 core (LGPL-2.1-or-later). See `emu/cores` in libvgm for per-file SPDX identifiers. |
-| nlohmann/json | https://github.com/nlohmann/json | MIT License | Header-only JSON library. |
-| nativefiledialog-extended | https://github.com/btzy/nativefiledialog-extended | zlib License | File dialog helper. |
-| GLFW | https://github.com/glfw/glfw | zlib/libpng License | Windowing/input library. |
-| Dear ImGui | https://github.com/ocornut/imgui | MIT License | Immediate-mode GUI toolkit. |
-| RtMidi | https://github.com/thestk/rtmidi | MIT License | MIDI I/O abstraction. |
-| stb | https://github.com/nothings/stb | MIT License or Public Domain | Single-header image loader (`stb_image`). |
-| chord_detector | https://github.com/ulalume/chord_detector | MIT License | Music theory utilities. |
-| kissfft | https://github.com/mborgerding/kissfft | BSD 3-Clause | FFT implementation. |
-| SQLiteCpp | https://github.com/SRombauts/SQLiteCpp | MIT License | C++ wrapper around SQLite. |
-| IconFontCppHeaders | https://github.com/juliettef/IconFontCppHeaders | zlib/libpng License | Pre-generated icon font headers. |
-| Font Awesome Free assets | Fonticons, Inc. | Icons: CC BY 4.0 • Fonts: SIL OFL 1.1 • Code: MIT | See `assets/fonts/LICENSE.txt` for attribution and redistribution requirements. |
-| Built-in presets | `assets/presets/*.dmp` | CC0 1.0 Universal | Listed in `assets/presets/LICENSE`. |
+| Component | Project URL | License(s) | Notes | License File |
+| --- | --- | --- | --- | --- |
+| libvgm (Nuked OPN2 core only) | https://github.com/ValleyBell/libvgm | Per-file mix in upstream repo | Megatoy links libvgm solely to access the Nuked OPN2 YM2612 core by Nuke.YKT. That core is licensed under LGPL-2.1-or-later; other libvgm cores remain unused. | `licenses/nuked-opn2-LGPL-2.1.txt` (full text from https://github.com/nukeykt/Nuked-OPN2) |
+| nlohmann/json | https://github.com/nlohmann/json | MIT License | Header-only JSON library. | `licenses/nlohmann-json-MIT.txt` |
+| nativefiledialog-extended | https://github.com/btzy/nativefiledialog-extended | zlib License | File dialog helper. | `licenses/nativefiledialog-extended-zlib.txt` |
+| GLFW | https://github.com/glfw/glfw | zlib/libpng License | Windowing/input library. | `licenses/glfw-zlib.txt` |
+| Dear ImGui | https://github.com/ocornut/imgui | MIT License | Immediate-mode GUI toolkit. | `licenses/imgui-MIT.txt` |
+| RtMidi | https://github.com/thestk/rtmidi | MIT License | MIDI I/O abstraction. | `licenses/rtmidi-MIT.txt` |
+| stb | https://github.com/nothings/stb | MIT License or Public Domain | Single-header image loader (`stb_image`). | `licenses/stb-license.txt` |
+| chord_detector | https://github.com/ulalume/chord_detector | MIT License | Music theory utilities. | `licenses/chord-detector-MIT.txt` |
+| kissfft | https://github.com/mborgerding/kissfft | BSD 3-Clause | FFT implementation. | `licenses/kissfft-BSD-3-Clause.txt` |
+| SQLiteCpp | https://github.com/SRombauts/SQLiteCpp | MIT License | C++ wrapper around SQLite. | `licenses/sqlitecpp-MIT.txt` |
+| IconFontCppHeaders | https://github.com/juliettef/IconFontCppHeaders | zlib/libpng License | Pre-generated icon font headers. | `licenses/iconfontcppheaders-zlib.txt` |
+| Font Awesome Free assets | https://fontawesome.com | Icons: CC BY 4.0 • Fonts: SIL OFL 1.1 • Code: MIT | Copied verbatim from `assets/fonts/LICENSE.txt`. | `licenses/font-awesome-license.txt` |
+| Built-in presets | Bundled `.dmp` patches | CC0 1.0 Universal | Listed alongside the assets. | `licenses/presets-CC0.txt` |
 
 System libraries such as OpenGL and libcurl are used under the terms
 distributed with your operating system or SDK.

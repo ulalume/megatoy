@@ -1,0 +1,28 @@
+# Presets License
+
+| File                  | Author  | License           |
+| --------------------- | ------- | ----------------- |
+| init.dmp              | ulalume | CC0 1.0 Universal |
+| bass.dmp              | ulalume | CC0 1.0 Universal |
+| bell.dmp              | ulalume | CC0 1.0 Universal |
+| bright piano.dmp      | ulalume | CC0 1.0 Universal |
+| choir.dmp             | ulalume | CC0 1.0 Universal |
+| church organ.dmp      | ulalume | CC0 1.0 Universal |
+| distortion guitar.dmp | ulalume | CC0 1.0 Universal |
+| electric piano.dmp    | ulalume | CC0 1.0 Universal |
+| flute.dmp             | ulalume | CC0 1.0 Universal |
+| gentle piano.dmp      | ulalume | CC0 1.0 Universal |
+| glockenspiel.dmp      | ulalume | CC0 1.0 Universal |
+| grand piano.dmp       | ulalume | CC0 1.0 Universal |
+| harpsichord.dmp       | ulalume | CC0 1.0 Universal |
+| old violin.dmp        | ulalume | CC0 1.0 Universal |
+| organ.dmp             | ulalume | CC0 1.0 Universal |
+| pad.dmp               | ulalume | CC0 1.0 Universal |
+| pizzicato violin.dmp  | ulalume | CC0 1.0 Universal |
+| ssg cocktail.dmp      | ulalume | CC0 1.0 Universal |
+| trumpet.dmp           | ulalume | CC0 1.0 Universal |
+| trumpet2.dmp          | ulalume | CC0 1.0 Universal |
+| violin.dmp            | ulalume | CC0 1.0 Universal |
+
+CC0 1.0 Universal allows copying, modification, and redistribution without
+restriction. For details, see https://creativecommons.org/publicdomain/zero/1.0/
