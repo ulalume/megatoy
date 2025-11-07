@@ -32,6 +32,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/fui.cpp
   src/formats/patch_loader.cpp
   src/formats/rym2612.cpp
+  src/gui/components/about_dialog.cpp
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
   src/gui/input/keyboard_typing.cpp
@@ -66,13 +67,24 @@ set(MEGATOY_CORE_SOURCES
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
+
   src/system/path_service.cpp
+  src/update/update_checker.cpp
   src/ym2612/channel.cpp
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
   src/ym2612/wave_sampler.cpp
   src/ym2612/fft_analyzer.cpp
 )
+# Add platform-specific source files
+if(APPLE)
+  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.mm)
+elseif(WIN32)
+  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.cpp)
+else()
+  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.cpp)
+endif()
+
 add_library(megatoy_core ${MEGATOY_CORE_SOURCES})
 
 target_include_directories(megatoy_core PUBLIC
@@ -105,12 +117,26 @@ target_link_libraries(megatoy_core PUBLIC
   glfw
   OpenGL::GL
   nlohmann_json::nlohmann_json
+  CURL::libcurl
   nfd
   rtmidi
   chord_detector::chord_detector
   kissfft
   SQLiteCpp
 )
+
+if(WIN32)
+  target_link_libraries(megatoy_core PUBLIC shell32)
+endif()
+
+if(APPLE)
+  target_link_libraries(megatoy_core PUBLIC
+    "-framework AppKit"
+    "-framework ApplicationServices"
+    "-framework CoreFoundation"
+    "-framework Foundation"
+  )
+endif()
 
 set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "presets")
 if(APPLE)

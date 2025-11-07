@@ -28,7 +28,7 @@ inline void reveal_in_file_manager(const std::string &path) {
   std::string command;
 #endif
   if (!command.empty()) {
-    std::system(command.c_str());
+    (void)std::system(command.c_str());
   }
 }
 

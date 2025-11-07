@@ -20,12 +20,20 @@ namespace {
 #define INDENT (4.0f)
 
 constexpr std::array<std::string_view, 6> kStarIconsLabels = {
-    "",
+    "-",
     ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
+};
+constexpr std::array<std::string_view, 6> kStarIconsLabelsMini = {
+    "-",
+    ICON_FA_STAR "1",
+    ICON_FA_STAR "2",
+    ICON_FA_STAR "3",
+    ICON_FA_STAR "4",
+    ICON_FA_STAR "5",
 };
 
 std::string to_lower(const std::string &value) {
@@ -136,6 +144,10 @@ void begin_popup_context(PatchSelectorContext &context,
             context.repository.to_absolute_path(relative_path));
       }
     }
+    ImGui::Separator();
+    if (ImGui::MenuItem("Refresh repository")) {
+      context.repository.refresh();
+    }
     ImGui::EndPopup();
   }
 }
@@ -161,7 +173,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       if (item.relative_path == kBuiltinPresetRoot) {
         display_name = std::string(kBuiltinPresetDisplayName);
       }
-      bool open = ImGui::TreeNode(display_name.c_str());
+      bool open = ImGui::TreeNodeEx(display_name.c_str(),
+                                    ImGuiTreeNodeFlags_SpanFullWidth);
       begin_popup_context(context, item.relative_path);
       if (open) {
         render_patch_tree(item.children, context, query_lower, min_star_rating,
@@ -427,9 +440,11 @@ void render_metadata_table(PatchSelectorContext &context) {
       }
       ImGui::SetNextItemWidth(-1);
 
+      auto available_width = ImGui::GetContentRegionAvail().x;
       bool star_changed = ImGui::SliderInt(
           "##star", &star_rating, 0, 5,
-          star_rating == 0 ? "-" : kStarIconsLabels[star_rating].data());
+          available_width > 60 ? kStarIconsLabels[star_rating].data()
+                               : kStarIconsLabelsMini[star_rating].data());
       if (star_changed) {
         pending_star_edits[entry->relative_path] = star_rating;
       }
@@ -517,44 +532,8 @@ void render_metadata_table(PatchSelectorContext &context) {
     context.repository.refresh();
   }
 }
-
-} // namespace
-
-void render_patch_selector(const char *title, PatchSelectorContext &context) {
+void render_filter_area(PatchSelectorContext &context) {
   auto &prefs = context.prefs;
-  if (!prefs.show_patch_selector) {
-    return;
-  }
-
-  ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
-
-  if (!ImGui::Begin(title, &prefs.show_patch_selector)) {
-    ImGui::End();
-    return;
-  }
-
-  auto &preset_repository = context.repository;
-  if (preset_repository.has_directory_changed()) {
-    preset_repository.refresh();
-  }
-
-  PatchViewMode current_mode = context.get_view_mode();
-  bool is_tree_mode = (current_mode == PatchViewMode::Tree);
-  bool is_table_mode = (current_mode == PatchViewMode::Table);
-
-  if (ImGui::RadioButton(ICON_FA_FOLDER_TREE " Tree view", is_tree_mode)) {
-    context.set_view_mode(PatchViewMode::Tree);
-    current_mode = PatchViewMode::Tree;
-  }
-  ImGui::SameLine();
-  if (ImGui::RadioButton(ICON_FA_TABLE " Table view", is_table_mode)) {
-    context.set_view_mode(PatchViewMode::Table);
-    current_mode = PatchViewMode::Table;
-  }
-
-  ImGui::Separator();
-
   char search_buffer[128];
   std::strncpy(search_buffer, context.prefs.metadata_search_query.c_str(),
                sizeof(search_buffer));
@@ -591,25 +570,55 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     ImGui::Text("Clear filters");
   }
   ImGui::EndDisabled();
+}
 
-  // Determine which view to render
-  if (context.get_view_mode() == PatchViewMode::Table) {
-    render_metadata_table(context);
-  } else {
-    if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(), true)) {
-      auto preset_tree = preset_repository.tree();
+} // namespace
 
-      std::string tree_query_lower =
-          to_lower(context.prefs.metadata_search_query);
-      bool rendered = render_patch_tree(preset_tree, context, tree_query_lower,
-                                        context.prefs.metadata_star_filter);
-      if (!rendered && (!tree_query_lower.empty() ||
-                        context.prefs.metadata_star_filter > 0)) {
-        ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
-                           "No results for current filters");
+void render_patch_selector(const char *title, PatchSelectorContext &context) {
+  auto &prefs = context.prefs;
+  if (!prefs.show_patch_selector) {
+    return;
+  }
+
+  ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
+
+  if (!ImGui::Begin(title, &prefs.show_patch_selector)) {
+    ImGui::End();
+    return;
+  }
+
+  auto &preset_repository = context.repository;
+  if (preset_repository.has_directory_changed()) {
+    preset_repository.refresh();
+  }
+
+  if (ImGui::BeginTabBar("##PatchViewMode")) {
+    if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Tree view")) {
+      render_filter_area(context);
+      if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
+                            true)) {
+        auto preset_tree = preset_repository.tree();
+        std::string tree_query_lower =
+            to_lower(context.prefs.metadata_search_query);
+        bool rendered =
+            render_patch_tree(preset_tree, context, tree_query_lower,
+                              context.prefs.metadata_star_filter);
+        if (!rendered && (!tree_query_lower.empty() ||
+                          context.prefs.metadata_star_filter > 0)) {
+          ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                             "No results for current filters");
+        }
+        ImGui::EndChild();
       }
+      ImGui::EndTabItem();
     }
-    ImGui::EndChild();
+    if (ImGui::BeginTabItem(ICON_FA_TABLE " Table view")) {
+      render_filter_area(context);
+      render_metadata_table(context);
+      ImGui::EndTabItem();
+    }
+    ImGui::EndTabBar();
   }
 
   ImGui::End();

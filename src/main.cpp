@@ -77,6 +77,7 @@ int main(int argc, char *argv[]) {
     services.gui_manager.begin_frame();
     services.history.handle_shortcuts(app_context);
     ui::render_all(app_context);
+    // ImGui::ShowDemoWindow();
 
     // Update preferences from UI state
     services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);

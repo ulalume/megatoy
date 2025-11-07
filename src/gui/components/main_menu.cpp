@@ -1,5 +1,6 @@
 #include "main_menu.hpp"
 
+#include "about_dialog.hpp"
 #include "gui/window_title.hpp"
 #include <imgui.h>
 #include <string>
@@ -8,7 +9,19 @@
 namespace ui {
 
 void render_main_menu(MainMenuContext &context) {
+  bool open_about = false;
   if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("megatoy")) {
+      if (ImGui::MenuItem("About megatoy")) {
+        open_about = true;
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Quit")) {
+        context.gui.set_should_close(true);
+      }
+      ImGui::EndMenu();
+    }
+
     if (ImGui::BeginMenu("Edit")) {
       auto &history = context.history;
       const ImGuiIO &io = ImGui::GetIO();
@@ -61,14 +74,14 @@ void render_main_menu(MainMenuContext &context) {
 
       ImGui::Separator();
 
-      ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
-      ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
-                      &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(PATCH_BROWSER_TITLE, nullptr,
                       &ui_prefs.show_patch_selector);
+      ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
       ImGui::MenuItem(PATCH_LAB_TITLE, nullptr, &ui_prefs.show_patch_lab);
-      ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
+      ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
+                      &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);
+      ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
       ImGui::MenuItem(PREFERENCES_TITLE, nullptr, &ui_prefs.show_preferences);
 
       ImGui::Separator();
@@ -85,6 +98,11 @@ void render_main_menu(MainMenuContext &context) {
     }
     ImGui::EndMainMenuBar();
   }
+
+  if (open_about) {
+    open_about_dialog();
+  }
+  render_about_dialog();
 }
 
 } // namespace ui

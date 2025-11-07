@@ -1,0 +1,10 @@
+#pragma once
+
+namespace megatoy {
+
+inline constexpr const char *kVersion = "@PROJECT_VERSION@";
+inline constexpr const char *kVersionTag = "@MEGATOY_VERSION_TAG@";
+inline constexpr const char *kGithubUser = "@MEGATOY_GITHUB_USER@";
+inline constexpr const char *kGithubRepo = "@MEGATOY_GITHUB_REPO@";
+
+} // namespace megatoy
