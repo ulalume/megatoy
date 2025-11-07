@@ -88,3 +88,12 @@ For distribution-specific notes on dependencies and audio drivers, see the Linux
 - [YM2612 registers reference](https://plutiedev.com/ym2612-registers)
 - [Official manual](https://segaretro.org/images/e/ef/YM2612_manual.pdf)
 - [Emulating the YM2612](https://jsgroth.dev/blog/posts/emulating-ym2612-part-1/)
+
+## License
+
+Megatoy is released under the MIT License (see `LICENSES.md` or
+`licenses/megatoy-MIT.txt`). Third-party components remain under their own
+licenses; refer to `licenses/THIRD_PARTY_NOTICES.md` for the mapping—including
+the Nuked OPN2 YM2612 core (LGPL-2.1-or-later) lifted from libvgm—and keep the
+entire `licenses/` directory next to any distributed binaries so recipients can
+review every upstream license text.
