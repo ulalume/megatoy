@@ -82,3 +82,10 @@ include(cmake/embed_assets.cmake)
 
 
 include(cmake/targets.cmake)
+
+# Copy license bundle during installation so release artifacts automatically
+# contain the required notices alongside the binaries.
+if(EXISTS "${CMAKE_SOURCE_DIR}/licenses")
+  install(DIRECTORY "${CMAKE_SOURCE_DIR}/licenses"
+          DESTINATION ".")
+endif()
