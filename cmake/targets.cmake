@@ -67,7 +67,7 @@ set(MEGATOY_CORE_SOURCES
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
-  src/system/open_default_browser.mm
+
   src/system/path_service.cpp
   src/update/update_checker.cpp
   src/ym2612/channel.cpp
@@ -76,6 +76,15 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/wave_sampler.cpp
   src/ym2612/fft_analyzer.cpp
 )
+# Add platform-specific source files
+if(APPLE)
+  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.mm)
+elseif(WIN32)
+  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.cpp)
+else()
+  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.cpp)
+endif()
+
 add_library(megatoy_core ${MEGATOY_CORE_SOURCES})
 
 target_include_directories(megatoy_core PUBLIC

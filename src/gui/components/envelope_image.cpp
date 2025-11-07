@@ -31,6 +31,8 @@ ImU32 color_from_slider_state(
   case UIState::EnvelopeState::SliderState::Active:
     return ImGui::GetColorU32(ImGuiCol_FrameBgActive);
   }
+  // Default case to prevent warning
+  return ImGui::GetColorU32(ImGuiCol_FrameBg);
 }
 
 void render_envelope_image(const ym2612::OperatorSettings &op,
