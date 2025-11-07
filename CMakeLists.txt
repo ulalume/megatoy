@@ -1,5 +1,20 @@
 cmake_minimum_required(VERSION 3.24)
-project(megatoy)
+
+set(MEGATOY_VERSION "0.3.8" CACHE STRING "Megatoy application version")
+project(megatoy VERSION ${MEGATOY_VERSION})
+
+# Project information
+set(MEGATOY_VERSION_TAG "v${PROJECT_VERSION}")
+
+# GitHub repository information
+set(MEGATOY_GITHUB_USER "ulalume" CACHE STRING "GitHub username")
+set(MEGATOY_GITHUB_REPO "megatoy" CACHE STRING "GitHub repository name")
+
+configure_file(
+  "${CMAKE_SOURCE_DIR}/src/project_info.hpp.in"
+  "${CMAKE_BINARY_DIR}/project_info.hpp"
+  @ONLY
+)
 
 enable_testing()
 
@@ -63,4 +78,7 @@ endif()
 
 include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
+
+
+
 include(cmake/targets.cmake)

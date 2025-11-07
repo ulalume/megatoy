@@ -175,9 +175,21 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install dependencies (vcpkg)
+        uses: microsoft/vcpkg-action@v1
+        with:
+          triplet: x64-windows-static
+          packages: curl[core,ssl]
       - name: Configure
         shell: bash
-        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+        run: >
+          cmake -S . -B build-release
+          -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+          -G "Visual Studio 17 2022"
+          -A x64
+          -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+          -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT//\\//}/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static
       - name: Build
         shell: bash
         run: cmake --build build-release --config $BUILD_TYPE --parallel

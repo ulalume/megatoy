@@ -81,9 +81,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install dependencies (vcpkg)
+        uses: microsoft/vcpkg-action@v1
+        with:
+          triplet: x64-windows-static
+          packages: curl[core,ssl]
+
       - name: Configure
         shell: pwsh
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=install
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -G "Visual Studio 17 2022"
+          -A x64
+          -DCMAKE_INSTALL_PREFIX=install
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static
 
       - name: Build
         shell: pwsh

@@ -67,6 +67,7 @@ set(MEGATOY_CORE_SOURCES
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
   src/system/path_service.cpp
+  src/update/update_checker.cpp
   src/ym2612/channel.cpp
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
@@ -105,6 +106,7 @@ target_link_libraries(megatoy_core PUBLIC
   glfw
   OpenGL::GL
   nlohmann_json::nlohmann_json
+  CURL::libcurl
   nfd
   rtmidi
   chord_detector::chord_detector
