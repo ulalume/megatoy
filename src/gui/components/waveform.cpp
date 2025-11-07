@@ -14,6 +14,10 @@ void render_waveform(const char *title, WaveformContext &context) {
     return;
   }
 
+  ImGuiWindowClass window_class;
+  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
+  ImGui::SetNextWindowClass(&window_class);
+
   ImGui::SetNextWindowSize(ImVec2(420.0f, 240.0f), ImGuiCond_FirstUseEver);
   if (!ImGui::Begin(title, &ui_prefs.show_waveform)) {
     ImGui::End();
