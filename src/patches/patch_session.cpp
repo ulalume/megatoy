@@ -6,6 +6,7 @@
 #include "formats/patch_loader.hpp"
 #include "platform/file_dialog.hpp"
 #include "ym2612/channel.hpp"
+#include "ym2612/types.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <utility>
@@ -209,8 +210,14 @@ bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
       current_patch_.instrument.clone_with_velocity(effective_velocity);
   ym_channel.write_instrument(instrument);
   ym_channel.write_key_on(
-      instrument.operators[0].enable, instrument.operators[1].enable,
-      instrument.operators[2].enable, instrument.operators[3].enable);
+      instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op1)]
+          .enable,
+      instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op2)]
+          .enable,
+      instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op3)]
+          .enable,
+      instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op4)]
+          .enable);
   return true;
 }
 
