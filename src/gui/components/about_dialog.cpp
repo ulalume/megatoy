@@ -1,9 +1,10 @@
 #include "about_dialog.hpp"
+
 #include "gui/styles/megatoy_style.hpp"
 #include "project_info.hpp"
+#include "system/open_default_browser.hpp"
 #include "update/update_checker.hpp"
 #include <atomic>
-#include <cstdlib>
 #include <format>
 #include <imgui.h>
 #include <memory>
@@ -47,19 +48,9 @@ AboutModalState &about_modal_state() {
   return state;
 }
 
-void open_external_url(const std::string &url) {
-#if defined(_WIN32)
-  std::string command = "start \"\" \"" + url + "\"";
-#elif defined(__APPLE__)
-  std::string command = "open \"" + url + "\"";
-#elif defined(__linux__)
-  std::string command = "xdg-open \"" + url + "\"";
-#else
-  std::string command;
-#endif
-  if (!command.empty()) {
-    std::system(command.c_str());
-  }
+bool open_external_url(const std::string &url) {
+  auto result = megatoy::system::open_default_browser(url);
+  return result.success;
 }
 
 void poll_update_request(AboutModalState &state) {
