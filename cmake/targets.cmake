@@ -32,6 +32,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/fui.cpp
   src/formats/patch_loader.cpp
   src/formats/rym2612.cpp
+  src/gui/components/about_dialog.cpp
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
   src/gui/input/keyboard_typing.cpp
