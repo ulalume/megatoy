@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <codecvt>
-#include <locale>
 
 #ifdef _WIN32
 #include <shellapi.h>
@@ -54,21 +52,9 @@ bool is_valid_url(std::string_view url) {
 OpenBrowserResult open_browser_windows(std::string_view url) {
   OpenBrowserResult result;
 
-  // Convert UTF-8 string to wide string for proper Unicode support
-  std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-  std::wstring wurl;
-  try {
-    wurl = converter.from_bytes(url.data(), url.data() + url.size());
-  } catch (const std::exception &) {
-    result.success = false;
-    result.error_message = "Failed to convert URL to wide string";
-    return result;
-  }
-
-  // Use ShellExecuteW for proper Unicode support
-  HINSTANCE shell_result = ShellExecuteW(nullptr,      // hwnd
-                                         L"open",      // verb
-                                         wurl.c_str(), // file
+  HINSTANCE shell_result = ShellExecuteA(nullptr,      // hwnd
+                                         "open",       // verb
+                                         url.data(),   // file
                                          nullptr,      // parameters
                                          nullptr,      // directory
                                          SW_SHOWNORMAL // show command

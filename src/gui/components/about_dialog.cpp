@@ -5,9 +5,9 @@
 #include "system/open_default_browser.hpp"
 #include "update/update_checker.hpp"
 #include <atomic>
-#include <format>
 #include <imgui.h>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -110,8 +110,9 @@ void render_update_status(const AboutModalState &state) {
   case UpdateStatus::UpdateAvailable:
     ImGui::Spacing();
     if (!state.release_url.empty()) {
-      auto label = std::format("New version available: {}",
-                               state.latest_version.c_str());
+      std::ostringstream oss;
+      oss << "New version available: " << state.latest_version;
+      std::string label = oss.str();
       if (ImGui::TextLink(label.c_str())) {
         open_external_url(state.release_url);
       }
