@@ -91,9 +91,6 @@ For distribution-specific notes on dependencies and audio drivers, see the Linux
 
 ## License
 
-Megatoy is released under the MIT License (see `LICENSES.md` or
-`licenses/megatoy-MIT.txt`). Third-party components remain under their own
-licenses; refer to `licenses/THIRD_PARTY_NOTICES.md` for the mapping—including
-the Nuked OPN2 YM2612 core (LGPL-2.1-or-later) lifted from libvgm—and keep the
-entire `licenses/` directory next to any distributed binaries so recipients can
-review every upstream license text.
+MIT
+
+Third party licenses: [licenses/THIRD_PARTY_NOTICES.md](licenses/THIRD_PARTY_NOTICES.md)
