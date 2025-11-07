@@ -17,13 +17,16 @@ Megatoy uses GLFW which supports both **Wayland** and **X11** display servers. A
 sudo apt update
 sudo apt install build-essential pkg-config git \
     libwayland-dev libxkbcommon-dev xorg-dev \
-    libasound2-dev libpulse-dev
+    libasound2-dev libpulse-dev \
+    libcurl4-openssl-dev libao-dev
 ```
 
 **Package notes:**
 - `libwayland-dev libxkbcommon-dev`: Enable native Wayland support
 - `xorg-dev`: Meta-package providing all X11 development libraries (replaces individual X11 packages)
 - `libasound2-dev libpulse-dev`: Mandatory for realtime audio (libvgm ALSA/PulseAudio drivers)
+- `libcurl4-openssl-dev`: Required for update checking functionality
+- `libao-dev`: Audio output library dependency
 
 ## 2. Install CMake 3.24+
 
@@ -100,7 +103,7 @@ DISPLAY=:0 ./build-release/megatoy                 # Force X11
   Only the WaveWrite backend was built. Solution:
   ```bash
   # Reinstall audio dependencies
-  sudo apt install libasound2-dev libpulse-dev
+  sudo apt install libasound2-dev libpulse-dev libcurl4-openssl-dev libao-dev
   # Clean and rebuild
   rm -rf build-release
   cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release \
@@ -129,7 +132,7 @@ DISPLAY=:0 ./build-release/megatoy                 # Force X11
   
   Ensure all display dependencies are installed:
   ```bash
-  sudo apt install libwayland-dev libxkbcommon-dev xorg-dev
+  sudo apt install libwayland-dev libxkbcommon-dev xorg-dev libcurl4-openssl-dev libao-dev
   ```
 
 ### Build Verification
