@@ -101,6 +101,11 @@ jobs:
           elif [ -f "$STAGING/bin/icon.png" ]; then
             cp "$STAGING/bin/icon.png" "$DIST/"
           fi
+          if [ -d "$STAGING/licenses" ]; then
+            cp -a "$STAGING/licenses" "$DIST/"
+          elif [ -d "$STAGING/bin/licenses" ]; then
+            cp -a "$STAGING/bin/licenses" "$DIST/licenses"
+          fi
           (cd dist && zip -r "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
       - name: Upload Artifact
         shell: bash
@@ -127,9 +132,22 @@ jobs:
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
       - name: Package Artifact
         run: |
-          APP="build-release/megatoy.app"
+          set -euo pipefail
+          STAGING="$INSTALL_PREFIX"
+          APP="$STAGING/megatoy.app"
+          if [ ! -d "$APP" ]; then
+            echo "App bundle not found at $APP" >&2
+            exit 1
+          fi
           mkdir -p dist
-          ditto -c -k --keepParent "$APP" "dist/$PACKAGE_NAME.zip"
+          DIST="dist/$PACKAGE_NAME"
+          rm -rf "$DIST"
+          mkdir -p "$DIST"
+          cp -R "$APP" "$DIST/"
+          if [ -d "$STAGING/licenses" ]; then
+            cp -a "$STAGING/licenses" "$DIST/"
+          fi
+          (cd dist && zip -r "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
       - name: Upload Artifact
         shell: bash
         run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
@@ -155,9 +173,22 @@ jobs:
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
       - name: Package Artifact
         run: |
-          APP="build-release/megatoy.app"
+          set -euo pipefail
+          STAGING="$INSTALL_PREFIX"
+          APP="$STAGING/megatoy.app"
+          if [ ! -d "$APP" ]; then
+            echo "App bundle not found at $APP" >&2
+            exit 1
+          fi
           mkdir -p dist
-          ditto -c -k --keepParent "$APP" "dist/$PACKAGE_NAME.zip"
+          DIST="dist/$PACKAGE_NAME"
+          rm -rf "$DIST"
+          mkdir -p "$DIST"
+          cp -R "$APP" "$DIST/"
+          if [ -d "$STAGING/licenses" ]; then
+            cp -a "$STAGING/licenses" "$DIST/"
+          fi
+          (cd dist && zip -r "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
       - name: Upload Artifact
         shell: bash
         run: gh release upload "$GITHUB_REF_NAME" "dist/$PACKAGE_NAME.zip" --clobber
@@ -211,6 +242,10 @@ jobs:
           $presets = Join-Path $install 'presets'
           if (Test-Path $presets) {
             Copy-Item $presets $dist -Recurse -Force
+          }
+          $licenses = Join-Path $install 'licenses'
+          if (Test-Path $licenses) {
+            Copy-Item $licenses $dist -Recurse -Force
           }
           Push-Location dist
           Compress-Archive -Path $env:PACKAGE_NAME -DestinationPath "$env:PACKAGE_NAME.zip" -Force

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.3.8" CACHE STRING "Megatoy application version")
+set(MEGATOY_VERSION "0.4.0" CACHE STRING "Megatoy application version")
 project(megatoy VERSION ${MEGATOY_VERSION})
 
 # Project information
