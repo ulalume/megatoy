@@ -144,6 +144,10 @@ void begin_popup_context(PatchSelectorContext &context,
             context.repository.to_absolute_path(relative_path));
       }
     }
+    ImGui::Separator();
+    if (ImGui::MenuItem("Refresh repository")) {
+      context.repository.refresh();
+    }
     ImGui::EndPopup();
   }
 }
@@ -169,7 +173,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       if (item.relative_path == kBuiltinPresetRoot) {
         display_name = std::string(kBuiltinPresetDisplayName);
       }
-      bool open = ImGui::TreeNode(display_name.c_str());
+      bool open = ImGui::TreeNodeEx(display_name.c_str(),
+                                    ImGuiTreeNodeFlags_SpanFullWidth);
       begin_popup_context(context, item.relative_path);
       if (open) {
         render_patch_tree(item.children, context, query_lower, min_star_rating,
