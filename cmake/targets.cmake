@@ -67,6 +67,7 @@ set(MEGATOY_CORE_SOURCES
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
+  src/system/open_default_browser.mm
   src/system/path_service.cpp
   src/update/update_checker.cpp
   src/ym2612/channel.cpp
@@ -114,6 +115,19 @@ target_link_libraries(megatoy_core PUBLIC
   kissfft
   SQLiteCpp
 )
+
+if(WIN32)
+  target_link_libraries(megatoy_core PUBLIC shell32)
+endif()
+
+if(APPLE)
+  target_link_libraries(megatoy_core PUBLIC
+    "-framework AppKit"
+    "-framework ApplicationServices"
+    "-framework CoreFoundation"
+    "-framework Foundation"
+  )
+endif()
 
 set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "presets")
 if(APPLE)
