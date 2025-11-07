@@ -5,7 +5,7 @@
 namespace ym2612 {
 Device::Device() {}
 void Device::init(uint32_t smplRate) {
-  config.emuCore = FCC_GPGX;
+  config.emuCore = FCC_NUKE;
   config.srMode = DEVRI_SRMODE_CUSTOM;
   config.flags = 0x00;
   config.clock = 7670454;
@@ -15,8 +15,6 @@ void Device::init(uint32_t smplRate) {
   if (error_code) {
     std::cout << "failed to init YM2612" << std::endl;
   }
-
-  info.devDef->SetOptionBits(info.dataPtr, 0x80);
 
   SndEmu_GetDeviceFunc(info.devDef, RWF_REGISTER | RWF_WRITE, DEVRW_A8D8, 0,
                        (void **)&device_func_write);
