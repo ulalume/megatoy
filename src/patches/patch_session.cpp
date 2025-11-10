@@ -4,11 +4,11 @@
 #include "formats/dmp.hpp"
 #include "formats/gin.hpp"
 #include "formats/patch_loader.hpp"
-#include "platform/platform_config.hpp"
 #include "platform/file_dialog.hpp"
+#include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_store.hpp"
 #include "platform/web/web_download.hpp"
+#include "platform/web/web_patch_store.hpp"
 #endif
 #include "ym2612/channel.hpp"
 #include "ym2612/types.hpp"
@@ -123,9 +123,11 @@ void PatchSession::apply_patch_to_audio() {
 
 SaveResult PatchSession::save_current_patch(bool force_overwrite) {
 #if defined(MEGATOY_PLATFORM_WEB)
-  const std::string sanitized_name =
-      sanitize_filename(current_patch_.name.empty() ? "patch"
-                                                    : current_patch_.name);
+  const std::string sanitized_name = sanitize_filename(
+      current_patch_.name.empty() ? "patch" : current_patch_.name);
+  if (!force_overwrite && platform::web::patch_store::exists(sanitized_name)) {
+    return SaveResult::duplicated();
+  }
   if (platform::web::patch_store::save(current_patch_, sanitized_name)) {
     mark_as_clean();
     repository_->refresh();
@@ -313,10 +315,9 @@ bool PatchSession::current_patch_is_user_patch() const {
 #else
   constexpr bool is_local_storage = false;
 #endif
-  const bool is_user_directory =
-      !current_patch_path_.empty() &&
-      current_patch_path_.rfind("user/", 0) == 0 &&
-      current_patch_path_.ends_with(".gin");
+  const bool is_user_directory = !current_patch_path_.empty() &&
+                                 current_patch_path_.rfind("user/", 0) == 0 &&
+                                 current_patch_path_.ends_with(".gin");
   return (is_user_directory || is_local_storage) &&
          original_patch_.name == current_patch_.name;
 }

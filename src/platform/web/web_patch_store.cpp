@@ -58,8 +58,8 @@ std::vector<StoredPatch> load_all() {
       entry.name = item.value("name", std::string{});
       entry.patch = item["patch"].get<ym2612::Patch>();
       std::string stored_id = item.value("id", std::string{});
-      std::string sanitized = make_storage_id(
-          entry.name.empty() ? stored_id : entry.name);
+      std::string sanitized =
+          make_storage_id(entry.name.empty() ? stored_id : entry.name);
       if (sanitized.empty()) {
         continue;
       }
@@ -67,11 +67,9 @@ std::vector<StoredPatch> load_all() {
         needs_migration = true;
       }
       entry.id = sanitized;
-      auto existing =
-          std::find_if(entries.begin(), entries.end(),
-                       [&](const StoredPatch &value) {
-                         return value.id == entry.id;
-                       });
+      auto existing = std::find_if(
+          entries.begin(), entries.end(),
+          [&](const StoredPatch &value) { return value.id == entry.id; });
       if (existing != entries.end()) {
         *existing = entry;
         needs_migration = true;
@@ -171,6 +169,17 @@ bool remove(const std::string &id) {
   return removed;
 }
 
+bool exists(const std::string &id) {
+  auto entries = load_all();
+  std::string storage_id = make_storage_id(id);
+  if (storage_id.empty()) {
+    return false;
+  }
+  return std::any_of(
+      entries.begin(), entries.end(),
+      [&](const StoredPatch &entry) { return entry.id == storage_id; });
+}
+
 } // namespace platform::web::patch_store
 
 #else
@@ -181,6 +190,7 @@ std::vector<SavedPatchInfo> list() { return {}; }
 bool save(const ym2612::Patch &, const std::string &) { return false; }
 bool load(const std::string &, ym2612::Patch &) { return false; }
 bool remove(const std::string &) { return false; }
+bool exists(const std::string &) { return false; }
 
 } // namespace platform::web::patch_store
 

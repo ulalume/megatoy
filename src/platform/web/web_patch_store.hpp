@@ -19,6 +19,6 @@ std::vector<SavedPatchInfo> list();
 bool save(const ym2612::Patch &patch, const std::string &display_name);
 bool load(const std::string &id, ym2612::Patch &out_patch);
 bool remove(const std::string &id);
+bool exists(const std::string &id);
 
 } // namespace platform::web::patch_store
-
