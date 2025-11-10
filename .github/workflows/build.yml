@@ -26,6 +26,8 @@ jobs:
             libxinerama-dev \
             libxcursor-dev \
             libxi-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
             libgtk-3-dev \
             xorg-dev \
             cmake pkg-config git tzdata curl gnupg \
