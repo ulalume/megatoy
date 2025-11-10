@@ -17,8 +17,13 @@ target_include_directories(imgui_lib PUBLIC
 
 target_link_libraries(imgui_lib PUBLIC
   SDL3::SDL3
-  OpenGL::GL
 )
+if(EMSCRIPTEN)
+  target_compile_definitions(imgui_lib PUBLIC IMGUI_IMPL_OPENGL_ES3 IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
+endif()
+if(NOT EMSCRIPTEN)
+  target_link_libraries(imgui_lib PUBLIC OpenGL::GL)
+endif()
 
 set(MEGATOY_CORE_SOURCES
   src/app_services.cpp
@@ -61,15 +66,12 @@ set(MEGATOY_CORE_SOURCES
   src/history/history_manager.cpp
   src/drop_actions.cpp
   src/midi/midi_input_manager.cpp
-  src/midi/rtmidi_backend.cpp
 
   src/patches/patch_session.cpp
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
   src/patches/patch_metadata.cpp
   src/platform/file_dialog.cpp
-  src/platform/native/native_file_system.cpp
-  src/platform/native/desktop_platform_services.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
 
@@ -82,6 +84,22 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/wave_sampler.cpp
   src/ym2612/fft_analyzer.cpp
 )
+
+if(EMSCRIPTEN)
+  list(APPEND MEGATOY_CORE_SOURCES
+    src/audio/webaudio_transport.cpp
+    src/platform/web/web_platform_services.cpp
+    src/platform/web/web_file_system.cpp
+    src/platform/web/web_download.cpp
+    src/platform/web/web_midi_backend.cpp
+  )
+else()
+  list(APPEND MEGATOY_CORE_SOURCES
+    src/midi/rtmidi_backend.cpp
+    src/platform/native/native_file_system.cpp
+    src/platform/native/desktop_platform_services.cpp
+  )
+endif()
 # Add platform-specific source files
 if(APPLE)
   list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.mm)
@@ -108,7 +126,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(MEGATOY_CORE_RELEASE_FLAGS -O3 -ffast-math -funroll-loops)
   if(MEGATOY_RELEASE_CPU_FLAGS)
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
-  else()
+  elseif(NOT EMSCRIPTEN)
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS -march=native)
   endif()
   target_compile_options(megatoy_core PRIVATE
@@ -121,18 +139,22 @@ target_link_libraries(megatoy_core PUBLIC
   vgm-player
   imgui_lib
   SDL3::SDL3
-  OpenGL::GL
   nlohmann_json::nlohmann_json
-  CURL::libcurl
-  nfd
-  rtmidi
   chord_detector::chord_detector
   kissfft
-  SQLiteCpp
 )
 
-if(WIN32)
-  target_link_libraries(megatoy_core PUBLIC shell32)
+if(NOT EMSCRIPTEN)
+  target_link_libraries(megatoy_core PUBLIC
+    OpenGL::GL
+    CURL::libcurl
+    nfd
+    rtmidi
+    SQLiteCpp
+  )
+  if(WIN32)
+    target_link_libraries(megatoy_core PUBLIC shell32)
+  endif()
 endif()
 
 if(APPLE)
@@ -155,6 +177,9 @@ target_compile_definitions(megatoy_core PUBLIC
   MEGATOY_PRESETS_RELATIVE_PATH="${MEGATOY_PRESETS_RELATIVE_PATH_VALUE}"
   $<$<PLATFORM_ID:Darwin>:GL_SILENCE_DEPRECATION>
 )
+if(EMSCRIPTEN)
+  target_compile_definitions(megatoy_core PUBLIC IMGUI_IMPL_OPENGL_ES3)
+endif()
 
 set(MEGATOY_MAIN_SOURCES src/main.cpp)
 if(WIN32)
@@ -195,7 +220,7 @@ install(TARGETS megatoy
   RUNTIME DESTINATION .
 )
 
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
   find_package(X11 REQUIRED)
   target_link_libraries(megatoy PRIVATE ${X11_LIBRARIES})
 endif()
@@ -203,6 +228,20 @@ endif()
 add_embedded_assets(megatoy
   EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/" "\\.txt$"
 )
+
+if(EMSCRIPTEN)
+  set_target_properties(megatoy PROPERTIES SUFFIX ".html")
+  target_link_options(megatoy PRIVATE
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sFORCE_FILESYSTEM=1"
+    "-sUSE_ZLIB=1"
+    "-sFULL_ES3=1"
+    "-sMAX_WEBGL_VERSION=2"
+    "-sMIN_WEBGL_VERSION=2"
+    "-sWASM=1"
+    "--preload-file" "${CMAKE_SOURCE_DIR}/assets@/app/assets"
+  )
+endif()
 
 target_include_directories(megatoy PRIVATE ${CMAKE_BINARY_DIR})
 

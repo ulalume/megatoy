@@ -4,6 +4,7 @@
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/window_title.hpp"
+#include "platform/platform_config.hpp"
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
@@ -61,6 +62,12 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#elif defined(MEGATOY_PLATFORM_WEB)
+  const char *glsl_version = "#version 300 es";
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #elif defined(__APPLE__)
   // GL 3.2 + GLSL 150

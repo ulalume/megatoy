@@ -2,6 +2,8 @@
 
 #include "audio/sdl_audio_transport.hpp"
 #include "midi/rtmidi_backend.hpp"
+#include "update/release_provider.hpp"
+#include <memory>
 
 DesktopPlatformServices::DesktopPlatformServices()
     : file_system_(),

@@ -5,6 +5,10 @@
 #include "formats/gin.hpp"
 #include "formats/patch_loader.hpp"
 #include "platform/file_dialog.hpp"
+#include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_download.hpp"
+#endif
 #include "ym2612/channel.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
@@ -142,6 +146,23 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
   const std::string sanitized_name = sanitize_filename(
       current_patch_.name.empty() ? "patch" : current_patch_.name);
 
+#if defined(MEGATOY_PLATFORM_WEB)
+  switch (format) {
+  case ExportFormat::DMP: {
+    const std::string filename = sanitized_name + ".dmp";
+    auto data = formats::dmp::serialize_patch(current_patch_);
+    platform::web::download_binary(filename, data, "application/octet-stream");
+    return SaveResult::success(filename);
+  }
+  case ExportFormat::MML: {
+    const std::string filename = sanitized_name + ".mml";
+    auto text = formats::ctrmml::patch_to_string(current_patch_);
+    platform::web::download_text(filename, text, "text/plain");
+    return SaveResult::success(filename);
+  }
+  }
+  return SaveResult::error("Unknown export format");
+#else
   switch (format) {
   case ExportFormat::DMP: {
     std::filesystem::path selected_path;
@@ -187,6 +208,7 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
   }
 
   return SaveResult::error("Unknown export format");
+#endif
 }
 
 bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,

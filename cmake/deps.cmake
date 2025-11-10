@@ -2,8 +2,35 @@ include_guard(GLOBAL)
 
 include(FetchContent)
 
-find_package(OpenGL REQUIRED)
-find_package(CURL REQUIRED)
+if(NOT EMSCRIPTEN)
+  find_package(OpenGL REQUIRED)
+  find_package(CURL REQUIRED)
+else()
+  if(DEFINED CMAKE_SYSROOT AND NOT CMAKE_SYSROOT STREQUAL "")
+    set(_ems_sysroot "${CMAKE_SYSROOT}")
+  elseif(DEFINED EMSCRIPTEN_ROOT_PATH)
+    set(_ems_sysroot "${EMSCRIPTEN_ROOT_PATH}/cache/sysroot")
+  elseif(DEFINED ENV{EMSDK})
+    set(_ems_sysroot "$ENV{EMSDK}/upstream/emscripten/cache/sysroot")
+  else()
+    message(FATAL_ERROR "Unable to determine Emscripten sysroot for zlib.")
+  endif()
+  if(NOT EXISTS "${_ems_sysroot}/lib/wasm32-emscripten/libz.a")
+    find_program(EMBUILDER_EXECUTABLE embuilder)
+    if(EMBUILDER_EXECUTABLE)
+      execute_process(COMMAND "${EMBUILDER_EXECUTABLE}" build zlib)
+    else()
+      message(WARNING "embuilder not found; zlib may be unavailable for Emscripten builds.")
+    endif()
+  endif()
+  set(ZLIB_LIBRARY "${_ems_sysroot}/lib/wasm32-emscripten/libz.a" CACHE FILEPATH "" FORCE)
+  set(ZLIB_LIBRARIES "${ZLIB_LIBRARY}" CACHE FILEPATH "" FORCE)
+  set(ZLIB_INCLUDE_DIR "${_ems_sysroot}/include" CACHE PATH "" FORCE)
+  set(ZLIB_INCLUDE_DIRS "${ZLIB_INCLUDE_DIR}" CACHE PATH "" FORCE)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${ZLIB_INCLUDE_DIR} -sUSE_ZLIB=1")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${ZLIB_INCLUDE_DIR} -sUSE_ZLIB=1")
+  set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
+endif()
 
 # nlohmann_json
 FetchContent_Declare(
@@ -13,14 +40,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# nativefiledialog-extended
-FetchContent_Declare(
-  nfd
-  GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended
-  GIT_TAG        v1.2.1
-)
-set(NFD_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(nfd)
+if(NOT EMSCRIPTEN)
+  # nativefiledialog-extended
+  FetchContent_Declare(
+    nfd
+    GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended
+    GIT_TAG        v1.2.1
+  )
+  set(NFD_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(nfd)
+endif()
 
 # SDL3
 FetchContent_Declare(
@@ -68,17 +97,19 @@ set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(USE_SANITIZERS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libvgm)
 
-# RtMidi
-FetchContent_Declare(
-  rtmidi
-  GIT_REPOSITORY https://github.com/thestk/rtmidi
-  GIT_TAG        6.0.0
-)
-set(RTMIDI_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
-set(RTMIDI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RTMIDI_TARGETNAME_UNINSTALL rtmidi_uninstall CACHE STRING "" FORCE)
-FetchContent_MakeAvailable(rtmidi)
+if(NOT EMSCRIPTEN)
+  # RtMidi
+  FetchContent_Declare(
+    rtmidi
+    GIT_REPOSITORY https://github.com/thestk/rtmidi
+    GIT_TAG        6.0.0
+  )
+  set(RTMIDI_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+  set(RTMIDI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+  set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(RTMIDI_TARGETNAME_UNINSTALL rtmidi_uninstall CACHE STRING "" FORCE)
+  FetchContent_MakeAvailable(rtmidi)
+endif()
 
 # stb single-header image loader
 FetchContent_Declare(
@@ -103,7 +134,7 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
   GIT_TAG        master
 )
-set(KISSFFT_STATIC ON CACHE BOOL "" FORCE)  
+set(KISSFFT_STATIC ON CACHE BOOL "" FORCE)
 set(KISSFFT_SHARED OFF CACHE BOOL "" FORCE)
 set(KISSFFT_PKGCONFIG OFF CACHE BOOL "" FORCE)
 set(KISSFFT_TEST     OFF CACHE BOOL "" FORCE)
@@ -111,19 +142,21 @@ set(KISSFFT_TOOLS    OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(kissfft)
 
-# SQLiteCpp
-FetchContent_Declare(
-  SQLiteCpp
-  GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp.git
-  GIT_TAG        3.3.1
-)
-set(SQLITECPP_INTERNAL_SQLITE ON CACHE BOOL "" FORCE)
-set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
-set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
-set(SQLITECPP_RUN_DOXYGEN OFF CACHE BOOL "" FORCE)
-set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(SQLiteCpp)
+if(NOT EMSCRIPTEN)
+  # SQLiteCpp
+  FetchContent_Declare(
+    SQLiteCpp
+    GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp.git
+    GIT_TAG        3.3.1
+  )
+  set(SQLITECPP_INTERNAL_SQLITE ON CACHE BOOL "" FORCE)
+  set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
+  set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
+  set(SQLITECPP_RUN_DOXYGEN OFF CACHE BOOL "" FORCE)
+  set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(SQLiteCpp)
+endif()
 
 # FontAwesome Headers
 FetchContent_Declare(

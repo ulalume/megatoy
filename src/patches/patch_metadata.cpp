@@ -1,4 +1,65 @@
 #include "patch_metadata.hpp"
+#include "platform/platform_config.hpp"
+
+#if defined(MEGATOY_PLATFORM_WEB)
+
+namespace patches {
+
+struct PatchMetadataManager::Impl {};
+
+PatchMetadataManager::PatchMetadataManager(const std::string &) {}
+PatchMetadataManager::~PatchMetadataManager() {}
+
+bool PatchMetadataManager::initialize() { return false; }
+bool PatchMetadataManager::save_metadata(const PatchMetadata &) {
+  return false;
+}
+std::optional<PatchMetadata>
+PatchMetadataManager::get_metadata(const std::string &) {
+  return std::nullopt;
+}
+bool PatchMetadataManager::update_metadata(const PatchMetadata &) {
+  return false;
+}
+bool PatchMetadataManager::delete_metadata(const std::string &) {
+  return false;
+}
+std::optional<PatchMetadata>
+PatchMetadataManager::find_by_hash(const std::string &) {
+  return std::nullopt;
+}
+bool PatchMetadataManager::update_path_by_hash(const std::string &,
+                                               const std::string &) {
+  return false;
+}
+std::vector<PatchMetadata> PatchMetadataManager::get_all_metadata() {
+  return {};
+}
+std::vector<PatchMetadata>
+PatchMetadataManager::get_by_category(const std::string &) {
+  return {};
+}
+std::vector<PatchMetadata> PatchMetadataManager::get_by_star_rating(int) {
+  return {};
+}
+std::vector<PatchMetadata>
+PatchMetadataManager::get_by_tag(const std::string &) {
+  return {};
+}
+bool PatchMetadataManager::cleanup_missing_files(
+    const std::vector<std::string> &) {
+  return false;
+}
+std::vector<std::string> PatchMetadataManager::get_all_categories() {
+  return {};
+}
+std::vector<std::string> PatchMetadataManager::get_all_tags() { return {}; }
+int PatchMetadataManager::get_total_patches() { return 0; }
+
+} // namespace patches
+
+#else
+
 #include <SQLiteCpp/Database.h>
 #include <SQLiteCpp/Exception.h>
 #include <SQLiteCpp/Statement.h>
@@ -467,7 +528,6 @@ private:
     }
     return tags;
   }
-
 };
 
 // PatchMetadataManager implementation
@@ -542,3 +602,5 @@ int PatchMetadataManager::get_total_patches() {
 }
 
 } // namespace patches
+
+#endif

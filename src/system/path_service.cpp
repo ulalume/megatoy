@@ -2,6 +2,8 @@
 
 #include "platform/native/native_file_system.hpp"
 
+#include "platform/platform_config.hpp"
+
 #include <array>
 #include <cstdlib>
 #include <filesystem>
@@ -34,6 +36,9 @@ namespace megatoy::system {
 namespace fs = std::filesystem;
 
 static fs::path home_path() {
+#if defined(MEGATOY_PLATFORM_WEB)
+  return fs::path("/app");
+#else
 #if defined(_WIN32)
   if (const char *user = std::getenv("USERPROFILE"))
     return user;
@@ -44,13 +49,18 @@ static fs::path home_path() {
     return home;
 #endif
   return fs::current_path();
+#endif
 }
 
 static fs::path config_path(std::string_view filename) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  return fs::path("/app/config") / filename;
+#else
 #if defined(_WIN32)
   return home_path() / "megatoy" / filename;
 #else
   return home_path() / ".config" / "megatoy" / filename;
+#endif
 #endif
 }
 
@@ -70,6 +80,8 @@ fs::path PathService::executable_directory_impl() {
   if (_NSGetExecutablePath(buffer.data(), &size) != 0)
     return fs::current_path();
   return fs::path(buffer.c_str()).parent_path();
+#elif defined(MEGATOY_PLATFORM_WEB)
+  return fs::path("/app");
 #else
   std::array<char, PATH_MAX> buffer{};
   ssize_t len = ::readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
@@ -94,12 +106,20 @@ fs::path PathService::executable_directory() {
 }
 
 fs::path PathService::builtin_presets_directory() {
+#if defined(MEGATOY_PLATFORM_WEB)
+  return fs::path("/app/assets/presets");
+#else
   return canonical_or_normal(executable_directory() /
                              MEGATOY_PRESETS_RELATIVE_PATH);
+#endif
 }
 
 fs::path PathService::default_data_directory() {
+#if defined(MEGATOY_PLATFORM_WEB)
+  return fs::path("/app/data");
+#else
   return home_path() / "Documents" / "megatoy";
+#endif
 }
 
 fs::path PathService::preferences_file_path() {
@@ -122,7 +142,7 @@ fs::path PathService::export_directory(const fs::path &root) {
 
 PathService::PathService() : PathService(default_vfs()) {}
 
-PathService::PathService(platform::VirtualFileSystem &vfs) : vfs_(vfs) {
+PathService::PathService(::platform::VirtualFileSystem &vfs) : vfs_(vfs) {
   set_data_root(default_data_directory());
   paths_.builtin_presets_root = builtin_presets_directory();
   paths_.preferences_file = preferences_file_path();

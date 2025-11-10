@@ -2,15 +2,26 @@
 
 #include "app_context.hpp"
 #include "app_services.hpp"
+#include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_midi_backend.hpp"
+#else
 #include "midi/rtmidi_backend.hpp"
+#endif
 #include "patches/patch_session.hpp"
 #include <iostream>
 
 namespace {
 
+#if defined(MEGATOY_PLATFORM_WEB)
+std::unique_ptr<MidiBackend> make_default_backend() {
+  return std::make_unique<platform::web::WebMidiBackend>();
+}
+#else
 std::unique_ptr<MidiBackend> make_default_backend() {
   return std::make_unique<RtMidiBackend>();
 }
+#endif
 
 } // namespace
 

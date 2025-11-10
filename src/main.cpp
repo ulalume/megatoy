@@ -5,8 +5,14 @@
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
-#include "platform/native/desktop_platform_services.hpp"
+#include "platform/platform_config.hpp"
 #include "update/release_provider.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_platform_services.hpp"
+#include <emscripten.h>
+#else
+#include "platform/native/desktop_platform_services.hpp"
+#endif
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
@@ -39,10 +45,62 @@ void handle_file_drop(void *user_pointer, int count, const char **paths) {
   }
 }
 
+struct RuntimeContext {
+  AppContext *app_context = nullptr;
+  MidiInputManager *midi = nullptr;
+  bool running = true;
+};
+
+bool run_frame(RuntimeContext &runtime) {
+  auto &services = runtime.app_context->services;
+  auto &app_state = runtime.app_context->state;
+
+  if (services.gui_manager.get_should_close()) {
+    if (services.patch_session.is_modified()) {
+      app_state.ui_state().confirmation_state =
+          UIState::ConfirmationState::exit();
+      services.gui_manager.set_should_close(false);
+    } else {
+      runtime.running = false;
+      return false;
+    }
+  }
+
+  services.gui_manager.poll_events();
+
+  runtime.midi->poll();
+  runtime.midi->dispatch(*runtime.app_context);
+
+  services.gui_manager.begin_frame();
+  services.history.handle_shortcuts(*runtime.app_context);
+  ui::render_all(*runtime.app_context);
+  services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);
+  services.gui_manager.end_frame();
+  return true;
+}
+
+#if defined(MEGATOY_PLATFORM_WEB)
+void web_main_loop(void *arg) {
+  auto *runtime = static_cast<RuntimeContext *>(arg);
+  if (!runtime->running) {
+    emscripten_cancel_main_loop();
+    return;
+  }
+  if (!run_frame(*runtime)) {
+    emscripten_cancel_main_loop();
+  }
+}
+#endif
+
 } // namespace
 
 int main(int argc, char *argv[]) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::WebPlatformServices platform_services;
+#else
   DesktopPlatformServices platform_services;
+#endif
+
   update::set_release_info_provider(platform_services.release_info_provider());
 
   AppServices services(platform_services);
@@ -50,48 +108,22 @@ int main(int argc, char *argv[]) {
   services.initialize_app(app_state);
   AppContext app_context{services, app_state};
 
-  // Setup window callbacks
   services.gui_manager.set_drop_callback(&app_context, handle_file_drop);
 
-  // Initialize MIDI
   MidiInputManager midi(platform_services.create_midi_backend());
   midi.init();
 
-  // Main application loop
-  while (true) {
-    // Check if window close was requested
-    if (services.gui_manager.get_should_close()) {
-      // Check if there are unsaved changes
-      if (services.patch_session.is_modified()) {
-        app_state.ui_state().confirmation_state =
-            UIState::ConfirmationState::exit();
-        services.gui_manager.set_should_close(false);
-      } else {
-        break;
-      }
-    }
+  RuntimeContext runtime{&app_context, &midi, true};
 
-    // Poll events
-    services.gui_manager.poll_events();
-
-    // Update MIDI
-    midi.poll();
-    midi.dispatch(app_context);
-
-    // Render UI
-    services.gui_manager.begin_frame();
-    services.history.handle_shortcuts(app_context);
-    ui::render_all(app_context);
-    // ImGui::ShowDemoWindow();
-
-    // Update preferences from UI state
-    services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);
-
-    services.gui_manager.end_frame();
-  }
-
-  // Shutdown
+#if defined(MEGATOY_PLATFORM_WEB)
+  emscripten_set_main_loop_arg(web_main_loop, &runtime, 0, true);
   services.shutdown_app();
   std::cout << "Goodbye!\n";
+#else
+  while (run_frame(runtime)) {
+  }
+  services.shutdown_app();
+  std::cout << "Goodbye!\n";
+#endif
   return 0;
 }

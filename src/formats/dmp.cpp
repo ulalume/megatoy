@@ -129,6 +129,38 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
   }
 }
 
+std::vector<uint8_t> serialize_patch(const ym2612::Patch &patch) {
+  std::vector<uint8_t> data;
+  data.reserve(3 + 4 * 11);
+  data.push_back(0x0B); // version
+  data.push_back(0x02); // system: Genesis
+  data.push_back(0x01); // instrument mode FM
+  data.push_back(patch.channel.frequency_modulation_sensitivity & 0x07);
+  data.push_back(patch.instrument.feedback & 0x07);
+  data.push_back(patch.instrument.algorithm & 0x07);
+  data.push_back(patch.channel.amplitude_modulation_sensitivity & 0x03);
+
+  for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
+       ++op_idx) {
+    const auto &op = patch.instrument.operators[op_idx];
+
+    data.push_back(op.multiple & 0x0F);
+    data.push_back(std::min<uint8_t>(op.total_level, 127));
+    data.push_back(std::min<uint8_t>(op.attack_rate, 31));
+    data.push_back(std::min<uint8_t>(op.decay_rate, 31));
+    data.push_back(std::min<uint8_t>(op.sustain_level, 15));
+    data.push_back(std::min<uint8_t>(op.release_rate, 15));
+    data.push_back(op.amplitude_modulation_enable ? 1 : 0);
+    data.push_back(std::min<uint8_t>(op.key_scale, 3));
+    data.push_back(formats::detune_from_patch_to_dmp(op.detune & 0x07));
+    data.push_back(std::min<uint8_t>(op.sustain_rate, 31));
+    uint8_t ssg =
+        (op.ssg_enable ? 0x08 : 0x00) | (op.ssg_type_envelope_control & 0x07);
+    data.push_back(ssg);
+  }
+  return data;
+}
+
 bool write_patch(const ym2612::Patch &patch,
                  const std::filesystem::path &target_path) {
   try {
@@ -137,35 +169,7 @@ bool write_patch(const ym2612::Patch &patch,
       output_path.replace_extension(".dmp");
     }
 
-    std::vector<uint8_t> data;
-    data.reserve(3 + 4 * 11);
-    data.push_back(0x0B); // version
-    data.push_back(0x02); // system: Genesis
-    data.push_back(0x01); // instrument mode FM
-    data.push_back(patch.channel.frequency_modulation_sensitivity & 0x07);
-    data.push_back(patch.instrument.feedback & 0x07);
-    data.push_back(patch.instrument.algorithm & 0x07);
-    data.push_back(patch.channel.amplitude_modulation_sensitivity & 0x03);
-
-    for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
-         ++op_idx) {
-      const auto &op = patch.instrument.operators[op_idx];
-
-      data.push_back(op.multiple & 0x0F);
-      data.push_back(std::min<uint8_t>(op.total_level, 127));
-      data.push_back(std::min<uint8_t>(op.attack_rate, 31));
-      data.push_back(std::min<uint8_t>(op.decay_rate, 31));
-      data.push_back(std::min<uint8_t>(op.sustain_level, 15));
-      data.push_back(std::min<uint8_t>(op.release_rate, 15));
-      data.push_back(op.amplitude_modulation_enable ? 1 : 0);
-      data.push_back(std::min<uint8_t>(op.key_scale, 3));
-      data.push_back(formats::detune_from_patch_to_dmp(op.detune & 0x07));
-      data.push_back(std::min<uint8_t>(op.sustain_rate, 31));
-      uint8_t ssg =
-          (op.ssg_enable ? 0x08 : 0x00) | (op.ssg_type_envelope_control & 0x07);
-      data.push_back(ssg);
-    }
-
+    auto data = serialize_patch(patch);
     std::ofstream out(output_path, std::ios::binary);
     if (!out) {
       std::cerr << "Failed to open file for writing: " << output_path

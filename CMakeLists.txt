@@ -44,18 +44,22 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
         "-DNDEBUG"
         "-funroll-loops"
     )
-    if(MEGATOY_LINUX_X86_64)
-      if(MEGATOY_GENERAL_X86_64_LINUX)
-        message(STATUS "Using generic x86-64 tuning for Linux Release build")
-        set(MEGATOY_RELEASE_CPU_FLAGS "-march=x86-64" "-mtune=generic")
+    if(NOT EMSCRIPTEN)
+      if(MEGATOY_LINUX_X86_64)
+        if(MEGATOY_GENERAL_X86_64_LINUX)
+          message(STATUS "Using generic x86-64 tuning for Linux Release build")
+          set(MEGATOY_RELEASE_CPU_FLAGS "-march=x86-64" "-mtune=generic")
+        else()
+          message(STATUS "Using native CPU optimizations for Linux Release build")
+          set(MEGATOY_RELEASE_CPU_FLAGS "-march=native")
+        endif()
       else()
-        message(STATUS "Using native CPU optimizations for Linux Release build")
         set(MEGATOY_RELEASE_CPU_FLAGS "-march=native")
       endif()
-    else()
-      set(MEGATOY_RELEASE_CPU_FLAGS "-march=native")
     endif()
-    list(APPEND OPTIMIZATION_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
+    if(MEGATOY_RELEASE_CPU_FLAGS)
+      list(APPEND OPTIMIZATION_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
+    endif()
     list(APPEND OPTIMIZATION_FLAGS
         "-flto"
         "-fomit-frame-pointer"
@@ -83,6 +87,9 @@ endif()
 include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 
+if(EMSCRIPTEN AND ZLIB_INCLUDE_DIRS)
+  include_directories(${ZLIB_INCLUDE_DIRS})
+endif()
 
 
 include(cmake/targets.cmake)
