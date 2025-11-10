@@ -30,6 +30,8 @@ jobs:
             libxkbcommon-dev \
             libgtk-3-dev \
             xorg-dev \
+            libasound2-dev \
+            libpulse-dev \
             cmake pkg-config git tzdata curl gnupg \
             libcurl4-openssl-dev
           curl -fsSL https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor -o /usr/share/keyrings/kitware-archive-keyring.gpg
