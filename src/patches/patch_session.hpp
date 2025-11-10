@@ -6,7 +6,6 @@
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
-#include <GLFW/glfw3.h>
 #include <array>
 #include <filesystem>
 #include <string>

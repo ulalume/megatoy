@@ -6,7 +6,7 @@ add_library(imgui_lib
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
@@ -16,7 +16,7 @@ target_include_directories(imgui_lib PUBLIC
 )
 
 target_link_libraries(imgui_lib PUBLIC
-  glfw
+  SDL2::SDL2
   OpenGL::GL
 )
 
@@ -114,7 +114,7 @@ endif()
 target_link_libraries(megatoy_core PUBLIC
   vgm-player vgm-audio
   imgui_lib
-  glfw
+  SDL2::SDL2
   OpenGL::GL
   nlohmann_json::nlohmann_json
   CURL::libcurl
@@ -171,6 +171,10 @@ else()
 endif()
 
 target_link_libraries(megatoy PRIVATE megatoy_core)
+
+if(TARGET SDL2::SDL2main)
+  target_link_libraries(megatoy PRIVATE SDL2::SDL2main)
+endif()
 
 if(APPLE)
   set(MEGATOY_BUNDLE_ICON "${CMAKE_SOURCE_DIR}/dist/icon.icns")

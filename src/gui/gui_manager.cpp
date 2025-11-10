@@ -6,15 +6,16 @@
 #include "gui/window_title.hpp"
 #include <filesystem>
 #include <imgui.h>
-#include <imgui_impl_glfw.h>
+#include <imgui_impl_sdl2.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_internal.h>
 #include <iostream>
 
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
+#else
+#include <SDL_opengl.h>
 #endif
-#include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) &&                                 \
     !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
@@ -22,26 +23,24 @@
 #endif
 
 GuiManager::GuiManager(PreferenceManager &preferences)
-    : preferences_(preferences), window_(nullptr), initialized_(false),
+    : preferences_(preferences), window_(nullptr), gl_context_(nullptr),
+      initialized_(false), should_close_(false), window_id_(0),
       fullscreen_(false), windowed_pos_x_(0), windowed_pos_y_(0),
       windowed_width_(0), windowed_height_(0), first_frame_(true),
       pending_imgui_ini_update_(false), imgui_ini_file_path_(),
-      theme_(ui::styles::ThemeId::MegatoyDark), drop_callback_(nullptr) {}
+      theme_(ui::styles::ThemeId::MegatoyDark), drop_user_pointer_(nullptr),
+      drop_callback_(nullptr) {}
 
 GuiManager::~GuiManager() { shutdown(); }
 
-void GuiManager::glfw_error_callback(int error, const char *description) {
-  std::cerr << "GLFW Error " << error << ": " << description << std::endl;
-}
-
-void GuiManager::glfw_drop_callback(GLFWwindow *window, int count,
-                                    const char **paths) {
-  auto *gui_manager =
-      static_cast<GuiManager *>(glfwGetWindowUserPointer(window));
-  if (gui_manager && gui_manager->drop_callback_ &&
-      gui_manager->drop_user_pointer_) {
-    gui_manager->drop_callback_(gui_manager->drop_user_pointer_, count, paths);
+void GuiManager::dispatch_drop_event(const char *path) {
+  if (path == nullptr || drop_callback_ == nullptr ||
+      drop_user_pointer_ == nullptr) {
+    return;
   }
+
+  const char *paths[]{path};
+  drop_callback_(drop_user_pointer_, 1, paths);
 }
 
 bool GuiManager::initialize(const std::string &window_title, int width,
@@ -50,10 +49,9 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     return true;
   }
 
-  // Setup GLFW
-  glfwSetErrorCallback(glfw_error_callback);
-  if (!glfwInit()) {
-    std::cerr << "Failed to initialize GLFW" << std::endl;
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) !=
+      0) {
+    std::cerr << "Failed to initialize SDL2: " << SDL_GetError() << std::endl;
     return false;
   }
 
@@ -61,37 +59,74 @@ bool GuiManager::initialize(const std::string &window_title, int width,
 #if defined(IMGUI_IMPL_OPENGL_ES2)
   // GL ES 2.0 + GLSL 100
   const char *glsl_version = "#version 100";
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-  glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #elif defined(__APPLE__)
   // GL 3.2 + GLSL 150
   const char *glsl_version = "#version 150";
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); // 3.2+ only
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Required on Mac
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,
+                      SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 #else
   // GL 3.0 + GLSL 130
   const char *glsl_version = "#version 130";
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
+  Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+#ifdef SDL_WINDOW_ALLOW_HIGHDPI
+  window_flags |= SDL_WINDOW_ALLOW_HIGHDPI;
 #endif
 
-  // Create window with graphics context
   window_ =
-      glfwCreateWindow(width, height, window_title.c_str(), nullptr, nullptr);
+      SDL_CreateWindow(window_title.c_str(), SDL_WINDOWPOS_CENTERED,
+                       SDL_WINDOWPOS_CENTERED, width, height, window_flags);
   if (window_ == nullptr) {
-    std::cerr << "Failed to create GLFW window" << std::endl;
-    glfwTerminate();
+    std::cerr << "Failed to create SDL2 window: " << SDL_GetError()
+              << std::endl;
+    SDL_Quit();
     return false;
   }
 
-  glfwMakeContextCurrent(window_);
-  glfwSwapInterval(1); // Enable vsync
+  gl_context_ = SDL_GL_CreateContext(window_);
+  if (gl_context_ == nullptr) {
+    std::cerr << "Failed to create OpenGL context: " << SDL_GetError()
+              << std::endl;
+    SDL_DestroyWindow(window_);
+    window_ = nullptr;
+    SDL_Quit();
+    return false;
+  }
 
-  glfwGetWindowPos(window_, &windowed_pos_x_, &windowed_pos_y_);
-  glfwGetWindowSize(window_, &windowed_width_, &windowed_height_);
+  if (SDL_GL_MakeCurrent(window_, gl_context_) != 0) {
+    std::cerr << "Failed to make OpenGL context current: " << SDL_GetError()
+              << std::endl;
+    SDL_GL_DeleteContext(gl_context_);
+    gl_context_ = nullptr;
+    SDL_DestroyWindow(window_);
+    window_ = nullptr;
+    SDL_Quit();
+    return false;
+  }
+
+  if (SDL_GL_SetSwapInterval(1) != 0) {
+    std::cerr << "Warning: unable to enable VSync: " << SDL_GetError()
+              << std::endl;
+  }
+
+  SDL_GetWindowPosition(window_, &windowed_pos_x_, &windowed_pos_y_);
+  SDL_GetWindowSize(window_, &windowed_width_, &windowed_height_);
+  window_id_ = SDL_GetWindowID(window_);
 
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
@@ -118,7 +153,7 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   set_theme(preferences_.theme());
 
   // Setup Platform/Renderer backends
-  ImGui_ImplGlfw_InitForOpenGL(window_, true);
+  ImGui_ImplSDL2_InitForOpenGL(window_, gl_context_);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
   // Initialize file dialog
@@ -132,6 +167,7 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   // Sync ImGui ini file
   sync_imgui_ini();
 
+  should_close_ = false;
   initialized_ = true;
   return true;
 }
@@ -147,27 +183,32 @@ void GuiManager::shutdown() {
 
   // Cleanup
   ImGui_ImplOpenGL3_Shutdown();
-  ImGui_ImplGlfw_Shutdown();
+  ImGui_ImplSDL2_Shutdown();
   ImGui::DestroyContext();
 
+  if (gl_context_) {
+    SDL_GL_DeleteContext(gl_context_);
+    gl_context_ = nullptr;
+  }
+
   if (window_) {
-    glfwDestroyWindow(window_);
+    SDL_DestroyWindow(window_);
     window_ = nullptr;
   }
-  glfwTerminate();
+  window_id_ = 0;
+  SDL_Quit();
 
   fullscreen_ = false;
+  should_close_ = false;
   initialized_ = false;
 }
 
 bool GuiManager::get_should_close() const {
-  return window_ ? glfwWindowShouldClose(window_) : true;
+  return !window_ || should_close_;
 }
 
 void GuiManager::set_should_close(bool value) {
-  if (window_) {
-    glfwSetWindowShouldClose(window_, value ? GLFW_TRUE : GLFW_FALSE);
-  }
+  should_close_ = value;
 }
 
 void GuiManager::begin_frame() {
@@ -177,7 +218,7 @@ void GuiManager::begin_frame() {
 
   // Start the Dear ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplGlfw_NewFrame();
+  ImGui_ImplSDL2_NewFrame();
   ImGui::NewFrame();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -228,18 +269,43 @@ void GuiManager::end_frame() {
   // Rendering
   ImGui::Render();
   int display_w, display_h;
-  glfwGetFramebufferSize(window_, &display_w, &display_h);
+  SDL_GL_GetDrawableSize(window_, &display_w, &display_h);
   glViewport(0, 0, display_w, display_h);
   glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
   glClear(GL_COLOR_BUFFER_BIT);
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-  glfwSwapBuffers(window_);
+  SDL_GL_SwapWindow(window_);
 }
 
 void GuiManager::poll_events() {
-  if (initialized_) {
-    glfwPollEvents();
+  if (!initialized_) {
+    return;
+  }
+
+  SDL_Event event;
+  while (SDL_PollEvent(&event)) {
+    ImGui_ImplSDL2_ProcessEvent(&event);
+
+    switch (event.type) {
+    case SDL_QUIT:
+      should_close_ = true;
+      break;
+    case SDL_WINDOWEVENT:
+      if (event.window.windowID == window_id_ &&
+          event.window.event == SDL_WINDOWEVENT_CLOSE) {
+        should_close_ = true;
+      }
+      break;
+    case SDL_DROPFILE:
+      if (event.drop.windowID == window_id_) {
+        dispatch_drop_event(event.drop.file);
+      }
+      SDL_free(event.drop.file);
+      break;
+    default:
+      break;
+    }
   }
 }
 
@@ -256,7 +322,7 @@ void GuiManager::apply_theme() {
 void GuiManager::reset_layout() { first_frame_ = true; }
 
 void GuiManager::set_fullscreen(bool enable) {
-  if (!initialized_ || !window_) {
+  if (!initialized_ || window_ == nullptr) {
     return;
   }
 
@@ -265,30 +331,24 @@ void GuiManager::set_fullscreen(bool enable) {
   }
 
   if (enable) {
-    GLFWmonitor *monitor = glfwGetWindowMonitor(window_);
-    if (monitor == nullptr) {
-      monitor = glfwGetPrimaryMonitor();
+    SDL_GetWindowPosition(window_, &windowed_pos_x_, &windowed_pos_y_);
+    SDL_GetWindowSize(window_, &windowed_width_, &windowed_height_);
+    if (SDL_SetWindowFullscreen(window_, SDL_WINDOW_FULLSCREEN_DESKTOP) == 0) {
+      fullscreen_ = true;
+    } else {
+      std::cerr << "Failed to enable fullscreen: " << SDL_GetError()
+                << std::endl;
     }
-    if (monitor == nullptr) {
-      return;
-    }
-
-    glfwGetWindowPos(window_, &windowed_pos_x_, &windowed_pos_y_);
-    glfwGetWindowSize(window_, &windowed_width_, &windowed_height_);
-
-    const GLFWvidmode *mode = glfwGetVideoMode(monitor);
-    if (mode == nullptr) {
-      return;
-    }
-
-    glfwSetWindowMonitor(window_, monitor, 0, 0, mode->width, mode->height,
-                         mode->refreshRate);
-    fullscreen_ = true;
   } else {
-    glfwSetWindowMonitor(window_, nullptr, windowed_pos_x_, windowed_pos_y_,
-                         windowed_width_ > 0 ? windowed_width_ : 800,
-                         windowed_height_ > 0 ? windowed_height_ : 600, 0);
-    fullscreen_ = false;
+    if (SDL_SetWindowFullscreen(window_, 0) == 0) {
+      SDL_SetWindowPosition(window_, windowed_pos_x_, windowed_pos_y_);
+      SDL_SetWindowSize(window_, windowed_width_ > 0 ? windowed_width_ : 800,
+                        windowed_height_ > 0 ? windowed_height_ : 600);
+      fullscreen_ = false;
+    } else {
+      std::cerr << "Failed to exit fullscreen: " << SDL_GetError()
+                << std::endl;
+    }
   }
 }
 
@@ -335,8 +395,4 @@ void GuiManager::set_drop_callback(void *user_pointer,
                                                     const char **paths)) {
   drop_user_pointer_ = user_pointer;
   drop_callback_ = callback;
-  if (window_) {
-    glfwSetWindowUserPointer(window_, this);
-    glfwSetDropCallback(window_, glfw_drop_callback);
-  }
 }

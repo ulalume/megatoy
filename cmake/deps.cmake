@@ -22,13 +22,13 @@ FetchContent_Declare(
 set(NFD_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(nfd)
 
-# GLFW
+# SDL2
 FetchContent_Declare(
-  glfw
-  GIT_REPOSITORY https://github.com/glfw/glfw
-  GIT_TAG        3.4
+  SDL2
+  GIT_REPOSITORY https://github.com/libsdl-org/SDL
+  GIT_TAG        release-2.30.5
 )
-FetchContent_MakeAvailable(glfw)
+FetchContent_MakeAvailable(SDL2)
 
 # Dear ImGui
 FetchContent_Declare(

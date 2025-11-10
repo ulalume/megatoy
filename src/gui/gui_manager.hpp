@@ -3,7 +3,7 @@
 #include "gui/styles/theme.hpp"
 #include "preferences/preference_manager.hpp"
 
-#include <GLFW/glfw3.h>
+#include <SDL.h>
 #include <string>
 
 /**
@@ -11,7 +11,7 @@
  *
  * Consolidates GuiSubsystem, GuiRuntime, and GuiManager into a single
  * class that handles all GUI-related functionality including:
- * - GLFW window management and initialization
+ * - SDL2 window management and initialization
  * - ImGui setup and rendering
  * - Theme management and preferences integration
  * - File dialog integration
@@ -68,9 +68,9 @@ public:
   void poll_events();
 
   /**
-   * Get GLFW window pointer
+   * Get SDL window pointer
    */
-  GLFWwindow *get_window() const { return window_; }
+  SDL_Window *get_window() const { return window_; }
 
   /**
    * Sync ImGui ini file with preferences
@@ -110,8 +110,11 @@ public:
 private:
   // Core GUI system
   PreferenceManager &preferences_;
-  GLFWwindow *window_;
+  SDL_Window *window_;
+  SDL_GLContext gl_context_;
   bool initialized_;
+  bool should_close_;
+  Uint32 window_id_;
 
   // Window state
   bool fullscreen_;
@@ -129,11 +132,7 @@ private:
   // Internal methods
   void set_imgui_ini_file(const std::string &path);
   void apply_imgui_ini_binding();
-
-  // Static callbacks
-  static void glfw_error_callback(int error, const char *description);
-  static void glfw_drop_callback(GLFWwindow *window, int count,
-                                 const char **paths);
+  void dispatch_drop_event(const char *path);
 
   // Drop callback state
   void *drop_user_pointer_;
