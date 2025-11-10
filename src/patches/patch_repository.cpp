@@ -1,19 +1,49 @@
 #include "patch_repository.hpp"
 #include "formats/ctrmml.hpp"
 #include "formats/patch_loader.hpp"
+#include "platform/platform_config.hpp"
 #include "ym2612/patch.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_patch_store.hpp"
+#endif
 #include <algorithm>
 #include <functional>
 #include <iostream>
+#include <string>
+#include <string_view>
 #include <unordered_map>
+
+namespace {
+#if defined(MEGATOY_PLATFORM_WEB)
+constexpr std::string_view kLocalStorageRelativeRoot = "localStorage";
+constexpr std::string_view kLocalStorageAbsolutePrefix = "localStorage://";
+constexpr std::string_view kLocalStorageRelativePrefix = "localStorage/";
+
+std::string extract_local_storage_id(
+    const patches::PatchEntry &entry) { // NOLINT(misc-no-recursion)
+  const std::string full =
+      entry.full_path.empty() ? std::string{} : entry.full_path.generic_string();
+  if (!full.empty() &&
+      full.rfind(kLocalStorageAbsolutePrefix, 0) == 0) {
+    return full.substr(kLocalStorageAbsolutePrefix.size());
+  }
+  if (entry.relative_path.rfind(kLocalStorageRelativePrefix, 0) == 0) {
+    return entry.relative_path.substr(kLocalStorageRelativePrefix.size());
+  }
+  return full;
+}
+#endif
+} // namespace
 
 namespace patches {
 
-PatchRepository::PatchRepository(const std::filesystem::path &patches_root,
+PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
+                                 const std::filesystem::path &patches_root,
                                  const std::filesystem::path &builtin_dir,
                                  const std::filesystem::path &metadata_db_path)
     : patches_directory_(patches_root), builtin_patch_directory_(builtin_dir),
-      has_builtin_directory_(!builtin_dir.empty()), cache_initialized_(false) {
+      vfs_(vfs), has_builtin_directory_(!builtin_dir.empty()),
+      cache_initialized_(false) {
 
   // Initialize metadata manager if path is provided
   if (!metadata_db_path.empty()) {
@@ -32,46 +62,66 @@ PatchRepository::PatchRepository(const std::filesystem::path &patches_root,
 void PatchRepository::refresh() {
   tree_cache_.clear();
 
-  try {
-    if (std::filesystem::exists(patches_directory_) &&
-        std::filesystem::is_directory(patches_directory_)) {
-      user_time_valid_ = true;
-      last_user_directory_check_time_ =
-          std::filesystem::last_write_time(patches_directory_);
-      scan_directory(patches_directory_, tree_cache_);
-    } else {
-      user_time_valid_ = false;
-    }
-
-    if (has_builtin_directory_ &&
-        std::filesystem::exists(builtin_patch_directory_) &&
-        std::filesystem::is_directory(builtin_patch_directory_)) {
-      PatchEntry builtin_root;
-      builtin_root.name = kBuiltinRootName;
-      builtin_root.relative_path = kBuiltinRootName;
-      builtin_root.full_path = builtin_patch_directory_;
-      builtin_root.format = "";
-      builtin_root.is_directory = true;
-
-      scan_directory(builtin_patch_directory_, builtin_root.children,
-                     builtin_root.relative_path);
-
-      if (!builtin_root.children.empty()) {
-        tree_cache_.push_back(std::move(builtin_root));
-      }
-
-      builtin_time_valid_ = true;
-      last_builtin_directory_check_time_ =
-          std::filesystem::last_write_time(builtin_patch_directory_);
-    } else {
-      builtin_time_valid_ = false;
-    }
-
-    cache_initialized_ = true;
-  } catch (const std::filesystem::filesystem_error &e) {
-    std::cerr << "Error scanning preset directories: " << e.what() << std::endl;
-    cache_initialized_ = false;
+  if (vfs_.is_directory(patches_directory_)) {
+    user_time_valid_ = vfs_.last_write_time(patches_directory_,
+                                            last_user_directory_check_time_);
+    scan_directory(patches_directory_, tree_cache_);
+  } else {
+    user_time_valid_ = false;
   }
+
+  if (has_builtin_directory_ && vfs_.is_directory(builtin_patch_directory_)) {
+    PatchEntry builtin_root;
+    builtin_root.name = kBuiltinRootName;
+    builtin_root.relative_path = kBuiltinRootName;
+    builtin_root.full_path = builtin_patch_directory_;
+    builtin_root.format = "";
+    builtin_root.is_directory = true;
+
+    scan_directory(builtin_patch_directory_, builtin_root.children,
+                   builtin_root.relative_path);
+
+    if (!builtin_root.children.empty()) {
+      tree_cache_.push_back(std::move(builtin_root));
+    }
+
+    builtin_time_valid_ = vfs_.last_write_time(
+        builtin_patch_directory_, last_builtin_directory_check_time_);
+  } else {
+    builtin_time_valid_ = false;
+  }
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  std::vector<PatchEntry> local_storage_children;
+  for (const auto &info : platform::web::patch_store::list()) {
+    PatchEntry entry;
+    entry.name = info.name;
+    entry.relative_path =
+        std::string(kLocalStorageRelativePrefix) + info.name;
+    entry.full_path =
+        std::filesystem::path(std::string(kLocalStorageAbsolutePrefix) +
+                              info.id);
+    entry.format = "web_gin";
+    entry.is_directory = false;
+    local_storage_children.push_back(std::move(entry));
+  }
+  if (!local_storage_children.empty()) {
+    std::sort(local_storage_children.begin(), local_storage_children.end(),
+              [](const PatchEntry &a, const PatchEntry &b) {
+                return a.name < b.name;
+              });
+    PatchEntry storage_root;
+    storage_root.name = std::string(kLocalStorageRelativeRoot);
+    storage_root.relative_path = std::string(kLocalStorageRelativeRoot);
+    storage_root.full_path =
+        std::filesystem::path(std::string(kLocalStorageRelativeRoot));
+    storage_root.is_directory = true;
+    storage_root.children = std::move(local_storage_children);
+    tree_cache_.push_back(std::move(storage_root));
+  }
+#endif
+
+  cache_initialized_ = true;
 }
 
 const std::vector<PatchEntry> &PatchRepository::tree() const {
@@ -83,6 +133,15 @@ bool PatchRepository::load_patch(const PatchEntry &entry,
   if (entry.is_directory) {
     return false;
   }
+#if defined(MEGATOY_PLATFORM_WEB)
+  if (entry.format == "web_gin") {
+    const std::string id = extract_local_storage_id(entry);
+    if (id.empty()) {
+      return false;
+    }
+    return platform::web::patch_store::load(id, patch);
+  }
+#endif
   auto result = formats::load_patch_from_file(entry.full_path);
   if (result.status == formats::PatchLoadStatus::Failure) {
     std::cerr << "Error loading preset patch " << entry.full_path << std::endl;
@@ -113,36 +172,29 @@ bool PatchRepository::has_directory_changed() const {
 
   bool changed = false;
 
-  try {
-    if (std::filesystem::exists(patches_directory_) &&
-        std::filesystem::is_directory(patches_directory_)) {
-      auto current_time = std::filesystem::last_write_time(patches_directory_);
-      if (!user_time_valid_ ||
-          current_time != last_user_directory_check_time_) {
-        changed = true;
-      }
-    } else if (user_time_valid_) {
+  std::filesystem::file_time_type current_time{};
+  if (vfs_.is_directory(patches_directory_)) {
+    if (!vfs_.last_write_time(patches_directory_, current_time)) {
+      changed = true;
+    } else if (!user_time_valid_ ||
+               current_time != last_user_directory_check_time_) {
       changed = true;
     }
-  } catch (const std::filesystem::filesystem_error &) {
+  } else if (user_time_valid_) {
     changed = true;
   }
 
-  try {
-    if (has_builtin_directory_ &&
-        std::filesystem::exists(builtin_patch_directory_) &&
-        std::filesystem::is_directory(builtin_patch_directory_)) {
-      auto current_time =
-          std::filesystem::last_write_time(builtin_patch_directory_);
-      if (!builtin_time_valid_ ||
-          current_time != last_builtin_directory_check_time_) {
+  if (has_builtin_directory_) {
+    if (vfs_.is_directory(builtin_patch_directory_)) {
+      if (!vfs_.last_write_time(builtin_patch_directory_, current_time)) {
+        changed = true;
+      } else if (!builtin_time_valid_ ||
+                 current_time != last_builtin_directory_check_time_) {
         changed = true;
       }
     } else if (builtin_time_valid_) {
       changed = true;
     }
-  } catch (const std::filesystem::filesystem_error &) {
-    changed = true;
   }
 
   return changed;
@@ -160,21 +212,10 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
     return;
   }
 
-  std::vector<std::filesystem::directory_entry> entries;
-
-  try {
-    for (const auto &entry : std::filesystem::directory_iterator(dir_path)) {
-      entries.push_back(entry);
-    }
-  } catch (const std::filesystem::filesystem_error &e) {
-    std::cerr << "Error reading directory " << dir_path << ": " << e.what()
-              << std::endl;
-    return;
-  }
-
+  auto entries = vfs_.read_directory(dir_path);
   std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) {
-    const std::string filename_a = a.path().filename().string();
-    const std::string filename_b = b.path().filename().string();
+    const std::string filename_a = a.path.filename().string();
+    const std::string filename_b = b.path.filename().string();
     if (filename_a == "user")
       return true;
     if (filename_a == "presets")
@@ -190,7 +231,7 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
   });
 
   for (const auto &entry : entries) {
-    const auto &path = entry.path();
+    const auto &path = entry.path;
     std::string filename = path.filename().string();
 
     if (filename.starts_with(".")) {
@@ -203,14 +244,14 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
     info.relative_path =
         relative_path.empty() ? filename : relative_path + "/" + filename;
 
-    if (entry.is_directory()) {
+    if (entry.is_directory) {
       info.is_directory = true;
       info.format = "";
       scan_directory(path, info.children, info.relative_path);
       if (!info.children.empty()) {
         tree.push_back(std::move(info));
       }
-    } else if (entry.is_regular_file()) {
+    } else if (entry.is_regular_file) {
       std::string extension = path.extension().string();
       std::transform(extension.begin(), extension.end(), extension.begin(),
                      ::tolower);
@@ -298,6 +339,13 @@ bool PatchRepository::is_supported_file(
 
 std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
+#if defined(MEGATOY_PLATFORM_WEB)
+  const std::string generic = path.generic_string();
+  if (!generic.empty() &&
+      generic.rfind(kLocalStorageRelativeRoot, 0) == 0) {
+    return path;
+  }
+#endif
   if (has_builtin_directory_) {
     auto relative_builtin = path.lexically_relative(builtin_patch_directory_);
     if (!relative_builtin.empty() && relative_builtin.native()[0] != '.') {
@@ -317,6 +365,12 @@ std::filesystem::path
 PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
   std::string relative = path.generic_string();
 
+#if defined(MEGATOY_PLATFORM_WEB)
+  if (!relative.empty() &&
+      relative.rfind(kLocalStorageRelativeRoot, 0) == 0) {
+    return path;
+  }
+#endif
   if (has_builtin_directory_) {
     const std::string builtin_root = kBuiltinRootName;
     if (relative == builtin_root) {

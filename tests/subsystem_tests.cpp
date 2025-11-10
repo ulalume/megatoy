@@ -1,5 +1,6 @@
 #include "audio/audio_manager.hpp"
 #include "patches/patch_session.hpp"
+#include "platform/native/native_file_system.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
@@ -12,6 +13,7 @@ namespace {
 
 struct TestEnvironment {
   std::filesystem::path root;
+  NativeFileSystem fs;
   megatoy::system::PathService directories;
   PreferenceManager preferences;
   AudioManager audio;
@@ -20,7 +22,7 @@ struct TestEnvironment {
   TestEnvironment()
       : root(std::filesystem::temp_directory_path() /
              "megatoy_subsystem_tests"),
-        directories(), preferences(directories), audio(),
+        fs(), directories(fs), preferences(directories), audio(),
         session(directories, audio) {
     std::filesystem::remove_all(root);
     directories.set_data_root(root);

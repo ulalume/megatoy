@@ -82,6 +82,8 @@ cmake --build build-release --config Release --parallel
 
 For distribution-specific notes on dependencies and audio drivers, see the Linux guide at [docs/BUILD_LINUX.md](docs/BUILD_LINUX.md).
 
+For experimental WebAssembly builds, see [docs/BUILD_WEB.md](docs/BUILD_WEB.md).
+
 ## Thanks
 
 - [libvgm](https://github.com/ValleyBell/libvgm/)

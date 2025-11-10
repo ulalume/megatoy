@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/virtual_file_system.hpp"
 #include <filesystem>
 
 namespace megatoy::system {
@@ -18,9 +19,12 @@ struct DirectoryPaths {
 class PathService {
 public:
   PathService();
+  explicit PathService(::platform::VirtualFileSystem &vfs);
 
   // Directory paths access
   const DirectoryPaths &paths() const { return paths_; }
+  ::platform::VirtualFileSystem &file_system() { return vfs_; }
+  const ::platform::VirtualFileSystem &file_system() const { return vfs_; }
 
   // Directory management
   void set_data_root(const std::filesystem::path &root);
@@ -52,6 +56,8 @@ private:
 
   // Platform-specific implementations
   static std::filesystem::path executable_directory_impl();
+
+  ::platform::VirtualFileSystem &vfs_;
 };
 
 } // namespace megatoy::system

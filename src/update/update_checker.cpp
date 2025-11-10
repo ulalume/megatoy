@@ -1,6 +1,35 @@
 #include "update_checker.hpp"
-
+#include "platform/platform_config.hpp"
 #include "project_info.hpp"
+#include <sstream>
+
+namespace update {
+
+std::string build_release_page_url() {
+  std::ostringstream oss;
+  oss << "https://github.com/" << megatoy::kGithubUser << "/"
+      << megatoy::kGithubRepo << "/releases";
+  return oss.str();
+}
+
+} // namespace update
+
+#if defined(MEGATOY_PLATFORM_WEB)
+
+namespace update {
+
+UpdateCheckResult check_for_updates(std::string_view current_version_tag) {
+  UpdateCheckResult result{};
+  result.success = false;
+  result.latest_version = std::string(current_version_tag);
+  result.error_message = "Update checks are unavailable in the web build.";
+  return result;
+}
+
+} // namespace update
+
+#else
+
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 
@@ -101,3 +130,5 @@ UpdateCheckResult check_for_updates(std::string_view current_version_tag) {
 }
 
 } // namespace update
+
+#endif

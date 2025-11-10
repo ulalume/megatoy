@@ -16,6 +16,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
 
+#if !defined(MEGATOY_PLATFORM_WEB)
     // Show the current directory
     ImGui::SeparatorText("Data Directory");
     ImGui::TextWrapped("%s", context.paths.data_root.c_str());
@@ -32,6 +33,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
         context.sync_patch_directories();
       }
     }
+#endif
 
     if (prefs.is_initialized()) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::StatusSuccess),
@@ -89,6 +91,23 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
     ImGui::Checkbox("Steal oldest note when all 6 channels are busy",
                     &ui_prefs.steal_oldest_note_when_full);
+
+    if (!context.midi_status_message.empty()) {
+      ImGui::TextWrapped("%s", context.midi_status_message.c_str());
+    }
+    if (context.show_web_midi_button) {
+      if (context.web_midi_button_disabled) {
+        ImGui::BeginDisabled();
+      }
+      if (ImGui::Button("Enable WebMIDI")) {
+        if (context.request_web_midi) {
+          context.request_web_midi();
+        }
+      }
+      if (context.web_midi_button_disabled) {
+        ImGui::EndDisabled();
+      }
+    }
 
     if (context.connected_midi_devices.empty()) {
       ImGui::TextUnformatted("No MIDI devices detected.");

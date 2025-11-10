@@ -1,15 +1,20 @@
 #include "about_dialog.hpp"
 
 #include "gui/styles/megatoy_style.hpp"
+#include "platform/platform_config.hpp"
 #include "project_info.hpp"
 #include "system/open_default_browser.hpp"
+#include "update/release_provider.hpp"
 #include "update/update_checker.hpp"
-#include <atomic>
+#if defined(MEGATOY_PLATFORM_WEB)
+#include <emscripten.h>
+#endif
+#include <chrono>
+#include <future>
 #include <imgui.h>
-#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <thread>
 
 namespace ui {
 namespace {
@@ -22,17 +27,12 @@ enum class UpdateStatus {
   Error,
 };
 
-struct UpdateCheckRequest {
-  std::atomic<bool> completed{false};
-  update::UpdateCheckResult result;
-};
-
 struct AboutModalState {
   UpdateStatus status = UpdateStatus::Idle;
   std::string latest_version;
   std::string release_url;
   std::string error_message;
-  std::shared_ptr<UpdateCheckRequest> pending_request;
+  std::optional<std::future<update::UpdateCheckResult>> pending_request;
 
   void reset() {
     status = UpdateStatus::Idle;
@@ -53,16 +53,23 @@ bool open_external_url(const std::string &url) {
   return result.success;
 }
 
+#if defined(MEGATOY_PLATFORM_WEB)
+void open_url_in_browser(const std::string &url) {
+  EM_ASM({ var target = UTF8ToString($0); window.open(target, '_blank'); },
+         url.c_str());
+}
+#endif
+
 void poll_update_request(AboutModalState &state) {
-  if (!state.pending_request) {
+  if (!state.pending_request.has_value()) {
     return;
   }
-  auto &request = state.pending_request;
-  if (!request->completed.load(std::memory_order_acquire)) {
+  auto &future = state.pending_request.value();
+  if (future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
     return;
   }
 
-  const auto &result = request->result;
+  update::UpdateCheckResult result = future.get();
   if (!result.success) {
     state.status = UpdateStatus::Error;
     state.error_message = result.error_message;
@@ -84,19 +91,13 @@ void poll_update_request(AboutModalState &state) {
 }
 
 void start_update_check(AboutModalState &state) {
-  auto request = std::make_shared<UpdateCheckRequest>();
   state.status = UpdateStatus::Checking;
   state.latest_version.clear();
   state.release_url.clear();
   state.error_message.clear();
-  state.pending_request = request;
-
-  std::thread([weak_request = std::weak_ptr<UpdateCheckRequest>(request)]() {
-    if (auto shared = weak_request.lock()) {
-      shared->result = update::check_for_updates(megatoy::kVersionTag);
-      shared->completed.store(true, std::memory_order_release);
-    }
-  }).detach();
+  state.pending_request =
+      update::release_info_provider().check_for_updates_async(
+          megatoy::kVersionTag);
 }
 
 void render_update_status(const AboutModalState &state) {
@@ -150,6 +151,14 @@ void render_about_dialog() {
 
   ImGui::Text("Version: %s", megatoy::kVersionTag);
 
+#if defined(MEGATOY_PLATFORM_WEB)
+  ImGui::Spacing();
+  ImGui::TextUnformatted("Check for newer builds on GitHub:");
+  const std::string releases_url = update::build_release_page_url();
+  if (ImGui::TextLink("Open releases page")) {
+    open_url_in_browser(releases_url);
+  }
+#else
   ImGui::Spacing();
   bool is_checking = state.status == UpdateStatus::Checking;
   ImGui::BeginDisabled(is_checking);
@@ -159,6 +168,7 @@ void render_about_dialog() {
   ImGui::EndDisabled();
 
   render_update_status(state);
+#endif
 
   ImGui::Separator();
   if (ImGui::Button("OK", ImVec2(120.0f, 0.0f))) {

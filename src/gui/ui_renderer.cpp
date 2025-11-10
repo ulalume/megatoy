@@ -14,6 +14,7 @@
 #include "gui/window_title.hpp"
 #include "history/snapshot_entry.hpp"
 #include "patch_actions.hpp"
+#include "midi/midi_input_manager.hpp"
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -222,12 +223,24 @@ MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
 PreferencesContext make_preferences_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
+  MidiInputManager::StatusInfo midi_status =
+      ctx.midi ? ctx.midi->status()
+               : MidiInputManager::StatusInfo{
+                     .message = "MIDI backend unavailable."};
   return {
       ctx.services.preference_manager,
       ui_state.prefs,
       ui_state.open_directory_dialog,
       ctx.services.path_service.paths(),
       state.connected_midi_inputs(),
+      midi_status.message,
+      midi_status.show_enable_button,
+      midi_status.enable_button_disabled,
+      [&ctx]() {
+        if (ctx.midi) {
+          ctx.midi->request_web_midi_access();
+        }
+      },
       [&ctx]() {
         // sync patch directories
         ctx.services.path_service.ensure_directories();
@@ -295,8 +308,10 @@ void render_all(AppContext &ctx) {
   auto patch_lab_context = make_patch_lab_context(ctx);
   render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
 
+#if !defined(MEGATOY_PLATFORM_WEB)
   auto waveform_context = make_waveform_context(ctx);
   render_waveform(WAVEFORM_TITLE, waveform_context);
+#endif
 }
 
 } // namespace ui

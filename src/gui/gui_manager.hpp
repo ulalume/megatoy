@@ -1,9 +1,10 @@
 #pragma once
 
 #include "gui/styles/theme.hpp"
+#include "platform/platform_config.hpp"
 #include "preferences/preference_manager.hpp"
 
-#include <GLFW/glfw3.h>
+#include <SDL3/SDL.h>
 #include <string>
 
 /**
@@ -11,7 +12,7 @@
  *
  * Consolidates GuiSubsystem, GuiRuntime, and GuiManager into a single
  * class that handles all GUI-related functionality including:
- * - GLFW window management and initialization
+ * - SDL3 window management and initialization
  * - ImGui setup and rendering
  * - Theme management and preferences integration
  * - File dialog integration
@@ -68,9 +69,9 @@ public:
   void poll_events();
 
   /**
-   * Get GLFW window pointer
+   * Get SDL window pointer
    */
-  GLFWwindow *get_window() const { return window_; }
+  SDL_Window *get_window() const { return window_; }
 
   /**
    * Sync ImGui ini file with preferences
@@ -110,8 +111,11 @@ public:
 private:
   // Core GUI system
   PreferenceManager &preferences_;
-  GLFWwindow *window_;
+  SDL_Window *window_;
+  SDL_GLContext gl_context_;
   bool initialized_;
+  bool should_close_;
+  SDL_WindowID window_id_;
 
   // Window state
   bool fullscreen_;
@@ -129,13 +133,17 @@ private:
   // Internal methods
   void set_imgui_ini_file(const std::string &path);
   void apply_imgui_ini_binding();
-
-  // Static callbacks
-  static void glfw_error_callback(int error, const char *description);
-  static void glfw_drop_callback(GLFWwindow *window, int count,
-                                 const char **paths);
+#if defined(MEGATOY_PLATFORM_WEB)
+  void load_web_imgui_ini();
+  void save_web_imgui_ini();
+#endif
+  void dispatch_drop_event(const char *path);
 
   // Drop callback state
   void *drop_user_pointer_;
   void (*drop_callback_)(void *user_pointer, int count, const char **paths);
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  bool web_ini_loaded_ = false;
+#endif
 };

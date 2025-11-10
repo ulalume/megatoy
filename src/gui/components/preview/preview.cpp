@@ -2,8 +2,13 @@
 
 #include "gui/image/resource_manager.hpp"
 #include "gui/styles/theme.hpp"
+#include "platform/platform_config.hpp"
 #include <cstdint>
+#if defined(MEGATOY_PLATFORM_WEB)
+#include <GLES3/gl3.h>
+#else
 #include <imgui_impl_opengl3_loader.h>
+#endif
 #include <iostream>
 #include <string>
 #include <type_traits>

@@ -17,6 +17,8 @@ struct WaveformContext {
   std::function<std::vector<ym2612::Note>()> active_notes;
 };
 
+#if !defined(MEGATOY_PLATFORM_WEB)
 void render_waveform(const char *title, WaveformContext &context);
+#endif
 
 } // namespace ui

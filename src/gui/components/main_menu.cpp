@@ -11,6 +11,7 @@ namespace ui {
 void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
   if (ImGui::BeginMainMenuBar()) {
+#if !defined(MEGATOY_PLATFORM_WEB)
     if (ImGui::BeginMenu("megatoy")) {
       if (ImGui::MenuItem("About megatoy")) {
         open_about = true;
@@ -21,6 +22,11 @@ void render_main_menu(MainMenuContext &context) {
       }
       ImGui::EndMenu();
     }
+#else
+    if (ImGui::MenuItem("About megatoy")) {
+      open_about = true;
+    }
+#endif
 
     if (ImGui::BeginMenu("Edit")) {
       auto &history = context.history;
@@ -81,7 +87,9 @@ void render_main_menu(MainMenuContext &context) {
       ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
                       &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);
+#if !defined(MEGATOY_PLATFORM_WEB)
       ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
+#endif
       ImGui::MenuItem(PREFERENCES_TITLE, nullptr, &ui_prefs.show_preferences);
 
       ImGui::Separator();

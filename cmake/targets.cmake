@@ -6,7 +6,7 @@ add_library(imgui_lib
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
@@ -16,14 +16,21 @@ target_include_directories(imgui_lib PUBLIC
 )
 
 target_link_libraries(imgui_lib PUBLIC
-  glfw
-  OpenGL::GL
+  SDL3::SDL3
 )
+if(EMSCRIPTEN)
+  target_compile_definitions(imgui_lib PUBLIC IMGUI_IMPL_OPENGL_ES3 IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
+endif()
+if(NOT EMSCRIPTEN)
+  target_link_libraries(imgui_lib PUBLIC OpenGL::GL)
+endif()
 
 set(MEGATOY_CORE_SOURCES
   src/app_services.cpp
   src/app_state.cpp
+  src/audio/audio_engine.cpp
   src/audio/audio_manager.cpp
+  src/audio/sdl_audio_transport.cpp
   src/channel_allocator.cpp
   src/formats/common.cpp
   src/formats/ctrmml.cpp
@@ -70,12 +77,31 @@ set(MEGATOY_CORE_SOURCES
 
   src/system/path_service.cpp
   src/update/update_checker.cpp
+  src/update/release_provider.cpp
   src/ym2612/channel.cpp
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
   src/ym2612/wave_sampler.cpp
   src/ym2612/fft_analyzer.cpp
 )
+
+if(EMSCRIPTEN)
+  list(APPEND MEGATOY_CORE_SOURCES
+    src/audio/webaudio_transport.cpp
+    src/platform/web/web_platform_services.cpp
+    src/platform/web/web_file_system.cpp
+    src/platform/web/web_download.cpp
+    src/platform/web/local_storage.cpp
+    src/platform/web/web_patch_store.cpp
+    src/platform/web/web_midi_backend.cpp
+  )
+else()
+  list(APPEND MEGATOY_CORE_SOURCES
+    src/midi/rtmidi_backend.cpp
+    src/platform/native/native_file_system.cpp
+    src/platform/native/desktop_platform_services.cpp
+  )
+endif()
 # Add platform-specific source files
 if(APPLE)
   list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.mm)
@@ -102,7 +128,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(MEGATOY_CORE_RELEASE_FLAGS -O3 -ffast-math -funroll-loops)
   if(MEGATOY_RELEASE_CPU_FLAGS)
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
-  else()
+  elseif(NOT EMSCRIPTEN)
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS -march=native)
   endif()
   target_compile_options(megatoy_core PRIVATE
@@ -112,21 +138,25 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 target_link_libraries(megatoy_core PUBLIC
-  vgm-player vgm-audio
+  vgm-player
   imgui_lib
-  glfw
-  OpenGL::GL
+  SDL3::SDL3
   nlohmann_json::nlohmann_json
-  CURL::libcurl
-  nfd
-  rtmidi
   chord_detector::chord_detector
   kissfft
-  SQLiteCpp
 )
 
-if(WIN32)
-  target_link_libraries(megatoy_core PUBLIC shell32)
+if(NOT EMSCRIPTEN)
+  target_link_libraries(megatoy_core PUBLIC
+    OpenGL::GL
+    CURL::libcurl
+    nfd
+    rtmidi
+    SQLiteCpp
+  )
+  if(WIN32)
+    target_link_libraries(megatoy_core PUBLIC shell32)
+  endif()
 endif()
 
 if(APPLE)
@@ -149,6 +179,9 @@ target_compile_definitions(megatoy_core PUBLIC
   MEGATOY_PRESETS_RELATIVE_PATH="${MEGATOY_PRESETS_RELATIVE_PATH_VALUE}"
   $<$<PLATFORM_ID:Darwin>:GL_SILENCE_DEPRECATION>
 )
+if(EMSCRIPTEN)
+  target_compile_definitions(megatoy_core PUBLIC IMGUI_IMPL_OPENGL_ES3)
+endif()
 
 set(MEGATOY_MAIN_SOURCES src/main.cpp)
 if(WIN32)
@@ -172,6 +205,10 @@ endif()
 
 target_link_libraries(megatoy PRIVATE megatoy_core)
 
+if(TARGET SDL3::SDL3main)
+  target_link_libraries(megatoy PRIVATE SDL3::SDL3main)
+endif()
+
 if(APPLE)
   set(MEGATOY_BUNDLE_ICON "${CMAKE_SOURCE_DIR}/dist/icon.icns")
   set_source_files_properties(${MEGATOY_BUNDLE_ICON}
@@ -185,7 +222,7 @@ install(TARGETS megatoy
   RUNTIME DESTINATION .
 )
 
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
   find_package(X11 REQUIRED)
   target_link_libraries(megatoy PRIVATE ${X11_LIBRARIES})
 endif()
@@ -193,6 +230,35 @@ endif()
 add_embedded_assets(megatoy
   EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/" "\\.txt$"
 )
+
+if(EMSCRIPTEN)
+  set_target_properties(megatoy PROPERTIES SUFFIX ".html")
+  target_link_options(megatoy PRIVATE
+    "--bind"
+    "-sFORCE_FILESYSTEM=1"
+    "-sUSE_ZLIB=1"
+    "-sFULL_ES3=1"
+    "-sMAX_WEBGL_VERSION=2"
+    "-sMIN_WEBGL_VERSION=2"
+    "-sWASM=1"
+    "-sINITIAL_MEMORY=134217728"
+    "--preload-file" "${CMAKE_SOURCE_DIR}/assets@/app/assets"
+  )
+  if(MEGATOY_GENERATE_SIMPLE_HTML)
+    set(MEGATOY_SIMPLE_SHELL_SRC "${CMAKE_SOURCE_DIR}/dist/web_shell_simple.html")
+    set(MEGATOY_SIMPLE_ICON_SRC "${CMAKE_SOURCE_DIR}/dist/icon.ico")
+    add_custom_command(
+      TARGET megatoy POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${MEGATOY_SIMPLE_SHELL_SRC}"
+              "$<TARGET_FILE_DIR:megatoy>/megatoy_simple.html"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${MEGATOY_SIMPLE_ICON_SRC}"
+              "$<TARGET_FILE_DIR:megatoy>/icon.ico"
+      COMMENT "Copying minimal Web shell to megatoy_simple.html"
+    )
+  endif()
+endif()
 
 target_include_directories(megatoy PRIVATE ${CMAKE_BINARY_DIR})
 

@@ -46,6 +46,10 @@ struct PatchLabState {
   int mutate_amount = 2;
   float mutate_probability = 0.35f;
   bool mutate_allow_algorithm_change = true;
+
+  // Combo filter states
+  std::string combo_filter_patch_a;
+  std::string combo_filter_patch_b;
 };
 
 void render_patch_lab(const char *title, PatchLabContext &context,

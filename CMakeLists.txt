@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.4.2" CACHE STRING "Megatoy application version")
+set(MEGATOY_VERSION "0.5.0" CACHE STRING "Megatoy application version")
 project(megatoy VERSION ${MEGATOY_VERSION})
+
+# Objective-C sources are used for macOS integrations
+if(APPLE)
+  enable_language(OBJC OBJCXX)
+endif()
 
 # Project information
 set(MEGATOY_VERSION_TAG "v${PROJECT_VERSION}")
@@ -37,21 +42,24 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(OPTIMIZATION_FLAGS
         "-O3"
         "-DNDEBUG"
-        "-ffast-math"
         "-funroll-loops"
     )
-    if(MEGATOY_LINUX_X86_64)
-      if(MEGATOY_GENERAL_X86_64_LINUX)
-        message(STATUS "Using generic x86-64 tuning for Linux Release build")
-        set(MEGATOY_RELEASE_CPU_FLAGS "-march=x86-64" "-mtune=generic")
+    if(NOT EMSCRIPTEN)
+      if(MEGATOY_LINUX_X86_64)
+        if(MEGATOY_GENERAL_X86_64_LINUX)
+          message(STATUS "Using generic x86-64 tuning for Linux Release build")
+          set(MEGATOY_RELEASE_CPU_FLAGS "-march=x86-64" "-mtune=generic")
+        else()
+          message(STATUS "Using native CPU optimizations for Linux Release build")
+          set(MEGATOY_RELEASE_CPU_FLAGS "-march=native")
+        endif()
       else()
-        message(STATUS "Using native CPU optimizations for Linux Release build")
         set(MEGATOY_RELEASE_CPU_FLAGS "-march=native")
       endif()
-    else()
-      set(MEGATOY_RELEASE_CPU_FLAGS "-march=native")
     endif()
-    list(APPEND OPTIMIZATION_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
+    if(MEGATOY_RELEASE_CPU_FLAGS)
+      list(APPEND OPTIMIZATION_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
+    endif()
     list(APPEND OPTIMIZATION_FLAGS
         "-flto"
         "-fomit-frame-pointer"
@@ -79,6 +87,17 @@ endif()
 include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 
+if(EMSCRIPTEN)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msimd128")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msimd128")
+  option(MEGATOY_GENERATE_SIMPLE_HTML
+         "Copy a minimal HTML launcher (megatoy_simple.html) alongside megatoy.html"
+         ON)
+endif()
+
+if(EMSCRIPTEN AND ZLIB_INCLUDE_DIRS)
+  include_directories(${ZLIB_INCLUDE_DIRS})
+endif()
 
 
 include(cmake/targets.cmake)

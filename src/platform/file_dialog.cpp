@@ -5,7 +5,8 @@
 #include <iostream>
 #include <sstream>
 
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+#elif defined(__APPLE__)
 #include <cstdio>
 #else
 #include <nfd.h>
@@ -15,7 +16,8 @@ namespace platform::file_dialog {
 
 namespace {
 
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+#elif defined(__APPLE__)
 std::string escape_for_applescript(const std::string &input) {
   std::string escaped;
   escaped.reserve(input.size() * 2);
@@ -53,7 +55,7 @@ std::string run_applescript(const std::string &script) {
   }
   return output;
 }
-#else
+#elif !defined(__EMSCRIPTEN__)
 bool g_nfd_initialized = false;
 
 struct FilterItems {
@@ -98,12 +100,14 @@ FilterItems build_filter_items(const std::vector<FileFilter> &filters) {
 
   return storage;
 }
-#endif
+#endif // platform-specific helpers
 
 } // namespace
 
 bool initialize() {
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+  return true;
+#elif defined(__APPLE__)
   return true;
 #else
   if (g_nfd_initialized) {
@@ -125,7 +129,7 @@ bool initialize() {
 }
 
 void shutdown() {
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
   if (g_nfd_initialized) {
     NFD_Quit();
     g_nfd_initialized = false;
@@ -135,7 +139,11 @@ void shutdown() {
 
 DialogResult pick_folder(const std::filesystem::path &default_path,
                          std::filesystem::path &selected_path) {
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+  (void)default_path;
+  (void)selected_path;
+  return DialogResult::Cancelled;
+#elif defined(__APPLE__)
   std::filesystem::path base = default_path;
   if (base.empty()) {
     const char *home = std::getenv("HOME");
@@ -185,7 +193,12 @@ DialogResult save_file(const std::filesystem::path &default_dir,
                        const std::string &default_name,
                        const std::vector<FileFilter> &filters,
                        std::filesystem::path &selected_path) {
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+  (void)default_dir;
+  (void)filters;
+  selected_path = std::filesystem::path(default_name);
+  return DialogResult::Cancelled;
+#elif defined(__APPLE__)
   std::filesystem::path base = default_dir;
   if (base.empty()) {
     const char *home = std::getenv("HOME");

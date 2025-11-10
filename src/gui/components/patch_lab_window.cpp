@@ -5,6 +5,8 @@
 #include "patches/patch_lab.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 #include <imgui.h>
 #include <vector>
 
@@ -78,20 +80,63 @@ std::string combo_preview_label(EntryPtr selection,
 
 bool render_patch_combo(const char *label,
                         const std::vector<EntryDisplay> &entries,
-                        EntryPtr &selection) {
+                        EntryPtr &selection, std::string &filter_text) {
   const std::string preview = combo_preview_label(selection, entries);
   bool changed = false;
+  bool filter_active = !filter_text.empty();
+
   if (ImGui::BeginCombo(label, preview.c_str())) {
+    // Add filter input at the top of the combo
+    ImGui::SetNextItemWidth(-1.0f);
+
+    // Use char buffer for ImGui compatibility
+    static char filter_buffer[256];
+    strncpy(filter_buffer, filter_text.c_str(), sizeof(filter_buffer) - 1);
+    filter_buffer[sizeof(filter_buffer) - 1] = '\0';
+
+    if (ImGui::InputTextWithHint("##filter",
+                                 ICON_FA_MAGNIFYING_GLASS " Search...",
+                                 filter_buffer, sizeof(filter_buffer))) {
+      filter_text = std::string(filter_buffer);
+      filter_active = !filter_text.empty();
+    }
+
+    // Auto-focus the filter input when combo opens
+    if (ImGui::IsWindowAppearing()) {
+      ImGui::SetKeyboardFocusHere(-1);
+    }
+
+    ImGui::Separator();
+
+    // Filter and display entries
     for (const auto &item : entries) {
-      const bool is_selected = selection == item.entry;
-      if (ImGui::Selectable(item.label.c_str(), is_selected)) {
-        selection = item.entry;
-        changed = true;
+      bool should_show = true;
+
+      if (filter_active) {
+        // Case-insensitive search
+        std::string item_lower = item.label;
+        std::string filter_lower = filter_text;
+        std::transform(item_lower.begin(), item_lower.end(), item_lower.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        std::transform(filter_lower.begin(), filter_lower.end(),
+                       filter_lower.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        should_show = item_lower.find(filter_lower) != std::string::npos;
       }
-      if (is_selected) {
-        ImGui::SetItemDefaultFocus();
+
+      if (should_show) {
+        const bool is_selected = selection == item.entry;
+        if (ImGui::Selectable(item.label.c_str(), is_selected)) {
+          selection = item.entry;
+          changed = true;
+          filter_text.clear();
+        }
+        if (is_selected) {
+          ImGui::SetItemDefaultFocus();
+        }
       }
     }
+
     ImGui::EndCombo();
   }
   return changed;
@@ -179,8 +224,10 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
     ImGui::BeginDisabled(true);
   }
 
-  render_patch_combo("Patch A", entries, state.source_a);
-  render_patch_combo("Patch B", entries, state.source_b);
+  render_patch_combo("Patch A", entries, state.source_a,
+                     state.combo_filter_patch_a);
+  render_patch_combo("Patch B", entries, state.source_b,
+                     state.combo_filter_patch_b);
 
   ImGui::SetNextItemWidth(120.0f);
   ImGui::InputInt("Seed (auto = -1)##merge", &state.merge_seed);
@@ -234,8 +281,10 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
     ImGui::BeginDisabled(true);
   }
 
-  render_patch_combo("Patch A##morph", entries, state.source_a);
-  render_patch_combo("Patch B##morph", entries, state.source_b);
+  render_patch_combo("Patch A##morph", entries, state.source_a,
+                     state.combo_filter_patch_a);
+  render_patch_combo("Patch B##morph", entries, state.source_b,
+                     state.combo_filter_patch_b);
 
   ImGui::SliderFloat("Blend", &state.morph_mix, 0.0f, 1.0f);
   ImGui::Checkbox("Interpolate algorithm", &state.morph_interpolate_algorithm);

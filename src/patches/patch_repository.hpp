@@ -1,6 +1,7 @@
 #pragma once
 
 #include "patch_metadata.hpp"
+#include "platform/virtual_file_system.hpp"
 #include "ym2612/patch.hpp"
 #include <filesystem>
 #include <memory>
@@ -26,7 +27,8 @@ struct PatchEntry {
 
 class PatchRepository {
 public:
-  PatchRepository(const std::filesystem::path &patches_root,
+  PatchRepository(platform::VirtualFileSystem &vfs,
+                  const std::filesystem::path &patches_root,
                   const std::filesystem::path &builtin_dir = {},
                   const std::filesystem::path &metadata_db_path = {});
 
@@ -62,6 +64,7 @@ private:
 
   std::filesystem::path patches_directory_;
   std::filesystem::path builtin_patch_directory_;
+  platform::VirtualFileSystem &vfs_;
   std::unique_ptr<PatchMetadataManager> metadata_manager_;
 
   std::vector<PatchEntry> tree_cache_;
