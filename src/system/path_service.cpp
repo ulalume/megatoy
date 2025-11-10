@@ -1,5 +1,7 @@
 #include "path_service.hpp"
 
+#include "platform/native/native_file_system.hpp"
+
 #include <array>
 #include <cstdlib>
 #include <filesystem>
@@ -17,6 +19,15 @@
 #ifndef MEGATOY_PRESETS_RELATIVE_PATH
 #define MEGATOY_PRESETS_RELATIVE_PATH "presets"
 #endif
+
+namespace {
+
+platform::VirtualFileSystem &default_vfs() {
+  static NativeFileSystem fs;
+  return fs;
+}
+
+} // namespace
 
 namespace megatoy::system {
 
@@ -109,7 +120,9 @@ fs::path PathService::export_directory(const fs::path &root) {
   return root / "export";
 }
 
-PathService::PathService() {
+PathService::PathService() : PathService(default_vfs()) {}
+
+PathService::PathService(platform::VirtualFileSystem &vfs) : vfs_(vfs) {
   set_data_root(default_data_directory());
   paths_.builtin_presets_root = builtin_presets_directory();
   paths_.preferences_file = preferences_file_path();
@@ -125,17 +138,17 @@ void PathService::set_data_root(const fs::path &root) {
 }
 
 bool PathService::ensure_directories() const {
-  try {
-    fs::create_directories(paths_.data_root);
-    fs::create_directories(paths_.patches_root);
-    fs::create_directories(paths_.user_patches_root);
-    fs::create_directories(paths_.export_root);
-    fs::create_directories(paths_.patch_metadata_db.parent_path());
-    return true;
-  } catch (const fs::filesystem_error &e) {
-    std::cerr << "Failed to create directories: " << e.what() << '\n';
-    return false;
+  bool success = true;
+  success = success && vfs_.create_directories(paths_.data_root);
+  success = success && vfs_.create_directories(paths_.patches_root);
+  success = success && vfs_.create_directories(paths_.user_patches_root);
+  success = success && vfs_.create_directories(paths_.export_root);
+  success = success &&
+            vfs_.create_directories(paths_.patch_metadata_db.parent_path());
+  if (!success) {
+    std::cerr << "Failed to create directories using virtual file system\n";
   }
+  return success;
 }
 
 } // namespace megatoy::system

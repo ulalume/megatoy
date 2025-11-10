@@ -1,13 +1,17 @@
 // midi_input_manager.hpp
 #pragma once
 
+#include "midi/midi_backend.hpp"
 #include <memory>
+#include <string>
+#include <vector>
 
 struct AppContext;
 
 class MidiInputManager {
 public:
   MidiInputManager();
+  explicit MidiInputManager(std::unique_ptr<MidiBackend> backend);
   ~MidiInputManager();
 
   bool init();
@@ -17,6 +21,8 @@ public:
   void dispatch(AppContext &context);
 
 private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
+  std::unique_ptr<MidiBackend> backend_;
+  std::vector<MidiMessage> pending_events_;
+  std::vector<std::string> available_ports_;
+  bool ports_dirty_;
 };

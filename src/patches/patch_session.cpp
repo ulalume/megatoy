@@ -16,9 +16,10 @@ namespace patches {
 PatchSession::PatchSession(megatoy::system::PathService &directories,
                            AudioManager &audio)
     : directories_(directories), audio_(audio),
-      repository_(directories_.paths().patches_root,
-                  directories_.paths().builtin_presets_root,
-                  directories_.paths().patch_metadata_db),
+      repository_(std::make_unique<PatchRepository>(
+          directories_.file_system(), directories_.paths().patches_root,
+          directories_.paths().builtin_presets_root,
+          directories_.paths().patch_metadata_db)),
       channel_allocator_() {}
 
 ym2612::Patch &PatchSession::current_patch() { return current_patch_; }
@@ -40,13 +41,13 @@ void PatchSession::set_current_patch_path(const std::filesystem::path &path) {
     current_patch_path_ = path.generic_string();
     return;
   }
-  const auto relative = repository_.to_relative_path(path);
+  const auto relative = repository_->to_relative_path(path);
   current_patch_path_ = relative.generic_string();
 }
 
-PatchRepository &PatchSession::repository() { return repository_; }
+PatchRepository &PatchSession::repository() { return *repository_; }
 
-const PatchRepository &PatchSession::repository() const { return repository_; }
+const PatchRepository &PatchSession::repository() const { return *repository_; }
 
 bool PatchSession::is_modified() const {
   return original_patch_ != current_patch_;
@@ -56,9 +57,9 @@ void PatchSession::mark_as_clean() { original_patch_ = current_patch_; }
 void PatchSession::initialize_patch_defaults() {
   const auto &paths = directories_.paths();
   const auto init_patch_path = paths.builtin_presets_root / "init.dmp";
+  auto &vfs = directories_.file_system();
 
-  if (!paths.builtin_presets_root.empty() &&
-      std::filesystem::exists(init_patch_path)) {
+  if (!paths.builtin_presets_root.empty() && vfs.exists(init_patch_path)) {
     auto load_result = formats::load_patch_from_file(init_patch_path);
     if (load_result.status == formats::PatchLoadStatus::Success) {
       set_current_patch_path(init_patch_path);
@@ -97,9 +98,10 @@ void PatchSession::initialize_patch_defaults() {
 }
 
 void PatchSession::refresh_directories() {
-  repository_ = PatchRepository(directories_.paths().patches_root,
-                                directories_.paths().builtin_presets_root,
-                                directories_.paths().patch_metadata_db);
+  repository_ = std::make_unique<PatchRepository>(
+      directories_.file_system(), directories_.paths().patches_root,
+      directories_.paths().builtin_presets_root,
+      directories_.paths().patch_metadata_db);
 }
 
 void PatchSession::set_current_patch(const ym2612::Patch &patch,

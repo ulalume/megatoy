@@ -5,6 +5,8 @@
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
+#include "platform/native/desktop_platform_services.hpp"
+#include "update/release_provider.hpp"
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
@@ -40,7 +42,10 @@ void handle_file_drop(void *user_pointer, int count, const char **paths) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-  AppServices services;
+  DesktopPlatformServices platform_services;
+  update::set_release_info_provider(platform_services.release_info_provider());
+
+  AppServices services(platform_services);
   AppState app_state{};
   services.initialize_app(app_state);
   AppContext app_context{services, app_state};
@@ -49,7 +54,7 @@ int main(int argc, char *argv[]) {
   services.gui_manager.set_drop_callback(&app_context, handle_file_drop);
 
   // Initialize MIDI
-  MidiInputManager midi;
+  MidiInputManager midi(platform_services.create_midi_backend());
   midi.init();
 
   // Main application loop

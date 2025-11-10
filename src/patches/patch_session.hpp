@@ -8,6 +8,7 @@
 #include "ym2612/patch.hpp"
 #include <array>
 #include <filesystem>
+#include <memory>
 #include <string>
 
 // Forward declaration
@@ -144,7 +145,7 @@ public:
 private:
   megatoy::system::PathService &directories_;
   AudioManager &audio_;
-  PatchRepository repository_;
+  std::unique_ptr<PatchRepository> repository_;
   ChannelAllocator channel_allocator_;
   ym2612::Patch current_patch_;
   std::string current_patch_path_;

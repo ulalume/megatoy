@@ -9,11 +9,13 @@
 
 namespace patches {
 
-PatchRepository::PatchRepository(const std::filesystem::path &patches_root,
+PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
+                                 const std::filesystem::path &patches_root,
                                  const std::filesystem::path &builtin_dir,
                                  const std::filesystem::path &metadata_db_path)
     : patches_directory_(patches_root), builtin_patch_directory_(builtin_dir),
-      has_builtin_directory_(!builtin_dir.empty()), cache_initialized_(false) {
+      vfs_(vfs), has_builtin_directory_(!builtin_dir.empty()),
+      cache_initialized_(false) {
 
   // Initialize metadata manager if path is provided
   if (!metadata_db_path.empty()) {
@@ -32,46 +34,36 @@ PatchRepository::PatchRepository(const std::filesystem::path &patches_root,
 void PatchRepository::refresh() {
   tree_cache_.clear();
 
-  try {
-    if (std::filesystem::exists(patches_directory_) &&
-        std::filesystem::is_directory(patches_directory_)) {
-      user_time_valid_ = true;
-      last_user_directory_check_time_ =
-          std::filesystem::last_write_time(patches_directory_);
-      scan_directory(patches_directory_, tree_cache_);
-    } else {
-      user_time_valid_ = false;
-    }
-
-    if (has_builtin_directory_ &&
-        std::filesystem::exists(builtin_patch_directory_) &&
-        std::filesystem::is_directory(builtin_patch_directory_)) {
-      PatchEntry builtin_root;
-      builtin_root.name = kBuiltinRootName;
-      builtin_root.relative_path = kBuiltinRootName;
-      builtin_root.full_path = builtin_patch_directory_;
-      builtin_root.format = "";
-      builtin_root.is_directory = true;
-
-      scan_directory(builtin_patch_directory_, builtin_root.children,
-                     builtin_root.relative_path);
-
-      if (!builtin_root.children.empty()) {
-        tree_cache_.push_back(std::move(builtin_root));
-      }
-
-      builtin_time_valid_ = true;
-      last_builtin_directory_check_time_ =
-          std::filesystem::last_write_time(builtin_patch_directory_);
-    } else {
-      builtin_time_valid_ = false;
-    }
-
-    cache_initialized_ = true;
-  } catch (const std::filesystem::filesystem_error &e) {
-    std::cerr << "Error scanning preset directories: " << e.what() << std::endl;
-    cache_initialized_ = false;
+  if (vfs_.is_directory(patches_directory_)) {
+    user_time_valid_ = vfs_.last_write_time(patches_directory_,
+                                            last_user_directory_check_time_);
+    scan_directory(patches_directory_, tree_cache_);
+  } else {
+    user_time_valid_ = false;
   }
+
+  if (has_builtin_directory_ && vfs_.is_directory(builtin_patch_directory_)) {
+    PatchEntry builtin_root;
+    builtin_root.name = kBuiltinRootName;
+    builtin_root.relative_path = kBuiltinRootName;
+    builtin_root.full_path = builtin_patch_directory_;
+    builtin_root.format = "";
+    builtin_root.is_directory = true;
+
+    scan_directory(builtin_patch_directory_, builtin_root.children,
+                   builtin_root.relative_path);
+
+    if (!builtin_root.children.empty()) {
+      tree_cache_.push_back(std::move(builtin_root));
+    }
+
+    builtin_time_valid_ = vfs_.last_write_time(
+        builtin_patch_directory_, last_builtin_directory_check_time_);
+  } else {
+    builtin_time_valid_ = false;
+  }
+
+  cache_initialized_ = true;
 }
 
 const std::vector<PatchEntry> &PatchRepository::tree() const {
@@ -113,36 +105,29 @@ bool PatchRepository::has_directory_changed() const {
 
   bool changed = false;
 
-  try {
-    if (std::filesystem::exists(patches_directory_) &&
-        std::filesystem::is_directory(patches_directory_)) {
-      auto current_time = std::filesystem::last_write_time(patches_directory_);
-      if (!user_time_valid_ ||
-          current_time != last_user_directory_check_time_) {
-        changed = true;
-      }
-    } else if (user_time_valid_) {
+  std::filesystem::file_time_type current_time{};
+  if (vfs_.is_directory(patches_directory_)) {
+    if (!vfs_.last_write_time(patches_directory_, current_time)) {
+      changed = true;
+    } else if (!user_time_valid_ ||
+               current_time != last_user_directory_check_time_) {
       changed = true;
     }
-  } catch (const std::filesystem::filesystem_error &) {
+  } else if (user_time_valid_) {
     changed = true;
   }
 
-  try {
-    if (has_builtin_directory_ &&
-        std::filesystem::exists(builtin_patch_directory_) &&
-        std::filesystem::is_directory(builtin_patch_directory_)) {
-      auto current_time =
-          std::filesystem::last_write_time(builtin_patch_directory_);
-      if (!builtin_time_valid_ ||
-          current_time != last_builtin_directory_check_time_) {
+  if (has_builtin_directory_) {
+    if (vfs_.is_directory(builtin_patch_directory_)) {
+      if (!vfs_.last_write_time(builtin_patch_directory_, current_time)) {
+        changed = true;
+      } else if (!builtin_time_valid_ ||
+                 current_time != last_builtin_directory_check_time_) {
         changed = true;
       }
     } else if (builtin_time_valid_) {
       changed = true;
     }
-  } catch (const std::filesystem::filesystem_error &) {
-    changed = true;
   }
 
   return changed;
@@ -160,21 +145,10 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
     return;
   }
 
-  std::vector<std::filesystem::directory_entry> entries;
-
-  try {
-    for (const auto &entry : std::filesystem::directory_iterator(dir_path)) {
-      entries.push_back(entry);
-    }
-  } catch (const std::filesystem::filesystem_error &e) {
-    std::cerr << "Error reading directory " << dir_path << ": " << e.what()
-              << std::endl;
-    return;
-  }
-
+  auto entries = vfs_.read_directory(dir_path);
   std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) {
-    const std::string filename_a = a.path().filename().string();
-    const std::string filename_b = b.path().filename().string();
+    const std::string filename_a = a.path.filename().string();
+    const std::string filename_b = b.path.filename().string();
     if (filename_a == "user")
       return true;
     if (filename_a == "presets")
@@ -190,7 +164,7 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
   });
 
   for (const auto &entry : entries) {
-    const auto &path = entry.path();
+    const auto &path = entry.path;
     std::string filename = path.filename().string();
 
     if (filename.starts_with(".")) {
@@ -203,14 +177,14 @@ void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
     info.relative_path =
         relative_path.empty() ? filename : relative_path + "/" + filename;
 
-    if (entry.is_directory()) {
+    if (entry.is_directory) {
       info.is_directory = true;
       info.format = "";
       scan_directory(path, info.children, info.relative_path);
       if (!info.children.empty()) {
         tree.push_back(std::move(info));
       }
-    } else if (entry.is_regular_file()) {
+    } else if (entry.is_regular_file) {
       std::string extension = path.extension().string();
       std::transform(extension.begin(), extension.end(), extension.begin(),
                      ::tolower);

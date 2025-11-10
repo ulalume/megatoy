@@ -23,7 +23,9 @@ target_link_libraries(imgui_lib PUBLIC
 set(MEGATOY_CORE_SOURCES
   src/app_services.cpp
   src/app_state.cpp
+  src/audio/audio_engine.cpp
   src/audio/audio_manager.cpp
+  src/audio/sdl_audio_transport.cpp
   src/channel_allocator.cpp
   src/formats/common.cpp
   src/formats/ctrmml.cpp
@@ -59,17 +61,21 @@ set(MEGATOY_CORE_SOURCES
   src/history/history_manager.cpp
   src/drop_actions.cpp
   src/midi/midi_input_manager.cpp
+  src/midi/rtmidi_backend.cpp
 
   src/patches/patch_session.cpp
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
   src/patches/patch_metadata.cpp
   src/platform/file_dialog.cpp
+  src/platform/native/native_file_system.cpp
+  src/platform/native/desktop_platform_services.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
 
   src/system/path_service.cpp
   src/update/update_checker.cpp
+  src/update/release_provider.cpp
   src/ym2612/channel.cpp
   src/ym2612/device.cpp
   src/ym2612/operator.cpp

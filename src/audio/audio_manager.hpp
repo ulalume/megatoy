@@ -1,14 +1,9 @@
 #pragma once
 
-#include "ym2612/device.hpp"
+#include "audio/audio_engine.hpp"
+#include "audio/audio_transport.hpp"
 #include "ym2612/patch.hpp"
-#include "ym2612/wave_sampler.hpp"
-#include <SDL3/SDL.h>
-#include <emu/EmuStructs.h>
-#include <atomic>
-#include <stop_token>
-#include <thread>
-#include <vector>
+#include <memory>
 
 /**
  * AudioManager - audio system management
@@ -16,6 +11,7 @@
 class AudioManager {
 public:
   AudioManager();
+  explicit AudioManager(std::unique_ptr<AudioTransport> transport);
   ~AudioManager();
 
   // Non-copyable, non-movable
@@ -39,14 +35,16 @@ public:
   /**
    * Direct access to YM2612 device
    */
-  ym2612::Device &device() { return device_; }
-  const ym2612::Device &device() const { return device_; }
+  ym2612::Device &device() { return engine_.device(); }
+  const ym2612::Device &device() const { return engine_.device(); }
 
   /**
    * Direct access to wave sampler
    */
-  ym2612::WaveSampler &wave_sampler() { return wave_sampler_; }
-  const ym2612::WaveSampler &wave_sampler() const { return wave_sampler_; }
+  ym2612::WaveSampler &wave_sampler() { return engine_.wave_sampler(); }
+  const ym2612::WaveSampler &wave_sampler() const {
+    return engine_.wave_sampler();
+  }
 
   /**
    * Apply patch settings to all channels
@@ -56,39 +54,14 @@ public:
   /**
    * Check if audio system is running
    */
-  bool is_running() const { return running_; }
+  bool is_running() const { return engine_.is_running(); }
 
   /**
    * Get current sample rate
    */
-  UINT32 sample_rate() const { return sample_rate_; }
+  UINT32 sample_rate() const { return engine_.sample_rate(); }
 
 private:
-  void audio_thread_func(std::stop_token stop_token);
-  void pump_audio_stream();
-
-  // Instance callback implementation
-  UINT32 fill_buffer(UINT32 buf_size, void *data);
-
-  // Core audio system
-  SDL_AudioStream *audio_stream_;
-  bool owns_audio_subsystem_;
-  std::jthread audio_thread_;
-  std::atomic<bool> audio_thread_alive_{false};
-  UINT32 smpl_size_;
-  UINT32 smpl_alloc_;
-  UINT32 sample_rate_;
-  UINT32 target_buffer_bytes_;
-
-  // Sample buffers
-  std::vector<DEV_SMPL> smpl_data_[2];
-  std::vector<INT16> stream_buffer_;
-
-  // YM2612 device and wave sampler
-  ym2612::Device device_;
-  ym2612::WaveSampler wave_sampler_;
-
-  // State flags
-  bool initialized_;
-  bool running_;
+  AudioEngine engine_;
+  std::unique_ptr<AudioTransport> transport_;
 };
