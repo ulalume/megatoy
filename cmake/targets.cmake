@@ -232,13 +232,13 @@ add_embedded_assets(megatoy
 if(EMSCRIPTEN)
   set_target_properties(megatoy PROPERTIES SUFFIX ".html")
   target_link_options(megatoy PRIVATE
-    "-sALLOW_MEMORY_GROWTH=1"
     "-sFORCE_FILESYSTEM=1"
     "-sUSE_ZLIB=1"
     "-sFULL_ES3=1"
     "-sMAX_WEBGL_VERSION=2"
     "-sMIN_WEBGL_VERSION=2"
     "-sWASM=1"
+    "-sINITIAL_MEMORY=134217728"
     "--preload-file" "${CMAKE_SOURCE_DIR}/assets@/app/assets"
   )
 endif()

@@ -117,24 +117,40 @@ void WebAudioTransport::handle_stream_callback(SDL_AudioStream *stream,
     return;
   }
 
-  if (int_buffer_.size() < static_cast<size_t>(required / sizeof(int16_t))) {
-    int_buffer_.resize(static_cast<size_t>(required / sizeof(int16_t)));
+  const std::size_t samples_requested =
+      static_cast<std::size_t>(required) / sizeof(int16_t);
+  if (int_buffer_.size() < samples_requested) {
+    int_buffer_.resize(samples_requested);
   }
 
-  std::uint32_t produced = callback_(static_cast<std::uint32_t>(required),
-                                     static_cast<void *>(int_buffer_.data()));
+  std::uint32_t produced =
+      callback_(static_cast<std::uint32_t>(samples_requested *
+                                           sizeof(int16_t)),
+                static_cast<void *>(int_buffer_.data()));
   if (produced == 0) {
     return;
   }
 
-  std::size_t frames =
-      static_cast<std::size_t>(produced) / (sizeof(int16_t) * 2);
+  const std::size_t produced_samples =
+      static_cast<std::size_t>(produced) / sizeof(int16_t);
+  if (produced_samples < 2) {
+    return;
+  }
+
+  const std::size_t frames = produced_samples / 2;
   temp_buffer_.resize(frames * sizeof(float) * 2);
   float *out = reinterpret_cast<float *>(temp_buffer_.data());
   const int16_t *in = int_buffer_.data();
-  for (std::size_t i = 0; i < frames * 2; ++i) {
+
+#if defined(__EMSCRIPTEN__) && defined(__wasm_simd128__)
+  for (std::size_t i = 0; i < produced_samples; ++i) {
     out[i] = static_cast<float>(in[i]) / 32768.0f;
   }
+#else
+  for (std::size_t i = 0; i < produced_samples; ++i) {
+    out[i] = static_cast<float>(in[i]) / 32768.0f;
+  }
+#endif
 
   SDL_PutAudioStreamData(stream, temp_buffer_.data(),
                          static_cast<int>(frames * sizeof(float) * 2));

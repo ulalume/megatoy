@@ -41,11 +41,12 @@ void render_waveform(const char *title, WaveformContext &context) {
                           styles::color_u32(styles::MegatoyCol::StatusWarning));
   }
 
+  ImGui::Columns(2, "waves", false);
+
   const ImVec2 available_region = ImGui::GetContentRegionAvail();
   const ImVec2 plot_size(
       (available_region.x - ImGui::GetStyle().ItemSpacing.x) / 2,
       available_region.y);
-  ImGui::Columns(2, "waves", false);
   if (has_samples) {
     ImGui::PlotLines("Wave", samples.data(),
                      static_cast<int>(samples.size() / 2), 0, nullptr, -1.0f,

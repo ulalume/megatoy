@@ -87,6 +87,11 @@ endif()
 include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 
+if(EMSCRIPTEN)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msimd128")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msimd128")
+endif()
+
 if(EMSCRIPTEN AND ZLIB_INCLUDE_DIRS)
   include_directories(${ZLIB_INCLUDE_DIRS})
 endif()
