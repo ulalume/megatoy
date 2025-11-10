@@ -17,16 +17,13 @@ Megatoy uses SDL3 which supports both **Wayland** and **X11** display servers th
 sudo apt update
 sudo apt install build-essential pkg-config git \
     libwayland-dev libxkbcommon-dev xorg-dev \
-    libasound2-dev libpulse-dev \
-    libcurl4-openssl-dev libao-dev
+    libcurl4-openssl-dev
 ```
 
 **Package notes:**
 - `libwayland-dev libxkbcommon-dev`: Enable native Wayland support
 - `xorg-dev`: Meta-package providing all X11 development libraries (replaces individual X11 packages)
-- `libasound2-dev libpulse-dev`: Mandatory for realtime audio (libvgm ALSA/PulseAudio drivers)
 - `libcurl4-openssl-dev`: Required for update checking functionality
-- `libao-dev`: Audio output library dependency
 
 ## 2. Install CMake 3.24+
 
@@ -60,15 +57,10 @@ cd megatoy
 
 ## 4. Configure and build
 
-Run CMake with ALSA/Pulse drivers explicitly enabled:
-
 ```bash
-cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release \
-    -DAUDIODRV_ALSA=ON -DAUDIODRV_PULSE=ON
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --config Release --parallel
 ```
-
-Keeping `AUDIODRV_ALSA`/`AUDIODRV_PULSE` ON prevents the build from falling back to WaveWrite-only.
 
 ## 5. Run and verify
 
@@ -78,10 +70,8 @@ Keeping `AUDIODRV_ALSA`/`AUDIODRV_PULSE` ON prevents the build from falling back
 
 **Expected output for working audio:**
 ```
-Available audio drivers:
-  0: PulseAudio
-  1: ALSA
-Using audio driver: PulseAudio
+SDL will automatically choose your default audio device; no extra driver
+selection is required.
 ```
 
 **Display server verification:**
@@ -98,26 +88,13 @@ DISPLAY=:0 ./build-release/megatoy                 # Force X11
 
 ### Audio Issues
 
-- **`AudioDrv_Start failed: 241` / frozen waveform**
+- **No sound output**
   
-  Only the WaveWrite backend was built. Solution:
-  ```bash
-  # Reinstall audio dependencies
-  sudo apt install libasound2-dev libpulse-dev libcurl4-openssl-dev libao-dev
-  # Clean and rebuild
-  rm -rf build-release
-  cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release \
-      -DAUDIODRV_ALSA=ON -DAUDIODRV_PULSE=ON
-  cmake --build build-release --config Release --parallel
-  ```
-
-- **PulseAudio unavailable on your system**
-  
-  Reconfigure with ALSA-only:
-  ```bash
-  cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release \
-      -DAUDIODRV_ALSA=ON -DAUDIODRV_PULSE=OFF
-  ```
+  SDL3 plays audio through the OS default output. Make sure other
+  applications can play audio, then run Megatoy with
+  `SDL_AUDIO_DEVICE_APPNAME=megatoy ./build-release/megatoy` to force a fresh
+  SDL device selection. You can also choose a specific backend via
+  `SDL_AUDIODRIVER=pulseaudio` (or `alsa`, `pipewire`, etc.).
 
 ### Display Issues
 
@@ -132,23 +109,14 @@ DISPLAY=:0 ./build-release/megatoy                 # Force X11
   
   Ensure all display dependencies are installed:
   ```bash
-  sudo apt install libwayland-dev libxkbcommon-dev xorg-dev libcurl4-openssl-dev libao-dev
+  sudo apt install libwayland-dev libxkbcommon-dev xorg-dev libcurl4-openssl-dev
   ```
-
-### Build Verification
-
-You can verify that audio drivers were properly built by checking:
-```bash
-grep -r "AUDDRV_ALSA\|AUDDRV_PULSE" build-release/_deps/libvgm-build/audio/CMakeFiles/vgm-audio.dir/flags.make
-```
-This should show `-D AUDDRV_ALSA` and/or `-D AUDDRV_PULSE` flags.
 
 ## Performance Notes
 
 For distribution builds with generic x86-64 compatibility:
 ```bash
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release \
-    -DAUDIODRV_ALSA=ON -DAUDIODRV_PULSE=ON \
     -DMEGATOY_GENERAL_X86_64_LINUX=ON
 ```
 

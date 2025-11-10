@@ -112,7 +112,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 target_link_libraries(megatoy_core PUBLIC
-  vgm-player vgm-audio
+  vgm-player
   imgui_lib
   SDL3::SDL3
   OpenGL::GL

@@ -3,8 +3,11 @@
 #include "ym2612/device.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/wave_sampler.hpp"
-#include <audio/AudioStream.h>
+#include <SDL3/SDL.h>
 #include <emu/EmuStructs.h>
+#include <atomic>
+#include <stop_token>
+#include <thread>
 #include <vector>
 
 /**
@@ -61,26 +64,25 @@ public:
   UINT32 sample_rate() const { return sample_rate_; }
 
 private:
-  // Static callback wrapper for C API
-  static UINT32 fill_buffer_static(void *drv_struct, void *user_param,
-                                   UINT32 buf_size, void *data);
+  void audio_thread_func(std::stop_token stop_token);
+  void pump_audio_stream();
 
   // Instance callback implementation
   UINT32 fill_buffer(UINT32 buf_size, void *data);
 
-  // Find and select a suitable real-time audio driver
-  bool find_suitable_driver();
-
   // Core audio system
-  void *aud_drv_;
-  UINT32 driver_index_;
-  std::vector<UINT32> driver_order_;
+  SDL_AudioStream *audio_stream_;
+  bool owns_audio_subsystem_;
+  std::jthread audio_thread_;
+  std::atomic<bool> audio_thread_alive_{false};
   UINT32 smpl_size_;
   UINT32 smpl_alloc_;
   UINT32 sample_rate_;
+  UINT32 target_buffer_bytes_;
 
   // Sample buffers
   std::vector<DEV_SMPL> smpl_data_[2];
+  std::vector<INT16> stream_buffer_;
 
   // YM2612 device and wave sampler
   ym2612::Device device_;

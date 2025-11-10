@@ -31,8 +31,7 @@ jobs:
             libgtk-3-dev \
             xorg-dev \
             cmake pkg-config git tzdata curl gnupg \
-            libcurl4-openssl-dev \
-            libao-dev
+            libcurl4-openssl-dev
           curl -fsSL https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor -o /usr/share/keyrings/kitware-archive-keyring.gpg
           echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ focal main' > /etc/apt/sources.list.d/kitware.list
           apt-get update
