@@ -76,9 +76,7 @@ bool SdlAudioTransport::start(std::uint32_t sample_rate,
   }
 
   audio_thread_alive_ = true;
-  audio_thread_ = std::jthread([this](std::stop_token token) {
-    audio_thread_func(token);
-  });
+  audio_thread_ = std::thread([this]() { audio_thread_func(); });
 
   initialized_ = true;
   return true;
@@ -91,7 +89,6 @@ void SdlAudioTransport::stop() {
 
   audio_thread_alive_ = false;
   if (audio_thread_.joinable()) {
-    audio_thread_.request_stop();
     audio_thread_.join();
   }
 
@@ -111,8 +108,8 @@ void SdlAudioTransport::stop() {
   initialized_ = false;
 }
 
-void SdlAudioTransport::audio_thread_func(std::stop_token stop_token) {
-  while (!stop_token.stop_requested()) {
+void SdlAudioTransport::audio_thread_func() {
+  while (audio_thread_alive_) {
     if (audio_stream_ != nullptr) {
       pump_audio_stream();
     } else {

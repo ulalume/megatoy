@@ -5,7 +5,6 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <stop_token>
 #include <thread>
 #include <vector>
 
@@ -24,7 +23,7 @@ public:
   bool is_active() const override { return initialized_; }
 
 private:
-  void audio_thread_func(std::stop_token stop_token);
+  void audio_thread_func();
   void pump_audio_stream();
 
   static std::uint32_t align_to_frame(std::uint32_t bytes,
@@ -32,7 +31,7 @@ private:
 
   SDL_AudioStream *audio_stream_;
   bool owns_audio_subsystem_;
-  std::jthread audio_thread_;
+  std::thread audio_thread_;
   std::atomic<bool> audio_thread_alive_{false};
   std::vector<std::uint8_t> stream_buffer_;
 
@@ -41,4 +40,3 @@ private:
   std::uint32_t target_buffer_bytes_;
   bool initialized_;
 };
-
