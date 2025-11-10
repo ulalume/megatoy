@@ -42,7 +42,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(OPTIMIZATION_FLAGS
         "-O3"
         "-DNDEBUG"
-        "-ffast-math"
         "-funroll-loops"
     )
     if(MEGATOY_LINUX_X86_64)
