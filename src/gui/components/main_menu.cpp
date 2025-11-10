@@ -11,6 +11,7 @@ namespace ui {
 void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
   if (ImGui::BeginMainMenuBar()) {
+#if !defined(MEGATOY_PLATFORM_WEB)
     if (ImGui::BeginMenu("megatoy")) {
       if (ImGui::MenuItem("About megatoy")) {
         open_about = true;
@@ -21,6 +22,11 @@ void render_main_menu(MainMenuContext &context) {
       }
       ImGui::EndMenu();
     }
+#else
+    if (ImGui::MenuItem("About megatoy")) {
+      open_about = true;
+    }
+#endif
 
     if (ImGui::BeginMenu("Edit")) {
       auto &history = context.history;

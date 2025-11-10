@@ -16,6 +16,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
 
+#if !defined(MEGATOY_PLATFORM_WEB)
     // Show the current directory
     ImGui::SeparatorText("Data Directory");
     ImGui::TextWrapped("%s", context.paths.data_root.c_str());
@@ -32,6 +33,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
         context.sync_patch_directories();
       }
     }
+#endif
 
     if (prefs.is_initialized()) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::StatusSuccess),
