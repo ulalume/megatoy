@@ -22,13 +22,13 @@ FetchContent_Declare(
 set(NFD_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(nfd)
 
-# SDL2
+# SDL3
 FetchContent_Declare(
-  SDL2
+  SDL3
   GIT_REPOSITORY https://github.com/libsdl-org/SDL
-  GIT_TAG        release-2.30.5
+  GIT_TAG        release-3.2.4
 )
-FetchContent_MakeAvailable(SDL2)
+FetchContent_MakeAvailable(SDL3)
 
 # Dear ImGui
 FetchContent_Declare(

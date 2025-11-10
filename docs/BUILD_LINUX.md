@@ -5,10 +5,10 @@ If you build without PulseAudio/ALSA support you will only get the WaveWrite bac
 
 ## Display Server Support
 
-Megatoy uses SDL2 which supports both **Wayland** and **X11** display servers through the same binary:
+Megatoy uses SDL3 which supports both **Wayland** and **X11** display servers through the same binary:
 
-- **Wayland systems**: SDL2 selects the native Wayland backend when available and falls back to XWayland if needed
-- **X11 systems**: SDL2 uses the X11 driver directly
+- **Wayland systems**: SDL3 selects the native Wayland backend when available and falls back to XWayland if needed
+- **X11 systems**: SDL3 uses the X11 driver directly
 - **Mixed environments**: No separate builds or launch flags are required
 
 ## 1. Required packages

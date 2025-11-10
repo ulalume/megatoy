@@ -6,7 +6,7 @@
 #include "gui/window_title.hpp"
 #include <filesystem>
 #include <imgui.h>
-#include <imgui_impl_sdl2.h>
+#include <imgui_impl_sdl3.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_internal.h>
 #include <iostream>
@@ -14,7 +14,7 @@
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
 #else
-#include <SDL_opengl.h>
+#include <SDL3/SDL_opengl.h>
 #endif
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) &&                                 \
@@ -49,9 +49,8 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     return true;
   }
 
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) !=
-      0) {
-    std::cerr << "Failed to initialize SDL2: " << SDL_GetError() << std::endl;
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
+    std::cerr << "Failed to initialize SDL3: " << SDL_GetError() << std::endl;
     return false;
   }
 
@@ -83,20 +82,18 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
-  Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-#ifdef SDL_WINDOW_ALLOW_HIGHDPI
-  window_flags |= SDL_WINDOW_ALLOW_HIGHDPI;
-#endif
+  Uint64 window_flags =
+      SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 
-  window_ =
-      SDL_CreateWindow(window_title.c_str(), SDL_WINDOWPOS_CENTERED,
-                       SDL_WINDOWPOS_CENTERED, width, height, window_flags);
+  window_ = SDL_CreateWindow(window_title.c_str(), width, height, window_flags);
   if (window_ == nullptr) {
-    std::cerr << "Failed to create SDL2 window: " << SDL_GetError()
+    std::cerr << "Failed to create SDL3 window: " << SDL_GetError()
               << std::endl;
     SDL_Quit();
     return false;
   }
+  SDL_SetWindowPosition(window_, SDL_WINDOWPOS_CENTERED,
+                        SDL_WINDOWPOS_CENTERED);
 
   gl_context_ = SDL_GL_CreateContext(window_);
   if (gl_context_ == nullptr) {
@@ -108,10 +105,10 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     return false;
   }
 
-  if (SDL_GL_MakeCurrent(window_, gl_context_) != 0) {
+  if (!SDL_GL_MakeCurrent(window_, gl_context_)) {
     std::cerr << "Failed to make OpenGL context current: " << SDL_GetError()
               << std::endl;
-    SDL_GL_DeleteContext(gl_context_);
+    SDL_GL_DestroyContext(gl_context_);
     gl_context_ = nullptr;
     SDL_DestroyWindow(window_);
     window_ = nullptr;
@@ -119,7 +116,7 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     return false;
   }
 
-  if (SDL_GL_SetSwapInterval(1) != 0) {
+  if (!SDL_GL_SetSwapInterval(1)) {
     std::cerr << "Warning: unable to enable VSync: " << SDL_GetError()
               << std::endl;
   }
@@ -153,7 +150,7 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   set_theme(preferences_.theme());
 
   // Setup Platform/Renderer backends
-  ImGui_ImplSDL2_InitForOpenGL(window_, gl_context_);
+  ImGui_ImplSDL3_InitForOpenGL(window_, gl_context_);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
   // Initialize file dialog
@@ -183,11 +180,11 @@ void GuiManager::shutdown() {
 
   // Cleanup
   ImGui_ImplOpenGL3_Shutdown();
-  ImGui_ImplSDL2_Shutdown();
+  ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
 
   if (gl_context_) {
-    SDL_GL_DeleteContext(gl_context_);
+    SDL_GL_DestroyContext(gl_context_);
     gl_context_ = nullptr;
   }
 
@@ -218,7 +215,7 @@ void GuiManager::begin_frame() {
 
   // Start the Dear ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplSDL2_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -268,14 +265,17 @@ void GuiManager::end_frame() {
 
   // Rendering
   ImGui::Render();
-  int display_w, display_h;
-  SDL_GL_GetDrawableSize(window_, &display_w, &display_h);
+  int display_w = 0;
+  int display_h = 0;
+  SDL_GetWindowSizeInPixels(window_, &display_w, &display_h);
   glViewport(0, 0, display_w, display_h);
   glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
   glClear(GL_COLOR_BUFFER_BIT);
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-  SDL_GL_SwapWindow(window_);
+  if (!SDL_GL_SwapWindow(window_)) {
+    std::cerr << "Failed to swap buffers: " << SDL_GetError() << std::endl;
+  }
 }
 
 void GuiManager::poll_events() {
@@ -285,23 +285,22 @@ void GuiManager::poll_events() {
 
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
-    ImGui_ImplSDL2_ProcessEvent(&event);
+    ImGui_ImplSDL3_ProcessEvent(&event);
 
     switch (event.type) {
-    case SDL_QUIT:
+    case SDL_EVENT_QUIT:
       should_close_ = true;
       break;
-    case SDL_WINDOWEVENT:
-      if (event.window.windowID == window_id_ &&
-          event.window.event == SDL_WINDOWEVENT_CLOSE) {
+    case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+      if (event.window.windowID == window_id_) {
         should_close_ = true;
       }
       break;
-    case SDL_DROPFILE:
-      if (event.drop.windowID == window_id_) {
-        dispatch_drop_event(event.drop.file);
+    case SDL_EVENT_DROP_FILE:
+      if (event.drop.windowID == window_id_ && event.drop.data != nullptr) {
+        std::string dropped_path(event.drop.data);
+        dispatch_drop_event(dropped_path.c_str());
       }
-      SDL_free(event.drop.file);
       break;
     default:
       break;
@@ -333,14 +332,15 @@ void GuiManager::set_fullscreen(bool enable) {
   if (enable) {
     SDL_GetWindowPosition(window_, &windowed_pos_x_, &windowed_pos_y_);
     SDL_GetWindowSize(window_, &windowed_width_, &windowed_height_);
-    if (SDL_SetWindowFullscreen(window_, SDL_WINDOW_FULLSCREEN_DESKTOP) == 0) {
+    SDL_SetWindowFullscreenMode(window_, nullptr);
+    if (SDL_SetWindowFullscreen(window_, true)) {
       fullscreen_ = true;
     } else {
       std::cerr << "Failed to enable fullscreen: " << SDL_GetError()
                 << std::endl;
     }
   } else {
-    if (SDL_SetWindowFullscreen(window_, 0) == 0) {
+    if (SDL_SetWindowFullscreen(window_, false)) {
       SDL_SetWindowPosition(window_, windowed_pos_x_, windowed_pos_y_);
       SDL_SetWindowSize(window_, windowed_width_ > 0 ? windowed_width_ : 800,
                         windowed_height_ > 0 ? windowed_height_ : 600);

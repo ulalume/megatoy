@@ -3,7 +3,7 @@
 #include "gui/styles/theme.hpp"
 #include "preferences/preference_manager.hpp"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <string>
 
 /**
@@ -11,7 +11,7 @@
  *
  * Consolidates GuiSubsystem, GuiRuntime, and GuiManager into a single
  * class that handles all GUI-related functionality including:
- * - SDL2 window management and initialization
+ * - SDL3 window management and initialization
  * - ImGui setup and rendering
  * - Theme management and preferences integration
  * - File dialog integration
@@ -114,7 +114,7 @@ private:
   SDL_GLContext gl_context_;
   bool initialized_;
   bool should_close_;
-  Uint32 window_id_;
+  SDL_WindowID window_id_;
 
   // Window state
   bool fullscreen_;
