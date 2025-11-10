@@ -6,6 +6,9 @@
 #include "system/open_default_browser.hpp"
 #include "update/release_provider.hpp"
 #include "update/update_checker.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include <emscripten.h>
+#endif
 #include <chrono>
 #include <future>
 #include <imgui.h>
@@ -49,6 +52,13 @@ bool open_external_url(const std::string &url) {
   auto result = megatoy::system::open_default_browser(url);
   return result.success;
 }
+
+#if defined(MEGATOY_PLATFORM_WEB)
+void open_url_in_browser(const std::string &url) {
+  EM_ASM({ var target = UTF8ToString($0); window.open(target, '_blank'); },
+         url.c_str());
+}
+#endif
 
 void poll_update_request(AboutModalState &state) {
   if (!state.pending_request.has_value()) {
@@ -146,7 +156,7 @@ void render_about_dialog() {
   ImGui::TextUnformatted("Check for newer builds on GitHub:");
   const std::string releases_url = update::build_release_page_url();
   if (ImGui::TextLink("Open releases page")) {
-    open_external_url(releases_url);
+    open_url_in_browser(releases_url);
   }
 #else
   ImGui::Spacing();
