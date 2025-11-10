@@ -93,3 +93,33 @@ void MidiInputManager::dispatch(AppContext &context) {
 
   pending_events_.clear();
 }
+
+MidiInputManager::StatusInfo MidiInputManager::status() const {
+  StatusInfo info;
+#if defined(MEGATOY_PLATFORM_WEB)
+  if (auto *web =
+          dynamic_cast<platform::web::WebMidiBackend *>(backend_.get())) {
+    auto backend_status = web->status();
+    info.message = backend_status.message;
+    info.show_enable_button =
+        backend_status.state ==
+            platform::web::WebMidiBackend::State::NeedsPermission ||
+        backend_status.state == platform::web::WebMidiBackend::State::Error;
+    info.enable_button_disabled =
+        backend_status.state == platform::web::WebMidiBackend::State::Pending;
+    return info;
+  }
+#endif
+  info.message =
+      backend_ ? "System MIDI backend active." : "MIDI backend unavailable.";
+  return info;
+}
+
+void MidiInputManager::request_web_midi_access() {
+#if defined(MEGATOY_PLATFORM_WEB)
+  if (auto *web =
+          dynamic_cast<platform::web::WebMidiBackend *>(backend_.get())) {
+    web->request_access();
+  }
+#endif
+}

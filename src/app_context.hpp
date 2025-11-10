@@ -4,9 +4,12 @@
 
 struct AppServices;
 
+class MidiInputManager;
+
 struct AppContext {
   AppServices &services;
   AppState &state;
+  MidiInputManager *midi = nullptr;
   AppState &app_state() { return state; }
   const AppState &app_state() const { return state; }
 

@@ -112,6 +112,7 @@ int main(int argc, char *argv[]) {
 
   MidiInputManager midi(platform_services.create_midi_backend());
   midi.init();
+  app_context.midi = &midi;
 
   RuntimeContext runtime{&app_context, &midi, true};
 

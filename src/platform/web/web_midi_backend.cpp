@@ -4,27 +4,28 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 #include <emscripten.h>
 #include <emscripten/val.h>
+#endif
 #include <vector>
 
+namespace platform::web {
+
 namespace {
-
-void initialize_js_backend() {
+#if defined(MEGATOY_PLATFORM_WEB)
+void request_access_js() {
   EM_ASM({
-    if (Module['megatoyMidiSetup']) {
+    var state = Module['megatoyMidiState'];
+    if (!state || !state.available) {
       return;
     }
-    Module['megatoyMidiSetup'] = true;
-    Module['megatoyMidiEvents'] = [];
-    Module['megatoyMidiPorts'] = [];
-    Module['megatoyMidiPortsChanged'] = false;
-
-    if (typeof navigator === 'undefined' ||
-        typeof navigator.requestMIDIAccess !== 'function') {
-      console.warn('WebMIDI not available in this browser.');
+    if (state.pending || state.status === "enabled") {
       return;
     }
+    state.pending = true;
+    state.status = "pending";
+    state.error = "";
 
-    navigator.requestMIDIAccess().then(function (access) {
+    function installHandlers(access) {
+      Module['megatoyMidiAccess'] = access;
       function refreshPorts() {
         Module['megatoyMidiPorts'] = [];
         access.inputs.forEach(function (input) {
@@ -45,28 +46,99 @@ void initialize_js_backend() {
       });
 
       access.onstatechange = function (event) {
-        if (event.port.type === 'input' && event.port.state === 'connected') {
+        if (event.port && event.port.type === 'input' &&
+            event.port.state === 'connected') {
           event.port.onmidimessage = handleMessage;
         }
         refreshPorts();
       };
 
       refreshPorts();
-    }, function (err) {
-      console.warn('WebMIDI request failed', err);
-    });
+    }
+
+    navigator.requestMIDIAccess()
+        .then(function (access) {
+          state.pending = false;
+          state.status = "enabled";
+          installHandlers(access);
+        })
+        .catch(function (err) {
+          state.pending = false;
+          state.status = "error";
+          state.error = (err && err.message) ? err.message
+                                             : "Failed to access WebMIDI.";
+        });
   });
 }
-
+#endif
 } // namespace
 
-#endif
+void WebMidiBackend::setup_js_state() const {
+#if defined(MEGATOY_PLATFORM_WEB)
+  EM_ASM({
+    if (Module['megatoyMidiSetup']) {
+      return;
+    }
+    Module['megatoyMidiSetup'] = true;
+    Module['megatoyMidiEvents'] = [];
+    Module['megatoyMidiPorts'] = [];
+    Module['megatoyMidiPortsChanged'] = false;
 
-namespace platform::web {
+    var available = typeof navigator !== 'undefined' &&
+                    typeof navigator.requestMIDIAccess === 'function';
+    Module['megatoyMidiState'] = {};
+    Module['megatoyMidiState'].available = available;
+    Module['megatoyMidiState'].status =
+        available ? "needs-permission" : "unavailable";
+    Module['megatoyMidiState'].pending = false;
+    Module['megatoyMidiState'].error = "";
+  });
+#endif
+}
+
+WebMidiBackend::StatusInfo WebMidiBackend::read_status_from_js() const {
+#if defined(MEGATOY_PLATFORM_WEB)
+  setup_js_state();
+  using emscripten::val;
+  StatusInfo info;
+  val module = val::global("Module");
+  val state = module["megatoyMidiState"];
+  if (state.isUndefined()) {
+    info.state = State::Unavailable;
+    info.message = "WebMIDI unavailable.";
+    return info;
+  }
+  std::string status =
+      state["status"].isUndefined() ? "unavailable"
+                                    : state["status"].as<std::string>();
+  std::string error =
+      state["error"].isUndefined() ? "" : state["error"].as<std::string>();
+  if (status == "enabled") {
+    info.state = State::Enabled;
+    info.message = "WebMIDI enabled. Awaiting input…";
+  } else if (status == "pending") {
+    info.state = State::Pending;
+    info.message = "Requesting WebMIDI access…";
+  } else if (status == "needs-permission") {
+    info.state = State::NeedsPermission;
+    info.message = "WebMIDI requires permission. Click Enable WebMIDI.";
+  } else if (status == "error") {
+    info.state = State::Error;
+    info.message =
+        error.empty() ? "WebMIDI permission was denied." : error;
+  } else {
+    info.state = State::Unavailable;
+    info.message = "WebMIDI unsupported in this browser.";
+  }
+  return info;
+#else
+  return {State::Unavailable, "WebMIDI unavailable on this platform."};
+#endif
+}
 
 bool WebMidiBackend::initialize() {
 #if defined(MEGATOY_PLATFORM_WEB)
-  initialize_js_backend();
+  setup_js_state();
   return true;
 #else
   return false;
@@ -75,10 +147,22 @@ bool WebMidiBackend::initialize() {
 
 void WebMidiBackend::shutdown() {}
 
+WebMidiBackend::StatusInfo WebMidiBackend::status() const {
+  return read_status_from_js();
+}
+
+void WebMidiBackend::request_access() {
+#if defined(MEGATOY_PLATFORM_WEB)
+  setup_js_state();
+  request_access_js();
+#endif
+}
+
 void WebMidiBackend::poll(std::vector<MidiMessage> &events,
                           std::vector<std::string> &available_ports,
                           bool &ports_changed) {
 #if defined(MEGATOY_PLATFORM_WEB)
+  setup_js_state();
   using emscripten::val;
   val module = val::global("Module");
 

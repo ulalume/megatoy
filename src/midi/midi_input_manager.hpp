@@ -10,6 +10,12 @@ struct AppContext;
 
 class MidiInputManager {
 public:
+  struct StatusInfo {
+    std::string message;
+    bool show_enable_button = false;
+    bool enable_button_disabled = false;
+  };
+
   MidiInputManager();
   explicit MidiInputManager(std::unique_ptr<MidiBackend> backend);
   ~MidiInputManager();
@@ -19,6 +25,9 @@ public:
 
   void poll();
   void dispatch(AppContext &context);
+
+  StatusInfo status() const;
+  void request_web_midi_access();
 
 private:
   std::unique_ptr<MidiBackend> backend_;
