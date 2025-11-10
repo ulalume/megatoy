@@ -541,7 +541,7 @@ void render_filter_area(PatchSelectorContext &context) {
 
   ImGui::SetNextItemWidth(130);
   if (ImGui::InputTextWithHint("##SharedSearch",
-                               ICON_FA_MAGNIFYING_GLASS " Search patches",
+                               ICON_FA_MAGNIFYING_GLASS " Search...",
                                search_buffer, sizeof(search_buffer))) {
     context.prefs.metadata_search_query = std::string(search_buffer);
   }
