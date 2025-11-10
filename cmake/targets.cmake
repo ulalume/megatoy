@@ -91,6 +91,8 @@ if(EMSCRIPTEN)
     src/platform/web/web_platform_services.cpp
     src/platform/web/web_file_system.cpp
     src/platform/web/web_download.cpp
+    src/platform/web/local_storage.cpp
+    src/platform/web/web_patch_store.cpp
     src/platform/web/web_midi_backend.cpp
   )
 else()
@@ -232,6 +234,7 @@ add_embedded_assets(megatoy
 if(EMSCRIPTEN)
   set_target_properties(megatoy PROPERTIES SUFFIX ".html")
   target_link_options(megatoy PRIVATE
+    "--bind"
     "-sFORCE_FILESYSTEM=1"
     "-sUSE_ZLIB=1"
     "-sFULL_ES3=1"

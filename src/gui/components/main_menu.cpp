@@ -81,7 +81,9 @@ void render_main_menu(MainMenuContext &context) {
       ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
                       &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);
+#if !defined(MEGATOY_PLATFORM_WEB)
       ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
+#endif
       ImGui::MenuItem(PREFERENCES_TITLE, nullptr, &ui_prefs.show_preferences);
 
       ImGui::Separator();

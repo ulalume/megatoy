@@ -1,12 +1,12 @@
 #include "waveform.hpp"
 #include "gui/styles/megatoy_style.hpp"
-#include "ym2612/fft_analyzer.hpp"
 #include <cstddef>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <vector>
 
 namespace ui {
+#if !defined(MEGATOY_PLATFORM_WEB)
 
 void render_waveform(const char *title, WaveformContext &context) {
   auto &ui_prefs = context.ui_prefs;
@@ -41,14 +41,13 @@ void render_waveform(const char *title, WaveformContext &context) {
                           styles::color_u32(styles::MegatoyCol::StatusWarning));
   }
 
-  ImGui::Columns(2, "waves", false);
-
   const ImVec2 available_region = ImGui::GetContentRegionAvail();
   const ImVec2 plot_size(
       (available_region.x - ImGui::GetStyle().ItemSpacing.x) / 2,
       available_region.y);
+  ImGui::Columns(2, "waves", false);
   if (has_samples) {
-    ImGui::PlotLines("Wave", samples.data(),
+    ImGui::PlotLines("##Wave", samples.data(),
                      static_cast<int>(samples.size() / 2), 0, nullptr, -1.0f,
                      1.0f, plot_size);
   } else {
@@ -93,7 +92,7 @@ void render_waveform(const char *title, WaveformContext &context) {
     }
     ImGui::PushStyleVar(ImGuiStyleVar_DisabledAlpha, 1.0f);
     ImGui::BeginDisabled(true);
-    ImGui::PlotHistogram("Spectrum", log_bins.data(), log_bins.size(), 0,
+    ImGui::PlotHistogram("##Spectrum", log_bins.data(), log_bins.size(), 0,
                          nullptr, 0, 35.0f + offset, plot_size);
     ImGui::EndDisabled();
     ImGui::PopStyleVar();
@@ -110,4 +109,5 @@ void render_waveform(const char *title, WaveformContext &context) {
   ImGui::End();
 }
 
+#endif
 } // namespace ui

@@ -3,6 +3,7 @@
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "operator_editor.hpp"
+#include "platform/platform_config.hpp"
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -58,8 +59,14 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
     ImGui::BeginDisabled(true);
   }
 
+  const char *save_label =
+#if defined(MEGATOY_PLATFORM_WEB)
+      is_user_patch ? "Overwrite" : "Save to 'localStorage'";
+#else
+      is_user_patch ? "Overwrite" : "Save to 'user'";
+#endif
   ImVec2 pos = ImGui::GetCursorPos();
-  if (ImGui::Button(is_user_patch ? "Overwrite" : "Save to 'user'")) {
+  if (ImGui::Button(save_label)) {
     auto result = patch_session.save_current_patch(is_user_patch);
     if (result.is_duplicated()) {
       state.last_export_path = result.path.string();
@@ -81,7 +88,8 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
     ImGui::SetCursorPos(pos);
     ImGui::EndDisabled();
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
-    ImGui::Button(is_user_patch ? "Overwrite##dummy" : "Save to 'user'##dummy");
+    std::string dummy_label = std::string(save_label) + "##dummy";
+    ImGui::Button(dummy_label.c_str());
     ImGui::PopStyleVar();
     ImGui::BeginDisabled(true);
   }
@@ -89,8 +97,13 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
     if (!name_valid) {
       ImGui::SetTooltip("Enter a valid patch name to save");
     } else if (!is_user_patch) {
+#if defined(MEGATOY_PLATFORM_WEB)
+      ImGui::SetTooltip("Save to localStorage as %s.gin",
+                        patch_session.current_patch().name.c_str());
+#else
       ImGui::SetTooltip("Save to user/%s.gin",
                         patch_session.current_patch().name.c_str());
+#endif
     } else if (!is_patch_modified) {
       ImGui::SetTooltip("Patch is not modified");
     }

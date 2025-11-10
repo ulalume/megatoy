@@ -1,5 +1,9 @@
 #include "preference_storage.hpp"
 
+#include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/local_storage.hpp"
+#endif
 #include <ios>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -10,22 +14,42 @@ class JsonPreferenceStorage : public PreferenceStorage {
 public:
   JsonPreferenceStorage(std::filesystem::path path,
                         platform::VirtualFileSystem &vfs)
-      : path_(std::move(path)), vfs_(vfs) {}
+      : path_(std::move(path)), vfs_(vfs)
+#if defined(MEGATOY_PLATFORM_WEB)
+        ,
+        use_local_storage_(true)
+#else
+        ,
+        use_local_storage_(false)
+#endif
+  {}
 
   bool load(PreferenceData &data) override {
     try {
-      if (!std::filesystem::exists(path_)) {
-        return true;
-      }
-
-      auto stream = vfs_.open_read(path_);
-      if (!stream) {
-        std::cerr << "Failed to open preferences file for reading" << std::endl;
-        return false;
-      }
-
       nlohmann::json j;
-      (*stream) >> j;
+      if (use_local_storage_) {
+#if defined(MEGATOY_PLATFORM_WEB)
+        auto stored =
+            platform::web::read_local_storage("megatoy_preferences");
+        if (!stored.has_value()) {
+          return true;
+        }
+        j = nlohmann::json::parse(stored.value());
+#endif
+      } else {
+        if (!std::filesystem::exists(path_)) {
+          return true;
+        }
+
+        auto stream = vfs_.open_read(path_);
+        if (!stream) {
+          std::cerr << "Failed to open preferences file for reading"
+                    << std::endl;
+          return false;
+        }
+
+        (*stream) >> j;
+      }
 
       if (j.contains("data_directory")) {
         data.data_directory = j["data_directory"].get<std::string>();
@@ -126,13 +150,21 @@ public:
           data.ui_preferences.midi_keyboard_typing_octave;
       j["ui"] = ui;
 
-      auto stream = vfs_.open_write(path_, std::ios::binary | std::ios::trunc);
-      if (!stream) {
-        std::cerr << "Failed to open preferences file for writing" << std::endl;
-        return false;
+      if (use_local_storage_) {
+#if defined(MEGATOY_PLATFORM_WEB)
+        platform::web::write_local_storage("megatoy_preferences",
+                                           j.dump(2));
+#endif
+      } else {
+        auto stream =
+            vfs_.open_write(path_, std::ios::binary | std::ios::trunc);
+        if (!stream) {
+          std::cerr << "Failed to open preferences file for writing"
+                    << std::endl;
+          return false;
+        }
+        (*stream) << j.dump(2);
       }
-
-      (*stream) << j.dump(2);
       return true;
     } catch (const std::exception &e) {
       std::cerr << "Error saving preferences: " << e.what() << std::endl;
@@ -143,6 +175,7 @@ public:
 private:
   std::filesystem::path path_;
   platform::VirtualFileSystem &vfs_;
+  bool use_local_storage_;
 };
 
 } // namespace

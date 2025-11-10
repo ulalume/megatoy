@@ -4,9 +4,10 @@
 #include "formats/dmp.hpp"
 #include "formats/gin.hpp"
 #include "formats/patch_loader.hpp"
-#include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
+#include "platform/file_dialog.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_patch_store.hpp"
 #include "platform/web/web_download.hpp"
 #endif
 #include "ym2612/channel.hpp"
@@ -121,6 +122,18 @@ void PatchSession::apply_patch_to_audio() {
 }
 
 SaveResult PatchSession::save_current_patch(bool force_overwrite) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  const std::string sanitized_name =
+      sanitize_filename(current_patch_.name.empty() ? "patch"
+                                                    : current_patch_.name);
+  if (platform::web::patch_store::save(current_patch_, sanitized_name)) {
+    mark_as_clean();
+    repository_->refresh();
+    return SaveResult::success(
+        std::filesystem::path("localStorage/" + sanitized_name));
+  }
+  return SaveResult::error("Failed to save patch in browser storage");
+#else
   // Check whether the file already exists
   auto patches_dir = directories_.paths().user_patches_root;
   auto patch_path =
@@ -139,6 +152,7 @@ SaveResult PatchSession::save_current_patch(bool force_overwrite) {
       return SaveResult::error("Failed to save patch");
     }
   }
+#endif
 }
 
 SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
@@ -292,9 +306,18 @@ void PatchSession::restore_snapshot(const PatchSnapshot &snapshot) {
 }
 
 bool PatchSession::current_patch_is_user_patch() const {
-  return !current_patch_path_.empty() &&
-         current_patch_path_.starts_with("user/") &&
-         current_patch_path_.ends_with(".gin") &&
+#if defined(MEGATOY_PLATFORM_WEB)
+  const bool is_local_storage =
+      !current_patch_path_.empty() &&
+      current_patch_path_.rfind("localStorage/", 0) == 0;
+#else
+  constexpr bool is_local_storage = false;
+#endif
+  const bool is_user_directory =
+      !current_patch_path_.empty() &&
+      current_patch_path_.rfind("user/", 0) == 0 &&
+      current_patch_path_.ends_with(".gin");
+  return (is_user_directory || is_local_storage) &&
          original_patch_.name == current_patch_.name;
 }
 

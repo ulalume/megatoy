@@ -295,8 +295,10 @@ void render_all(AppContext &ctx) {
   auto patch_lab_context = make_patch_lab_context(ctx);
   render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
 
+#if !defined(MEGATOY_PLATFORM_WEB)
   auto waveform_context = make_waveform_context(ctx);
   render_waveform(WAVEFORM_TITLE, waveform_context);
+#endif
 }
 
 } // namespace ui
