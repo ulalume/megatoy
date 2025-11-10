@@ -246,11 +246,15 @@ if(EMSCRIPTEN)
   )
   if(MEGATOY_GENERATE_SIMPLE_HTML)
     set(MEGATOY_SIMPLE_SHELL_SRC "${CMAKE_SOURCE_DIR}/dist/web_shell_simple.html")
+    set(MEGATOY_SIMPLE_ICON_SRC "${CMAKE_SOURCE_DIR}/dist/icon.ico")
     add_custom_command(
       TARGET megatoy POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
               "${MEGATOY_SIMPLE_SHELL_SRC}"
               "$<TARGET_FILE_DIR:megatoy>/megatoy_simple.html"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${MEGATOY_SIMPLE_ICON_SRC}"
+              "$<TARGET_FILE_DIR:megatoy>/icon.ico"
       COMMENT "Copying minimal Web shell to megatoy_simple.html"
     )
   endif()
