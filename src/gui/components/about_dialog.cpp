@@ -1,6 +1,7 @@
 #include "about_dialog.hpp"
 
 #include "gui/styles/megatoy_style.hpp"
+#include "platform/platform_config.hpp"
 #include "project_info.hpp"
 #include "system/open_default_browser.hpp"
 #include "update/release_provider.hpp"
@@ -140,6 +141,14 @@ void render_about_dialog() {
 
   ImGui::Text("Version: %s", megatoy::kVersionTag);
 
+#if defined(MEGATOY_PLATFORM_WEB)
+  ImGui::Spacing();
+  ImGui::TextUnformatted("Check for newer builds on GitHub:");
+  const std::string releases_url = update::build_release_page_url();
+  if (ImGui::TextLink("Open releases page")) {
+    open_external_url(releases_url);
+  }
+#else
   ImGui::Spacing();
   bool is_checking = state.status == UpdateStatus::Checking;
   ImGui::BeginDisabled(is_checking);
@@ -149,6 +158,7 @@ void render_about_dialog() {
   ImGui::EndDisabled();
 
   render_update_status(state);
+#endif
 
   ImGui::Separator();
   if (ImGui::Button("OK", ImVec2(120.0f, 0.0f))) {

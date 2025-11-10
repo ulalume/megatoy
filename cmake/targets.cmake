@@ -244,6 +244,16 @@ if(EMSCRIPTEN)
     "-sINITIAL_MEMORY=134217728"
     "--preload-file" "${CMAKE_SOURCE_DIR}/assets@/app/assets"
   )
+  if(MEGATOY_GENERATE_SIMPLE_HTML)
+    set(MEGATOY_SIMPLE_SHELL_SRC "${CMAKE_SOURCE_DIR}/dist/web_shell_simple.html")
+    add_custom_command(
+      TARGET megatoy POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${MEGATOY_SIMPLE_SHELL_SRC}"
+              "$<TARGET_FILE_DIR:megatoy>/megatoy_simple.html"
+      COMMENT "Copying minimal Web shell to megatoy_simple.html"
+    )
+  endif()
 endif()
 
 target_include_directories(megatoy PRIVATE ${CMAKE_BINARY_DIR})

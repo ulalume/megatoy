@@ -11,8 +11,8 @@
 #include "platform/platform_config.hpp"
 #include <filesystem>
 #include <imgui.h>
-#include <imgui_impl_sdl3.h>
 #include <imgui_impl_opengl3.h>
+#include <imgui_impl_sdl3.h>
 #include <imgui_internal.h>
 #include <iostream>
 
@@ -214,13 +214,9 @@ void GuiManager::shutdown() {
   initialized_ = false;
 }
 
-bool GuiManager::get_should_close() const {
-  return !window_ || should_close_;
-}
+bool GuiManager::get_should_close() const { return !window_ || should_close_; }
 
-void GuiManager::set_should_close(bool value) {
-  should_close_ = value;
-}
+void GuiManager::set_should_close(bool value) { should_close_ = value; }
 
 void GuiManager::begin_frame() {
   if (!initialized_) {
@@ -271,6 +267,9 @@ void GuiManager::begin_frame() {
 
     // Finish the dockspace
     ImGui::DockBuilderFinish(dockspace_id);
+
+    // Set SOFT_KEYBOARD as the default active tab
+    ImGui::SetWindowFocus(ui::SOFT_KEYBOARD_TITLE);
   }
 }
 
@@ -376,8 +375,7 @@ void GuiManager::set_fullscreen(bool enable) {
                         windowed_height_ > 0 ? windowed_height_ : 600);
       fullscreen_ = false;
     } else {
-      std::cerr << "Failed to exit fullscreen: " << SDL_GetError()
-                << std::endl;
+      std::cerr << "Failed to exit fullscreen: " << SDL_GetError() << std::endl;
     }
   }
 }

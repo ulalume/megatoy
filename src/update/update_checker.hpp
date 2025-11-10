@@ -14,5 +14,6 @@ struct UpdateCheckResult {
 };
 
 UpdateCheckResult check_for_updates(std::string_view current_version_tag);
+std::string build_release_page_url();
 
 } // namespace update

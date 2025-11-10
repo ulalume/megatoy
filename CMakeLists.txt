@@ -90,6 +90,9 @@ include(cmake/embed_assets.cmake)
 if(EMSCRIPTEN)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msimd128")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msimd128")
+  option(MEGATOY_GENERATE_SIMPLE_HTML
+         "Copy a minimal HTML launcher (megatoy_simple.html) alongside megatoy.html"
+         ON)
 endif()
 
 if(EMSCRIPTEN AND ZLIB_INCLUDE_DIRS)

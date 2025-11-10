@@ -1,6 +1,18 @@
 #include "update_checker.hpp"
 #include "platform/platform_config.hpp"
 #include "project_info.hpp"
+#include <sstream>
+
+namespace update {
+
+std::string build_release_page_url() {
+  std::ostringstream oss;
+  oss << "https://github.com/" << megatoy::kGithubUser << "/"
+      << megatoy::kGithubRepo << "/releases";
+  return oss.str();
+}
+
+} // namespace update
 
 #if defined(MEGATOY_PLATFORM_WEB)
 
