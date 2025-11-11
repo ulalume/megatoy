@@ -146,10 +146,10 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
 
 #if defined(MEGATOY_PLATFORM_WEB)
 std::string extract_local_storage_id(const patches::PatchEntry &entry) {
-  const std::string full =
-      entry.full_path.empty() ? std::string{} : entry.full_path.generic_string();
-  if (!full.empty() &&
-      full.rfind(kLocalStorageAbsolutePrefix, 0) == 0) {
+  const std::string full = entry.full_path.empty()
+                               ? std::string{}
+                               : entry.full_path.generic_string();
+  if (!full.empty() && full.rfind(kLocalStorageAbsolutePrefix, 0) == 0) {
     return full.substr(kLocalStorageAbsolutePrefix.size());
   }
   if (entry.relative_path.rfind(kLocalStorageRelativePrefix, 0) == 0) {
@@ -588,7 +588,7 @@ void render_filter_area(PatchSelectorContext &context) {
   }
 
   prefs.patch_search_query = context.prefs.metadata_search_query;
-
+#if !defined(MEGATOY_PLATFORM_WEB)
   ImGui::SameLine();
   ImGui::SetNextItemWidth(60);
   ImGui::SliderInt(
@@ -596,7 +596,7 @@ void render_filter_area(PatchSelectorContext &context) {
       context.prefs.metadata_star_filter == 0
           ? "Stars"
           : kStarIconsLabels[context.prefs.metadata_star_filter].data());
-
+#endif
   ImGui::SameLine();
   const auto is_filtered = !(context.prefs.metadata_search_query.empty() &&
                              context.prefs.metadata_star_filter == 0);
@@ -634,8 +634,10 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     preset_repository.refresh();
   }
 
+#if !defined(MEGATOY_PLATFORM_WEB)
   if (ImGui::BeginTabBar("##PatchViewMode")) {
     if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Tree view")) {
+#endif
       render_filter_area(context);
       if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
                             true)) {
@@ -652,6 +654,7 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
         }
         ImGui::EndChild();
       }
+#if !defined(MEGATOY_PLATFORM_WEB)
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem(ICON_FA_TABLE " Table view")) {
@@ -661,7 +664,7 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     }
     ImGui::EndTabBar();
   }
-
+#endif
   ImGui::End();
 }
 

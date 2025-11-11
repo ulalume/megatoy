@@ -1,3 +1,5 @@
+#include "platform/platform_config.hpp"
+
 #include "app_context.hpp"
 #include "app_services.hpp"
 #include "app_state.hpp"
@@ -5,7 +7,6 @@
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
-#include "platform/platform_config.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_platform_services.hpp"
