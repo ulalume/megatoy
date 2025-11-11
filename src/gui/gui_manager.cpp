@@ -4,11 +4,9 @@
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/window_title.hpp"
-#include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/local_storage.hpp"
 #endif
-#include "platform/platform_config.hpp"
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>

@@ -13,8 +13,8 @@
 #include "gui/components/waveform.hpp"
 #include "gui/window_title.hpp"
 #include "history/snapshot_entry.hpp"
-#include "patch_actions.hpp"
 #include "midi/midi_input_manager.hpp"
+#include "patch_actions.hpp"
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -225,8 +225,8 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
   auto &ui_state = state.ui_state();
   MidiInputManager::StatusInfo midi_status =
       ctx.midi ? ctx.midi->status()
-               : MidiInputManager::StatusInfo{
-                     .message = "MIDI backend unavailable."};
+               : MidiInputManager::StatusInfo{.message =
+                                                  "MIDI backend unavailable."};
   return {
       ctx.services.preference_manager,
       ui_state.prefs,
@@ -296,9 +296,6 @@ void render_all(AppContext &ctx) {
   auto patch_selector_context = make_patch_selector_context(ctx);
   render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);
 
-  auto midi_keyboard_context = make_midi_keyboard_context(ctx);
-  render_midi_keyboard(SOFT_KEYBOARD_TITLE, midi_keyboard_context);
-
   auto preferences_context = make_preferences_context(ctx);
   render_preferences_window(PREFERENCES_TITLE, preferences_context);
 
@@ -307,6 +304,9 @@ void render_all(AppContext &ctx) {
 
   auto patch_lab_context = make_patch_lab_context(ctx);
   render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
+
+  auto midi_keyboard_context = make_midi_keyboard_context(ctx);
+  render_midi_keyboard(SOFT_KEYBOARD_TITLE, midi_keyboard_context);
 
 #if !defined(MEGATOY_PLATFORM_WEB)
   auto waveform_context = make_waveform_context(ctx);
