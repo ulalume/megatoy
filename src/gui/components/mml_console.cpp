@@ -1,7 +1,11 @@
 #include "mml_console.hpp"
 #include "formats/ctrmml.hpp"
+#include "platform/platform_config.hpp"
 #include <cstring>
 #include <imgui.h>
+#if defined(MEGATOY_PLATFORM_WEB)
+#include <emscripten.h>
+#endif
 
 namespace ui {
 
@@ -21,7 +25,11 @@ void render_mml_console(const char *title, MmlConsoleContext &context) {
 
   // copy to clipboard button
   if (ImGui::Button("Copy to Clipboard")) {
+#if defined(MEGATOY_PLATFORM_WEB)
+    EM_ASM({ var txt = UTF8ToString($0); navigator.clipboard.writeText(txt).catch(console.warn); }, mml_c);
+#else
     ImGui::SetClipboardText(mml_c);
+#endif
   }
   // panel (border)
   ImGui::BeginChild("MML Panel", ImVec2(0, 0), true);
