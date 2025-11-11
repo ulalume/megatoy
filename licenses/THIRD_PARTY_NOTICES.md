@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-Megatoy is released under the MIT License (see `megatoy-MIT.txt`). Every third-
+megatoy is released under the MIT License (see `megatoy-MIT.txt`). Every third-
 party component keeps its upstream license; this directory stores the original
-license texts that must accompany any redistributed Megatoy binary.
+license texts that must accompany any redistributed megatoy binary.
 
 | Component                     | Project URL                                       | License(s)                                        | Notes                                                                                                                                                          | License File                                                                     |
 | ----------------------------- | ------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |

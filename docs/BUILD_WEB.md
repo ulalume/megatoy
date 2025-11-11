@@ -1,6 +1,6 @@
 # Web build (Emscripten)
 
-Megatoy can run in the browser via WebAssembly using the Emscripten SDK.
+megatoy can run in the browser via WebAssembly using the Emscripten SDK.
 
 ## Prerequisites
 

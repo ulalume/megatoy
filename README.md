@@ -1,4 +1,4 @@
-# Megatoy - YM2612 Patch Editor
+# megatoy - YM2612 Patch Editor
 
 > ⚠️ **Early Development**: This project is in active development and features may be incomplete.
 

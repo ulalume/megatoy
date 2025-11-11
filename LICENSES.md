@@ -1,6 +1,6 @@
-# Megatoy License (MIT)
+# megatoy License (MIT)
 
-Copyright (c) 2025 Megatoy contributors
+Copyright (c) 2025 megatoy contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

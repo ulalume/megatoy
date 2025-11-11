@@ -1,11 +1,11 @@
-# Megatoy Linux Install Guide
+# megatoy Linux Install Guide
 
-This document covers how to build Megatoy on Linux (tested with Ubuntu/Debian) and enable realtime audio drivers.
+This document covers how to build megatoy on Linux (tested with Ubuntu/Debian) and enable realtime audio drivers.
 If you build without PulseAudio/ALSA support you will only get the WaveWrite backend, which produces no live audio or waveform updates.
 
 ## Display Server Support
 
-Megatoy uses SDL3 which supports both **Wayland** and **X11** display servers through the same binary:
+megatoy uses SDL3 which supports both **Wayland** and **X11** display servers through the same binary:
 
 - **Wayland systems**: SDL3 selects the native Wayland backend when available and falls back to XWayland if needed
 - **X11 systems**: SDL3 uses the X11 driver directly
@@ -91,9 +91,9 @@ DISPLAY=:0 ./build-release/megatoy                 # Force X11
 ### Audio Issues
 
 - **No sound output**
-  
+
   SDL3 plays audio through the OS default output. Make sure other
-  applications can play audio, then run Megatoy with
+  applications can play audio, then run megatoy with
   `SDL_AUDIO_DEVICE_APPNAME=megatoy ./build-release/megatoy` to force a fresh
   SDL device selection. You can also choose a specific backend via
   `SDL_AUDIODRIVER=pulseaudio` (or `alsa`, `pipewire`, etc.).
@@ -101,14 +101,14 @@ DISPLAY=:0 ./build-release/megatoy                 # Force X11
 ### Display Issues
 
 - **Application doesn't start on Wayland**
-  
+
   Try XWayland compatibility mode:
   ```bash
   DISPLAY=:0 ./build-release/megatoy
   ```
 
 - **Missing display libraries**
-  
+
   Ensure all display dependencies are installed:
   ```bash
   sudo apt install libwayland-dev libxkbcommon-dev xorg-dev libcurl4-openssl-dev
@@ -122,4 +122,4 @@ cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release \
     -DMEGATOY_GENERAL_X86_64_LINUX=ON
 ```
 
-With these steps Megatoy should produce audio and realtime visuals on both Wayland and X11 systems.
+With these steps megatoy should produce audio and realtime visuals on both Wayland and X11 systems.
