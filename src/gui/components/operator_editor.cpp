@@ -151,7 +151,8 @@ void render_envelope(PatchEditorContext &context, ym2612::OperatorSettings &op,
 // Helper function to render operator settings
 bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             ym2612::OperatorSettings &op, int op_index,
-                            UIState::EnvelopeState &envelope_state) {
+                            UIState::EnvelopeState &envelope_state,
+                            bool space_for_feedback) {
   bool setting_changed = false;
 
   const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
@@ -201,7 +202,7 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       patch.instrument.feedback = static_cast<uint8_t>(feedback);
       setting_changed = true;
     }
-  } else if (op_index == 1) {
+  } else if (space_for_feedback) {
     ImVec2 pos = ImGui::GetCursorPos();
     ImGui::SetCursorPosY(pos.y + 20);
   }

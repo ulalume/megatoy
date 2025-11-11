@@ -266,6 +266,8 @@ void render_patch_metadata(PatchEditorContext &context, ym2612::Patch &patch,
   render_patch_name_field(context, patch, name_valid);
 
   render_save_export_popups(context, patch, state);
+
+  ImGui::Spacing();
 }
 
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
@@ -360,13 +362,28 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
 
 void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
                              bool &settings_changed) {
-  ImGui::Columns(2, "operation_columns", false);
+
+  const auto avail_width = ImGui::GetContentRegionAvail().x;
+  bool space_for_feedbacks[4] = {false};
+  if (avail_width > 250.0f * 4) {
+    ImGui::Columns(4, "operation_columns", false);
+    space_for_feedbacks[0] = true;
+    space_for_feedbacks[1] = true;
+    space_for_feedbacks[2] = true;
+    space_for_feedbacks[3] = true;
+  } else if (avail_width > 250.0f * 2) {
+    ImGui::Columns(2, "operation_columns", false);
+    space_for_feedbacks[0] = true;
+    space_for_feedbacks[1] = true;
+  } else {
+    ImGui::Columns(1, "operation_columns", false);
+  }
   for (auto i = 0; i < 4; i++) {
     auto op_index = static_cast<int>(ym2612::all_operator_indices[i]);
 
     settings_changed |= render_operator_editor(
         context, patch, patch.instrument.operators[op_index], i,
-        context.envelope_states[i]);
+        context.envelope_states[i], space_for_feedbacks[i]);
 
     ImGui::Spacing();
     ImGui::NextColumn();
@@ -399,10 +416,13 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
   bool settings_changed = false;
 
   render_patch_metadata(context, patch, state);
-  ImGui::Spacing();
 
+  const auto available_width = ImGui::GetContentRegionAvail().x;
+  ImGui::Columns(available_width > 800 ? 2 : 1, "##lfo_channel_columns", false);
   render_lfo_section(context, patch, settings_changed);
+  ImGui::NextColumn();
   render_channel_section(context, patch, settings_changed);
+  ImGui::Columns(1);
   render_operator_section(context, patch, settings_changed);
 
   // Apply settings if changed
