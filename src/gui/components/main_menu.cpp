@@ -74,12 +74,10 @@ void render_main_menu(MainMenuContext &context) {
       auto &ui_prefs = context.ui_prefs;
 
 #if !defined(MEGATOY_PLATFORM_WEB)
-      ImGui::MenuItem("Fullscreen", nullptr, false);
       bool fullscreen = context.gui.is_fullscreen();
       if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
         context.gui.set_fullscreen(!fullscreen);
       }
-
       ImGui::Separator();
 #endif
 
