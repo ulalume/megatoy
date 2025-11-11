@@ -126,6 +126,7 @@ private:
 
   // ImGui state
   bool first_frame_;
+  bool first_end_frame_;
   bool pending_imgui_ini_update_;
   std::string imgui_ini_file_path_;
   ui::styles::ThemeId theme_;

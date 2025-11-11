@@ -32,9 +32,9 @@ GuiManager::GuiManager(PreferenceManager &preferences)
       initialized_(false), should_close_(false), window_id_(0),
       fullscreen_(false), windowed_pos_x_(0), windowed_pos_y_(0),
       windowed_width_(0), windowed_height_(0), first_frame_(true),
-      pending_imgui_ini_update_(false), imgui_ini_file_path_(),
-      theme_(ui::styles::ThemeId::MegatoyDark), drop_user_pointer_(nullptr),
-      drop_callback_(nullptr) {}
+      first_end_frame_(false), pending_imgui_ini_update_(false),
+      imgui_ini_file_path_(), theme_(ui::styles::ThemeId::MegatoyDark),
+      drop_user_pointer_(nullptr), drop_callback_(nullptr) {}
 
 GuiManager::~GuiManager() { shutdown(); }
 
@@ -235,6 +235,7 @@ void GuiManager::begin_frame() {
 
   if (first_frame_) {
     first_frame_ = false;
+    first_end_frame_ = true;
 
     ImGui::DockBuilderRemoveNode(dockspace_id);
     ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
@@ -267,13 +268,16 @@ void GuiManager::begin_frame() {
 
     // Finish the dockspace
     ImGui::DockBuilderFinish(dockspace_id);
-
-    // Set SOFT_KEYBOARD as the default active tab
-    ImGui::SetWindowFocus(ui::SOFT_KEYBOARD_TITLE);
   }
 }
 
 void GuiManager::end_frame() {
+  if (first_end_frame_) {
+    first_end_frame_ = false;
+    // Set SOFT_KEYBOARD as the default active tab
+    ImGui::SetWindowFocus(ui::SOFT_KEYBOARD_TITLE);
+    std::cout << "First end frame" << std::endl;
+  }
   if (!initialized_) {
     return;
   }
