@@ -21,7 +21,11 @@
     <canvas id="canvas"></canvas>
     <script>
       var Module = Module || {};
-      Module.canvas = document.getElementById('canvas');
+      var canvas = document.getElementById('canvas');
+      canvas.addEventListener('contextmenu', function (event) {
+        event.preventDefault();
+      });
+      Module.canvas = canvas;
     </script>
     <script src="megatoy.js"></script>
   </body>

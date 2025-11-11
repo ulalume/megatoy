@@ -32,9 +32,9 @@ GuiManager::GuiManager(PreferenceManager &preferences)
       initialized_(false), should_close_(false), window_id_(0),
       fullscreen_(false), windowed_pos_x_(0), windowed_pos_y_(0),
       windowed_width_(0), windowed_height_(0), first_frame_(true),
-      pending_imgui_ini_update_(false), imgui_ini_file_path_(),
-      theme_(ui::styles::ThemeId::MegatoyDark), drop_user_pointer_(nullptr),
-      drop_callback_(nullptr) {}
+      first_end_frame_(false), pending_imgui_ini_update_(false),
+      imgui_ini_file_path_(), theme_(ui::styles::ThemeId::MegatoyDark),
+      drop_user_pointer_(nullptr), drop_callback_(nullptr) {}
 
 GuiManager::~GuiManager() { shutdown(); }
 
@@ -141,9 +141,6 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   (void)io;
-#if defined(MEGATOY_PLATFORM_WEB)
-  load_web_imgui_ini();
-#endif
 
   io.ConfigFlags |=
       ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
@@ -177,6 +174,9 @@ bool GuiManager::initialize(const std::string &window_title, int width,
 
   // Sync ImGui ini file
   sync_imgui_ini();
+#if defined(MEGATOY_PLATFORM_WEB)
+  load_web_imgui_ini();
+#endif
 
   should_close_ = false;
   initialized_ = true;
@@ -235,6 +235,7 @@ void GuiManager::begin_frame() {
 
   if (first_frame_) {
     first_frame_ = false;
+    first_end_frame_ = true;
 
     ImGui::DockBuilderRemoveNode(dockspace_id);
     ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
@@ -267,13 +268,16 @@ void GuiManager::begin_frame() {
 
     // Finish the dockspace
     ImGui::DockBuilderFinish(dockspace_id);
-
-    // Set SOFT_KEYBOARD as the default active tab
-    ImGui::SetWindowFocus(ui::SOFT_KEYBOARD_TITLE);
   }
 }
 
 void GuiManager::end_frame() {
+  if (first_end_frame_) {
+    first_end_frame_ = false;
+    // Set SOFT_KEYBOARD as the default active tab
+    ImGui::SetWindowFocus(ui::SOFT_KEYBOARD_TITLE);
+    std::cout << "First end frame" << std::endl;
+  }
   if (!initialized_) {
     return;
   }
@@ -336,6 +340,8 @@ void GuiManager::poll_events() {
 void GuiManager::sync_imgui_ini() {
 #if defined(MEGATOY_PLATFORM_WEB)
   load_web_imgui_ini();
+  pending_imgui_ini_update_ = true;
+  apply_imgui_ini_binding();
 #else
   const auto ini_path = preferences_.get_imgui_ini_file();
   set_imgui_ini_file(ini_path.generic_string());
@@ -403,9 +409,6 @@ void GuiManager::set_imgui_ini_file(const std::string &path) {
 }
 
 void GuiManager::apply_imgui_ini_binding() {
-#if defined(MEGATOY_PLATFORM_WEB)
-  return;
-#endif
   if (!pending_imgui_ini_update_) {
     return;
   }
@@ -414,10 +417,16 @@ void GuiManager::apply_imgui_ini_binding() {
     return;
   }
 
+#if defined(MEGATOY_PLATFORM_WEB)
+  ImGui::GetIO().IniFilename = nullptr;
+  pending_imgui_ini_update_ = false;
+  return;
+#else
   ImGuiIO &io = ImGui::GetIO();
   io.IniFilename =
       imgui_ini_file_path_.empty() ? nullptr : imgui_ini_file_path_.c_str();
   pending_imgui_ini_update_ = false;
+#endif
 }
 
 void GuiManager::set_drop_callback(void *user_pointer,
@@ -436,6 +445,9 @@ void GuiManager::load_web_imgui_ini() {
   auto stored = platform::web::read_local_storage("megatoy_imgui_ini");
   if (stored.has_value() && !stored->empty()) {
     ImGui::LoadIniSettingsFromMemory(stored->c_str(), stored->size());
+    first_frame_ = false;
+  } else {
+    first_frame_ = true;
   }
   web_ini_loaded_ = true;
 }

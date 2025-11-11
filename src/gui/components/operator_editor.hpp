@@ -17,5 +17,6 @@ struct PatchEditorContext;
 
 bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             ym2612::OperatorSettings &op, int op_index,
-                            UIState::EnvelopeState &envelope_state);
+                            UIState::EnvelopeState &envelope_state,
+                            bool space_for_feedback);
 } // namespace ui
