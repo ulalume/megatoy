@@ -1,6 +1,7 @@
 #include "preferences.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
+#include "platform/platform_config.hpp"
 #include <imgui.h>
 
 namespace ui {
@@ -33,8 +34,6 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
         context.sync_patch_directories();
       }
     }
-#endif
-
     if (prefs.is_initialized()) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::StatusSuccess),
                          "Directories initialized");
@@ -49,6 +48,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
         }
       }
     }
+#endif
 
     ImGui::SeparatorText("Theme");
 
