@@ -258,6 +258,32 @@ if(EMSCRIPTEN)
       COMMENT "Copying minimal Web shell to megatoy_simple.html"
     )
   endif()
+
+  set(MEGATOY_WEB_DIST_DIR "${CMAKE_BINARY_DIR}/web_dist")
+  add_custom_command(
+    TARGET megatoy POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${MEGATOY_WEB_DIST_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${MEGATOY_WEB_DIST_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE_DIR:megatoy>/icon.ico"
+            "${MEGATOY_WEB_DIST_DIR}/icon.ico"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE_DIR:megatoy>/megatoy_simple.html"
+            "${MEGATOY_WEB_DIST_DIR}/index.html"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE_DIR:megatoy>/megatoy.js"
+            "${MEGATOY_WEB_DIST_DIR}/megatoy.js"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE_DIR:megatoy>/megatoy.wasm"
+            "${MEGATOY_WEB_DIST_DIR}/megatoy.wasm"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE_DIR:megatoy>/megatoy.data"
+            "${MEGATOY_WEB_DIST_DIR}/megatoy.data"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "$<TARGET_FILE_DIR:megatoy>/presets"
+            "${MEGATOY_WEB_DIST_DIR}/presets"
+    COMMENT "Preparing web distribution files"
+  )
 endif()
 
 target_include_directories(megatoy PRIVATE ${CMAKE_BINARY_DIR})
