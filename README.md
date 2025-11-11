@@ -58,7 +58,7 @@ Load patches by placing files in `~/megatoy/patches/` (created automatically) or
 
 Built-in patches:
 
-- [25 built-in CC0 patches](https://github.com/ulalume/megatoy/tree/main/assets/presets) - Contributions welcome! See [Issue #15](https://github.com/ulalume/megatoy/issues/15)
+- [built-in CC0 patches](https://github.com/ulalume/megatoy/tree/main/assets/presets) - Contributions welcome! See [Issue #15](https://github.com/ulalume/megatoy/issues/15)
 
 Recommended external collections:
 
