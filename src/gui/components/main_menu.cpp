@@ -73,12 +73,15 @@ void render_main_menu(MainMenuContext &context) {
     if (ImGui::BeginMenu("View")) {
       auto &ui_prefs = context.ui_prefs;
 
+#if !defined(MEGATOY_PLATFORM_WEB)
+      ImGui::MenuItem("Fullscreen", nullptr, false);
       bool fullscreen = context.gui.is_fullscreen();
       if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
         context.gui.set_fullscreen(!fullscreen);
       }
 
       ImGui::Separator();
+#endif
 
       ImGui::MenuItem(PATCH_BROWSER_TITLE, nullptr,
                       &ui_prefs.show_patch_selector);
