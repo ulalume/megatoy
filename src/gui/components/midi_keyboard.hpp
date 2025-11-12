@@ -19,6 +19,14 @@ struct MidiKeyboardState {
   TypingKeyboardLayout cached_layout = TypingKeyboardLayout::Qwerty;
   TypingLayout cached_custom_layout =
       builtin_typing_layout(TypingKeyboardLayout::Qwerty);
+  struct PlaybackState {
+    bool playing = false;
+    float timer = 0.0f;
+    std::size_t next_index = 0;
+    bool note_active = false;
+    ym2612::Note current_note{};
+    std::vector<ym2612::Note> sequence_snapshot;
+  } playback;
   bool initialized = false;
 
   std::map<ImGuiKey, ym2612::Note> key_mappings;
@@ -26,6 +34,7 @@ struct MidiKeyboardState {
   std::vector<Key> scale_keys;
   std::vector<ym2612::Note> display_notes;
   std::string typing_range_label;
+  std::vector<ym2612::Note> playback_sequence;
 };
 
 struct MidiKeyboardContext {
