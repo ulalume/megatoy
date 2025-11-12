@@ -1,6 +1,7 @@
 #include "midi_keyboard.hpp"
 
 #include "core/types.hpp"
+#include "gui/input/key_name_utils.hpp"
 #include "gui/input/keyboard_typing.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "util.hpp"
@@ -14,12 +15,16 @@ namespace ui {
 namespace {
 
 void refresh_state(MidiKeyboardState &state, const InputState &input,
-                   TypingKeyboardLayout layout) {
+                   TypingKeyboardLayout layout,
+                   const TypingLayout &custom_layout) {
   const auto &settings = input.midi_keyboard_settings;
+  const bool custom_layout_changed =
+      layout == TypingKeyboardLayout::Custom &&
+      state.cached_custom_layout != custom_layout;
   if (state.initialized && state.cached_scale == settings.scale &&
       state.cached_key == settings.key &&
       state.cached_octave == input.keyboard_typing_octave &&
-      state.cached_layout == layout) {
+      state.cached_layout == layout && !custom_layout_changed) {
     return;
   }
 
@@ -27,10 +32,11 @@ void refresh_state(MidiKeyboardState &state, const InputState &input,
   state.cached_key = settings.key;
   state.cached_octave = input.keyboard_typing_octave;
   state.cached_layout = layout;
+  state.cached_custom_layout = custom_layout;
 
-  state.key_mappings = create_key_mappings(settings.scale, settings.key,
-                                           input.keyboard_typing_octave,
-                                           layout);
+  state.key_mappings =
+      create_key_mappings(settings.scale, settings.key,
+                          input.keyboard_typing_octave, layout, custom_layout);
 
   state.reverse_mappings.clear();
   for (const auto &pair : state.key_mappings) {
@@ -55,9 +61,8 @@ void refresh_state(MidiKeyboardState &state, const InputState &input,
     auto cmp = [](const auto &lhs, const auto &rhs) {
       return lhs.second.midi_note() < rhs.second.midi_note();
     };
-    const auto range =
-        std::minmax_element(state.key_mappings.begin(),
-                            state.key_mappings.end(), cmp);
+    const auto range = std::minmax_element(state.key_mappings.begin(),
+                                           state.key_mappings.end(), cmp);
     if (range.first != state.key_mappings.end() &&
         range.second != state.key_mappings.end()) {
       state.typing_range_label =
@@ -73,6 +78,20 @@ void refresh_state(MidiKeyboardState &state, const InputState &input,
 const char *typing_label(const MidiKeyboardState &state) {
   return state.typing_range_label.empty() ? "Keys"
                                           : state.typing_range_label.c_str();
+}
+
+std::pair<ImGuiKey, ImGuiKey>
+octave_keys_for_layout(TypingKeyboardLayout layout,
+                       const PreferenceManager::UIPreferences &prefs) {
+  const auto defaults = default_octave_keys(layout);
+  if (layout != TypingKeyboardLayout::Custom) {
+    return defaults;
+  }
+  const ImGuiKey down =
+      key_from_preference(prefs.custom_typing_octave_down_key, defaults.first);
+  const ImGuiKey up =
+      key_from_preference(prefs.custom_typing_octave_up_key, defaults.second);
+  return {down, up};
 }
 
 } // namespace
@@ -96,9 +115,11 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   auto &input = context.input_state;
   auto &keyboard_settings = input.midi_keyboard_settings;
   auto &ui_prefs = context.ui_prefs;
-  const auto typing_layout =
-      clamp_layout_pref(ui_prefs.midi_keyboard_layout);
+  const auto typing_layout = clamp_layout_pref(ui_prefs.midi_keyboard_layout);
   ui_prefs.midi_keyboard_layout = static_cast<int>(typing_layout);
+  const TypingLayout custom_layout =
+      layout_from_preferences(ui_prefs.custom_typing_layout_keys);
+  const auto octave_keys = octave_keys_for_layout(typing_layout, ui_prefs);
 
   const auto clamp_scale = [](int value) {
     return std::clamp(value, 0, static_cast<int>(Scale::RYUKYU));
@@ -123,12 +144,12 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     input.keyboard_typing_octave = static_cast<uint8_t>(pref_octave);
   }
 
-  refresh_state(context.state, input, typing_layout);
+  refresh_state(context.state, input, typing_layout, custom_layout);
   const auto &key_mappings = context.state.key_mappings;
 
   if (!ImGui::GetIO().WantTextInput && !key_mappings.empty()) {
     KeyboardTypingContext typing_context{
-        context.input_state,
+        context.input_state, octave_keys.first, octave_keys.second,
         [&context](ym2612::Note note, uint8_t velocity) {
           context.key_on(note, velocity);
         },
@@ -159,7 +180,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       keyboard_settings.key = Key::C;
       context.ui_prefs.midi_keyboard_key = static_cast<int>(Key::C);
     }
-    refresh_state(context.state, input, typing_layout);
+    refresh_state(context.state, input, typing_layout, custom_layout);
   }
 
   ImGui::SameLine(0, 16);
@@ -172,7 +193,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (ImGui::Combo("Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
     keyboard_settings.key = static_cast<Key>(current_key);
     context.ui_prefs.midi_keyboard_key = current_key;
-    refresh_state(context.state, input, typing_layout);
+    refresh_state(context.state, input, typing_layout, custom_layout);
   }
   if (keyboard_settings.scale == Scale::CHROMATIC)
     ImGui::EndDisabled();
@@ -185,10 +206,24 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                        typing_label(context.state))) {
     input.keyboard_typing_octave = current_key_octave;
     context.ui_prefs.midi_keyboard_typing_octave = current_key_octave;
-    refresh_state(context.state, input, typing_layout);
+    refresh_state(context.state, input, typing_layout, custom_layout);
   }
   if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("'<' key: down\n'>' key: up");
+    const auto key_label = [](ImGuiKey key) {
+      if (key == ImGuiKey_None) {
+        return std::string("Unassigned");
+      }
+      std::string label = short_key_name(key);
+      if (label.empty() || label == "??") {
+        const char *fallback = ImGui::GetKeyName(key);
+        label = (fallback && fallback[0] != '\0') ? fallback : "Unknown";
+      }
+      return label;
+    };
+    const std::string tooltip =
+        "Octave Down: " + key_label(octave_keys.first) + "\nOctave Up: " +
+        key_label(octave_keys.second);
+    ImGui::SetTooltip("%s", tooltip.c_str());
   }
 
   ImGui::SameLine(0, 16);
@@ -272,9 +307,13 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         ImGuiKey mapped_key = (it != context.state.reverse_mappings.end())
                                   ? it->second
                                   : ImGuiKey_None;
-        std::string key_text = mapped_key == ImGuiKey_Semicolon
-                                   ? ";"
-                                   : ImGui::GetKeyName(mapped_key);
+        std::string key_text = mapped_key == ImGuiKey_None
+                                   ? std::string()
+                                   : short_key_name(mapped_key);
+        if (key_text.empty()) {
+          const char *fallback = ImGui::GetKeyName(mapped_key);
+          key_text = fallback ? fallback : "";
+        }
         ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
         ImVec2 text_pos(key_min.x + (key_width - text_size.x) * 0.5f,
                         key_max_mapped.y);

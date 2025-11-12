@@ -11,10 +11,13 @@
 namespace ui {
 const std::map<ImGuiKey, ym2612::Note>
 create_key_mappings(Scale scale, Key key, uint8_t selected_octave,
-                    TypingKeyboardLayout layout);
+                    TypingKeyboardLayout layout,
+                    const TypingLayout &custom_layout);
 
 struct KeyboardTypingContext {
   InputState &input_state;
+  ImGuiKey octave_down_key = ImGuiKey_Comma;
+  ImGuiKey octave_up_key = ImGuiKey_Period;
   std::function<void(ym2612::Note, uint8_t)> key_on;
   std::function<void(ym2612::Note)> key_off;
 };

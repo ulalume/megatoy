@@ -10,22 +10,54 @@ namespace ui {
 
 namespace {
 
-constexpr std::array<size_t, 11> non_chromatic_key_indices{0,  2,  4,  5,  7, 9,
-                                                           11, 12, 14, 16, 17};
+constexpr std::array<int, 7> white_key_offsets{0, 2, 4, 5, 7, 9, 11};
 
-std::vector<ImGuiKey> keys_for_scale(Scale scale, TypingKeyboardLayout layout) {
-  const auto &base_keys = typing_layout_keys(layout);
-  if (scale == Scale::CHROMATIC) {
-    return {base_keys.begin(), base_keys.end()};
-  }
-  std::vector<ImGuiKey> filtered;
-  filtered.reserve(non_chromatic_key_indices.size());
-  for (const auto idx : non_chromatic_key_indices) {
-    if (idx >= base_keys.size()) {
+std::vector<size_t> non_chromatic_indices(size_t max_notes) {
+  std::vector<size_t> indices;
+  for (size_t octave = 0;; ++octave) {
+    bool added = false;
+    for (int offset : white_key_offsets) {
+      const size_t index = octave * 12 + static_cast<size_t>(offset);
+      if (index >= max_notes) {
+        return indices;
+      }
+      indices.push_back(index);
+      added = true;
+    }
+    if (!added) {
       break;
     }
-    filtered.push_back(base_keys[idx]);
   }
+  return indices;
+}
+
+std::vector<ImGuiKey> keys_for_scale(Scale scale,
+                                     const TypingLayout &base_layout) {
+  if (scale == Scale::CHROMATIC) {
+    return base_layout;
+  }
+
+  std::vector<ImGuiKey> filtered;
+  if (base_layout.empty()) {
+    return filtered;
+  }
+
+  const size_t playable_keys = base_layout.back() == ImGuiKey_None
+                                   ? base_layout.size() - 1
+                                   : base_layout.size();
+  const auto indices = non_chromatic_indices(playable_keys);
+  filtered.reserve(indices.size() + 1);
+  for (const auto idx : indices) {
+    if (idx >= base_layout.size()) {
+      break;
+    }
+    auto key = base_layout[idx];
+    if (key == ImGuiKey_None) {
+      break;
+    }
+    filtered.push_back(key);
+  }
+  filtered.push_back(ImGuiKey_None);
   return filtered;
 }
 
@@ -33,8 +65,12 @@ std::vector<ImGuiKey> keys_for_scale(Scale scale, TypingKeyboardLayout layout) {
 
 const std::map<ImGuiKey, ym2612::Note>
 create_key_mappings(Scale scale, Key key, uint8_t selected_octave,
-                    TypingKeyboardLayout layout) {
-  const auto keyboard_keys = keys_for_scale(scale, layout);
+                    TypingKeyboardLayout layout,
+                    const TypingLayout &custom_layout) {
+  const auto base_layout = layout == TypingKeyboardLayout::Custom
+                               ? custom_layout
+                               : builtin_typing_layout(layout);
+  const auto keyboard_keys = keys_for_scale(scale, base_layout);
 
   auto keys = keys_from_scale_and_key(scale, key);
   std::map<ImGuiKey, ym2612::Note> key_mappings;
@@ -66,28 +102,38 @@ void check_keyboard_typing(
     const std::map<ImGuiKey, ym2612::Note> key_mappings) {
   auto &input = context.input_state;
 
-  // Handle octave changes with comma and period keys
-  bool comma_pressed_now = ImGui::IsKeyDown(ImGuiKey_Comma);
-  bool comma_was_pressed = key_pressed_last_frame[ImGuiKey_Comma];
-  bool period_pressed_now = ImGui::IsKeyDown(ImGuiKey_Period);
-  bool period_was_pressed = key_pressed_last_frame[ImGuiKey_Period];
+  const ImGuiKey octave_down = context.octave_down_key;
+  const ImGuiKey octave_up = context.octave_up_key;
 
-  // Comma key: decrease octave
-  if (comma_pressed_now && !comma_was_pressed) {
+  // Handle octave changes with configured keys
+  bool down_pressed_now =
+      octave_down != ImGuiKey_None ? ImGui::IsKeyDown(octave_down) : false;
+  bool down_was_pressed = octave_down != ImGuiKey_None
+                              ? key_pressed_last_frame[octave_down]
+                              : false;
+  bool up_pressed_now =
+      octave_up != ImGuiKey_None ? ImGui::IsKeyDown(octave_up) : false;
+  bool up_was_pressed =
+      octave_up != ImGuiKey_None ? key_pressed_last_frame[octave_up] : false;
+
+  if (down_pressed_now && !down_was_pressed) {
     if (input.keyboard_typing_octave > 0) {
       input.keyboard_typing_octave--;
     }
   }
 
-  // Period key: increase octave
-  if (period_pressed_now && !period_was_pressed) {
+  if (up_pressed_now && !up_was_pressed) {
     if (input.keyboard_typing_octave < 7) {
       input.keyboard_typing_octave++;
     }
   }
 
-  key_pressed_last_frame[ImGuiKey_Comma] = comma_pressed_now;
-  key_pressed_last_frame[ImGuiKey_Period] = period_pressed_now;
+  if (octave_down != ImGuiKey_None) {
+    key_pressed_last_frame[octave_down] = down_pressed_now;
+  }
+  if (octave_up != ImGuiKey_None) {
+    key_pressed_last_frame[octave_up] = up_pressed_now;
+  }
 
   for (auto &[imgui_key, note] : key_mappings) {
     bool key_pressed_now = ImGui::IsKeyDown(imgui_key);

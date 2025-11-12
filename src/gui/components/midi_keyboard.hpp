@@ -1,7 +1,7 @@
 #pragma once
 
-#include "input_state.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
+#include "input_state.hpp"
 #include "preferences/preference_manager.hpp"
 #include "ym2612/note.hpp"
 #include <functional>
@@ -17,6 +17,8 @@ struct MidiKeyboardState {
   Key cached_key = Key::C;
   uint8_t cached_octave = 0;
   TypingKeyboardLayout cached_layout = TypingKeyboardLayout::Qwerty;
+  TypingLayout cached_custom_layout =
+      builtin_typing_layout(TypingKeyboardLayout::Qwerty);
   bool initialized = false;
 
   std::map<ImGuiKey, ym2612::Note> key_mappings;

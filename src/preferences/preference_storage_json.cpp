@@ -1,4 +1,6 @@
 #include "preference_storage.hpp"
+#include <algorithm>
+#include <imgui.h>
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/local_storage.hpp"
 #endif
@@ -118,6 +120,30 @@ public:
           data.ui_preferences.midi_keyboard_layout =
               ui["midi_keyboard_layout"].get<int>();
         }
+        if (ui.contains("custom_typing_layout_keys") &&
+            ui["custom_typing_layout_keys"].is_array()) {
+          const auto &custom = ui["custom_typing_layout_keys"];
+          data.ui_preferences.custom_typing_layout_keys.clear();
+          for (const auto &entry : custom) {
+            data.ui_preferences.custom_typing_layout_keys.push_back(
+                entry.get<int>());
+          }
+          if (!data.ui_preferences.custom_typing_layout_keys.empty() &&
+              data.ui_preferences.custom_typing_layout_keys.back() ==
+                  static_cast<int>(ImGuiKey_None) &&
+              data.ui_preferences.custom_typing_layout_keys.size() ==
+                  ui::typing_layout_builtin_entry_count) {
+            data.ui_preferences.custom_typing_layout_keys.pop_back();
+          }
+        }
+        if (ui.contains("custom_typing_octave_down_key")) {
+          data.ui_preferences.custom_typing_octave_down_key =
+              ui["custom_typing_octave_down_key"].get<int>();
+        }
+        if (ui.contains("custom_typing_octave_up_key")) {
+          data.ui_preferences.custom_typing_octave_up_key =
+              ui["custom_typing_octave_up_key"].get<int>();
+        }
       }
 
       return true;
@@ -151,6 +177,12 @@ public:
       ui["midi_keyboard_typing_octave"] =
           data.ui_preferences.midi_keyboard_typing_octave;
       ui["midi_keyboard_layout"] = data.ui_preferences.midi_keyboard_layout;
+      ui["custom_typing_layout_keys"] =
+          data.ui_preferences.custom_typing_layout_keys;
+      ui["custom_typing_octave_down_key"] =
+          data.ui_preferences.custom_typing_octave_down_key;
+      ui["custom_typing_octave_up_key"] =
+          data.ui_preferences.custom_typing_octave_up_key;
       j["ui"] = ui;
 
       if (use_local_storage_) {
