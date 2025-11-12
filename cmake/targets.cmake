@@ -22,8 +22,10 @@ if(EMSCRIPTEN)
   target_compile_definitions(imgui_lib PUBLIC IMGUI_IMPL_OPENGL_ES3 IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
 endif()
 if(NOT EMSCRIPTEN)
-  target_link_libraries(imgui_lib PUBLIC OpenGL::GL)
+target_link_libraries(imgui_lib PUBLIC OpenGL::GL)
 endif()
+
+set(MEGATOY_PRESETS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets/presets")
 
 set(MEGATOY_CORE_SOURCES
   src/app_services.cpp
@@ -260,6 +262,16 @@ if(EMSCRIPTEN)
   endif()
 
   set(MEGATOY_WEB_DIST_DIR "${CMAKE_BINARY_DIR}/web_dist")
+  if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
+    set(MEGATOY_WEB_PRESETS_COMMAND
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${MEGATOY_PRESETS_SOURCE_DIR}"
+                "${MEGATOY_WEB_DIST_DIR}/presets")
+  else()
+    set(MEGATOY_WEB_PRESETS_COMMAND
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "Skipping presets copy; not found at ${MEGATOY_PRESETS_SOURCE_DIR}")
+  endif()
   add_custom_command(
     TARGET megatoy POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E rm -rf "${MEGATOY_WEB_DIST_DIR}"
@@ -279,9 +291,7 @@ if(EMSCRIPTEN)
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE_DIR:megatoy>/megatoy.data"
             "${MEGATOY_WEB_DIST_DIR}/megatoy.data"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "$<TARGET_FILE_DIR:megatoy>/presets"
-            "${MEGATOY_WEB_DIST_DIR}/presets"
+    ${MEGATOY_WEB_PRESETS_COMMAND}
     COMMENT "Preparing web distribution files"
   )
 endif()
@@ -315,7 +325,6 @@ add_custom_command(
             -P "${COMPILE_COMMANDS_MIRROR_SCRIPT}"
 )
 
-set(MEGATOY_PRESETS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets/presets")
 if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
   if(APPLE)
     set(MEGATOY_PRESETS_DESTINATION
