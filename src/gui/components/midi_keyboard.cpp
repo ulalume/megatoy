@@ -13,20 +13,24 @@
 namespace ui {
 namespace {
 
-void refresh_state(MidiKeyboardState &state, const InputState &input) {
+void refresh_state(MidiKeyboardState &state, const InputState &input,
+                   TypingKeyboardLayout layout) {
   const auto &settings = input.midi_keyboard_settings;
   if (state.initialized && state.cached_scale == settings.scale &&
       state.cached_key == settings.key &&
-      state.cached_octave == input.keyboard_typing_octave) {
+      state.cached_octave == input.keyboard_typing_octave &&
+      state.cached_layout == layout) {
     return;
   }
 
   state.cached_scale = settings.scale;
   state.cached_key = settings.key;
   state.cached_octave = input.keyboard_typing_octave;
+  state.cached_layout = layout;
 
   state.key_mappings = create_key_mappings(settings.scale, settings.key,
-                                           input.keyboard_typing_octave);
+                                           input.keyboard_typing_octave,
+                                           layout);
 
   state.reverse_mappings.clear();
   for (const auto &pair : state.key_mappings) {
@@ -45,12 +49,22 @@ void refresh_state(MidiKeyboardState &state, const InputState &input) {
     }
   }
 
-  const auto from = state.key_mappings.find(ImGuiKey_A);
-  const auto to = state.key_mappings.find(ImGuiKey_Semicolon);
-  if (from != state.key_mappings.end() && to != state.key_mappings.end()) {
-    state.typing_range_label = from->second.name() + "-" + to->second.name();
-  } else {
+  if (state.key_mappings.empty()) {
     state.typing_range_label.clear();
+  } else {
+    auto cmp = [](const auto &lhs, const auto &rhs) {
+      return lhs.second.midi_note() < rhs.second.midi_note();
+    };
+    const auto range =
+        std::minmax_element(state.key_mappings.begin(),
+                            state.key_mappings.end(), cmp);
+    if (range.first != state.key_mappings.end() &&
+        range.second != state.key_mappings.end()) {
+      state.typing_range_label =
+          range.first->second.name() + "-" + range.second->second.name();
+    } else {
+      state.typing_range_label.clear();
+    }
   }
 
   state.initialized = true;
@@ -81,6 +95,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
 
   auto &input = context.input_state;
   auto &keyboard_settings = input.midi_keyboard_settings;
+  auto &ui_prefs = context.ui_prefs;
+  const auto typing_layout =
+      clamp_layout_pref(ui_prefs.midi_keyboard_layout);
+  ui_prefs.midi_keyboard_layout = static_cast<int>(typing_layout);
 
   const auto clamp_scale = [](int value) {
     return std::clamp(value, 0, static_cast<int>(Scale::RYUKYU));
@@ -105,7 +123,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     input.keyboard_typing_octave = static_cast<uint8_t>(pref_octave);
   }
 
-  refresh_state(context.state, input);
+  refresh_state(context.state, input, typing_layout);
   const auto &key_mappings = context.state.key_mappings;
 
   if (!ImGui::GetIO().WantTextInput && !key_mappings.empty()) {
@@ -120,7 +138,6 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   context.ui_prefs.midi_keyboard_typing_octave =
       static_cast<int>(input.keyboard_typing_octave);
 
-  auto &ui_prefs = context.ui_prefs;
   if (!ui_prefs.show_midi_keyboard) {
     return;
   }
@@ -142,7 +159,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       keyboard_settings.key = Key::C;
       context.ui_prefs.midi_keyboard_key = static_cast<int>(Key::C);
     }
-    refresh_state(context.state, input);
+    refresh_state(context.state, input, typing_layout);
   }
 
   ImGui::SameLine(0, 16);
@@ -155,7 +172,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (ImGui::Combo("Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
     keyboard_settings.key = static_cast<Key>(current_key);
     context.ui_prefs.midi_keyboard_key = current_key;
-    refresh_state(context.state, input);
+    refresh_state(context.state, input, typing_layout);
   }
   if (keyboard_settings.scale == Scale::CHROMATIC)
     ImGui::EndDisabled();
@@ -168,7 +185,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                        typing_label(context.state))) {
     input.keyboard_typing_octave = current_key_octave;
     context.ui_prefs.midi_keyboard_typing_octave = current_key_octave;
-    refresh_state(context.state, input);
+    refresh_state(context.state, input, typing_layout);
   }
   if (ImGui::IsItemHovered()) {
     ImGui::SetTooltip("'<' key: down\n'>' key: up");

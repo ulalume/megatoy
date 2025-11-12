@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/types.hpp"
+#include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/theme.hpp"
 #include <filesystem>
 #include <string>
@@ -28,6 +29,7 @@ struct UIPreferences {
   int midi_keyboard_scale = static_cast<int>(Scale::CHROMATIC);
   int midi_keyboard_key = static_cast<int>(Key::C);
   int midi_keyboard_typing_octave = 4;
+  int midi_keyboard_layout = static_cast<int>(ui::TypingKeyboardLayout::Qwerty);
 
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
     return lhs.show_patch_editor == rhs.show_patch_editor &&
@@ -47,7 +49,8 @@ struct UIPreferences {
            lhs.metadata_star_filter == rhs.metadata_star_filter &&
            lhs.midi_keyboard_scale == rhs.midi_keyboard_scale &&
            lhs.midi_keyboard_key == rhs.midi_keyboard_key &&
-           lhs.midi_keyboard_typing_octave == rhs.midi_keyboard_typing_octave;
+           lhs.midi_keyboard_typing_octave == rhs.midi_keyboard_typing_octave &&
+           lhs.midi_keyboard_layout == rhs.midi_keyboard_layout;
   }
 
   friend bool operator!=(const UIPreferences &lhs, const UIPreferences &rhs) {

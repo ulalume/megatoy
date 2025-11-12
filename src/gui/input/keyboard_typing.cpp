@@ -1,32 +1,49 @@
 #include "keyboard_typing.hpp"
+#include "typing_keyboard_layout.hpp"
+#include <array>
 #include <cstring>
 #include <imgui.h>
 #include <map>
+#include <vector>
 
 namespace ui {
 
-static constexpr ImGuiKey chromatic_keyboard_keys[] = {
-    ImGuiKey_A, ImGuiKey_W,         ImGuiKey_S,    ImGuiKey_E, ImGuiKey_D,
-    ImGuiKey_F, ImGuiKey_T,         ImGuiKey_G,    ImGuiKey_Y, ImGuiKey_H,
-    ImGuiKey_U, ImGuiKey_J,         ImGuiKey_K,    ImGuiKey_O, ImGuiKey_L,
-    ImGuiKey_P, ImGuiKey_Semicolon, ImGuiKey_None,
-};
-static constexpr ImGuiKey none_chromatic_keyboard_keys[] = {
-    ImGuiKey_A, ImGuiKey_S,         ImGuiKey_D,   ImGuiKey_F,
-    ImGuiKey_G, ImGuiKey_H,         ImGuiKey_J,   ImGuiKey_K,
-    ImGuiKey_L, ImGuiKey_Semicolon, ImGuiKey_None};
+namespace {
+
+constexpr std::array<size_t, 11> non_chromatic_key_indices{0,  2,  4,  5,  7, 9,
+                                                           11, 12, 14, 16, 17};
+
+std::vector<ImGuiKey> keys_for_scale(Scale scale, TypingKeyboardLayout layout) {
+  const auto &base_keys = typing_layout_keys(layout);
+  if (scale == Scale::CHROMATIC) {
+    return {base_keys.begin(), base_keys.end()};
+  }
+  std::vector<ImGuiKey> filtered;
+  filtered.reserve(non_chromatic_key_indices.size());
+  for (const auto idx : non_chromatic_key_indices) {
+    if (idx >= base_keys.size()) {
+      break;
+    }
+    filtered.push_back(base_keys[idx]);
+  }
+  return filtered;
+}
+
+} // namespace
 
 const std::map<ImGuiKey, ym2612::Note>
-create_key_mappings(Scale scale, Key key, uint8_t selected_octave) {
-  const ImGuiKey *keyboard_keys = scale == Scale::CHROMATIC
-                                      ? chromatic_keyboard_keys
-                                      : none_chromatic_keyboard_keys;
+create_key_mappings(Scale scale, Key key, uint8_t selected_octave,
+                    TypingKeyboardLayout layout) {
+  const auto keyboard_keys = keys_for_scale(scale, layout);
 
   auto keys = keys_from_scale_and_key(scale, key);
   std::map<ImGuiKey, ym2612::Note> key_mappings;
   auto i = 0;
   auto old_key = 1000;
   while (true) {
+    if (i >= static_cast<int>(keyboard_keys.size())) {
+      break;
+    }
     auto keyboard_key = keyboard_keys[i];
     if (keyboard_key == ImGuiKey_None)
       break;

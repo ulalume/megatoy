@@ -1,7 +1,8 @@
 #include "preferences.hpp"
+#include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
-#include "platform/platform_config.hpp"
+#include <algorithm>
 #include <imgui.h>
 
 namespace ui {
@@ -119,6 +120,17 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
         ImGui::BulletText("%s", name.c_str());
       }
       ImGui::Unindent();
+    }
+
+    ImGui::SeparatorText("Typing Keyboard");
+    const int layout_count =
+        static_cast<int>(ui::typing_keyboard_layout_names.size());
+    ui_prefs.midi_keyboard_layout =
+        std::clamp(ui_prefs.midi_keyboard_layout, 0, layout_count - 1);
+    int current_layout = ui_prefs.midi_keyboard_layout;
+    if (ImGui::Combo("Layout", &current_layout,
+                     ui::typing_keyboard_layout_names.data(), layout_count)) {
+      ui_prefs.midi_keyboard_layout = current_layout;
     }
   }
 

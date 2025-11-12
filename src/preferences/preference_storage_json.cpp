@@ -1,6 +1,4 @@
 #include "preference_storage.hpp"
-
-#include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/local_storage.hpp"
 #endif
@@ -22,15 +20,15 @@ public:
         ,
         use_local_storage_(false)
 #endif
-  {}
+  {
+  }
 
   bool load(PreferenceData &data) override {
     try {
       nlohmann::json j;
       if (use_local_storage_) {
 #if defined(MEGATOY_PLATFORM_WEB)
-        auto stored =
-            platform::web::read_local_storage("megatoy_preferences");
+        auto stored = platform::web::read_local_storage("megatoy_preferences");
         if (!stored.has_value()) {
           return true;
         }
@@ -116,6 +114,10 @@ public:
           data.ui_preferences.midi_keyboard_typing_octave =
               ui["midi_keyboard_typing_octave"].get<int>();
         }
+        if (ui.contains("midi_keyboard_layout")) {
+          data.ui_preferences.midi_keyboard_layout =
+              ui["midi_keyboard_layout"].get<int>();
+        }
       }
 
       return true;
@@ -148,12 +150,12 @@ public:
       ui["midi_keyboard_key"] = data.ui_preferences.midi_keyboard_key;
       ui["midi_keyboard_typing_octave"] =
           data.ui_preferences.midi_keyboard_typing_octave;
+      ui["midi_keyboard_layout"] = data.ui_preferences.midi_keyboard_layout;
       j["ui"] = ui;
 
       if (use_local_storage_) {
 #if defined(MEGATOY_PLATFORM_WEB)
-        platform::web::write_local_storage("megatoy_preferences",
-                                           j.dump(2));
+        platform::web::write_local_storage("megatoy_preferences", j.dump(2));
 #endif
       } else {
         auto stream =
