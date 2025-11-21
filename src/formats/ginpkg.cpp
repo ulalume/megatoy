@@ -132,6 +132,24 @@ const std::vector<HistoryEntry> &GinPackage::history() const {
   return history_;
 }
 
+std::optional<std::string> GinPackage::snapshot(const std::string &uuid) const {
+  auto it = snapshots_.find(uuid);
+  if (it != snapshots_.end()) {
+    return it->second;
+  }
+  return std::nullopt;
+}
+
+bool GinPackage::DeleteVersion(const std::string &uuid) {
+  const auto before_size = history_.size();
+  history_.erase(
+      std::remove_if(history_.begin(), history_.end(),
+                     [&](const HistoryEntry &entry) { return entry.uuid == uuid; }),
+      history_.end());
+  snapshots_.erase(uuid);
+  return history_.size() != before_size;
+}
+
 void GinPackage::AddVersion(const std::string &json_snapshot,
                             const std::string &comment) {
   if (json_snapshot.empty()) {
@@ -343,6 +361,53 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &package_path) 
     std::cerr << "Failed to load ginpkg '" << package_path
               << "': " << e.what() << std::endl;
     return {};
+  }
+}
+
+std::optional<GinPackage> load_package(const std::filesystem::path &path) {
+  GinPackage package;
+  if (!package.Load(path)) {
+    return std::nullopt;
+  }
+  return package;
+}
+
+std::optional<ym2612::Patch> read_version(const std::filesystem::path &path,
+                                          const std::string &uuid) {
+  try {
+    auto package = load_package(path);
+    if (!package) {
+      return std::nullopt;
+    }
+    auto snapshot = package->snapshot(uuid);
+    if (!snapshot) {
+      return std::nullopt;
+    }
+    auto json = nlohmann::json::parse(*snapshot);
+    ym2612::Patch patch = json.get<ym2612::Patch>();
+    return patch;
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to load ginpkg version '" << uuid
+              << "' from " << path << ": " << e.what() << std::endl;
+    return std::nullopt;
+  }
+}
+
+bool delete_version(const std::filesystem::path &path,
+                    const std::string &uuid) {
+  try {
+    auto package = load_package(path);
+    if (!package) {
+      return false;
+    }
+    if (!package->DeleteVersion(uuid)) {
+      return false;
+    }
+    return package->Save(path);
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to delete ginpkg version '" << uuid
+              << "' from " << path << ": " << e.what() << std::endl;
+    return false;
   }
 }
 

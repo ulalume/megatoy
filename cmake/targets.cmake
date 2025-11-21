@@ -52,6 +52,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/operator_editor.cpp
   src/gui/components/patch_drop.cpp
   src/gui/components/patch_editor.cpp
+  src/gui/components/patch_history.cpp
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/preferences.cpp

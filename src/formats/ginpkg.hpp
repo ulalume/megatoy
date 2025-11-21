@@ -32,6 +32,8 @@ public:
                   const std::string &comment = "");
 
   const std::vector<HistoryEntry> &history() const;
+  std::optional<std::string> snapshot(const std::string &uuid) const;
+  bool DeleteVersion(const std::string &uuid);
 
 private:
   std::string current_data_;
@@ -48,5 +50,11 @@ save_patch(const std::filesystem::path &patches_dir,
            const std::string &comment = "");
 
 std::vector<ym2612::Patch> read_file(const std::filesystem::path &package_path);
+
+std::optional<GinPackage> load_package(const std::filesystem::path &path);
+std::optional<ym2612::Patch> read_version(const std::filesystem::path &path,
+                                          const std::string &uuid);
+bool delete_version(const std::filesystem::path &path,
+                    const std::string &uuid);
 
 } // namespace formats::ginpkg

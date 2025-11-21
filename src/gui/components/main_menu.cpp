@@ -85,6 +85,10 @@ void render_main_menu(MainMenuContext &context) {
                       &ui_prefs.show_patch_selector);
       ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
       ImGui::MenuItem(PATCH_LAB_TITLE, nullptr, &ui_prefs.show_patch_lab);
+#if !defined(MEGATOY_PLATFORM_WEB)
+      ImGui::MenuItem(PATCH_HISTORY_TITLE, nullptr,
+                      &ui_prefs.show_patch_history);
+#endif
       ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
                       &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);

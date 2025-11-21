@@ -63,7 +63,10 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
 #if defined(MEGATOY_PLATFORM_WEB)
       is_user_patch ? "Overwrite" : "Save to 'localStorage'";
 #else
-      is_user_patch ? "Overwrite" : "Save to 'user'";
+      is_user_patch ? (patch_session.current_patch_path().ends_with(".ginpkg")
+                           ? "Save version"
+                           : "Overwrite")
+                    : "Save to 'user'";
 #endif
   ImVec2 pos = ImGui::GetCursorPos();
   if (ImGui::Button(save_label)) {
@@ -101,8 +104,13 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
       ImGui::SetTooltip("Save to localStorage as %s.ginpkg",
                         patch_session.current_patch().name.c_str());
 #else
-      ImGui::SetTooltip("Save to user/%s.ginpkg",
-                        patch_session.current_patch().name.c_str());
+      if (patch_session.current_patch_path().ends_with(".ginpkg")) {
+        ImGui::SetTooltip("Save version to %s",
+                          patch_session.current_patch_path().c_str());
+      } else {
+        ImGui::SetTooltip("Save to user/%s.ginpkg",
+                          patch_session.current_patch().name.c_str());
+      }
 #endif
     } else if (!is_patch_modified) {
       ImGui::SetTooltip("Patch is not modified");

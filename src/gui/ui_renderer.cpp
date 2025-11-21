@@ -7,6 +7,7 @@
 #include "gui/components/mml_console.hpp"
 #include "gui/components/patch_drop.hpp"
 #include "gui/components/patch_editor.hpp"
+#include "gui/components/patch_history.hpp"
 #include "gui/components/patch_lab_window.hpp"
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
@@ -115,6 +116,11 @@ PatchLabState &patch_lab_state() {
   return state;
 }
 
+PatchHistoryState &patch_history_state() {
+  static PatchHistoryState state;
+  return state;
+}
+
 MidiKeyboardState &midi_keyboard_state() {
   static MidiKeyboardState state;
   return state;
@@ -199,6 +205,11 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
           [](const std::filesystem::path &path) {
             reveal_in_file_manager(path.string());
           }};
+}
+
+PatchHistoryContext make_patch_history_context(AppContext &ctx) {
+  auto &ui_state = ctx.app_state().ui_state();
+  return {ctx.services.patch_session, ui_state.prefs};
 }
 
 MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
@@ -293,20 +304,26 @@ void render_all(AppContext &ctx) {
   render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
                       patch_editor_state());
 
+#if !defined(MEGATOY_PLATFORM_WEB)
+  auto patch_history_context = make_patch_history_context(ctx);
+  render_patch_history(PATCH_HISTORY_TITLE, patch_history_context,
+                       patch_history_state());
+#endif
+
   auto patch_selector_context = make_patch_selector_context(ctx);
   render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);
 
   auto preferences_context = make_preferences_context(ctx);
   render_preferences_window(PREFERENCES_TITLE, preferences_context);
 
+  auto midi_keyboard_context = make_midi_keyboard_context(ctx);
+  render_midi_keyboard(SOFT_KEYBOARD_TITLE, midi_keyboard_context);
+
   auto mml_context = make_mml_console_context(ctx);
   render_mml_console(MML_CONSOLE_TITLE, mml_context);
 
   auto patch_lab_context = make_patch_lab_context(ctx);
   render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
-
-  auto midi_keyboard_context = make_midi_keyboard_context(ctx);
-  render_midi_keyboard(SOFT_KEYBOARD_TITLE, midi_keyboard_context);
 
 #if !defined(MEGATOY_PLATFORM_WEB)
   auto waveform_context = make_waveform_context(ctx);
