@@ -38,6 +38,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/ctrmml.cpp
   src/formats/dmp.cpp
   src/formats/gin.cpp
+  src/formats/ginpkg.cpp
   src/formats/fui.cpp
   src/formats/patch_loader.cpp
   src/formats/rym2612.cpp
@@ -146,6 +147,7 @@ target_link_libraries(megatoy_core PUBLIC
   nlohmann_json::nlohmann_json
   chord_detector::chord_detector
   kissfft
+  miniz
 )
 
 if(NOT EMSCRIPTEN)

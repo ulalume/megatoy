@@ -21,10 +21,10 @@ constexpr std::string_view kLocalStorageRelativePrefix = "localStorage/";
 
 std::string extract_local_storage_id(
     const patches::PatchEntry &entry) { // NOLINT(misc-no-recursion)
-  const std::string full =
-      entry.full_path.empty() ? std::string{} : entry.full_path.generic_string();
-  if (!full.empty() &&
-      full.rfind(kLocalStorageAbsolutePrefix, 0) == 0) {
+  const std::string full = entry.full_path.empty()
+                               ? std::string{}
+                               : entry.full_path.generic_string();
+  if (!full.empty() && full.rfind(kLocalStorageAbsolutePrefix, 0) == 0) {
     return full.substr(kLocalStorageAbsolutePrefix.size());
   }
   if (entry.relative_path.rfind(kLocalStorageRelativePrefix, 0) == 0) {
@@ -96,11 +96,9 @@ void PatchRepository::refresh() {
   for (const auto &info : platform::web::patch_store::list()) {
     PatchEntry entry;
     entry.name = info.name;
-    entry.relative_path =
-        std::string(kLocalStorageRelativePrefix) + info.name;
-    entry.full_path =
-        std::filesystem::path(std::string(kLocalStorageAbsolutePrefix) +
-                              info.id);
+    entry.relative_path = std::string(kLocalStorageRelativePrefix) + info.name;
+    entry.full_path = std::filesystem::path(
+        std::string(kLocalStorageAbsolutePrefix) + info.id);
     entry.format = "web_gin";
     entry.is_directory = false;
     local_storage_children.push_back(std::move(entry));
@@ -201,7 +199,7 @@ bool PatchRepository::has_directory_changed() const {
 }
 
 std::vector<std::string> PatchRepository::supported_extensions() {
-  return {".gin", ".rym2612", ".dmp", ".fui", ".mml"};
+  return {".gin", ".ginpkg", ".rym2612", ".dmp", ".fui", ".mml"};
 }
 
 void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
@@ -316,11 +314,8 @@ PatchRepository::detect_format(const std::filesystem::path &file_path) const {
                  ::tolower);
 
   static const std::unordered_map<std::string, std::string> format_map = {
-      {".gin", "gin"},
-      {".rym2612", "rym2612"},
-      {".dmp", "dmp"},
-      {".fui", "fui"},
-      {".mml", "ctrmml"}};
+      {".gin", "gin"}, {".ginpkg", "ginpkg"}, {".rym2612", "rym2612"},
+      {".dmp", "dmp"}, {".fui", "fui"},       {".mml", "ctrmml"}};
 
   auto it = format_map.find(extension);
   return it != format_map.end() ? it->second : "unknown";
@@ -341,8 +336,7 @@ std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
 #if defined(MEGATOY_PLATFORM_WEB)
   const std::string generic = path.generic_string();
-  if (!generic.empty() &&
-      generic.rfind(kLocalStorageRelativeRoot, 0) == 0) {
+  if (!generic.empty() && generic.rfind(kLocalStorageRelativeRoot, 0) == 0) {
     return path;
   }
 #endif
@@ -366,8 +360,7 @@ PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
   std::string relative = path.generic_string();
 
 #if defined(MEGATOY_PLATFORM_WEB)
-  if (!relative.empty() &&
-      relative.rfind(kLocalStorageRelativeRoot, 0) == 0) {
+  if (!relative.empty() && relative.rfind(kLocalStorageRelativeRoot, 0) == 0) {
     return path;
   }
 #endif

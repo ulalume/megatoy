@@ -98,10 +98,10 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
       ImGui::SetTooltip("Enter a valid patch name to save");
     } else if (!is_user_patch) {
 #if defined(MEGATOY_PLATFORM_WEB)
-      ImGui::SetTooltip("Save to localStorage as %s.gin",
+      ImGui::SetTooltip("Save to localStorage as %s.ginpkg",
                         patch_session.current_patch().name.c_str());
 #else
-      ImGui::SetTooltip("Save to user/%s.gin",
+      ImGui::SetTooltip("Save to user/%s.ginpkg",
                         patch_session.current_patch().name.c_str());
 #endif
     } else if (!is_patch_modified) {
