@@ -235,7 +235,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
 
   update_playback(context, ImGui::GetIO().DeltaTime);
 
-  if (!ImGui::GetIO().WantTextInput && !key_mappings.empty()) {
+  const ImGuiIO &io = ImGui::GetIO();
+  const bool primary_modifier = io.KeyCtrl || io.KeySuper;
+  if (!primary_modifier && !ImGui::GetIO().WantTextInput &&
+      !key_mappings.empty()) {
     KeyboardTypingContext typing_context{
         context.input_state, octave_keys.first, octave_keys.second,
         [&context](ym2612::Note note, uint8_t velocity) {

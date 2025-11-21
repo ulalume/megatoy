@@ -1,7 +1,9 @@
 #pragma once
 
 #include "gui/gui_manager.hpp"
+#include "gui/save_export_state.hpp"
 #include "history/history_manager.hpp"
+#include "patches/patch_session.hpp"
 #include "preferences/preference_manager.hpp"
 #include <functional>
 
@@ -13,6 +15,8 @@ struct MainMenuContext {
   PreferenceManager &preferences;
   PreferenceManager::UIPreferences &ui_prefs;
   bool &open_directory_dialog;
+  patches::PatchSession &patch_session;
+  SaveExportState &save_state;
   std::function<void()> undo;
   std::function<void()> redo;
 };

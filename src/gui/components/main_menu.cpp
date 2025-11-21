@@ -1,8 +1,10 @@
 #include "main_menu.hpp"
 
 #include "about_dialog.hpp"
+#include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
 #include <imgui.h>
+#include <iostream>
 #include <string>
 #include <string_view>
 
@@ -27,6 +29,52 @@ void render_main_menu(MainMenuContext &context) {
       open_about = true;
     }
 #endif
+
+    const ImGuiIO &io = ImGui::GetIO();
+    auto &session = context.patch_session;
+    const bool name_valid = is_patch_name_valid(session.current_patch());
+    const bool is_patch_modified = session.is_modified();
+    const bool is_user_patch = session.current_patch_is_user_patch();
+    const bool save_disabled =
+        !name_valid || (is_user_patch && !is_patch_modified);
+    if (ImGui::BeginMenu("File")) {
+      const bool mac_behavior = io.ConfigMacOSXBehaviors;
+      const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
+      const char *save_label = save_label_for(session, is_user_patch);
+      if (save_disabled)
+        ImGui::BeginDisabled(true);
+      if (ImGui::MenuItem(save_label, save_shortcut)) {
+        trigger_save(session, context.save_state, is_user_patch);
+      }
+      if (save_disabled)
+        ImGui::EndDisabled();
+
+      if (!name_valid)
+        ImGui::BeginDisabled(true);
+      if (ImGui::BeginMenu("Export")) {
+        if (ImGui::MenuItem(".mml (ctrmml)")) {
+          trigger_export(session, context.save_state,
+                         patches::ExportFormat::MML);
+        }
+        if (ImGui::MenuItem(".dmp")) {
+          trigger_export(session, context.save_state,
+                         patches::ExportFormat::DMP);
+        }
+        ImGui::EndMenu();
+      }
+      if (!name_valid)
+        ImGui::EndDisabled();
+
+      ImGui::EndMenu();
+    }
+
+    if (!save_disabled) {
+      const bool primary_modifier = io.KeyCtrl || io.KeySuper;
+      std::cout << "Primary modifier: " << primary_modifier << std::endl;
+      if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+        trigger_save(session, context.save_state, is_user_patch);
+      }
+    }
 
     if (ImGui::BeginMenu("Edit")) {
       auto &history = context.history;

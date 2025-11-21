@@ -12,6 +12,7 @@
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
 #include "gui/components/waveform.hpp"
+#include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
 #include "history/snapshot_entry.hpp"
 #include "midi/midi_input_manager.hpp"
@@ -106,11 +107,6 @@ drop_actions::Environment make_drop_environment(AppContext &ctx) {
       }};
 }
 
-PatchEditorState &patch_editor_state() {
-  static PatchEditorState state;
-  return state;
-}
-
 PatchLabState &patch_lab_state() {
   static PatchLabState state;
   return state;
@@ -135,8 +131,26 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
           ctx.services.preference_manager,
           ui_state.prefs,
           ui_state.open_directory_dialog,
+          ctx.services.patch_session,
+          ui_state.save_export_state,
           [history_actions]() { history_actions.undo(); },
           [history_actions]() { history_actions.redo(); }};
+}
+
+void render_save_export_popup_host(AppContext &ctx) {
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
+                           ImGuiWindowFlags_NoInputs |
+                           ImGuiWindowFlags_NoBackground |
+                           ImGuiWindowFlags_NoSavedSettings |
+                           ImGuiWindowFlags_NoMove |
+                           ImGuiWindowFlags_NoScrollbar;
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos);
+  ImGui::SetNextWindowSize(ImVec2(0, 0));
+  if (ImGui::Begin("##save_export_popup_host", nullptr, flags)) {
+    render_save_export_popups(ctx.services.patch_session,
+                              ctx.app_state().ui_state().save_export_state);
+  }
+  ImGui::End();
 }
 
 PatchDropContext make_patch_drop_context(AppContext &ctx) {
@@ -302,7 +316,7 @@ void render_all(AppContext &ctx) {
 
   auto patch_editor_context = make_patch_editor_context(ctx);
   render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
-                      patch_editor_state());
+                      ctx.app_state().ui_state().save_export_state);
 
 #if !defined(MEGATOY_PLATFORM_WEB)
   auto patch_history_context = make_patch_history_context(ctx);
@@ -329,6 +343,9 @@ void render_all(AppContext &ctx) {
   auto waveform_context = make_waveform_context(ctx);
   render_waveform(WAVEFORM_TITLE, waveform_context);
 #endif
+
+  render_save_export_popup_host(ctx);
+
 }
 
 } // namespace ui

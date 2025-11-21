@@ -1,18 +1,15 @@
 #pragma once
 
 #include "app_state.hpp"
+#include "gui/save_export_state.hpp"
 #include "patches/patch_session.hpp"
-#include <imgui.h>
-
 #include <functional>
+#include <imgui.h>
 #include <string>
 
 namespace ui {
 
-struct PatchEditorState {
-  std::string last_export_path;
-  std::string last_export_error;
-};
+using PatchEditorState = SaveExportState;
 
 struct PatchEditorContext {
   patches::PatchSession &session;
