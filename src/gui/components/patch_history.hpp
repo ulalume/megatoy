@@ -15,6 +15,7 @@ struct PatchHistoryState {
   std::string loaded_path;
   std::vector<formats::ginpkg::HistoryEntry> versions;
   std::string current_data;
+  std::string current_timestamp;
   std::string error_message;
   bool refresh_requested = true;
   std::string selected_uuid;

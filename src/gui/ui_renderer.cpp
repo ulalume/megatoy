@@ -18,7 +18,6 @@
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
 #include <filesystem>
-#include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -138,12 +137,10 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
 }
 
 void render_save_export_popup_host(AppContext &ctx) {
-  ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
-                           ImGuiWindowFlags_NoInputs |
-                           ImGuiWindowFlags_NoBackground |
-                           ImGuiWindowFlags_NoSavedSettings |
-                           ImGuiWindowFlags_NoMove |
-                           ImGuiWindowFlags_NoScrollbar;
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar;
   ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos);
   ImGui::SetNextWindowSize(ImVec2(0, 0));
   if (ImGui::Begin("##save_export_popup_host", nullptr, flags)) {
@@ -345,7 +342,6 @@ void render_all(AppContext &ctx) {
 #endif
 
   render_save_export_popup_host(ctx);
-
 }
 
 } // namespace ui

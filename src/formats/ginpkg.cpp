@@ -116,6 +116,7 @@ GinPackage::GinPackage() { Clear(); }
 
 void GinPackage::Clear() {
   current_data_.clear();
+  current_timestamp_.clear();
   history_.clear();
   snapshots_.clear();
 }
@@ -124,6 +125,9 @@ bool GinPackage::empty() const { return current_data_.empty(); }
 
 void GinPackage::SetCurrentData(std::string data) {
   current_data_ = std::move(data);
+  if (current_timestamp_.empty()) {
+    current_timestamp_ = iso8601_utc_timestamp();
+  }
 }
 
 const std::string &GinPackage::current_data() const { return current_data_; }
@@ -157,12 +161,14 @@ void GinPackage::AddVersion(const std::string &json_snapshot,
   }
   HistoryEntry entry;
   entry.uuid = generate_uuid();
-  entry.timestamp = iso8601_utc_timestamp();
+  entry.timestamp = current_timestamp_.empty() ? iso8601_utc_timestamp()
+                                               : current_timestamp_;
   if (!comment.empty()) {
     entry.comment = comment;
   }
   history_.push_back(entry);
   snapshots_[entry.uuid] = json_snapshot;
+  current_timestamp_.clear();
 }
 
 bool GinPackage::Load(const std::filesystem::path &path) {
@@ -227,10 +233,17 @@ bool GinPackage::Load(const std::filesystem::path &path) {
           }
         }
       }
+      if (j.contains("current") && j["current"].is_object()) {
+        const auto &cur = j["current"];
+        if (cur.contains("timestamp") && cur["timestamp"].is_string()) {
+          current_timestamp_ = cur["timestamp"].get<std::string>();
+        }
+      }
     } catch (const std::exception &e) {
       std::cerr << "Failed to parse history.json in " << path
                 << ": " << e.what() << std::endl;
       history_.clear();
+      current_timestamp_.clear();
     }
   }
 
@@ -275,7 +288,13 @@ bool GinPackage::Save(const std::filesystem::path &path) const {
 
   bool ok = write_zip_entry(archive, kCurrentFile, current_data_);
   if (ok) {
-    const auto history_text = history_to_json(history_).dump(2);
+    nlohmann::json current_meta;
+    if (!current_timestamp_.empty()) {
+      current_meta["timestamp"] = current_timestamp_;
+    }
+    auto history_json = history_to_json(history_);
+    history_json["current"] = std::move(current_meta);
+    const auto history_text = history_json.dump(2);
     ok = write_zip_entry(archive, kHistoryFile, history_text);
   }
   if (ok) {

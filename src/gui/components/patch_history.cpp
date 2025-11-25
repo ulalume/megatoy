@@ -69,6 +69,9 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
   const bool is_ginpkg = is_ginpkg_path(path_str);
 
   if (!is_ginpkg) {
+    state.loaded_path = path_str;
+    state.selected_uuid = std::string(kCurrentId);
+    state.refresh_requested = false;
     ImGui::TextUnformatted(
         "Patch versions view is available for ginpkg packages only.");
     ImGui::End();
@@ -83,6 +86,7 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
     state.refresh_requested = true;
     state.loaded_path = path_str;
     state.last_write_time.reset();
+    state.selected_uuid = std::string(kCurrentId);
   }
 
   if (state.refresh_requested) {
@@ -91,10 +95,13 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
     if (package) {
       state.versions = package->history();
       state.current_data = package->current_data();
+      state.current_timestamp = package->current_timestamp();
+      state.selected_uuid = std::string(kCurrentId);
     } else {
       state.error_message = "Failed to read ginpkg.";
       state.versions.clear();
       state.current_data.clear();
+      state.current_timestamp.clear();
     }
     state.refresh_requested = false;
   }
@@ -107,13 +114,6 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
 
   if (!state.error_message.empty()) {
     ImGui::Text("%s", state.error_message.c_str());
-  }
-
-  if (state.versions.empty()) {
-    ImGui::TextUnformatted(
-        "No versions yet. Save to create your first version.");
-    ImGui::End();
-    return;
   }
 
   ImGui::Separator();
@@ -158,7 +158,9 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
       {
-        const std::string label = "Latest";
+        const std::string label = state.current_timestamp.empty()
+                                       ? "Latest"
+                                       : state.current_timestamp + " (Latest)";
         bool selected = state.selected_uuid == kCurrentId;
         if (ImGui::Selectable((label + "##current").c_str(), selected)) {
           state.selected_uuid = std::string(kCurrentId);

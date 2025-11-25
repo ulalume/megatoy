@@ -27,6 +27,7 @@ public:
 
   void SetCurrentData(std::string data);
   const std::string &current_data() const;
+  const std::string &current_timestamp() const { return current_timestamp_; }
 
   void AddVersion(const std::string &json_snapshot,
                   const std::string &comment = "");
@@ -37,6 +38,7 @@ public:
 
 private:
   std::string current_data_;
+  std::string current_timestamp_;
   std::vector<HistoryEntry> history_;
   std::unordered_map<std::string, std::string> snapshots_;
 };
