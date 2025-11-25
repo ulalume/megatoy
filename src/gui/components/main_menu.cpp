@@ -3,6 +3,7 @@
 #include "about_dialog.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
+#include "platform/platform_config.hpp"
 #include <imgui.h>
 #include <string>
 #include <string_view>

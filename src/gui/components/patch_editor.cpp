@@ -4,6 +4,7 @@
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "operator_editor.hpp"
+#include "platform/platform_config.hpp"
 #include <cctype>
 #include <cstring>
 #include <filesystem>

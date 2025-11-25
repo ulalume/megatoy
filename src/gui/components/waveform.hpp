@@ -1,5 +1,7 @@
 #pragma once
 
+#include "platform/platform_config.hpp"
+
 #include "preferences/preference_manager.hpp"
 #include "ym2612/fft_analyzer.hpp"
 #include "ym2612/note.hpp"

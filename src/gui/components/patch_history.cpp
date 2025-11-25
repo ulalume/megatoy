@@ -1,6 +1,7 @@
 #include "patch_history.hpp"
 
 #include "formats/ginpkg.hpp"
+#include "platform/platform_config.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <imgui.h>

@@ -1,6 +1,8 @@
+#include "platform/platform_config.hpp"
 #include "preference_storage.hpp"
 #include <algorithm>
 #include <imgui.h>
+
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/local_storage.hpp"
 #endif

@@ -3,6 +3,7 @@
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
+#include "platform/platform_config.hpp"
 #include <algorithm>
 #include <array>
 #include <imgui.h>

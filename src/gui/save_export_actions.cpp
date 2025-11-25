@@ -1,12 +1,12 @@
 #include "save_export_actions.hpp"
-
 #include "components/common.hpp"
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
-#include <imgui.h>
+#include "platform/platform_config.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <imgui.h>
 #include <iomanip>
 #include <sstream>
 
@@ -181,8 +181,8 @@ std::string base_name_without_counter(const std::string &name, int &start) {
   auto pos = name.find_last_of(' ');
   if (pos != std::string::npos && pos + 1 < name.size()) {
     std::string suffix = name.substr(pos + 1);
-    bool all_digits = !suffix.empty() &&
-                      std::all_of(suffix.begin(), suffix.end(), ::isdigit);
+    bool all_digits =
+        !suffix.empty() && std::all_of(suffix.begin(), suffix.end(), ::isdigit);
     if (all_digits) {
       try {
         int parsed = std::stoi(suffix);

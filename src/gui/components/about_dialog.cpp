@@ -55,8 +55,12 @@ bool open_external_url(const std::string &url) {
 
 #if defined(MEGATOY_PLATFORM_WEB)
 void open_url_in_browser(const std::string &url) {
-  EM_ASM({ var target = UTF8ToString($0); window.open(target, '_blank'); },
-         url.c_str());
+  EM_ASM(
+      {
+        var target = UTF8ToString($0);
+        window.open(target, '_blank');
+      },
+      url.c_str());
 }
 #endif
 

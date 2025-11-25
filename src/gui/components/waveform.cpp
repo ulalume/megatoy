@@ -1,5 +1,6 @@
 #include "waveform.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "platform/platform_config.hpp"
 #include <cstddef>
 #include <imgui.h>
 #include <imgui_internal.h>

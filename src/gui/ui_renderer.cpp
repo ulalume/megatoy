@@ -17,6 +17,7 @@
 #include "history/snapshot_entry.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
+#include "platform/platform_config.hpp"
 #include <filesystem>
 #include <string>
 #include <utility>
