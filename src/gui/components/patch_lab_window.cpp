@@ -170,6 +170,9 @@ void apply_patch_result(PatchLabContext &context,
 }
 
 void render_random_section(PatchLabContext &context, PatchLabState &state) {
+  ImGui::TextWrapped("Generates a new patch each time.");
+  ImGui::Spacing();
+
   ImGui::SetNextItemWidth(120.0f);
   ImGui::InputInt("Seed (auto = -1)", &state.random_seed);
 
@@ -195,6 +198,11 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
 
 void render_merge_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
+  ImGui::TextWrapped(
+      "Mixes two patches by randomly choosing parameters from Patch A and "
+      "Patch B.");
+  ImGui::Spacing();
+
   auto sanitized_a = sanitize_selection(state.source_a, entries);
   auto sanitized_b = sanitize_selection(state.source_b, entries);
   state.source_a = sanitized_a;
@@ -252,6 +260,11 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
 
 void render_morph_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
+  ImGui::TextWrapped(
+      "Interpolates between Patch A and Patch B with the blend slider for "
+      "smooth transitions.");
+  ImGui::Spacing();
+
   auto sanitized_a = sanitize_selection(state.source_a, entries);
   auto sanitized_b = sanitize_selection(state.source_b, entries);
   state.source_a = sanitized_a;
@@ -305,6 +318,11 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
 }
 
 void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
+  ImGui::TextWrapped(
+      "Perturbs the current patch; adjust variation depth and probability, "
+      "and optionally lock the algorithm.");
+  ImGui::Spacing();
+
   state.mutate_amount = std::clamp(state.mutate_amount, 0, 12);
   state.mutate_probability = std::clamp(state.mutate_probability, 0.0f, 1.0f);
 
