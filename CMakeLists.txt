@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.5.3" CACHE STRING "megatoy application version")
+set(MEGATOY_VERSION "0.5.4" CACHE STRING "megatoy application version")
 project(megatoy VERSION ${MEGATOY_VERSION})
 
 # Objective-C sources are used for macOS integrations
@@ -104,7 +104,7 @@ if(EMSCRIPTEN)
       INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ""
     )
   endif()
-  
+
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msimd128")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msimd128")
   option(MEGATOY_GENERATE_SIMPLE_HTML
