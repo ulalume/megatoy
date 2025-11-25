@@ -70,7 +70,6 @@ void render_main_menu(MainMenuContext &context) {
 
     if (!save_disabled) {
       const bool primary_modifier = io.KeyCtrl || io.KeySuper;
-      std::cout << "Primary modifier: " << primary_modifier << std::endl;
       if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
         trigger_save(session, context.save_state, is_user_patch);
       }
