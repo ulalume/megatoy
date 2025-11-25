@@ -19,4 +19,10 @@ void trigger_export(patches::PatchSession &session, SaveExportState &state,
 void render_save_export_popups(patches::PatchSession &session,
                                SaveExportState &state);
 
+// Duplicate helpers
+void start_duplicate_dialog(patches::PatchSession &session,
+                            SaveExportState &state);
+void render_duplicate_dialog(patches::PatchSession &session,
+                             SaveExportState &state);
+
 } // namespace ui

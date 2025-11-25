@@ -17,6 +17,11 @@ struct SaveExportState {
   };
 
   Pending pending_popup = Pending::None;
+
+  struct DuplicateDialog {
+    bool open = false;
+    std::string name;
+  } duplicate;
 };
 
 } // namespace ui

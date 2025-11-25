@@ -1,7 +1,6 @@
 #pragma once
 
 #include "formats/ginpkg.hpp"
-#include "gui/window_title.hpp"
 #include "patches/patch_session.hpp"
 #include "preferences/preference_manager.hpp"
 #include <filesystem>

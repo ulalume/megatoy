@@ -4,7 +4,6 @@
 #include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
 #include <imgui.h>
-#include <iostream>
 #include <string>
 #include <string_view>
 
@@ -12,14 +11,17 @@ namespace ui {
 
 void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
+  const ImGuiIO &io = ImGui::GetIO();
   if (ImGui::BeginMainMenuBar()) {
 #if !defined(MEGATOY_PLATFORM_WEB)
     if (ImGui::BeginMenu("megatoy")) {
+      const bool mac_behavior = io.ConfigMacOSXBehaviors;
+
       if (ImGui::MenuItem("About megatoy")) {
         open_about = true;
       }
       ImGui::Separator();
-      if (ImGui::MenuItem("Quit")) {
+      if (ImGui::MenuItem("Quit", mac_behavior ? "Cmd+Q" : "Alt+F4")) {
         context.gui.set_should_close(true);
       }
       ImGui::EndMenu();
@@ -29,8 +31,6 @@ void render_main_menu(MainMenuContext &context) {
       open_about = true;
     }
 #endif
-
-    const ImGuiIO &io = ImGui::GetIO();
     auto &session = context.patch_session;
     const bool name_valid = is_patch_name_valid(session.current_patch());
     const bool is_patch_modified = session.is_modified();
@@ -48,6 +48,18 @@ void render_main_menu(MainMenuContext &context) {
       }
       if (save_disabled)
         ImGui::EndDisabled();
+
+      if (!name_valid)
+        ImGui::BeginDisabled(true);
+      const char *duplicate_shortcut =
+          mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
+      if (ImGui::MenuItem("Duplicate...", duplicate_shortcut)) {
+        start_duplicate_dialog(session, context.save_state);
+      }
+      if (!name_valid)
+        ImGui::EndDisabled();
+
+      ImGui::Separator();
 
       if (!name_valid)
         ImGui::BeginDisabled(true);
@@ -69,9 +81,15 @@ void render_main_menu(MainMenuContext &context) {
     }
 
     if (!save_disabled) {
-      const bool primary_modifier = io.KeyCtrl || io.KeySuper;
+      const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && !io.KeyShift;
       if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
         trigger_save(session, context.save_state, is_user_patch);
+      }
+    }
+    if (name_valid) {
+      const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && io.KeyShift;
+      if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+        start_duplicate_dialog(session, context.save_state);
       }
     }
 

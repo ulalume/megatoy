@@ -4,7 +4,6 @@
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "operator_editor.hpp"
-#include "platform/platform_config.hpp"
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -94,6 +93,17 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
     ImGui::EndDisabled();
   }
 
+  ImGui::SameLine();
+  if (!name_valid) {
+    ImGui::BeginDisabled(true);
+  }
+  if (ImGui::Button("Duplicate...")) {
+    start_duplicate_dialog(context.session, state);
+  }
+  if (!name_valid) {
+    ImGui::EndDisabled();
+  }
+
   if (!name_valid) {
     ImGui::BeginDisabled(true);
   }
@@ -109,6 +119,10 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
   auto relative_path = patch_session.repository().to_relative_path(
       patch_session.current_patch_path());
   ImGui::Text("%s", display_preset_path(relative_path).c_str());
+
+  // Render popups in the same window/ID stack as the actions that open them.
+  render_save_export_popups(patch_session, state);
+  render_duplicate_dialog(patch_session, state);
 }
 
 void render_patch_name_field(PatchEditorContext &context, ym2612::Patch &patch,

@@ -159,8 +159,8 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
       ImGui::TableSetColumnIndex(0);
       {
         const std::string label = state.current_timestamp.empty()
-                                       ? "Latest"
-                                       : state.current_timestamp + " (Latest)";
+                                      ? "Latest"
+                                      : state.current_timestamp + " (Latest)";
         bool selected = state.selected_uuid == kCurrentId;
         if (ImGui::Selectable((label + "##current").c_str(), selected)) {
           state.selected_uuid = std::string(kCurrentId);

@@ -5,6 +5,10 @@
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
 #include <imgui.h>
+#include <algorithm>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
 
 namespace ui {
 
@@ -160,6 +164,130 @@ void render_save_export_popups(patches::PatchSession &session,
     if (ImGui::Button("OK", ImVec2(120, 0))) {
       ImGui::CloseCurrentPopup();
     }
+    ImGui::EndPopup();
+  }
+}
+
+namespace {
+
+std::string format_number(int number) {
+  std::ostringstream oss;
+  oss << std::setw(2) << std::setfill('0') << number;
+  return oss.str();
+}
+
+std::string base_name_without_counter(const std::string &name, int &start) {
+  start = 2;
+  auto pos = name.find_last_of(' ');
+  if (pos != std::string::npos && pos + 1 < name.size()) {
+    std::string suffix = name.substr(pos + 1);
+    bool all_digits = !suffix.empty() &&
+                      std::all_of(suffix.begin(), suffix.end(), ::isdigit);
+    if (all_digits) {
+      try {
+        int parsed = std::stoi(suffix);
+        if (parsed >= 1) {
+          start = parsed + 1;
+          return name.substr(0, pos);
+        }
+      } catch (...) {
+      }
+    }
+  }
+  return name;
+}
+
+std::filesystem::path to_candidate_path(const patches::PatchSession &session,
+                                        const std::string &name) {
+  std::string filename = name;
+  if (!filename.ends_with(".ginpkg") && !filename.ends_with(".gin")) {
+    filename += ".ginpkg";
+  }
+  return session.repository().to_absolute_path(filename);
+}
+
+bool name_conflicts(const patches::PatchSession &session,
+                    const std::string &name) {
+  auto abs = to_candidate_path(session, name);
+  return std::filesystem::exists(abs);
+}
+
+std::string generate_duplicate_name(const patches::PatchSession &session) {
+  const std::string current = session.current_patch().name;
+  int counter = 0;
+  auto base = base_name_without_counter(current, counter);
+  if (base.empty()) {
+    base = "patch";
+  }
+
+  std::string candidate;
+  while (true) {
+    candidate = base + " " + format_number(counter);
+    if (!name_conflicts(session, candidate)) {
+      break;
+    }
+    ++counter;
+  }
+  return candidate;
+}
+
+} // namespace
+
+void start_duplicate_dialog(patches::PatchSession &session,
+                            SaveExportState &state) {
+  state.duplicate.open = true;
+  state.duplicate.name = generate_duplicate_name(session);
+}
+
+void render_duplicate_dialog(patches::PatchSession &session,
+                             SaveExportState &state) {
+  if (!state.duplicate.open) {
+    return;
+  }
+
+  ImGui::OpenPopup("Duplicate Patch");
+  if (ImGui::BeginPopupModal("Duplicate Patch", &state.duplicate.open,
+                             ImGuiWindowFlags_AlwaysAutoResize)) {
+    char buffer[128];
+    std::strncpy(buffer, state.duplicate.name.c_str(), sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+
+    ImGui::Text("Enter a new name for the duplicate:");
+    ImGui::InputText("##dup_name", buffer, sizeof(buffer));
+    state.duplicate.name = buffer;
+
+    ym2612::Patch temp = session.current_patch();
+    temp.name = state.duplicate.name;
+    bool name_valid = is_patch_name_valid(temp);
+    bool exists = name_conflicts(session, state.duplicate.name);
+    bool disable_save = !name_valid || exists || state.duplicate.name.empty();
+
+    if (exists) {
+      ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "Name already exists");
+    } else if (!name_valid) {
+      ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "Invalid name");
+    }
+
+    ImGui::Spacing();
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+      state.duplicate.open = false;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (disable_save)
+      ImGui::BeginDisabled(true);
+    if (ImGui::Button("Save", ImVec2(120, 0))) {
+      auto original_name = session.current_patch().name;
+      auto patch_copy = session.current_patch();
+      patch_copy.name = state.duplicate.name;
+      session.set_current_patch(patch_copy, session.current_patch_path());
+      trigger_save(session, state, false);
+      state.duplicate.open = false;
+      ImGui::CloseCurrentPopup();
+    }
+    if (disable_save)
+      ImGui::EndDisabled();
+
     ImGui::EndPopup();
   }
 }
