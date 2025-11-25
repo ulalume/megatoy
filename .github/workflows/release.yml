@@ -116,7 +116,7 @@ jobs:
 
   build-macos-arm64:
     needs: create_release
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       BUILD_TYPE: Release
       VERSION: ${{ github.ref_name }}
@@ -157,7 +157,7 @@ jobs:
 
   build-macos-x86_64:
     needs: create_release
-    runs-on: macos-13
+    runs-on: macos-15-intel
     env:
       BUILD_TYPE: Release
       VERSION: ${{ github.ref_name }}
