@@ -201,8 +201,8 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
     options.mutate_iterations = state.random_template_iterations;
 
     auto result = patch_lab::random_patch(options);
-    apply_patch_result(context, "Patch Lab Randomize", "patch_lab.random",
-                       result.patch);
+    auto key = "patch_lab.random: " + std::to_string(result.seed);
+    apply_patch_result(context, "Patch Lab Randomize", key, result.patch);
     state.random_last_seed = result.seed;
     state.random_has_result = true;
   }
