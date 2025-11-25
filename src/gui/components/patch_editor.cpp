@@ -1,9 +1,9 @@
 #include "patch_editor.hpp"
 #include "common.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
+#include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "operator_editor.hpp"
-#include "platform/platform_config.hpp"
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -39,15 +39,9 @@ static int filename_input_callback(ImGuiInputTextCallbackData *data) {
 
 namespace {
 
-bool is_patch_name_valid(const ym2612::Patch &patch) {
-  return !patch.name.empty() &&
-         patches::sanitize_filename(patch.name) == patch.name;
-}
-
 void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
                                 PatchEditorState &state) {
   auto &patch_session = context.session;
-  auto &repository = patch_session.repository();
 
   auto is_user_patch = patch_session.current_patch_is_user_patch();
   auto is_patch_modified = patch_session.is_modified();
@@ -59,28 +53,10 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
     ImGui::BeginDisabled(true);
   }
 
-  const char *save_label =
-#if defined(MEGATOY_PLATFORM_WEB)
-      is_user_patch ? "Overwrite" : "Save to 'localStorage'";
-#else
-      is_user_patch ? "Overwrite" : "Save to 'user'";
-#endif
+  const char *save_label = save_label_for(patch_session, is_user_patch);
   ImVec2 pos = ImGui::GetCursorPos();
   if (ImGui::Button(save_label)) {
-    auto result = patch_session.save_current_patch(is_user_patch);
-    if (result.is_duplicated()) {
-      state.last_export_path = result.path.string();
-      ImGui::OpenPopup("Overwrite Confirmation");
-    } else if (result.is_success()) {
-      state.last_export_path = result.path.string();
-      ImGui::OpenPopup("Save Success");
-      repository.refresh();
-      patch_session.set_current_patch_path(
-          repository.to_relative_path(result.path));
-    } else if (result.is_error()) {
-      state.last_export_error = result.error_message;
-      ImGui::OpenPopup("Error##SaveOrExport");
-    }
+    trigger_save(patch_session, state, is_user_patch);
   }
 
   // for hover
@@ -98,17 +74,33 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
       ImGui::SetTooltip("Enter a valid patch name to save");
     } else if (!is_user_patch) {
 #if defined(MEGATOY_PLATFORM_WEB)
-      ImGui::SetTooltip("Save to localStorage as %s.gin",
+      ImGui::SetTooltip("Save to localStorage as %s.ginpkg",
                         patch_session.current_patch().name.c_str());
 #else
-      ImGui::SetTooltip("Save to user/%s.gin",
-                        patch_session.current_patch().name.c_str());
+      if (patch_session.current_patch_path().ends_with(".ginpkg")) {
+        ImGui::SetTooltip("Save version to %s",
+                          patch_session.current_patch_path().c_str());
+      } else {
+        ImGui::SetTooltip("Save to user/%s.ginpkg",
+                          patch_session.current_patch().name.c_str());
+      }
 #endif
     } else if (!is_patch_modified) {
       ImGui::SetTooltip("Patch is not modified");
     }
   }
   if (save_button_is_disabled) {
+    ImGui::EndDisabled();
+  }
+
+  ImGui::SameLine();
+  if (!name_valid) {
+    ImGui::BeginDisabled(true);
+  }
+  if (ImGui::Button("Duplicate...")) {
+    start_duplicate_dialog(context.session, state);
+  }
+  if (!name_valid) {
     ImGui::EndDisabled();
   }
 
@@ -124,9 +116,13 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
   }
 
   ImGui::SameLine();
-  auto relative_path =
-      repository.to_relative_path(patch_session.current_patch_path());
+  auto relative_path = patch_session.repository().to_relative_path(
+      patch_session.current_patch_path());
   ImGui::Text("%s", display_preset_path(relative_path).c_str());
+
+  // Render popups in the same window/ID stack as the actions that open them.
+  render_save_export_popups(patch_session, state);
+  render_duplicate_dialog(patch_session, state);
 }
 
 void render_patch_name_field(PatchEditorContext &context, ym2612::Patch &patch,
@@ -152,90 +148,6 @@ void render_patch_name_field(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::PopItemWidth();
 }
 
-void render_save_export_popups(PatchEditorContext &context,
-                               const ym2612::Patch &patch,
-                               PatchEditorState &state) {
-  center_next_window();
-  if (ImGui::BeginPopupModal("Overwrite Confirmation", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-    ImGui::Text("A patch with this name already exists:");
-    ImGui::Text("\"%s\"", patch.name.c_str());
-    ImGui::Spacing();
-    ImGui::Text("Do you want to overwrite it?");
-    ImGui::Spacing();
-
-    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::SameLine();
-    const bool overwrite_button = ImGui::Button("Overwrite", ImVec2(120, 0));
-
-    ImGui::EndPopup();
-
-    if (overwrite_button) {
-      auto result = context.session.save_current_patch(true);
-      if (result.is_success()) {
-        state.last_export_path = result.path.string();
-        context.session.set_current_patch_path(
-            context.session.repository().to_relative_path(result.path));
-        ImGui::OpenPopup("Save Success");
-      } else if (result.is_error()) {
-        state.last_export_error = result.error_message;
-        ImGui::OpenPopup("Error##SaveOrExport");
-      }
-      ImGui::CloseCurrentPopup();
-    }
-  }
-
-  center_next_window();
-  if (ImGui::BeginPopupModal("Save Success", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-    ImGui::Text("Patch saved successfully.");
-    ImGui::TextWrapped("%s", state.last_export_path.c_str());
-    ImGui::Spacing();
-    if (ImGui::Button("OK", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-
-  center_next_window();
-  if (ImGui::BeginPopupModal("Export Success", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-    ImGui::Text("Patch exported successfully.");
-    ImGui::TextWrapped("%s", state.last_export_path.c_str());
-    ImGui::Spacing();
-    if (ImGui::Button("OK", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-
-  center_next_window();
-  if (ImGui::BeginPopupModal("Error##SaveOrExport", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-    ImGui::TextWrapped("%s", state.last_export_error.c_str());
-    ImGui::Spacing();
-    if (ImGui::Button("OK", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-}
-
 void render_patch_metadata(PatchEditorContext &context, ym2612::Patch &patch,
                            PatchEditorState &state) {
   const bool name_valid = is_patch_name_valid(patch);
@@ -253,19 +165,10 @@ void render_patch_metadata(PatchEditorContext &context, ym2612::Patch &patch,
   if (export_mml || export_dmp) {
     const auto export_format =
         export_mml ? patches::ExportFormat::MML : patches::ExportFormat::DMP;
-    auto result = context.session.export_current_patch_as(export_format);
-    if (result.is_success()) {
-      state.last_export_path = result.path.string();
-      ImGui::OpenPopup("Export Success");
-    } else if (result.is_error()) {
-      state.last_export_error = result.error_message;
-      ImGui::OpenPopup("Error##SaveOrExport");
-    }
+    trigger_export(context.session, state, export_format);
   }
 
   render_patch_name_field(context, patch, name_valid);
-
-  render_save_export_popups(context, patch, state);
 
   ImGui::Spacing();
 }

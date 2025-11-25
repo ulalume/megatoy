@@ -2,7 +2,7 @@
 #include "audio/audio_manager.hpp"
 #include "formats/ctrmml.hpp"
 #include "formats/dmp.hpp"
-#include "formats/gin.hpp"
+#include "formats/ginpkg.hpp"
 #include "formats/patch_loader.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
@@ -139,14 +139,14 @@ SaveResult PatchSession::save_current_patch(bool force_overwrite) {
   // Check whether the file already exists
   auto patches_dir = directories_.paths().user_patches_root;
   auto patch_path =
-      formats::gin::build_patch_path(patches_dir, current_patch_.name);
+      formats::ginpkg::build_package_path(patches_dir, current_patch_.name);
 
   if (std::filesystem::exists(patch_path) && !force_overwrite) {
     return SaveResult::duplicated();
   } else {
     // Save as new file
-    auto result = formats::gin::save_patch(patches_dir, current_patch_,
-                                           current_patch_.name);
+    auto result = formats::ginpkg::save_patch(patches_dir, current_patch_,
+                                              current_patch_.name);
     if (result.has_value()) {
       mark_as_clean(); // Patch saved, no longer modified
       return SaveResult::success(result.value());
@@ -315,9 +315,11 @@ bool PatchSession::current_patch_is_user_patch() const {
 #else
   constexpr bool is_local_storage = false;
 #endif
+  const bool has_supported_extension = current_patch_path_.ends_with(".gin") ||
+                                       current_patch_path_.ends_with(".ginpkg");
   const bool is_user_directory = !current_patch_path_.empty() &&
                                  current_patch_path_.rfind("user/", 0) == 0 &&
-                                 current_patch_path_.ends_with(".gin");
+                                 has_supported_extension;
   return (is_user_directory || is_local_storage) &&
          original_patch_.name == current_patch_.name;
 }

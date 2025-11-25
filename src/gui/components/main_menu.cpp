@@ -1,6 +1,7 @@
 #include "main_menu.hpp"
 
 #include "about_dialog.hpp"
+#include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
 #include <imgui.h>
 #include <string>
@@ -10,14 +11,17 @@ namespace ui {
 
 void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
+  const ImGuiIO &io = ImGui::GetIO();
   if (ImGui::BeginMainMenuBar()) {
 #if !defined(MEGATOY_PLATFORM_WEB)
     if (ImGui::BeginMenu("megatoy")) {
+      const bool mac_behavior = io.ConfigMacOSXBehaviors;
+
       if (ImGui::MenuItem("About megatoy")) {
         open_about = true;
       }
       ImGui::Separator();
-      if (ImGui::MenuItem("Quit")) {
+      if (ImGui::MenuItem("Quit", mac_behavior ? "Cmd+Q" : "Alt+F4")) {
         context.gui.set_should_close(true);
       }
       ImGui::EndMenu();
@@ -27,6 +31,67 @@ void render_main_menu(MainMenuContext &context) {
       open_about = true;
     }
 #endif
+    auto &session = context.patch_session;
+    const bool name_valid = is_patch_name_valid(session.current_patch());
+    const bool is_patch_modified = session.is_modified();
+    const bool is_user_patch = session.current_patch_is_user_patch();
+    const bool save_disabled =
+        !name_valid || (is_user_patch && !is_patch_modified);
+    if (ImGui::BeginMenu("File")) {
+      const bool mac_behavior = io.ConfigMacOSXBehaviors;
+      const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
+      const char *save_label = save_label_for(session, is_user_patch);
+      if (save_disabled)
+        ImGui::BeginDisabled(true);
+      if (ImGui::MenuItem(save_label, save_shortcut)) {
+        trigger_save(session, context.save_state, is_user_patch);
+      }
+      if (save_disabled)
+        ImGui::EndDisabled();
+
+      if (!name_valid)
+        ImGui::BeginDisabled(true);
+      const char *duplicate_shortcut =
+          mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
+      if (ImGui::MenuItem("Duplicate...", duplicate_shortcut)) {
+        start_duplicate_dialog(session, context.save_state);
+      }
+      if (!name_valid)
+        ImGui::EndDisabled();
+
+      ImGui::Separator();
+
+      if (!name_valid)
+        ImGui::BeginDisabled(true);
+      if (ImGui::BeginMenu("Export")) {
+        if (ImGui::MenuItem(".mml (ctrmml)")) {
+          trigger_export(session, context.save_state,
+                         patches::ExportFormat::MML);
+        }
+        if (ImGui::MenuItem(".dmp")) {
+          trigger_export(session, context.save_state,
+                         patches::ExportFormat::DMP);
+        }
+        ImGui::EndMenu();
+      }
+      if (!name_valid)
+        ImGui::EndDisabled();
+
+      ImGui::EndMenu();
+    }
+
+    if (!save_disabled) {
+      const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && !io.KeyShift;
+      if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+        trigger_save(session, context.save_state, is_user_patch);
+      }
+    }
+    if (name_valid) {
+      const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && io.KeyShift;
+      if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+        start_duplicate_dialog(session, context.save_state);
+      }
+    }
 
     if (ImGui::BeginMenu("Edit")) {
       auto &history = context.history;
@@ -85,6 +150,10 @@ void render_main_menu(MainMenuContext &context) {
                       &ui_prefs.show_patch_selector);
       ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
       ImGui::MenuItem(PATCH_LAB_TITLE, nullptr, &ui_prefs.show_patch_lab);
+#if !defined(MEGATOY_PLATFORM_WEB)
+      ImGui::MenuItem(PATCH_HISTORY_TITLE, nullptr,
+                      &ui_prefs.show_patch_history);
+#endif
       ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
                       &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);

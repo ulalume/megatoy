@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.5.3" CACHE STRING "megatoy application version")
+set(MEGATOY_VERSION "0.5.4" CACHE STRING "megatoy application version")
 project(megatoy VERSION ${MEGATOY_VERSION})
 
 # Objective-C sources are used for macOS integrations
@@ -88,17 +88,36 @@ include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 
 if(EMSCRIPTEN)
+  if(NOT MEGATOY_EMSCRIPTEN_SYSROOT AND DEFINED ENV{EM_CACHE})
+    set(MEGATOY_EMSCRIPTEN_SYSROOT "$ENV{EM_CACHE}/sysroot")
+  endif()
+  if(NOT TARGET ZLIB::ZLIB AND MEGATOY_EMSCRIPTEN_SYSROOT)
+    add_library(ZLIB::ZLIB UNKNOWN IMPORTED)
+    set_target_properties(ZLIB::ZLIB PROPERTIES
+      IMPORTED_LOCATION "${MEGATOY_EMSCRIPTEN_SYSROOT}/lib/wasm32-emscripten/libz.a"
+    )
+  endif()
+  if(TARGET ZLIB::ZLIB)
+    # Prevent the Emscripten zlib port from injecting the sysroot include path ahead of libc++ headers.
+    set_target_properties(ZLIB::ZLIB PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES ""
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ""
+    )
+  endif()
+
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msimd128")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msimd128")
   option(MEGATOY_GENERATE_SIMPLE_HTML
          "Copy a minimal HTML launcher (megatoy_simple.html) alongside megatoy.html"
          ON)
+  # Ensure libc++ headers are searched before any sysroot includes injected by dependencies.
+  foreach(_inc_dir ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+    if(_inc_dir MATCHES "/include/c\\+\\+/v1$")
+      include_directories(BEFORE SYSTEM "${_inc_dir}")
+      break()
+    endif()
+  endforeach()
 endif()
-
-if(EMSCRIPTEN AND ZLIB_INCLUDE_DIRS)
-  include_directories(${ZLIB_INCLUDE_DIRS})
-endif()
-
 
 include(cmake/targets.cmake)
 

@@ -169,26 +169,10 @@ void apply_patch_result(PatchLabContext &context,
   }
 }
 
-patch_lab::MutateResult mutate_patch(PatchLabContext &context,
-                                     const std::string &history_label,
-                                     const std::string &history_key,
-                                     const patch_lab::MutateOptions &options) {
-  auto &session = context.session;
-  auto before = session.current_patch();
-  if (context.begin_history) {
-    context.begin_history(history_label, history_key, before);
-  }
-
-  auto result = patch_lab::mutate_in_place(session.current_patch(), options);
-  session.apply_patch_to_audio();
-
-  if (context.commit_history) {
-    context.commit_history();
-  }
-  return result;
-}
-
 void render_random_section(PatchLabContext &context, PatchLabState &state) {
+  ImGui::TextWrapped("Generates a new patch each time.");
+  ImGui::Spacing();
+
   ImGui::SetNextItemWidth(120.0f);
   ImGui::InputInt("Seed (auto = -1)", &state.random_seed);
 
@@ -201,8 +185,8 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
     options.mutate_iterations = state.random_template_iterations;
 
     auto result = patch_lab::random_patch(options);
-    apply_patch_result(context, "Patch Lab Randomize", "patch_lab.random",
-                       result.patch);
+    const auto key = "patch_lab.random: " + std::to_string(result.seed);
+    apply_patch_result(context, "Patch Lab Randomize", key, result.patch);
     state.random_last_seed = result.seed;
     state.random_has_result = true;
   }
@@ -214,6 +198,11 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
 
 void render_merge_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
+  ImGui::TextWrapped(
+      "Mixes two patches by randomly choosing parameters from Patch A and "
+      "Patch B.");
+  ImGui::Spacing();
+
   auto sanitized_a = sanitize_selection(state.source_a, entries);
   auto sanitized_b = sanitize_selection(state.source_b, entries);
   state.source_a = sanitized_a;
@@ -247,7 +236,7 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
         patch_lab::MergeOptions options;
         options.seed = state.merge_seed;
         auto result = patch_lab::merge(patch_a, patch_b, options);
-        apply_patch_result(context, "Patch Lab Merge", "patch_lab.merge",
+        apply_patch_result(context, "Patch Lab Merge", result.patch.hash(),
                            result.patch);
         state.merge_last_seed = result.seed;
         state.merge_has_result = true;
@@ -271,6 +260,11 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
 
 void render_morph_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
+  ImGui::TextWrapped(
+      "Interpolates between Patch A and Patch B with the blend slider for "
+      "smooth transitions.");
+  ImGui::Spacing();
+
   auto sanitized_a = sanitize_selection(state.source_a, entries);
   auto sanitized_b = sanitize_selection(state.source_b, entries);
   state.source_a = sanitized_a;
@@ -306,7 +300,7 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
         options.interpolate_algorithm = state.morph_interpolate_algorithm;
 
         auto result = patch_lab::morph(patch_a, patch_b, options);
-        apply_patch_result(context, "Patch Lab Morph", "patch_lab.morph",
+        apply_patch_result(context, "Patch Lab Morph", result.patch.hash(),
                            result.patch);
         state.morph_error.clear();
       }
@@ -324,6 +318,11 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
 }
 
 void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
+  ImGui::TextWrapped(
+      "Perturbs the current patch; adjust variation depth and probability, "
+      "and optionally lock the algorithm.");
+  ImGui::Spacing();
+
   state.mutate_amount = std::clamp(state.mutate_amount, 0, 12);
   state.mutate_probability = std::clamp(state.mutate_probability, 0.0f, 1.0f);
 
@@ -341,8 +340,10 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
     options.amount = state.mutate_amount;
     options.probability = state.mutate_probability;
     options.allow_algorithm_variation = state.mutate_allow_algorithm_change;
-    auto result =
-        mutate_patch(context, "Patch Lab Mutate", "patch_lab.mutate", options);
+
+    auto before = context.session.current_patch();
+    auto result = patch_lab::mutate_in_place(before, options);
+    apply_patch_result(context, "Patch Lab Mutate", before.hash(), before);
     state.mutate_last_seed = result.seed;
     state.mutate_has_result = true;
   }

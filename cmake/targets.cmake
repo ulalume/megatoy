@@ -38,6 +38,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/ctrmml.cpp
   src/formats/dmp.cpp
   src/formats/gin.cpp
+  src/formats/ginpkg.cpp
   src/formats/fui.cpp
   src/formats/patch_loader.cpp
   src/formats/rym2612.cpp
@@ -51,9 +52,11 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/operator_editor.cpp
   src/gui/components/patch_drop.cpp
   src/gui/components/patch_editor.cpp
+  src/gui/components/patch_history.cpp
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/preferences.cpp
+  src/gui/save_export_actions.cpp
   src/gui/components/preview/algorithm_preview.cpp
   src/gui/components/preview/preview.cpp
   src/gui/components/preview/ssg_preview.cpp
@@ -146,6 +149,7 @@ target_link_libraries(megatoy_core PUBLIC
   nlohmann_json::nlohmann_json
   chord_detector::chord_detector
   kissfft
+  miniz
 )
 
 if(NOT EMSCRIPTEN)

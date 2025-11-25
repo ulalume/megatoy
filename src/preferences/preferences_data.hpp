@@ -16,6 +16,7 @@ struct UIPreferences {
   bool show_preferences = false;
   bool show_waveform = true;
   bool show_patch_lab = true;
+  bool show_patch_history = true;
   bool use_velocity = true;
   bool steal_oldest_note_when_full = true;
   std::string patch_search_query;
@@ -48,6 +49,7 @@ struct UIPreferences {
            lhs.show_preferences == rhs.show_preferences &&
            lhs.show_waveform == rhs.show_waveform &&
            lhs.show_patch_lab == rhs.show_patch_lab &&
+           lhs.show_patch_history == rhs.show_patch_history &&
            lhs.use_velocity == rhs.use_velocity &&
            lhs.steal_oldest_note_when_full == rhs.steal_oldest_note_when_full &&
            lhs.patch_search_query == rhs.patch_search_query &&

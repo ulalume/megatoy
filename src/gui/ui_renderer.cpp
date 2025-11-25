@@ -7,16 +7,17 @@
 #include "gui/components/mml_console.hpp"
 #include "gui/components/patch_drop.hpp"
 #include "gui/components/patch_editor.hpp"
+#include "gui/components/patch_history.hpp"
 #include "gui/components/patch_lab_window.hpp"
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
 #include "gui/components/waveform.hpp"
+#include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
 #include "history/snapshot_entry.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
 #include <filesystem>
-#include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -105,13 +106,13 @@ drop_actions::Environment make_drop_environment(AppContext &ctx) {
       }};
 }
 
-PatchEditorState &patch_editor_state() {
-  static PatchEditorState state;
+PatchLabState &patch_lab_state() {
+  static PatchLabState state;
   return state;
 }
 
-PatchLabState &patch_lab_state() {
-  static PatchLabState state;
+PatchHistoryState &patch_history_state() {
+  static PatchHistoryState state;
   return state;
 }
 
@@ -129,8 +130,24 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
           ctx.services.preference_manager,
           ui_state.prefs,
           ui_state.open_directory_dialog,
+          ctx.services.patch_session,
+          ui_state.save_export_state,
           [history_actions]() { history_actions.undo(); },
           [history_actions]() { history_actions.redo(); }};
+}
+
+void render_save_export_popup_host(AppContext &ctx) {
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar;
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos);
+  ImGui::SetNextWindowSize(ImVec2(0, 0));
+  if (ImGui::Begin("##save_export_popup_host", nullptr, flags)) {
+    render_save_export_popups(ctx.services.patch_session,
+                              ctx.app_state().ui_state().save_export_state);
+  }
+  ImGui::End();
 }
 
 PatchDropContext make_patch_drop_context(AppContext &ctx) {
@@ -199,6 +216,11 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
           [](const std::filesystem::path &path) {
             reveal_in_file_manager(path.string());
           }};
+}
+
+PatchHistoryContext make_patch_history_context(AppContext &ctx) {
+  auto &ui_state = ctx.app_state().ui_state();
+  return {ctx.services.patch_session, ui_state.prefs};
 }
 
 MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
@@ -291,7 +313,13 @@ void render_all(AppContext &ctx) {
 
   auto patch_editor_context = make_patch_editor_context(ctx);
   render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
-                      patch_editor_state());
+                      ctx.app_state().ui_state().save_export_state);
+
+#if !defined(MEGATOY_PLATFORM_WEB)
+  auto patch_history_context = make_patch_history_context(ctx);
+  render_patch_history(PATCH_HISTORY_TITLE, patch_history_context,
+                       patch_history_state());
+#endif
 
   auto patch_selector_context = make_patch_selector_context(ctx);
   render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);
@@ -299,19 +327,21 @@ void render_all(AppContext &ctx) {
   auto preferences_context = make_preferences_context(ctx);
   render_preferences_window(PREFERENCES_TITLE, preferences_context);
 
+  auto midi_keyboard_context = make_midi_keyboard_context(ctx);
+  render_midi_keyboard(SOFT_KEYBOARD_TITLE, midi_keyboard_context);
+
   auto mml_context = make_mml_console_context(ctx);
   render_mml_console(MML_CONSOLE_TITLE, mml_context);
 
   auto patch_lab_context = make_patch_lab_context(ctx);
   render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
 
-  auto midi_keyboard_context = make_midi_keyboard_context(ctx);
-  render_midi_keyboard(SOFT_KEYBOARD_TITLE, midi_keyboard_context);
-
 #if !defined(MEGATOY_PLATFORM_WEB)
   auto waveform_context = make_waveform_context(ctx);
   render_waveform(WAVEFORM_TITLE, waveform_context);
 #endif
+
+  render_save_export_popup_host(ctx);
 }
 
 } // namespace ui

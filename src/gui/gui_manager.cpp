@@ -254,6 +254,8 @@ void GuiManager::begin_frame() {
         dock_main_id, ImGuiDir_Left, 0.35f, nullptr, &dock_main_id);
 
     ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
+    ImGui::DockBuilderDockWindow(ui::PATCH_HISTORY_TITLE, dock_main_id);
+
     ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
 
     ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);
@@ -272,8 +274,9 @@ void GuiManager::begin_frame() {
 void GuiManager::end_frame() {
   if (first_end_frame_) {
     first_end_frame_ = false;
-    // Set SOFT_KEYBOARD as the default active tab
-    ImGui::SetWindowFocus(ui::SOFT_KEYBOARD_TITLE);
+    auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
+                              std::string(ui::PATCH_EDITOR_TITLE);
+    ImGui::SetWindowFocus(patch_editor_title.c_str());
     std::cout << "First end frame" << std::endl;
   }
   if (!initialized_) {

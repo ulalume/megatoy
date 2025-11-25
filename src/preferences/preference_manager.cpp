@@ -83,7 +83,17 @@ void PreferenceManager::reset_data_directory() {
 }
 
 void PreferenceManager::reset_ui_preferences() {
+  const auto current = ui_preferences_;
   ui_preferences_ = {};
+  ui_preferences_.use_velocity = current.use_velocity;
+  ui_preferences_.steal_oldest_note_when_full =
+      current.steal_oldest_note_when_full;
+  ui_preferences_.midi_keyboard_layout = current.midi_keyboard_layout;
+  ui_preferences_.custom_typing_layout_keys = current.custom_typing_layout_keys;
+  ui_preferences_.custom_typing_octave_down_key =
+      current.custom_typing_octave_down_key;
+  ui_preferences_.custom_typing_octave_up_key =
+      current.custom_typing_octave_up_key;
   save_preferences();
 }
 

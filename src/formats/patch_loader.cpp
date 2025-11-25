@@ -4,6 +4,7 @@
 #include "dmp.hpp"
 #include "fui.hpp"
 #include "gin.hpp"
+#include "ginpkg.hpp"
 #include "rym2612.hpp"
 
 #include <algorithm>
@@ -49,6 +50,7 @@ PatchLoadResult load_patch_from_file(const std::filesystem::path &path) {
   static const std::unordered_map<std::string,
                                   std::pair<ReaderFunc, std::string>>
       readers = {{".gin", {formats::gin::read_file, "GIN"}},
+                 {".ginpkg", {formats::ginpkg::read_file, "GINPKG"}},
                  {".dmp", {formats::dmp::read_file, "DMP"}},
                  {".rym2612", {formats::rym2612::read_file, "RYM2612"}},
                  {".fui", {formats::fui::read_file, "FUI"}},

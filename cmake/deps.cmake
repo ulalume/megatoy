@@ -6,7 +6,9 @@ if(NOT EMSCRIPTEN)
   find_package(OpenGL REQUIRED)
   find_package(CURL REQUIRED)
 else()
-  if(DEFINED CMAKE_SYSROOT AND NOT CMAKE_SYSROOT STREQUAL "")
+  if(DEFINED ENV{EM_CACHE} AND NOT "$ENV{EM_CACHE}" STREQUAL "")
+    set(_ems_sysroot "$ENV{EM_CACHE}/sysroot")
+  elseif(DEFINED CMAKE_SYSROOT AND NOT CMAKE_SYSROOT STREQUAL "")
     set(_ems_sysroot "${CMAKE_SYSROOT}")
   elseif(DEFINED EMSCRIPTEN_ROOT_PATH)
     set(_ems_sysroot "${EMSCRIPTEN_ROOT_PATH}/cache/sysroot")
@@ -27,8 +29,8 @@ else()
   set(ZLIB_LIBRARIES "${ZLIB_LIBRARY}" CACHE FILEPATH "" FORCE)
   set(ZLIB_INCLUDE_DIR "${_ems_sysroot}/include" CACHE PATH "" FORCE)
   set(ZLIB_INCLUDE_DIRS "${ZLIB_INCLUDE_DIR}" CACHE PATH "" FORCE)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${ZLIB_INCLUDE_DIR} -sUSE_ZLIB=1")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${ZLIB_INCLUDE_DIR} -sUSE_ZLIB=1")
+  set(MEGATOY_EMSCRIPTEN_SYSROOT "${_ems_sysroot}" CACHE PATH "" FORCE)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sUSE_ZLIB=1")
   set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
 endif()
 
@@ -165,3 +167,27 @@ FetchContent_Declare(
   GIT_TAG        main
 )
 FetchContent_MakeAvailable(IconFontCppHeaders)
+
+FetchContent_Declare(
+  miniz
+  GIT_REPOSITORY https://github.com/richgel999/miniz
+  GIT_TAG        2.2.0
+)
+if(POLICY CMP0169)
+  cmake_policy(SET CMP0169 OLD)
+endif()
+FetchContent_GetProperties(miniz)
+if(NOT miniz_POPULATED)
+  FetchContent_Populate(miniz)
+  set(miniz_export_header "${miniz_SOURCE_DIR}/miniz_export.h")
+  if(NOT EXISTS "${miniz_export_header}")
+    file(WRITE "${miniz_export_header}" "#pragma once\n\n#if defined(_WIN32)\n#if defined(MINIZ_SHARED)\n#if defined(MINIZ_EXPORTS)\n#define MINIZ_EXPORT __declspec(dllexport)\n#else\n#define MINIZ_EXPORT __declspec(dllimport)\n#endif\n#else\n#define MINIZ_EXPORT\n#endif\n#elif defined(__GNUC__) && __GNUC__ >= 4\n#define MINIZ_EXPORT __attribute__((visibility(\"default\")))\n#else\n#define MINIZ_EXPORT\n#endif\n")
+  endif()
+endif()
+add_library(miniz STATIC
+  ${miniz_SOURCE_DIR}/miniz.c
+  ${miniz_SOURCE_DIR}/miniz_tdef.c
+  ${miniz_SOURCE_DIR}/miniz_tinfl.c
+  ${miniz_SOURCE_DIR}/miniz_zip.c
+)
+target_include_directories(miniz PUBLIC ${miniz_SOURCE_DIR})
