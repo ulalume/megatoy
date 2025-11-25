@@ -70,7 +70,7 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
 
   if (!is_ginpkg) {
     ImGui::TextUnformatted(
-        "Patch history view is available for ginpkg packages only.");
+        "Patch versions view is available for ginpkg packages only.");
     ImGui::End();
     return;
   }
@@ -111,7 +111,7 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
 
   if (state.versions.empty()) {
     ImGui::TextUnformatted(
-        "No history yet. Save to create your first version.");
+        "No versions yet. Save to create your first version.");
     ImGui::End();
     return;
   }

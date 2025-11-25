@@ -8,5 +8,5 @@ constexpr char MML_CONSOLE_TITLE[] = "MML Console";
 constexpr char WAVEFORM_TITLE[] = "Waveform";
 constexpr char PREFERENCES_TITLE[] = "Preferences";
 constexpr char PATCH_LAB_TITLE[] = "Patch Lab";
-constexpr char PATCH_HISTORY_TITLE[] = "Patch History";
+constexpr char PATCH_HISTORY_TITLE[] = "Patch Versions (ginpkg)";
 } // namespace ui
