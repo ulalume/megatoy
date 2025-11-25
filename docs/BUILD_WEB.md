@@ -17,6 +17,10 @@ megatoy can run in the browser via WebAssembly using the Emscripten SDK.
 ## Configure and build
 
 ```bash
+# If your emscripten installation is read-only (e.g., Homebrew), point caches to a writable location.
+export EM_CACHE="$HOME/.emscripten_cache"
+export PKG_CONFIG_LIBDIR="$EM_CACHE/sysroot/lib/pkgconfig"
+
 emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
 cmake --build build-web --target megatoy --parallel
 ```
