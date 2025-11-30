@@ -4,16 +4,18 @@
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <fstream>
+#include <iterator>
 #include <iostream>
 #include <vector>
 
 namespace {
 
-// Helper that reads a value from the binary stream
-template <typename T> T read_binary_value(std::ifstream &file) {
-  T value;
-  file.read(reinterpret_cast<char *>(&value), sizeof(T));
-  return value;
+// Safe accessor that returns 0 when reading past the end of the buffer.
+uint8_t read_byte(const std::vector<uint8_t> &bytes, size_t index) {
+  if (index < bytes.size()) {
+    return bytes[index];
+  }
+  return 0;
 }
 
 } // namespace
@@ -21,44 +23,97 @@ template <typename T> T read_binary_value(std::ifstream &file) {
 namespace formats::dmp {
 
 std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
-  std::ifstream file(file_path, std::ios::binary);
-  if (!file.is_open()) {
-    std::cerr << "Failed to open DMP file: " << file_path << std::endl;
-    return {};
-  }
-
   try {
-    uint8_t file_version = read_binary_value<uint8_t>(file);
-    if (file_version != 11) {
-      std::cerr << "Unsupported DMP version: " << static_cast<int>(file_version)
+    std::ifstream file(file_path, std::ios::binary);
+    if (!file.is_open()) {
+      std::cerr << "Failed to open DMP file: " << file_path << std::endl;
+      return {};
+    }
+
+    std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file),
+                               std::istreambuf_iterator<char>()};
+    constexpr size_t header_size = 7;
+    constexpr size_t operator_bytes = 11;
+    constexpr size_t operator_count = 4;
+    constexpr size_t expected_size = header_size + operator_count * operator_bytes;
+
+    if (bytes.size() == expected_size - 2 && bytes.size() >= 3 &&
+        bytes[0] == 0 && bytes[1] == 0 && bytes[2] == 0) {
+      // DefleMask sometimes writes Genesis FM presets; in this file the
+      // version/system bytes were dropped. Reconstruct them so the data aligns.
+      std::vector<uint8_t> repaired;
+      repaired.reserve(expected_size);
+      repaired.push_back(0x0B); // version
+      repaired.push_back(0x02); // system: Genesis
+      repaired.insert(repaired.end(), bytes.begin(), bytes.end());
+      if (repaired.size() < expected_size) {
+        repaired.resize(expected_size, 0);
+      }
+      if (repaired.size() >= 3 && repaired[2] == 0) {
+        repaired[2] = 0x01; // FM instrument mode
+      }
+      std::cerr << "Heuristically repaired missing DMP header (version/system): "
+                << file_path << std::endl;
+      bytes.swap(repaired);
+    }
+
+    if (bytes.size() < 7) {
+      std::cerr << "DMP file too small to contain a header: " << file_path
                 << std::endl;
       return {};
     }
 
-    uint8_t system = read_binary_value<uint8_t>(file);
-    if (system != 0x02) { // SYSTEM_GENESIS
-      std::cerr << "Unsupported system: " << static_cast<int>(system)
-                << std::endl;
-      return {};
+    struct HeaderLayout {
+      size_t instrument_mode_idx;
+      size_t system_idx;
+      size_t fms_idx;
+      size_t feedback_idx;
+      size_t algorithm_idx;
+      size_t ams_idx;
+    };
+
+    constexpr HeaderLayout modern_layout{2, 1, 3, 4, 5, 6};
+    constexpr HeaderLayout legacy_v9_layout{1, 2, 3, 4, 5, 6};
+
+    uint8_t file_version = read_byte(bytes, 0);
+    const HeaderLayout *layout = &modern_layout;
+    if (file_version == 0x09) {
+      layout = &legacy_v9_layout; // pre-1.0 DefleMask exports swap system/mode
+    } else if (file_version != 0x0B) {
+      std::cerr << "Unrecognized DMP version " << static_cast<int>(file_version)
+                << ", attempting best-effort parse" << std::endl;
     }
 
-    uint8_t instrument_mode = read_binary_value<uint8_t>(file);
-    if (instrument_mode != 1) { // FM mode
-      std::cerr << "Only FM instruments are supported" << std::endl;
-      return {};
+    uint8_t instrument_mode = read_byte(bytes, layout->instrument_mode_idx);
+    uint8_t system = read_byte(bytes, layout->system_idx);
+    uint8_t lfo_fms = read_byte(bytes, layout->fms_idx);       // FMS on YM2612
+    uint8_t feedback = read_byte(bytes, layout->feedback_idx); // FB
+    uint8_t algorithm = read_byte(bytes, layout->algorithm_idx); // ALG
+    uint8_t lfo_ams = read_byte(bytes, layout->ams_idx);         // AMS on YM2612
+
+    if (bytes.size() < expected_size) {
+      std::cerr << "DMP file shorter than expected (" << bytes.size() << " < "
+                << expected_size
+                << "), padding missing operator bytes with zeros" << std::endl;
     }
+
+    // Older exports used 0 or 1 for Genesis; keep loading but warn.
+    if (!(system == 0x02 || (file_version <= 0x09 && (system == 0x00 || system == 0x01)))) {
+      std::cerr << "Unsupported or unknown DMP system code: "
+                << static_cast<int>(system) << std::endl;
+    }
+
+    if (instrument_mode != 1) {
+      std::cerr << "Instrument mode is not FM (" << static_cast<int>(instrument_mode)
+                << "), parsing as FM because file matches FM size" << std::endl;
+    }
+
     ym2612::Patch patch;
-
     patch.name = file_path.stem().string();
 
     patch.global.dac_enable = false;
     patch.global.lfo_enable = false;
     patch.global.lfo_frequency = 0;
-
-    uint8_t lfo_fms = read_binary_value<uint8_t>(file);   // FMS on YM2612
-    uint8_t feedback = read_binary_value<uint8_t>(file);  // FB
-    uint8_t algorithm = read_binary_value<uint8_t>(file); // ALG
-    uint8_t lfo_ams = read_binary_value<uint8_t>(file);   // AMS on YM2612
 
     patch.channel.left_speaker = true;
     patch.channel.right_speaker = true;
@@ -70,18 +125,19 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
 
     for (int op = 0; op < 4; ++op) {
       auto &operator_settings = patch.instrument.operators[op];
+      const size_t base = header_size + op * operator_bytes;
 
-      uint8_t mult = read_binary_value<uint8_t>(file);  // MULT
-      uint8_t tl = read_binary_value<uint8_t>(file);    // TL
-      uint8_t ar = read_binary_value<uint8_t>(file);    // AR
-      uint8_t dr = read_binary_value<uint8_t>(file);    // DR (D1R)
-      uint8_t sl = read_binary_value<uint8_t>(file);    // SL (D2L)
-      uint8_t rr = read_binary_value<uint8_t>(file);    // RR
-      uint8_t am = read_binary_value<uint8_t>(file);    // AM
-      uint8_t rs = read_binary_value<uint8_t>(file);    // RS (Key Scale)
-      uint8_t dt = read_binary_value<uint8_t>(file);    // DT
-      uint8_t d2r = read_binary_value<uint8_t>(file);   // D2R
-      uint8_t ssgeg = read_binary_value<uint8_t>(file); // SSGEG
+      uint8_t mult = read_byte(bytes, base + 0);  // MULT
+      uint8_t tl = read_byte(bytes, base + 1);    // TL
+      uint8_t ar = read_byte(bytes, base + 2);    // AR
+      uint8_t dr = read_byte(bytes, base + 3);    // DR (D1R)
+      uint8_t sl = read_byte(bytes, base + 4);    // SL (D2L)
+      uint8_t rr = read_byte(bytes, base + 5);    // RR
+      uint8_t am = read_byte(bytes, base + 6);    // AM
+      uint8_t rs = read_byte(bytes, base + 7);    // RS (Key Scale)
+      uint8_t dt = read_byte(bytes, base + 8);    // DT
+      uint8_t d2r = read_byte(bytes, base + 9);   // D2R
+      uint8_t ssgeg = read_byte(bytes, base + 10); // SSGEG
 
       operator_settings.multiple = mult & 0x0F;
       operator_settings.total_level = tl & 0x7F;
