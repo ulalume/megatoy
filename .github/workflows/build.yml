@@ -110,3 +110,30 @@ jobs:
       - name: Install artifacts
         shell: pwsh
         run: cmake --install build --config Release
+
+  build-web:
+    name: Build Web (WASM)
+    runs-on: ubuntu-latest
+    env:
+      EM_CACHE: ${{ runner.temp }}/emscripten_cache
+      PKG_CONFIG_LIBDIR: ${{ runner.temp }}/emscripten_cache/sysroot/lib/pkgconfig
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Configure
+        run: emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-web --target megatoy --parallel
+
+      - name: Upload web-dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: build-web/web-dist
