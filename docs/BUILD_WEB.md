@@ -25,14 +25,14 @@ emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
 cmake --build build-web --target megatoy --parallel
 ```
 
-The build produces `build-web/megatoy.html` plus the accompanying `.js` and `.wasm` files. Open the HTML file with a local web server, e.g.:
+The build copies the required web bundle into `build-web/web-dist`. Serve the files from that directory, e.g.:
 
 ```bash
-cd build-web
+cd build-web/web-dist
 python3 -m http.server 8080
 ```
 
-Navigate to `http://localhost:8080/megatoy.html` in a WebGL2-capable browser.
+Navigate to `http://localhost:8080/index.html` in a WebGL2-capable browser.
 
 ## Current limitations
 
