@@ -110,13 +110,9 @@ jobs:
       - name: Install artifacts
         shell: pwsh
         run: cmake --install build --config Release
-
   build-web:
     name: Build Web (WASM)
     runs-on: ubuntu-latest
-    env:
-      EM_CACHE: ${{ runner.temp }}/emscripten_cache
-      PKG_CONFIG_LIBDIR: ${{ runner.temp }}/emscripten_cache/sysroot/lib/pkgconfig
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,4 +132,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-dist
-          path: build-web/web-dist
+          path: build-web/web_dist
