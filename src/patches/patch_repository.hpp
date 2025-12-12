@@ -1,9 +1,11 @@
 #pragma once
 
 #include "patch_metadata.hpp"
+#include "patch_storage.hpp"
 #include "platform/virtual_file_system.hpp"
 #include "ym2612/patch.hpp"
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -81,6 +83,7 @@ private:
   void load_metadata_for_entry(PatchEntry &entry);
   std::string detect_format(const std::filesystem::path &file_path) const;
   bool is_supported_file(const std::filesystem::path &file_path) const;
+  std::vector<std::unique_ptr<PatchStorage>> storages_;
 };
 
 } // namespace patches

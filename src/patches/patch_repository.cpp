@@ -2,37 +2,16 @@
 #include "formats/ctrmml.hpp"
 #include "formats/patch_loader.hpp"
 #include "platform/platform_config.hpp"
+#include "patch_storage.hpp"
 #include "ym2612/patch.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_store.hpp"
+#include "patches/web_patch_storage.hpp"
 #endif
 #include <algorithm>
 #include <functional>
 #include <iostream>
 #include <string>
 #include <unordered_map>
-
-namespace {
-#if defined(MEGATOY_PLATFORM_WEB)
-constexpr std::string_view kLocalStorageRelativeRoot = "localStorage";
-constexpr std::string_view kLocalStorageAbsolutePrefix = "localStorage://";
-constexpr std::string_view kLocalStorageRelativePrefix = "localStorage/";
-
-std::string extract_local_storage_id(
-    const patches::PatchEntry &entry) { // NOLINT(misc-no-recursion)
-  const std::string full = entry.full_path.empty()
-                               ? std::string{}
-                               : entry.full_path.generic_string();
-  if (!full.empty() && full.rfind(kLocalStorageAbsolutePrefix, 0) == 0) {
-    return full.substr(kLocalStorageAbsolutePrefix.size());
-  }
-  if (entry.relative_path.rfind(kLocalStorageRelativePrefix, 0) == 0) {
-    return entry.relative_path.substr(kLocalStorageRelativePrefix.size());
-  }
-  return full;
-}
-#endif
-} // namespace
 
 namespace patches {
 
@@ -54,6 +33,10 @@ PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
       metadata_manager_.reset();
     }
   }
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  storages_.push_back(std::make_unique<WebPatchStorage>());
+#endif
 
   refresh();
 }
@@ -90,33 +73,9 @@ void PatchRepository::refresh() {
     builtin_time_valid_ = false;
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  std::vector<PatchEntry> local_storage_children;
-  for (const auto &info : platform::web::patch_store::list()) {
-    PatchEntry entry;
-    entry.name = info.name;
-    entry.relative_path = std::string(kLocalStorageRelativePrefix) + info.name;
-    entry.full_path = std::filesystem::path(
-        std::string(kLocalStorageAbsolutePrefix) + info.id);
-    entry.format = "web_gin";
-    entry.is_directory = false;
-    local_storage_children.push_back(std::move(entry));
+  for (const auto &storage : storages_) {
+    storage->append_entries(tree_cache_);
   }
-  if (!local_storage_children.empty()) {
-    std::sort(local_storage_children.begin(), local_storage_children.end(),
-              [](const PatchEntry &a, const PatchEntry &b) {
-                return a.name < b.name;
-              });
-    PatchEntry storage_root;
-    storage_root.name = std::string(kLocalStorageRelativeRoot);
-    storage_root.relative_path = std::string(kLocalStorageRelativeRoot);
-    storage_root.full_path =
-        std::filesystem::path(std::string(kLocalStorageRelativeRoot));
-    storage_root.is_directory = true;
-    storage_root.children = std::move(local_storage_children);
-    tree_cache_.push_back(std::move(storage_root));
-  }
-#endif
 
   cache_initialized_ = true;
 }
@@ -130,15 +89,13 @@ bool PatchRepository::load_patch(const PatchEntry &entry,
   if (entry.is_directory) {
     return false;
   }
-#if defined(MEGATOY_PLATFORM_WEB)
-  if (entry.format == "web_gin") {
-    const std::string id = extract_local_storage_id(entry);
-    if (id.empty()) {
-      return false;
+
+  for (const auto &storage : storages_) {
+    if (storage->load_patch(entry, patch)) {
+      return true;
     }
-    return platform::web::patch_store::load(id, patch);
   }
-#endif
+
   auto result = formats::load_patch_from_file(entry.full_path);
   if (result.status == formats::PatchLoadStatus::Failure) {
     std::cerr << "Error loading preset patch " << entry.full_path << std::endl;
@@ -334,6 +291,7 @@ bool PatchRepository::is_supported_file(
 std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
 #if defined(MEGATOY_PLATFORM_WEB)
+  constexpr std::string_view kLocalStorageRelativeRoot = "localStorage";
   const std::string generic = path.generic_string();
   if (!generic.empty() && generic.rfind(kLocalStorageRelativeRoot, 0) == 0) {
     return path;

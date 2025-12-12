@@ -75,6 +75,7 @@ set(MEGATOY_CORE_SOURCES
   src/patches/patch_session.cpp
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
+  src/patches/web_patch_storage.cpp
   src/patches/patch_metadata.cpp
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
