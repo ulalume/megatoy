@@ -28,8 +28,7 @@ cmake --build build-web --target megatoy --parallel
 The build copies the required web bundle into `build-web/web-dist`. Serve the files from that directory, e.g.:
 
 ```bash
-cd build-web/web-dist
-python3 -m http.server 8080
+python3 -m http.server 8080 --directory ./build-web/web_dist
 ```
 
 Navigate to `http://localhost:8080/index.html` in a WebGL2-capable browser.
