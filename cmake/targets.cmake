@@ -75,6 +75,7 @@ set(MEGATOY_CORE_SOURCES
   src/patches/patch_session.cpp
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
+  src/patches/filesystem_patch_storage.cpp
   src/patches/web_patch_storage.cpp
   src/patches/patch_metadata.cpp
   src/platform/file_dialog.cpp
@@ -95,6 +96,7 @@ set(MEGATOY_CORE_SOURCES
 if(EMSCRIPTEN)
   list(APPEND MEGATOY_CORE_SOURCES
     src/audio/webaudio_transport.cpp
+    src/patches/patch_session_web.cpp
     src/platform/web/web_platform_services.cpp
     src/platform/web/web_file_system.cpp
     src/platform/web/web_download.cpp
@@ -104,6 +106,7 @@ if(EMSCRIPTEN)
   )
 else()
   list(APPEND MEGATOY_CORE_SOURCES
+    src/patches/patch_session_native.cpp
     src/midi/rtmidi_backend.cpp
     src/platform/native/native_file_system.cpp
     src/platform/native/desktop_platform_services.cpp

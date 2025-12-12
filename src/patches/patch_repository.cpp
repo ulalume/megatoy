@@ -3,6 +3,7 @@
 #include "formats/patch_loader.hpp"
 #include "platform/platform_config.hpp"
 #include "patch_storage.hpp"
+#include "patches/filesystem_patch_storage.hpp"
 #include "ym2612/patch.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "patches/web_patch_storage.hpp"
@@ -11,7 +12,6 @@
 #include <functional>
 #include <iostream>
 #include <string>
-#include <unordered_map>
 
 namespace patches {
 
@@ -37,6 +37,13 @@ PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
 #if defined(MEGATOY_PLATFORM_WEB)
   storages_.push_back(std::make_unique<WebPatchStorage>());
 #endif
+  storages_.push_back(std::make_unique<FilesystemPatchStorage>(
+      vfs_, patches_directory_, "", metadata_manager_.get()));
+  if (has_builtin_directory_) {
+    storages_.push_back(std::make_unique<FilesystemPatchStorage>(
+        vfs_, builtin_patch_directory_, kBuiltinRootName,
+        metadata_manager_.get()));
+  }
 
   refresh();
 }
@@ -44,31 +51,14 @@ PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
 void PatchRepository::refresh() {
   tree_cache_.clear();
 
-  if (vfs_.is_directory(patches_directory_)) {
-    user_time_valid_ = vfs_.last_write_time(patches_directory_,
-                                            last_user_directory_check_time_);
-    scan_directory(patches_directory_, tree_cache_);
-  } else {
-    user_time_valid_ = false;
-  }
-
-  if (has_builtin_directory_ && vfs_.is_directory(builtin_patch_directory_)) {
-    PatchEntry builtin_root;
-    builtin_root.name = kBuiltinRootName;
-    builtin_root.relative_path = kBuiltinRootName;
-    builtin_root.full_path = builtin_patch_directory_;
-    builtin_root.format = "";
-    builtin_root.is_directory = true;
-
-    scan_directory(builtin_patch_directory_, builtin_root.children,
-                   builtin_root.relative_path);
-
-    if (!builtin_root.children.empty()) {
-      tree_cache_.push_back(std::move(builtin_root));
-    }
-
-    builtin_time_valid_ = vfs_.last_write_time(
-        builtin_patch_directory_, last_builtin_directory_check_time_);
+  user_time_valid_ = vfs_.is_directory(patches_directory_) &&
+                     vfs_.last_write_time(patches_directory_,
+                                          last_user_directory_check_time_);
+  if (has_builtin_directory_) {
+    builtin_time_valid_ = vfs_.is_directory(builtin_patch_directory_) &&
+                          vfs_.last_write_time(
+                              builtin_patch_directory_,
+                              last_builtin_directory_check_time_);
   } else {
     builtin_time_valid_ = false;
   }
@@ -158,136 +148,6 @@ std::vector<std::string> PatchRepository::supported_extensions() {
   return {".gin", ".ginpkg", ".rym2612", ".dmp", ".fui", ".mml"};
 }
 
-void PatchRepository::scan_directory(const std::filesystem::path &dir_path,
-                                     std::vector<PatchEntry> &tree,
-                                     const std::string &relative_path) {
-  if (!std::filesystem::exists(dir_path) ||
-      !std::filesystem::is_directory(dir_path)) {
-    return;
-  }
-
-  auto entries = vfs_.read_directory(dir_path);
-  std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) {
-    const std::string filename_a = a.path.filename().string();
-    const std::string filename_b = b.path.filename().string();
-    if (filename_a == "user")
-      return true;
-    if (filename_a == "presets")
-      return false;
-    if (filename_b == "user")
-      return false;
-    if (filename_b == "presets")
-      return true;
-    return std::lexicographical_compare(
-        filename_a.begin(), filename_a.end(), filename_b.begin(),
-        filename_b.end(),
-        [](char a, char b) { return std::tolower(a) < std::tolower(b); });
-  });
-
-  for (const auto &entry : entries) {
-    const auto &path = entry.path;
-    std::string filename = path.filename().string();
-
-    if (filename.starts_with(".")) {
-      continue;
-    }
-
-    PatchEntry info;
-    info.name = filename;
-    info.full_path = path;
-    info.relative_path =
-        relative_path.empty() ? filename : relative_path + "/" + filename;
-
-    if (entry.is_directory) {
-      info.is_directory = true;
-      info.format = "";
-      scan_directory(path, info.children, info.relative_path);
-      if (!info.children.empty()) {
-        tree.push_back(std::move(info));
-      }
-    } else if (entry.is_regular_file) {
-      std::string extension = path.extension().string();
-      std::transform(extension.begin(), extension.end(), extension.begin(),
-                     ::tolower);
-
-      if (extension == ".mml") {
-        std::vector<ym2612::Patch> instruments =
-            formats::ctrmml::read_file(path);
-        if (!instruments.empty()) {
-          PatchEntry container;
-          container.name = path.stem().string();
-          container.full_path = path;
-          container.relative_path = info.relative_path;
-          container.is_directory = true;
-          container.format = "ctrmml";
-
-          for (size_t idx = 0; idx < instruments.size(); ++idx) {
-            const auto &instrument = instruments[idx];
-            PatchEntry child;
-            child.name = instrument.name;
-            child.full_path = path;
-            std::string identifier = instrument.name;
-            std::replace(identifier.begin(), identifier.end(), '/', '_');
-            std::replace(identifier.begin(), identifier.end(), '\\', '_');
-            child.relative_path = container.relative_path + "/" +
-                                  std::to_string(idx) + "_" + identifier;
-            child.format = "ctrmml";
-            child.is_directory = false;
-            child.children.clear();
-            child.ctrmml_index = idx;
-
-            // Load metadata for ctrmml child entry
-            load_metadata_for_entry(child);
-
-            container.children.push_back(std::move(child));
-          }
-
-          tree.push_back(std::move(container));
-        }
-        continue;
-      }
-
-      if (!is_supported_file(path)) {
-        continue;
-      }
-
-      info.is_directory = false;
-      info.format = detect_format(path);
-      info.name = formats::get_patch_name_from_file(path, info.format);
-
-      // Load metadata for regular patch file
-      load_metadata_for_entry(info);
-
-      tree.push_back(std::move(info));
-    }
-  }
-}
-
-std::string
-PatchRepository::detect_format(const std::filesystem::path &file_path) const {
-  std::string extension = file_path.extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 ::tolower);
-
-  static const std::unordered_map<std::string, std::string> format_map = {
-      {".gin", "gin"}, {".ginpkg", "ginpkg"}, {".rym2612", "rym2612"},
-      {".dmp", "dmp"}, {".fui", "fui"},       {".mml", "ctrmml"}};
-
-  auto it = format_map.find(extension);
-  return it != format_map.end() ? it->second : "unknown";
-}
-
-bool PatchRepository::is_supported_file(
-    const std::filesystem::path &file_path) const {
-  std::string extension = file_path.extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 ::tolower);
-
-  auto supported = supported_extensions();
-  return std::find(supported.begin(), supported.end(), extension) !=
-         supported.end();
-}
-
 std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -334,15 +194,6 @@ PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
   }
 
   return patches_directory_ / path;
-}
-
-void PatchRepository::load_metadata_for_entry(PatchEntry &entry) {
-  if (!metadata_manager_ || entry.is_directory) {
-    return;
-  }
-
-  // Load metadata from database
-  entry.metadata = metadata_manager_->get_metadata(entry.relative_path);
 }
 
 bool PatchRepository::save_patch_metadata(const std::string &relative_path,

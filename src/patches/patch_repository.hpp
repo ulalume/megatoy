@@ -77,12 +77,6 @@ private:
   bool builtin_time_valid_ = false;
   bool cache_initialized_;
 
-  void scan_directory(const std::filesystem::path &dir_path,
-                      std::vector<PatchEntry> &tree,
-                      const std::string &relative_path = "");
-  void load_metadata_for_entry(PatchEntry &entry);
-  std::string detect_format(const std::filesystem::path &file_path) const;
-  bool is_supported_file(const std::filesystem::path &file_path) const;
   std::vector<std::unique_ptr<PatchStorage>> storages_;
 };
 
