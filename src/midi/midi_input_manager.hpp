@@ -16,7 +16,6 @@ public:
     bool enable_button_disabled = false;
   };
 
-  MidiInputManager();
   explicit MidiInputManager(std::unique_ptr<MidiBackend> backend);
   ~MidiInputManager();
 

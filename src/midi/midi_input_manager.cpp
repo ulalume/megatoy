@@ -5,28 +5,9 @@
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_midi_backend.hpp"
-#else
-#include "midi/rtmidi_backend.hpp"
 #endif
 #include "patches/patch_session.hpp"
 #include <iostream>
-
-namespace {
-
-#if defined(MEGATOY_PLATFORM_WEB)
-std::unique_ptr<MidiBackend> make_default_backend() {
-  return std::make_unique<platform::web::WebMidiBackend>();
-}
-#else
-std::unique_ptr<MidiBackend> make_default_backend() {
-  return std::make_unique<RtMidiBackend>();
-}
-#endif
-
-} // namespace
-
-MidiInputManager::MidiInputManager()
-    : MidiInputManager(make_default_backend()) {}
 
 MidiInputManager::MidiInputManager(std::unique_ptr<MidiBackend> backend)
     : backend_(std::move(backend)), pending_events_(), available_ports_(),
@@ -35,9 +16,6 @@ MidiInputManager::MidiInputManager(std::unique_ptr<MidiBackend> backend)
 MidiInputManager::~MidiInputManager() { shutdown(); }
 
 bool MidiInputManager::init() {
-  if (!backend_) {
-    backend_ = make_default_backend();
-  }
   if (!backend_) {
     std::cerr << "No MIDI backend available\n";
     return false;

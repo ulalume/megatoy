@@ -80,6 +80,7 @@ set(MEGATOY_CORE_SOURCES
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
 
+  src/platform/std_file_system.cpp
   src/system/path_service.cpp
   src/update/update_checker.cpp
   src/update/release_provider.cpp
