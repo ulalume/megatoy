@@ -99,11 +99,11 @@ void WebMidiBackend::setup_js_state() const {
 #endif
 }
 
-WebMidiBackend::StatusInfo WebMidiBackend::read_status_from_js() const {
+WebMidiBackend::WebStatus WebMidiBackend::read_status_from_js() const {
 #if defined(MEGATOY_PLATFORM_WEB)
   setup_js_state();
   using emscripten::val;
-  StatusInfo info;
+  WebStatus info;
   val module = val::global("Module");
   val state = module["megatoyMidiState"];
   if (state.isUndefined()) {
@@ -150,7 +150,15 @@ bool WebMidiBackend::initialize() {
 void WebMidiBackend::shutdown() {}
 
 WebMidiBackend::StatusInfo WebMidiBackend::status() const {
-  return read_status_from_js();
+  auto web_status = read_status_from_js();
+  MidiBackend::StatusInfo info;
+  info.message = web_status.message;
+  info.show_enable_button =
+      web_status.state == State::NeedsPermission ||
+      web_status.state == State::Error;
+  info.enable_button_disabled =
+      web_status.state == State::Pending;
+  return info;
 }
 
 void WebMidiBackend::request_access() {

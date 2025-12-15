@@ -10,11 +10,7 @@ struct AppContext;
 
 class MidiInputManager {
 public:
-  struct StatusInfo {
-    std::string message;
-    bool show_enable_button = false;
-    bool enable_button_disabled = false;
-  };
+  using StatusInfo = MidiBackend::StatusInfo;
 
   explicit MidiInputManager(std::unique_ptr<MidiBackend> backend);
   ~MidiInputManager();

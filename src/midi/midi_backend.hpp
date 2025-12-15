@@ -18,6 +18,12 @@ struct MidiMessage {
 
 class MidiBackend {
 public:
+  struct StatusInfo {
+    std::string message;
+    bool show_enable_button = false;
+    bool enable_button_disabled = false;
+  };
+
   virtual ~MidiBackend() = default;
 
   virtual bool initialize() = 0;
@@ -26,4 +32,12 @@ public:
   virtual void poll(std::vector<MidiMessage> &events,
                     std::vector<std::string> &available_ports,
                     bool &ports_changed) = 0;
+
+   // Optional status reporting (e.g., WebMIDI permission state).
+  virtual StatusInfo status() const {
+    return {"System MIDI backend active.", false, false};
+  }
+
+  // Optional permission request hook (WebMIDI).
+  virtual void request_access() {}
 };

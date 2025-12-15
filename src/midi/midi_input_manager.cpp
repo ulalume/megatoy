@@ -2,10 +2,6 @@
 
 #include "app_context.hpp"
 #include "app_services.hpp"
-#include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_midi_backend.hpp"
-#endif
 #include "patches/patch_session.hpp"
 #include <iostream>
 
@@ -73,31 +69,14 @@ void MidiInputManager::dispatch(AppContext &context) {
 }
 
 MidiInputManager::StatusInfo MidiInputManager::status() const {
-  StatusInfo info;
-#if defined(MEGATOY_PLATFORM_WEB)
-  if (auto *web =
-          dynamic_cast<platform::web::WebMidiBackend *>(backend_.get())) {
-    auto backend_status = web->status();
-    info.message = backend_status.message;
-    info.show_enable_button =
-        backend_status.state ==
-            platform::web::WebMidiBackend::State::NeedsPermission ||
-        backend_status.state == platform::web::WebMidiBackend::State::Error;
-    info.enable_button_disabled =
-        backend_status.state == platform::web::WebMidiBackend::State::Pending;
-    return info;
+  if (!backend_) {
+    return {"MIDI backend unavailable.", false, false};
   }
-#endif
-  info.message =
-      backend_ ? "System MIDI backend active." : "MIDI backend unavailable.";
-  return info;
+  return backend_->status();
 }
 
 void MidiInputManager::request_web_midi_access() {
-#if defined(MEGATOY_PLATFORM_WEB)
-  if (auto *web =
-          dynamic_cast<platform::web::WebMidiBackend *>(backend_.get())) {
-    web->request_access();
+  if (backend_) {
+    backend_->request_access();
   }
-#endif
 }

@@ -15,11 +15,6 @@ public:
     Error,
   };
 
-  struct StatusInfo {
-    State state = State::Unavailable;
-    std::string message;
-  };
-
   WebMidiBackend() = default;
   ~WebMidiBackend() override = default;
 
@@ -29,12 +24,16 @@ public:
             std::vector<std::string> &available_ports,
             bool &ports_changed) override;
 
-  StatusInfo status() const;
-  void request_access();
+  MidiBackend::StatusInfo status() const override;
+  void request_access() override;
 
 private:
   void setup_js_state() const;
-  StatusInfo read_status_from_js() const;
+  struct WebStatus {
+    State state = State::Unavailable;
+    std::string message;
+  };
+  WebStatus read_status_from_js() const;
 };
 
 } // namespace platform::web
