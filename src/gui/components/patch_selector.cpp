@@ -644,9 +644,8 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
       auto preset_tree = preset_repository.tree();
       std::string tree_query_lower =
           to_lower(context.prefs.metadata_search_query);
-      bool rendered =
-          render_patch_tree(preset_tree, context, tree_query_lower,
-                            context.prefs.metadata_star_filter);
+      bool rendered = render_patch_tree(preset_tree, context, tree_query_lower,
+                                        context.prefs.metadata_star_filter);
       if (!rendered && (!tree_query_lower.empty() ||
                         context.prefs.metadata_star_filter > 0)) {
         ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),

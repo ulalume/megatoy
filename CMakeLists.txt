@@ -44,7 +44,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
         "-DNDEBUG"
         "-funroll-loops"
     )
-    if(NOT EMSCRIPTEN)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
       if(MEGATOY_LINUX_X86_64)
         if(MEGATOY_GENERAL_X86_64_LINUX)
           message(STATUS "Using generic x86-64 tuning for Linux Release build")
@@ -87,7 +87,7 @@ endif()
 include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 
-if(EMSCRIPTEN)
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   if(NOT MEGATOY_EMSCRIPTEN_SYSROOT AND DEFINED ENV{EM_CACHE})
     set(MEGATOY_EMSCRIPTEN_SYSROOT "$ENV{EM_CACHE}/sysroot")
   endif()

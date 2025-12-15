@@ -4,8 +4,8 @@
 
 extern int main(int argc, char *argv[]);
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine,
-                    int nCmdShow) {
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                    LPWSTR lpCmdLine, int nCmdShow) {
   (void)hInstance;
   (void)hPrevInstance;
   (void)lpCmdLine;

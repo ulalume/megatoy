@@ -13,4 +13,3 @@ public:
   virtual void stop() = 0;
   virtual bool is_active() const = 0;
 };
-

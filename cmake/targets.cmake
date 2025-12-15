@@ -18,10 +18,10 @@ target_include_directories(imgui_lib PUBLIC
 target_link_libraries(imgui_lib PUBLIC
   SDL3::SDL3
 )
-if(EMSCRIPTEN)
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   target_compile_definitions(imgui_lib PUBLIC IMGUI_IMPL_OPENGL_ES3 IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
 endif()
-if(NOT EMSCRIPTEN)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 target_link_libraries(imgui_lib PUBLIC OpenGL::GL)
 endif()
 
@@ -96,7 +96,7 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/fft_analyzer.cpp
 )
 
-if(EMSCRIPTEN)
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   list(APPEND MEGATOY_CORE_SOURCES
     src/audio/webaudio_transport.cpp
     src/gui/imgui_ini_bridge_web.cpp
@@ -142,7 +142,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(MEGATOY_CORE_RELEASE_FLAGS -O3 -ffast-math -funroll-loops)
   if(MEGATOY_RELEASE_CPU_FLAGS)
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
-  elseif(NOT EMSCRIPTEN)
+  elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS -march=native)
   endif()
   target_compile_options(megatoy_core PRIVATE
@@ -161,7 +161,7 @@ target_link_libraries(megatoy_core PUBLIC
   miniz
 )
 
-if(NOT EMSCRIPTEN)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   target_link_libraries(megatoy_core PUBLIC
     OpenGL::GL
     CURL::libcurl
@@ -194,7 +194,7 @@ target_compile_definitions(megatoy_core PUBLIC
   MEGATOY_PRESETS_RELATIVE_PATH="${MEGATOY_PRESETS_RELATIVE_PATH_VALUE}"
   $<$<PLATFORM_ID:Darwin>:GL_SILENCE_DEPRECATION>
 )
-if(EMSCRIPTEN)
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   target_compile_definitions(megatoy_core PUBLIC IMGUI_IMPL_OPENGL_ES3)
 endif()
 
@@ -237,7 +237,7 @@ install(TARGETS megatoy
   RUNTIME DESTINATION .
 )
 
-if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
+if(UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   find_package(X11 REQUIRED)
   target_link_libraries(megatoy PRIVATE ${X11_LIBRARIES})
 endif()
@@ -246,7 +246,7 @@ add_embedded_assets(megatoy
   EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/" "\\.txt$"
 )
 
-if(EMSCRIPTEN)
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set_target_properties(megatoy PROPERTIES SUFFIX ".html")
   target_link_options(megatoy PRIVATE
     "--bind"

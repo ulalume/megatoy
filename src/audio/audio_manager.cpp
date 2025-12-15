@@ -11,8 +11,7 @@ std::unique_ptr<AudioTransport> make_default_transport() {
 
 } // namespace
 
-AudioManager::AudioManager()
-    : AudioManager(make_default_transport()) {}
+AudioManager::AudioManager() : AudioManager(make_default_transport()) {}
 
 AudioManager::AudioManager(std::unique_ptr<AudioTransport> transport)
     : engine_(), transport_(std::move(transport)) {}

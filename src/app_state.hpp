@@ -1,8 +1,8 @@
 #pragma once
 
+#include "gui/save_export_state.hpp"
 #include "input_state.hpp"
 #include "patches/patch_repository.hpp"
-#include "gui/save_export_state.hpp"
 #include "preferences/preference_manager.hpp"
 #include "ym2612/patch.hpp"
 #include <filesystem>

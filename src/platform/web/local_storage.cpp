@@ -6,16 +6,13 @@
 
 namespace {
 
-emscripten::val storage() {
-  return emscripten::val::global("localStorage");
-}
+emscripten::val storage() { return emscripten::val::global("localStorage"); }
 
 } // namespace
 
 namespace platform::web {
 
-std::optional<std::string>
-read_local_storage(const std::string &key) {
+std::optional<std::string> read_local_storage(const std::string &key) {
   using emscripten::val;
   val value = storage().call<val>("getItem", key);
   if (value.isNull() || value.isUndefined()) {
@@ -24,8 +21,7 @@ read_local_storage(const std::string &key) {
   return value.as<std::string>();
 }
 
-void write_local_storage(const std::string &key,
-                         const std::string &value) {
+void write_local_storage(const std::string &key, const std::string &value) {
   storage().call<void>("setItem", key, value);
 }
 
@@ -39,17 +35,14 @@ void remove_local_storage(const std::string &key) {
 
 namespace platform::web {
 
-std::optional<std::string>
-read_local_storage(const std::string &) {
+std::optional<std::string> read_local_storage(const std::string &) {
   return std::nullopt;
 }
 
-void write_local_storage(const std::string &,
-                         const std::string &) {}
+void write_local_storage(const std::string &, const std::string &) {}
 
 void remove_local_storage(const std::string &) {}
 
 } // namespace platform::web
 
 #endif
-

@@ -17,7 +17,7 @@ void request_access_js() {
     if (!state || !state.available) {
       return;
     }
-    if (state.pending || state.status === "enabled") {
+    if (state.pending || state.status == = "enabled") {
       return;
     }
     state.pending = true;
@@ -28,7 +28,7 @@ void request_access_js() {
       Module['megatoyMidiAccess'] = access;
       function refreshPorts() {
         Module['megatoyMidiPorts'] = [];
-        access.inputs.forEach(function (input) {
+        access.inputs.forEach(function(input) {
           Module['megatoyMidiPorts'].push(input.name || input.id || 'MIDI');
         });
         Module['megatoyMidiPortsChanged'] = true;
@@ -36,18 +36,17 @@ void request_access_js() {
 
       function handleMessage(event) {
         Module['megatoyMidiEvents'].push({
-          port: event.target && event.target.name ? event.target.name : 'MIDI',
-          data: Array.prototype.slice.call(event.data || [])
+          port : event.target && event.target.name ? event.target.name : 'MIDI',
+          data : Array.prototype.slice.call(event.data || [])
         });
       }
 
-      access.inputs.forEach(function (input) {
-        input.onmidimessage = handleMessage;
-      });
+      access.inputs.forEach(
+          function(input) { input.onmidimessage = handleMessage; });
 
-      access.onstatechange = function (event) {
-        if (event.port && event.port.type === 'input' &&
-            event.port.state === 'connected') {
+      access.onstatechange = function(event) {
+        if (event.port &&event.port.type == = 'input' &&event.port.state ==
+            = 'connected') {
           event.port.onmidimessage = handleMessage;
         }
         refreshPorts();
@@ -57,16 +56,16 @@ void request_access_js() {
     }
 
     navigator.requestMIDIAccess()
-        .then(function (access) {
+        .then(function(access) {
           state.pending = false;
           state.status = "enabled";
           installHandlers(access);
         })
-        .catch(function (err) {
+        .catch(function(err) {
           state.pending = false;
           state.status = "error";
-          state.error = (err && err.message) ? err.message
-                                             : "Failed to access WebMIDI.";
+          state.error =
+              (err && err.message) ? err.message : "Failed to access WebMIDI.";
         });
   });
 }
@@ -84,8 +83,8 @@ void WebMidiBackend::setup_js_state() const {
     Module['megatoyMidiPorts'] = [];
     Module['megatoyMidiPortsChanged'] = false;
 
-    var available = typeof navigator !== 'undefined' &&
-                    typeof navigator.requestMIDIAccess === 'function';
+    var available = typeof navigator !=
+        = 'undefined' &&typeof navigator.requestMIDIAccess == = 'function';
     Module['megatoyMidiState'] = {};
     Module['megatoyMidiState'].available = available;
     Module['megatoyMidiState'].status =
@@ -108,9 +107,9 @@ WebMidiBackend::StatusInfo WebMidiBackend::read_status_from_js() const {
     info.message = "WebMIDI unavailable.";
     return info;
   }
-  std::string status =
-      state["status"].isUndefined() ? "unavailable"
-                                    : state["status"].as<std::string>();
+  std::string status = state["status"].isUndefined()
+                           ? "unavailable"
+                           : state["status"].as<std::string>();
   std::string error =
       state["error"].isUndefined() ? "" : state["error"].as<std::string>();
   if (status == "enabled") {
@@ -124,8 +123,7 @@ WebMidiBackend::StatusInfo WebMidiBackend::read_status_from_js() const {
     info.message = "WebMIDI requires permission. Click Enable WebMIDI.";
   } else if (status == "error") {
     info.state = State::Error;
-    info.message =
-        error.empty() ? "WebMIDI permission was denied." : error;
+    info.message = error.empty() ? "WebMIDI permission was denied." : error;
   } else {
     info.state = State::Unavailable;
     info.message = "WebMIDI unsupported in this browser.";
@@ -204,14 +202,13 @@ void WebMidiBackend::poll(std::vector<MidiMessage> &events,
       unsigned char velocity = (len > 2) ? bytes[2] : 0;
       message.note = ym2612::Note::from_midi_note(midi_note);
       message.velocity = velocity;
-      message.port_name =
-          evt["port"].isUndefined() ? std::string("MIDI")
-                                    : evt["port"].as<std::string>();
+      message.port_name = evt["port"].isUndefined()
+                              ? std::string("MIDI")
+                              : evt["port"].as<std::string>();
       if (type == 0x90 && velocity > 0) {
         message.type = MidiMessage::Type::NoteOn;
         events.push_back(message);
-      } else if (type == 0x80 ||
-                 (type == 0x90 && velocity == 0)) {
+      } else if (type == 0x80 || (type == 0x90 && velocity == 0)) {
         message.type = MidiMessage::Type::NoteOff;
         events.push_back(message);
       }

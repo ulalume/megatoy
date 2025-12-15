@@ -1,9 +1,9 @@
 #include "patch_repository.hpp"
 #include "formats/ctrmml.hpp"
 #include "formats/patch_loader.hpp"
-#include "platform/platform_config.hpp"
 #include "patch_storage.hpp"
 #include "patches/filesystem_patch_storage.hpp"
+#include "platform/platform_config.hpp"
 #include "ym2612/patch.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "patches/web_patch_storage.hpp"
@@ -51,14 +51,14 @@ PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
 void PatchRepository::refresh() {
   tree_cache_.clear();
 
-  user_time_valid_ = vfs_.is_directory(patches_directory_) &&
-                     vfs_.last_write_time(patches_directory_,
-                                          last_user_directory_check_time_);
+  user_time_valid_ =
+      vfs_.is_directory(patches_directory_) &&
+      vfs_.last_write_time(patches_directory_, last_user_directory_check_time_);
   if (has_builtin_directory_) {
-    builtin_time_valid_ = vfs_.is_directory(builtin_patch_directory_) &&
-                          vfs_.last_write_time(
-                              builtin_patch_directory_,
-                              last_builtin_directory_check_time_);
+    builtin_time_valid_ =
+        vfs_.is_directory(builtin_patch_directory_) &&
+        vfs_.last_write_time(builtin_patch_directory_,
+                             last_builtin_directory_check_time_);
   } else {
     builtin_time_valid_ = false;
   }

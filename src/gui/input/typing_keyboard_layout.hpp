@@ -76,8 +76,9 @@ layout_from_preferences(const TypingLayoutPreference &pref) {
   return result;
 }
 
-inline void copy_builtin_to_preferences(TypingLayoutPreference &pref,
-                                        const BuiltinTypingLayoutArray &builtin) {
+inline void
+copy_builtin_to_preferences(TypingLayoutPreference &pref,
+                            const BuiltinTypingLayoutArray &builtin) {
   pref.clear();
   pref.reserve(typing_layout_default_slot_count);
   for (auto key : builtin) {

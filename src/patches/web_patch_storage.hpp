@@ -1,8 +1,8 @@
 #pragma once
 
-#include "platform/platform_config.hpp"
 #include "patch_repository.hpp"
 #include "patch_storage.hpp"
+#include "platform/platform_config.hpp"
 
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_patch_store.hpp"

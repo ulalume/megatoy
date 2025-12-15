@@ -4,8 +4,8 @@
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <fstream>
-#include <iterator>
 #include <iostream>
+#include <iterator>
 #include <vector>
 
 namespace {
@@ -35,7 +35,8 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
     constexpr size_t header_size = 7;
     constexpr size_t operator_bytes = 11;
     constexpr size_t operator_count = 4;
-    constexpr size_t expected_size = header_size + operator_count * operator_bytes;
+    constexpr size_t expected_size =
+        header_size + operator_count * operator_bytes;
 
     if (bytes.size() == expected_size - 2 && bytes.size() >= 3 &&
         bytes[0] == 0 && bytes[1] == 0 && bytes[2] == 0) {
@@ -52,8 +53,9 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
       if (repaired.size() >= 3 && repaired[2] == 0) {
         repaired[2] = 0x01; // FM instrument mode
       }
-      std::cerr << "Heuristically repaired missing DMP header (version/system): "
-                << file_path << std::endl;
+      std::cerr
+          << "Heuristically repaired missing DMP header (version/system): "
+          << file_path << std::endl;
       bytes.swap(repaired);
     }
 
@@ -89,7 +91,7 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
     uint8_t lfo_fms = read_byte(bytes, layout->fms_idx);       // FMS on YM2612
     uint8_t feedback = read_byte(bytes, layout->feedback_idx); // FB
     uint8_t algorithm = read_byte(bytes, layout->algorithm_idx); // ALG
-    uint8_t lfo_ams = read_byte(bytes, layout->ams_idx);         // AMS on YM2612
+    uint8_t lfo_ams = read_byte(bytes, layout->ams_idx); // AMS on YM2612
 
     if (bytes.size() < expected_size) {
       std::cerr << "DMP file shorter than expected (" << bytes.size() << " < "
@@ -98,13 +100,15 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
     }
 
     // Older exports used 0 or 1 for Genesis; keep loading but warn.
-    if (!(system == 0x02 || (file_version <= 0x09 && (system == 0x00 || system == 0x01)))) {
+    if (!(system == 0x02 ||
+          (file_version <= 0x09 && (system == 0x00 || system == 0x01)))) {
       std::cerr << "Unsupported or unknown DMP system code: "
                 << static_cast<int>(system) << std::endl;
     }
 
     if (instrument_mode != 1) {
-      std::cerr << "Instrument mode is not FM (" << static_cast<int>(instrument_mode)
+      std::cerr << "Instrument mode is not FM ("
+                << static_cast<int>(instrument_mode)
                 << "), parsing as FM because file matches FM size" << std::endl;
     }
 
@@ -127,16 +131,16 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
       auto &operator_settings = patch.instrument.operators[op];
       const size_t base = header_size + op * operator_bytes;
 
-      uint8_t mult = read_byte(bytes, base + 0);  // MULT
-      uint8_t tl = read_byte(bytes, base + 1);    // TL
-      uint8_t ar = read_byte(bytes, base + 2);    // AR
-      uint8_t dr = read_byte(bytes, base + 3);    // DR (D1R)
-      uint8_t sl = read_byte(bytes, base + 4);    // SL (D2L)
-      uint8_t rr = read_byte(bytes, base + 5);    // RR
-      uint8_t am = read_byte(bytes, base + 6);    // AM
-      uint8_t rs = read_byte(bytes, base + 7);    // RS (Key Scale)
-      uint8_t dt = read_byte(bytes, base + 8);    // DT
-      uint8_t d2r = read_byte(bytes, base + 9);   // D2R
+      uint8_t mult = read_byte(bytes, base + 0);   // MULT
+      uint8_t tl = read_byte(bytes, base + 1);     // TL
+      uint8_t ar = read_byte(bytes, base + 2);     // AR
+      uint8_t dr = read_byte(bytes, base + 3);     // DR (D1R)
+      uint8_t sl = read_byte(bytes, base + 4);     // SL (D2L)
+      uint8_t rr = read_byte(bytes, base + 5);     // RR
+      uint8_t am = read_byte(bytes, base + 6);     // AM
+      uint8_t rs = read_byte(bytes, base + 7);     // RS (Key Scale)
+      uint8_t dt = read_byte(bytes, base + 8);     // DT
+      uint8_t d2r = read_byte(bytes, base + 9);    // D2R
       uint8_t ssgeg = read_byte(bytes, base + 10); // SSGEG
 
       operator_settings.multiple = mult & 0x0F;

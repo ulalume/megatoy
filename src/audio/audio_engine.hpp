@@ -3,7 +3,6 @@
 #include "ym2612/device.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/wave_sampler.hpp"
-#include <cstdint>
 #include <emu/EmuStructs.h>
 #include <vector>
 
@@ -46,4 +45,3 @@ private:
   ym2612::WaveSampler wave_sampler_;
   bool running_;
 };
-

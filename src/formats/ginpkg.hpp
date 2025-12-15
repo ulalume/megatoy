@@ -43,20 +43,19 @@ private:
   std::unordered_map<std::string, std::string> snapshots_;
 };
 
-std::filesystem::path build_package_path(
-    const std::filesystem::path &patches_dir, const std::string &filename);
+std::filesystem::path
+build_package_path(const std::filesystem::path &patches_dir,
+                   const std::string &filename);
 
 const std::optional<std::filesystem::path>
-save_patch(const std::filesystem::path &patches_dir,
-           const ym2612::Patch &patch, const std::string &filename,
-           const std::string &comment = "");
+save_patch(const std::filesystem::path &patches_dir, const ym2612::Patch &patch,
+           const std::string &filename, const std::string &comment = "");
 
 std::vector<ym2612::Patch> read_file(const std::filesystem::path &package_path);
 
 std::optional<GinPackage> load_package(const std::filesystem::path &path);
 std::optional<ym2612::Patch> read_version(const std::filesystem::path &path,
                                           const std::string &uuid);
-bool delete_version(const std::filesystem::path &path,
-                    const std::string &uuid);
+bool delete_version(const std::filesystem::path &path, const std::string &uuid);
 
 } // namespace formats::ginpkg

@@ -124,8 +124,7 @@ void WebAudioTransport::handle_stream_callback(SDL_AudioStream *stream,
   }
 
   std::uint32_t produced =
-      callback_(static_cast<std::uint32_t>(samples_requested *
-                                           sizeof(int16_t)),
+      callback_(static_cast<std::uint32_t>(samples_requested * sizeof(int16_t)),
                 static_cast<void *>(int_buffer_.data()));
   if (produced == 0) {
     return;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include "platform/platform_config.hpp"
+#include <cstdint>
 #if defined(MEGATOY_PLATFORM_WEB)
 #include <GLES3/gl3.h>
 #else

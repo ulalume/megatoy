@@ -1,8 +1,8 @@
 #include "platform/platform_config.hpp"
 
 #if defined(MEGATOY_PLATFORM_WEB)
-#include "patches/web_patch_storage.hpp"
 #include "patches/filename_utils.hpp"
+#include "patches/web_patch_storage.hpp"
 #include "platform/web/web_patch_store.hpp"
 #include <algorithm>
 #include <filesystem>
@@ -43,10 +43,9 @@ void WebPatchStorage::append_entries(std::vector<PatchEntry> &tree) const {
   if (local_storage_children.empty()) {
     return;
   }
-  std::sort(local_storage_children.begin(), local_storage_children.end(),
-            [](const PatchEntry &a, const PatchEntry &b) {
-              return a.name < b.name;
-            });
+  std::sort(
+      local_storage_children.begin(), local_storage_children.end(),
+      [](const PatchEntry &a, const PatchEntry &b) { return a.name < b.name; });
 
   PatchEntry storage_root;
   storage_root.name = std::string(kLocalStorageRelativeRoot);

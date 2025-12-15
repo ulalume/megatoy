@@ -107,10 +107,12 @@ public:
               ui["patch_search_query"].get<std::string>();
         }
         if (ui.contains("patch_sort_column")) {
-          data.ui_preferences.patch_sort_column = ui["patch_sort_column"].get<int>();
+          data.ui_preferences.patch_sort_column =
+              ui["patch_sort_column"].get<int>();
         }
         if (ui.contains("patch_sort_order")) {
-          data.ui_preferences.patch_sort_order = ui["patch_sort_order"].get<int>();
+          data.ui_preferences.patch_sort_order =
+              ui["patch_sort_order"].get<int>();
         }
         if (ui.contains("steal_oldest_note_when_full")) {
           data.ui_preferences.steal_oldest_note_when_full =

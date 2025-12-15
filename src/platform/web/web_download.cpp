@@ -20,10 +20,12 @@ EM_JS(void, megatoy_download_bytes,
         link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
-        setTimeout(function () {
-          URL.revokeObjectURL(link.href);
-          document.body.removeChild(link);
-        }, 0);
+        setTimeout(
+            function() {
+              URL.revokeObjectURL(link.href);
+              document.body.removeChild(link);
+            },
+            0);
       });
 
 EM_JS(void, megatoy_download_text,
@@ -38,10 +40,12 @@ EM_JS(void, megatoy_download_text,
         link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
-        setTimeout(function () {
-          URL.revokeObjectURL(link.href);
-          document.body.removeChild(link);
-        }, 0);
+        setTimeout(
+            function() {
+              URL.revokeObjectURL(link.href);
+              document.body.removeChild(link);
+            },
+            0);
       });
 #endif
 

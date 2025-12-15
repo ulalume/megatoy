@@ -16,4 +16,3 @@ struct InputState {
 
   std::map<int, ym2612::Note> active_keyboard_notes;
 };
-

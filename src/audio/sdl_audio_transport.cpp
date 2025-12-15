@@ -43,8 +43,8 @@ bool SdlAudioTransport::start(std::uint32_t sample_rate,
   desired.channels = 2;
   desired.format = SDL_AUDIO_S16;
 
-  audio_stream_ = SDL_OpenAudioDeviceStream(
-      SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &desired, nullptr, nullptr);
+  audio_stream_ = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+                                            &desired, nullptr, nullptr);
   if (audio_stream_ == nullptr) {
     std::cerr << "Failed to open SDL audio stream: " << SDL_GetError()
               << std::endl;
@@ -66,9 +66,8 @@ bool SdlAudioTransport::start(std::uint32_t sample_rate,
     frame_size_ = kFallbackFrameSize;
   }
 
-  target_buffer_bytes_ =
-      std::max<std::uint32_t>(frame_size_ * (effective_sample_rate / 40),
-                              frame_size_ * 8);
+  target_buffer_bytes_ = std::max<std::uint32_t>(
+      frame_size_ * (effective_sample_rate / 40), frame_size_ * 8);
 
   if (!SDL_ResumeAudioStreamDevice(audio_stream_)) {
     std::cerr << "Failed to start SDL audio device: " << SDL_GetError()

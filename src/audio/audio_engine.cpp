@@ -57,8 +57,7 @@ UINT32 AudioEngine::render(UINT32 buf_size, void *data) {
   std::fill_n(smpl_data_[0].data(), smpl_count, DEV_SMPL{});
   std::fill_n(smpl_data_[1].data(), smpl_count, DEV_SMPL{});
 
-  std::array<DEV_SMPL *, 2> outputs{smpl_data_[0].data(),
-                                    smpl_data_[1].data()};
+  std::array<DEV_SMPL *, 2> outputs{smpl_data_[0].data(), smpl_data_[1].data()};
   device_.update(smpl_count, outputs);
   wave_sampler_.push_samples(outputs[0], outputs[1], smpl_count);
 

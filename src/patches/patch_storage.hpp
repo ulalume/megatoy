@@ -7,7 +7,6 @@ namespace patches {
 
 struct PatchEntry;
 
-
 // Extension point to plug in non-filesystem patch sources (e.g. web
 // localStorage). Keeping it tiny avoids scattering platform ifdefs.
 class PatchStorage {
