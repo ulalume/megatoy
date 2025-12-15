@@ -13,11 +13,12 @@ namespace {
 #if defined(MEGATOY_PLATFORM_WEB)
 void request_access_js() {
   EM_ASM({
+    // clang-format off
     var state = Module['megatoyMidiState'];
     if (!state || !state.available) {
       return;
     }
-    if (state.pending || state.status == = "enabled") {
+    if (state.pending || state.status === "enabled") {
       return;
     }
     state.pending = true;
@@ -45,8 +46,8 @@ void request_access_js() {
           function(input) { input.onmidimessage = handleMessage; });
 
       access.onstatechange = function(event) {
-        if (event.port &&event.port.type == = 'input' &&event.port.state ==
-            = 'connected') {
+        if (event.port && event.port.type === 'input' &&
+            event.port.state === 'connected') {
           event.port.onmidimessage = handleMessage;
         }
         refreshPorts();
@@ -67,6 +68,7 @@ void request_access_js() {
           state.error =
               (err && err.message) ? err.message : "Failed to access WebMIDI.";
         });
+    // clang-format on
   });
 }
 #endif
@@ -75,6 +77,7 @@ void request_access_js() {
 void WebMidiBackend::setup_js_state() const {
 #if defined(MEGATOY_PLATFORM_WEB)
   EM_ASM({
+    // clang-format off
     if (Module['megatoyMidiSetup']) {
       return;
     }
@@ -83,14 +86,15 @@ void WebMidiBackend::setup_js_state() const {
     Module['megatoyMidiPorts'] = [];
     Module['megatoyMidiPortsChanged'] = false;
 
-    var available = typeof navigator !=
-        = 'undefined' &&typeof navigator.requestMIDIAccess == = 'function';
+    var available = typeof navigator !== 'undefined' &&
+        typeof navigator.requestMIDIAccess === 'function';
     Module['megatoyMidiState'] = {};
     Module['megatoyMidiState'].available = available;
     Module['megatoyMidiState'].status =
         available ? "needs-permission" : "unavailable";
     Module['megatoyMidiState'].pending = false;
     Module['megatoyMidiState'].error = "";
+    // clang-format on
   });
 #endif
 }
