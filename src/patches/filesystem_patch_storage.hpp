@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace patches {
 
@@ -24,8 +25,18 @@ public:
   SavePatchResult save_patch(const ym2612::Patch &patch,
                              const std::string &name,
                              bool overwrite) override;
+  bool is_writable() const override { return writable_; }
+  std::string_view label() const override { return label_; }
+  bool save_patch_metadata(const std::string &relative_path,
+                           const ym2612::Patch &patch,
+                           const PatchMetadata &metadata) override;
   bool update_patch_metadata(const std::string &relative_path,
                              const PatchMetadata &metadata) override;
+  std::optional<PatchMetadata>
+  get_patch_metadata(const std::string &relative_path) const override;
+  void cleanup_metadata(const std::vector<std::string> &paths) const override;
+  std::optional<bool>
+  has_patch_named(const std::string &name) const override;
   std::optional<std::filesystem::path>
   to_relative_path(const std::filesystem::path &path) const override;
   std::optional<std::filesystem::path>
@@ -37,6 +48,7 @@ private:
   std::string root_label_;
   PatchMetadataManager *metadata_manager_;
   bool writable_;
+  std::string label_;
 
   void scan_directory(const std::filesystem::path &dir_path,
                       std::vector<PatchEntry> &tree,

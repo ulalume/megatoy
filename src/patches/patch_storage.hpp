@@ -4,6 +4,7 @@
 #include "ym2612/patch.hpp"
 #include <filesystem>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace patches {
@@ -56,11 +57,33 @@ public:
     return SavePatchResult::unsupported();
   }
 
-  // Optional metadata update. Default is unsupported (for storages without
+  // Optional metadata operations. Default is unsupported (for storages without
   // metadata persistence).
+  virtual bool save_patch_metadata(const std::string &, const ym2612::Patch &,
+                                   const PatchMetadata &) {
+    return false;
+  }
+
   virtual bool update_patch_metadata(const std::string &,
                                      const PatchMetadata &) {
     return false;
+  }
+
+  virtual std::optional<PatchMetadata>
+  get_patch_metadata(const std::string &) const {
+    return std::nullopt;
+  }
+
+  virtual void cleanup_metadata(const std::vector<std::string> &) const {}
+
+  // Capability helpers for UI/logic to query storage properties.
+  virtual bool is_writable() const { return false; }
+  virtual std::string_view label() const { return {}; }
+
+  // Optional duplicate check for a given patch name (unsanitized). If
+  // unsupported, return std::nullopt.
+  virtual std::optional<bool> has_patch_named(const std::string &) const {
+    return std::nullopt;
   }
 
   // Optional path mapping helpers so PatchRepository doesn't need platform

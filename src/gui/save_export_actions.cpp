@@ -4,7 +4,6 @@
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
 #include <algorithm>
-#include <filesystem>
 #include <imgui.h>
 #include <iomanip>
 #include <sstream>
@@ -188,19 +187,9 @@ std::string base_name_without_counter(const std::string &name, int &start) {
   return name;
 }
 
-std::filesystem::path to_candidate_path(const patches::PatchSession &session,
-                                        const std::string &name) {
-  std::string filename = name;
-  if (!filename.ends_with(".ginpkg") && !filename.ends_with(".gin")) {
-    filename += ".ginpkg";
-  }
-  return session.repository().to_absolute_path(filename);
-}
-
 bool name_conflicts(const patches::PatchSession &session,
                     const std::string &name) {
-  auto abs = to_candidate_path(session, name);
-  return std::filesystem::exists(abs);
+  return session.repository().patch_name_conflicts(name);
 }
 
 std::string generate_duplicate_name(const patches::PatchSession &session) {

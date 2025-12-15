@@ -103,6 +103,24 @@ bool WebPatchStorage::update_patch_metadata(const std::string &relative_path,
   return false;
 }
 
+std::optional<PatchMetadata>
+WebPatchStorage::get_patch_metadata(const std::string &relative_path) const {
+  (void)relative_path;
+  return std::nullopt;
+}
+
+void WebPatchStorage::cleanup_metadata(
+    const std::vector<std::string> &paths) const {
+  (void)paths;
+}
+
+std::optional<bool> WebPatchStorage::has_patch_named(
+    const std::string &name) const {
+  const std::string sanitized =
+      patches::sanitize_filename(name.empty() ? "patch" : name);
+  return platform::web::patch_store::exists(sanitized);
+}
+
 std::optional<std::filesystem::path>
 WebPatchStorage::to_relative_path(const std::filesystem::path &path) const {
   const std::string generic = path.generic_string();

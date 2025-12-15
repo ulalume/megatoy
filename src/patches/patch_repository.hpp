@@ -66,6 +66,10 @@ public:
   void cleanup_orphaned_metadata();
   bool remove_patch(const PatchEntry &entry);
 
+  // Capabilities
+  std::string primary_writable_label() const;
+  bool patch_name_conflicts(const std::string &name) const;
+
 private:
   static constexpr const char *kBuiltinRootName = "presets";
 

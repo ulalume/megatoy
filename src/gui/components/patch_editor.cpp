@@ -74,18 +74,14 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
     if (!name_valid) {
       ImGui::SetTooltip("Enter a valid patch name to save");
     } else if (!is_user_patch) {
-#if defined(MEGATOY_PLATFORM_WEB)
-      ImGui::SetTooltip("Save to localStorage as %s.ginpkg",
-                        patch_session.current_patch().name.c_str());
-#else
-      if (patch_session.current_patch_path().ends_with(".ginpkg")) {
-        ImGui::SetTooltip("Save version to %s",
-                          patch_session.current_patch_path().c_str());
+      const auto &path = patch_session.current_patch_path();
+      if (path.ends_with(".ginpkg")) {
+        ImGui::SetTooltip("Save version to %s", path.c_str());
       } else {
-        ImGui::SetTooltip("Save to user/%s.ginpkg",
+        ImGui::SetTooltip("Save to %s/%s.ginpkg",
+                          patch_session.repository().primary_writable_label().c_str(),
                           patch_session.current_patch().name.c_str());
       }
-#endif
     } else if (!is_patch_modified) {
       ImGui::SetTooltip("Patch is not modified");
     }

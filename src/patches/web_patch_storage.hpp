@@ -3,6 +3,7 @@
 #include "patch_repository.hpp"
 #include "patch_storage.hpp"
 #include "platform/platform_config.hpp"
+#include <string_view>
 
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_patch_store.hpp"
@@ -20,6 +21,13 @@ public:
                              bool overwrite) override;
   bool update_patch_metadata(const std::string &relative_path,
                              const PatchMetadata &metadata) override;
+  std::optional<PatchMetadata>
+  get_patch_metadata(const std::string &relative_path) const override;
+  void cleanup_metadata(const std::vector<std::string> &paths) const override;
+  bool is_writable() const override { return true; }
+  std::string_view label() const override { return "localStorage"; }
+  std::optional<bool>
+  has_patch_named(const std::string &name) const override;
   std::optional<std::filesystem::path>
   to_relative_path(const std::filesystem::path &path) const override;
   std::optional<std::filesystem::path>

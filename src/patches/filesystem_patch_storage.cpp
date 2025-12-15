@@ -26,7 +26,13 @@ FilesystemPatchStorage::FilesystemPatchStorage(
     bool writable)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)),
-      metadata_manager_(metadata_manager), writable_(writable) {}
+      metadata_manager_(metadata_manager), writable_(writable) {
+  if (root_label_.empty()) {
+    label_ = root_.filename().generic_string();
+  } else {
+    label_ = root_label_;
+  }
+}
 
 void FilesystemPatchStorage::append_entries(
     std::vector<PatchEntry> &tree) const {
@@ -96,6 +102,20 @@ SavePatchResult FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
   return SavePatchResult::error("Failed to save patch");
 }
 
+bool FilesystemPatchStorage::save_patch_metadata(
+    const std::string &relative_path, const ym2612::Patch &patch,
+    const PatchMetadata &metadata) {
+  if (!metadata_manager_) {
+    return false;
+  }
+
+  PatchMetadata metadata_with_hash = metadata;
+  metadata_with_hash.path = relative_path;
+  metadata_with_hash.hash = patch.hash();
+
+  return metadata_manager_->save_metadata(metadata_with_hash);
+}
+
 bool FilesystemPatchStorage::update_patch_metadata(
     const std::string &relative_path, const PatchMetadata &metadata) {
   if (!metadata_manager_) {
@@ -104,6 +124,33 @@ bool FilesystemPatchStorage::update_patch_metadata(
   PatchMetadata updated_metadata = metadata;
   updated_metadata.path = relative_path;
   return metadata_manager_->update_metadata(updated_metadata);
+}
+
+std::optional<PatchMetadata>
+FilesystemPatchStorage::get_patch_metadata(
+    const std::string &relative_path) const {
+  if (!metadata_manager_) {
+    return std::nullopt;
+  }
+  return metadata_manager_->get_metadata(relative_path);
+}
+
+void FilesystemPatchStorage::cleanup_metadata(
+    const std::vector<std::string> &paths) const {
+  if (!metadata_manager_) {
+    return;
+  }
+  metadata_manager_->cleanup_missing_files(paths);
+}
+
+std::optional<bool>
+FilesystemPatchStorage::has_patch_named(const std::string &name) const {
+  if (!writable_) {
+    return std::nullopt;
+  }
+  auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
+  auto target = formats::ginpkg::build_package_path(root_, sanitized);
+  return vfs_.exists(target);
 }
 
 std::optional<std::filesystem::path>

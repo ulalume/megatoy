@@ -33,16 +33,21 @@ PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
     }
   }
 
+#if defined(MEGATOY_PLATFORM_WEB)
+  storages_.push_back(std::make_unique<WebPatchStorage>());
+  const bool user_writable = false;
+#else
+  const bool user_writable = true;
+#endif
+
   storages_.push_back(std::make_unique<FilesystemPatchStorage>(
-      vfs_, user_patches_directory_, "user", metadata_manager_.get(), true));
+      vfs_, user_patches_directory_, "user", metadata_manager_.get(),
+      user_writable));
   if (has_builtin_directory_) {
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, builtin_patch_directory_, kBuiltinRootName,
         metadata_manager_.get(), false));
   }
-#if defined(MEGATOY_PLATFORM_WEB)
-  storages_.push_back(std::make_unique<WebPatchStorage>());
-#endif
 
   refresh();
 }
@@ -196,18 +201,12 @@ PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
 bool PatchRepository::save_patch_metadata(const std::string &relative_path,
                                           const ym2612::Patch &patch,
                                           const PatchMetadata &metadata) {
-  if (!metadata_manager_) {
-    return false;
+  for (const auto &storage : storages_) {
+    if (storage->save_patch_metadata(relative_path, patch, metadata)) {
+      return true;
+    }
   }
-
-  // Calculate hash for the patch
-  std::string hash = patch.hash();
-
-  PatchMetadata metadata_with_hash = metadata;
-  metadata_with_hash.path = relative_path;
-  metadata_with_hash.hash = hash;
-
-  return metadata_manager_->save_metadata(metadata_with_hash);
+  return false;
 }
 
 bool PatchRepository::update_patch_metadata(const std::string &relative_path,
@@ -222,23 +221,17 @@ bool PatchRepository::update_patch_metadata(const std::string &relative_path,
 
 std::optional<PatchMetadata>
 PatchRepository::get_patch_metadata(const std::string &relative_path) const {
-  if (!metadata_manager_) {
-    return std::nullopt;
+  for (const auto &storage : storages_) {
+    if (auto md = storage->get_patch_metadata(relative_path)) {
+      return md;
+    }
   }
-
-  return metadata_manager_->get_metadata(relative_path);
+  return std::nullopt;
 }
 
 std::vector<PatchEntry> PatchRepository::get_patches_by_metadata_filter(
     const std::function<bool(const PatchMetadata &)> &filter) const {
   std::vector<PatchEntry> result;
-
-  if (!metadata_manager_) {
-    return result;
-  }
-
-  // Get all metadata and filter
-  auto all_metadata = metadata_manager_->get_all_metadata();
 
   std::function<void(const std::vector<PatchEntry> &)> search_tree;
   search_tree = [&](const std::vector<PatchEntry> &entries) {
@@ -256,10 +249,6 @@ std::vector<PatchEntry> PatchRepository::get_patches_by_metadata_filter(
 }
 
 void PatchRepository::cleanup_orphaned_metadata() {
-  if (!metadata_manager_) {
-    return;
-  }
-
   // Collect all existing patch paths
   std::vector<std::string> existing_paths;
 
@@ -277,7 +266,32 @@ void PatchRepository::cleanup_orphaned_metadata() {
   collect_paths(tree_cache_);
 
   // Cleanup orphaned entries
-  metadata_manager_->cleanup_missing_files(existing_paths);
+  for (const auto &storage : storages_) {
+    storage->cleanup_metadata(existing_paths);
+  }
+}
+
+std::string PatchRepository::primary_writable_label() const {
+  for (const auto &storage : storages_) {
+    if (storage->is_writable()) {
+      std::string label(storage->label());
+      if (!label.empty()) {
+        return label;
+      }
+    }
+  }
+  return "user";
+}
+
+bool PatchRepository::patch_name_conflicts(const std::string &name) const {
+  for (const auto &storage : storages_) {
+    if (auto has = storage->has_patch_named(name)) {
+      if (*has) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 } // namespace patches
