@@ -14,15 +14,10 @@
 #else
 #include "platform/native/desktop_platform_services.hpp"
 #endif
+#include "runtime_context.hpp"
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
-
-struct RuntimeContext {
-  AppContext *app_context = nullptr;
-  MidiInputManager *midi = nullptr;
-  bool running = true;
-};
 
 namespace {
 
@@ -104,8 +99,7 @@ int main(int argc, char *argv[]) {
 
   RuntimeContext runtime{&app_context, &midi, true};
 
-  const auto frame = [&runtime]() { return run_frame(runtime); };
-  platform::run_main_loop(runtime, frame);
+  platform::run_main_loop(runtime, run_frame);
   services.shutdown_app();
   std::cout << "Goodbye!\n";
   return 0;

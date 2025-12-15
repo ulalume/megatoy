@@ -5,8 +5,12 @@
 #include "gui/styles/theme.hpp"
 #include "gui/window_title.hpp"
 #include "gui/imgui_ini_bridge.hpp"
+#include "platform/platform_config.hpp"
 #include <filesystem>
 #include <imgui.h>
+#if defined(MEGATOY_PLATFORM_WEB)
+#define IMGUI_IMPL_OPENGL_ES3 1
+#endif
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_internal.h>
@@ -370,6 +374,22 @@ void GuiManager::set_fullscreen(bool enable) {
 }
 
 void GuiManager::toggle_fullscreen() { set_fullscreen(!fullscreen_); }
+
+bool GuiManager::supports_fullscreen() const {
+  return megatoy::platform::is_desktop();
+}
+
+bool GuiManager::supports_quit() const { return megatoy::platform::is_desktop(); }
+
+bool GuiManager::supports_waveform() const {
+  // Waveform panel relies on native file IO.
+  return megatoy::platform::is_desktop();
+}
+
+bool GuiManager::supports_patch_history() const {
+  // ginpkg history is not supported on web builds.
+  return megatoy::platform::is_desktop();
+}
 
 void GuiManager::set_theme(ui::styles::ThemeId theme) {
   theme_ = theme;

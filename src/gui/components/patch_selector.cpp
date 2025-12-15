@@ -2,6 +2,7 @@
 #include "common.hpp"
 #include "file_manager.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "platform/platform_config.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <array>
@@ -56,22 +57,6 @@ bool contains_case_insensitive(const std::string &haystack,
   return haystack_lower.find(needle_lower) != std::string::npos;
 }
 
-bool has_search_text(const std::string &value) {
-  return std::any_of(value.begin(), value.end(),
-                     [](unsigned char ch) { return !std::isspace(ch); });
-}
-
-void collect_leaf_patches(const std::vector<patches::PatchEntry> &tree,
-                          std::vector<const patches::PatchEntry *> &out) {
-  for (const auto &item : tree) {
-    if (item.is_directory) {
-      collect_leaf_patches(item.children, out);
-    } else {
-      out.push_back(&item);
-    }
-  }
-}
-
 bool entry_passes_star_filter(const patches::PatchEntry &entry,
                               int min_star_rating) {
   if (min_star_rating <= 0) {
@@ -115,6 +100,22 @@ bool directory_has_visible_children(const patches::PatchEntry &directory,
   return false;
 }
 
+bool has_search_text(const std::string &value) {
+  return std::any_of(value.begin(), value.end(),
+                     [](unsigned char ch) { return !std::isspace(ch); });
+}
+
+void collect_leaf_patches(const std::vector<patches::PatchEntry> &tree,
+                          std::vector<const patches::PatchEntry *> &out) {
+  for (const auto &item : tree) {
+    if (item.is_directory) {
+      collect_leaf_patches(item.children, out);
+    } else {
+      out.push_back(&item);
+    }
+  }
+}
+
 void show_patch_tooltip(const patches::PatchEntry &entry) {
   if (!ImGui::IsItemHovered()) {
     return;
@@ -142,15 +143,17 @@ void begin_popup_context(PatchSelectorContext &context,
     return;
   }
 
-  if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
-    if (context.reveal_in_file_manager) {
-      context.reveal_in_file_manager(
-          context.repository.to_absolute_path(entry.relative_path));
+  if (megatoy::platform::is_desktop()) {
+    if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
+      if (context.reveal_in_file_manager) {
+        context.reveal_in_file_manager(
+            context.repository.to_absolute_path(entry.relative_path));
+      }
     }
-  }
-  ImGui::Separator();
-  if (ImGui::MenuItem("Refresh repository")) {
-    context.repository.refresh();
+    ImGui::Separator();
+    if (ImGui::MenuItem("Refresh repository")) {
+      context.repository.refresh();
+    }
   }
 
   if (!entry.is_directory && entry.format == "web_gin") {
@@ -544,6 +547,7 @@ void render_metadata_table(PatchSelectorContext &context) {
     context.repository.refresh();
   }
 }
+
 void render_filter_area(PatchSelectorContext &context) {
   auto &prefs = context.prefs;
   char search_buffer[128];
@@ -559,15 +563,15 @@ void render_filter_area(PatchSelectorContext &context) {
   }
 
   prefs.patch_search_query = context.prefs.metadata_search_query;
-#if !defined(MEGATOY_PLATFORM_WEB)
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(60);
-  ImGui::SliderInt(
-      "##Stars", &context.prefs.metadata_star_filter, 0, 5,
-      context.prefs.metadata_star_filter == 0
-          ? "Stars"
-          : kStarIconsLabels[context.prefs.metadata_star_filter].data());
-#endif
+  if (megatoy::platform::is_desktop()) {
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(60);
+    ImGui::SliderInt(
+        "##Stars", &context.prefs.metadata_star_filter, 0, 5,
+        context.prefs.metadata_star_filter == 0
+            ? "Stars"
+            : kStarIconsLabels[context.prefs.metadata_star_filter].data());
+  }
   ImGui::SameLine();
   const auto is_filtered = !(context.prefs.metadata_search_query.empty() &&
                              context.prefs.metadata_star_filter == 0);
@@ -605,37 +609,52 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     preset_repository.refresh();
   }
 
-#if !defined(MEGATOY_PLATFORM_WEB)
-  if (ImGui::BeginTabBar("##PatchViewMode")) {
-    if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Tree view")) {
-#endif
-      render_filter_area(context);
-      if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
-                            true)) {
-        auto preset_tree = preset_repository.tree();
-        std::string tree_query_lower =
-            to_lower(context.prefs.metadata_search_query);
-        bool rendered =
-            render_patch_tree(preset_tree, context, tree_query_lower,
-                              context.prefs.metadata_star_filter);
-        if (!rendered && (!tree_query_lower.empty() ||
-                          context.prefs.metadata_star_filter > 0)) {
-          ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
-                             "No results for current filters");
+  if (megatoy::platform::is_desktop()) {
+    if (ImGui::BeginTabBar("##PatchViewMode")) {
+      if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Tree view")) {
+        render_filter_area(context);
+        if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
+                              true)) {
+          auto preset_tree = preset_repository.tree();
+          std::string tree_query_lower =
+              to_lower(context.prefs.metadata_search_query);
+          bool rendered =
+              render_patch_tree(preset_tree, context, tree_query_lower,
+                                context.prefs.metadata_star_filter);
+          if (!rendered && (!tree_query_lower.empty() ||
+                            context.prefs.metadata_star_filter > 0)) {
+            ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                               "No results for current filters");
+          }
+          ImGui::EndChild();
         }
-        ImGui::EndChild();
+        ImGui::EndTabItem();
       }
-#if !defined(MEGATOY_PLATFORM_WEB)
-      ImGui::EndTabItem();
+
+      if (ImGui::BeginTabItem(ICON_FA_TABLE " Table view")) {
+        render_filter_area(context);
+        render_metadata_table(context);
+        ImGui::EndTabItem();
+      }
+      ImGui::EndTabBar();
     }
-    if (ImGui::BeginTabItem(ICON_FA_TABLE " Table view")) {
-      render_filter_area(context);
-      render_metadata_table(context);
-      ImGui::EndTabItem();
+  } else {
+    render_filter_area(context);
+    if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(), true)) {
+      auto preset_tree = preset_repository.tree();
+      std::string tree_query_lower =
+          to_lower(context.prefs.metadata_search_query);
+      bool rendered =
+          render_patch_tree(preset_tree, context, tree_query_lower,
+                            context.prefs.metadata_star_filter);
+      if (!rendered && (!tree_query_lower.empty() ||
+                        context.prefs.metadata_star_filter > 0)) {
+        ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                           "No results for current filters");
+      }
+      ImGui::EndChild();
     }
-    ImGui::EndTabBar();
   }
-#endif
   ImGui::End();
 }
 

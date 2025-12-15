@@ -94,6 +94,11 @@ public:
   void set_fullscreen(bool enable);
   void toggle_fullscreen();
 
+  bool supports_fullscreen() const;
+  bool supports_quit() const;
+  bool supports_waveform() const;
+  bool supports_patch_history() const;
+
   /**
    * Theme management
    */

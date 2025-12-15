@@ -187,6 +187,7 @@ PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
   std::string relative = path.generic_string();
 
 #if defined(MEGATOY_PLATFORM_WEB)
+  constexpr std::string_view kLocalStorageRelativeRoot = "localStorage";
   if (!relative.empty() && relative.rfind(kLocalStorageRelativeRoot, 0) == 0) {
     return path;
   }

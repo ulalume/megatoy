@@ -9,8 +9,6 @@
 
 namespace ui {
 
-enum class PatchViewMode { Tree, Table };
-
 enum class TableSortColumn { Name, Category, StarRating, Format, Path };
 
 enum class SortOrder { Ascending, Descending };

@@ -1,10 +1,11 @@
-#include "patches/web_patch_storage.hpp"
+#include "platform/platform_config.hpp"
 
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "patches/web_patch_storage.hpp"
 #include "patches/filename_utils.hpp"
-#include "platform/platform_config.hpp"
 #include "platform/web/web_patch_store.hpp"
 #include <algorithm>
+#include <filesystem>
 
 namespace {
 constexpr std::string_view kLocalStorageRelativeRoot = "localStorage";
@@ -81,5 +82,4 @@ bool WebPatchStorage::remove_patch(const PatchEntry &entry) {
 }
 
 } // namespace patches
-
-#endif
+#endif // MEGATOY_PLATFORM_WEB

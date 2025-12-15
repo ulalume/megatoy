@@ -3,7 +3,6 @@
 #include "about_dialog.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
-#include "platform/platform_config.hpp"
 #include <imgui.h>
 #include <string>
 #include <string_view>
@@ -14,24 +13,20 @@ void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
   const ImGuiIO &io = ImGui::GetIO();
   if (ImGui::BeginMainMenuBar()) {
-#if !defined(MEGATOY_PLATFORM_WEB)
     if (ImGui::BeginMenu("megatoy")) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
 
       if (ImGui::MenuItem("About megatoy")) {
         open_about = true;
       }
-      ImGui::Separator();
-      if (ImGui::MenuItem("Quit", mac_behavior ? "Cmd+Q" : "Alt+F4")) {
-        context.gui.set_should_close(true);
+      if (context.gui.supports_quit()) {
+        ImGui::Separator();
+        if (ImGui::MenuItem("Quit", mac_behavior ? "Cmd+Q" : "Alt+F4")) {
+          context.gui.set_should_close(true);
+        }
       }
       ImGui::EndMenu();
     }
-#else
-    if (ImGui::MenuItem("About megatoy")) {
-      open_about = true;
-    }
-#endif
     auto &session = context.patch_session;
     const bool name_valid = is_patch_name_valid(session.current_patch());
     const bool is_patch_modified = session.is_modified();
@@ -81,7 +76,7 @@ void render_main_menu(MainMenuContext &context) {
       ImGui::EndMenu();
     }
 
-    if (!save_disabled) {
+    if (context.gui.supports_quit() && !save_disabled) {
       const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && !io.KeyShift;
       if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
         trigger_save(session, context.save_state, is_user_patch);
@@ -139,28 +134,28 @@ void render_main_menu(MainMenuContext &context) {
     if (ImGui::BeginMenu("View")) {
       auto &ui_prefs = context.ui_prefs;
 
-#if !defined(MEGATOY_PLATFORM_WEB)
-      bool fullscreen = context.gui.is_fullscreen();
-      if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
-        context.gui.set_fullscreen(!fullscreen);
+      if (context.gui.supports_fullscreen()) {
+        bool fullscreen = context.gui.is_fullscreen();
+        if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
+          context.gui.set_fullscreen(!fullscreen);
+        }
+        ImGui::Separator();
       }
-      ImGui::Separator();
-#endif
 
       ImGui::MenuItem(PATCH_BROWSER_TITLE, nullptr,
                       &ui_prefs.show_patch_selector);
       ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
       ImGui::MenuItem(PATCH_LAB_TITLE, nullptr, &ui_prefs.show_patch_lab);
-#if !defined(MEGATOY_PLATFORM_WEB)
-      ImGui::MenuItem(PATCH_HISTORY_TITLE, nullptr,
-                      &ui_prefs.show_patch_history);
-#endif
+      if (context.gui.supports_patch_history()) {
+        ImGui::MenuItem(PATCH_HISTORY_TITLE, nullptr,
+                        &ui_prefs.show_patch_history);
+      }
       ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
                       &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);
-#if !defined(MEGATOY_PLATFORM_WEB)
-      ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
-#endif
+      if (context.gui.supports_waveform()) {
+        ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
+      }
       ImGui::MenuItem(PREFERENCES_TITLE, nullptr, &ui_prefs.show_preferences);
 
       ImGui::Separator();

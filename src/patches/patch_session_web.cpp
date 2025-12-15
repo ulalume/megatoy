@@ -1,5 +1,3 @@
-#if defined(MEGATOY_PLATFORM_WEB)
-
 #include "patch_session.hpp"
 
 #include "formats/ctrmml.hpp"
@@ -64,5 +62,3 @@ const char *PatchSession::save_label_for(bool is_user_patch) const {
 }
 
 } // namespace patches
-
-#endif

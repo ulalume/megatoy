@@ -99,7 +99,6 @@ if(EMSCRIPTEN)
   list(APPEND MEGATOY_CORE_SOURCES
     src/audio/webaudio_transport.cpp
     src/gui/imgui_ini_bridge_web.cpp
-    src/platform/run_loop_web.cpp
     src/patches/patch_session_web.cpp
     src/platform/web/web_platform_services.cpp
     src/platform/web/web_file_system.cpp
@@ -110,7 +109,6 @@ if(EMSCRIPTEN)
   )
 else()
   list(APPEND MEGATOY_CORE_SOURCES
-    src/platform/run_loop_native.cpp
     src/patches/patch_session_native.cpp
     src/midi/rtmidi_backend.cpp
     src/platform/native/native_file_system.cpp
