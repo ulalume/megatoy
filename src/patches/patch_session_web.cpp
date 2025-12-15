@@ -59,6 +59,10 @@ bool PatchSession::current_patch_is_user_patch() const {
          original_patch_.name == current_patch_.name;
 }
 
+const char *PatchSession::save_label_for(bool is_user_patch) const {
+  return is_user_patch ? "Overwrite" : "Save to 'localStorage'";
+}
+
 } // namespace patches
 
 #endif

@@ -87,6 +87,14 @@ bool PatchSession::current_patch_is_user_patch() const {
   return is_user_directory && original_patch_.name == current_patch_.name;
 }
 
+const char *PatchSession::save_label_for(bool is_user_patch) const {
+  if (is_user_patch) {
+    return current_patch_path_.ends_with(".ginpkg") ? "Save version"
+                                                    : "Overwrite";
+  }
+  return "Save to 'user'";
+}
+
 } // namespace patches
 
 #endif

@@ -107,6 +107,7 @@ public:
   void restore_snapshot(const PatchSnapshot &snapshot);
 
   bool current_patch_is_user_patch() const;
+  const char *save_label_for(bool is_user_patch) const;
 
 private:
   megatoy::system::PathService &directories_;

@@ -3,7 +3,6 @@
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
-#include "platform/platform_config.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <imgui.h>
@@ -19,15 +18,7 @@ bool is_patch_name_valid(const ym2612::Patch &patch) {
 
 const char *save_label_for(const patches::PatchSession &session,
                            bool is_user_patch) {
-#if defined(MEGATOY_PLATFORM_WEB)
-  return is_user_patch ? "Overwrite" : "Save to 'localStorage'";
-#else
-  if (is_user_patch) {
-    return session.current_patch_path().ends_with(".ginpkg") ? "Save version"
-                                                             : "Overwrite";
-  }
-  return "Save to 'user'";
-#endif
+  return session.save_label_for(is_user_patch);
 }
 
 void trigger_save(patches::PatchSession &session, SaveExportState &state,
