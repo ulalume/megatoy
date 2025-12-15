@@ -149,7 +149,7 @@ bool WebMidiBackend::initialize() {
 
 void WebMidiBackend::shutdown() {}
 
-WebMidiBackend::StatusInfo WebMidiBackend::status() const {
+MidiBackend::StatusInfo WebMidiBackend::status() const {
   auto web_status = read_status_from_js();
   MidiBackend::StatusInfo info;
   info.message = web_status.message;

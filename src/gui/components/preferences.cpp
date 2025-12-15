@@ -294,38 +294,38 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
 
-#if !defined(MEGATOY_PLATFORM_WEB)
-    // Show the current directory
-    ImGui::SeparatorText("Data Directory");
-    ImGui::TextWrapped("%s", context.paths.data_root.c_str());
-    ImGui::Spacing();
+    if (context.allow_data_directory_ui) {
+      // Show the current directory
+      ImGui::SeparatorText("Data Directory");
+      ImGui::TextWrapped("%s", context.paths.data_root.c_str());
+      ImGui::Spacing();
 
-    if (ImGui::Button("Select Directory...")) {
-      context.open_directory_dialog = true;
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Reset to Default")) {
-      prefs.reset_data_directory();
-      if (context.sync_patch_directories) {
-        context.sync_patch_directories();
+      if (ImGui::Button("Select Directory...")) {
+        context.open_directory_dialog = true;
       }
-    }
-    if (prefs.is_initialized()) {
-      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusSuccess),
-                         "Directories initialized");
-    } else {
-      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusError),
-                         "Directory initialization failed");
-      if (ImGui::Button("Retry Directory Creation")) {
-        if (prefs.ensure_directories_exist()) {
-          if (context.sync_patch_directories) {
-            context.sync_patch_directories();
+
+      ImGui::SameLine();
+      if (ImGui::Button("Reset to Default")) {
+        prefs.reset_data_directory();
+        if (context.sync_patch_directories) {
+          context.sync_patch_directories();
+        }
+      }
+      if (prefs.is_initialized()) {
+        ImGui::TextColored(styles::color(styles::MegatoyCol::StatusSuccess),
+                           "Directories initialized");
+      } else {
+        ImGui::TextColored(styles::color(styles::MegatoyCol::StatusError),
+                           "Directory initialization failed");
+        if (ImGui::Button("Retry Directory Creation")) {
+          if (prefs.ensure_directories_exist()) {
+            if (context.sync_patch_directories) {
+              context.sync_patch_directories();
+            }
           }
         }
       }
     }
-#endif
 
     ImGui::SeparatorText("Theme");
 

@@ -2,6 +2,7 @@
 #include "formats/ctrmml.hpp"
 #include "formats/patch_loader.hpp"
 #include "patch_storage.hpp"
+#include "platform/platform_config.hpp"
 #include "patches/filesystem_patch_storage.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "patches/web_patch_storage.hpp"
@@ -15,11 +16,13 @@
 namespace patches {
 
 PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
-                                 const std::filesystem::path &user_patches_root,
+                                 const std::filesystem::path &patches_root,
+                                 const std::filesystem::path &user_save_root,
                                  const std::filesystem::path &builtin_dir,
                                  const std::filesystem::path &metadata_db_path)
-    : user_patches_directory_(user_patches_root),
-      builtin_patch_directory_(builtin_dir), vfs_(vfs),
+    : patches_root_directory_(patches_root),
+      user_save_directory_(user_save_root), builtin_patch_directory_(builtin_dir),
+      vfs_(vfs),
       has_builtin_directory_(!builtin_dir.empty()), cache_initialized_(false) {
 
   // Initialize metadata manager if path is provided
@@ -35,14 +38,11 @@ PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
 
 #if defined(MEGATOY_PLATFORM_WEB)
   storages_.push_back(std::make_unique<WebPatchStorage>());
-  const bool user_writable = false;
-#else
-  const bool user_writable = true;
 #endif
 
   storages_.push_back(std::make_unique<FilesystemPatchStorage>(
-      vfs_, user_patches_directory_, "user", metadata_manager_.get(),
-      user_writable));
+      vfs_, patches_root_directory_, "", metadata_manager_.get(), true,
+      user_save_directory_));
   if (has_builtin_directory_) {
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, builtin_patch_directory_, kBuiltinRootName,
@@ -56,8 +56,8 @@ void PatchRepository::refresh() {
   tree_cache_.clear();
 
   user_time_valid_ =
-      vfs_.is_directory(user_patches_directory_) &&
-      vfs_.last_write_time(user_patches_directory_,
+      vfs_.is_directory(patches_root_directory_) &&
+      vfs_.last_write_time(patches_root_directory_,
                            last_user_directory_check_time_);
   if (has_builtin_directory_) {
     builtin_time_valid_ =
@@ -122,8 +122,8 @@ bool PatchRepository::has_directory_changed() const {
   bool changed = false;
 
   std::filesystem::file_time_type current_time{};
-  if (vfs_.is_directory(user_patches_directory_)) {
-    if (!vfs_.last_write_time(user_patches_directory_, current_time)) {
+  if (vfs_.is_directory(patches_root_directory_)) {
+    if (!vfs_.last_write_time(patches_root_directory_, current_time)) {
       changed = true;
     } else if (!user_time_valid_ ||
                current_time != last_user_directory_check_time_) {
@@ -195,7 +195,7 @@ PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
       return *mapped;
     }
   }
-  return user_patches_directory_ / path;
+  return patches_root_directory_ / path;
 }
 
 bool PatchRepository::save_patch_metadata(const std::string &relative_path,

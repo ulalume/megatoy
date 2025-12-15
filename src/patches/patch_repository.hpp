@@ -31,7 +31,8 @@ struct PatchEntry {
 class PatchRepository {
 public:
   PatchRepository(platform::VirtualFileSystem &vfs,
-                  const std::filesystem::path &user_patches_root,
+                  const std::filesystem::path &patches_root,
+                  const std::filesystem::path &user_save_root,
                   const std::filesystem::path &builtin_dir = {},
                   const std::filesystem::path &metadata_db_path = {});
 
@@ -73,7 +74,8 @@ public:
 private:
   static constexpr const char *kBuiltinRootName = "presets";
 
-  std::filesystem::path user_patches_directory_;
+  std::filesystem::path patches_root_directory_;
+  std::filesystem::path user_save_directory_;
   std::filesystem::path builtin_patch_directory_;
   platform::VirtualFileSystem &vfs_;
   std::unique_ptr<PatchMetadataManager> metadata_manager_;

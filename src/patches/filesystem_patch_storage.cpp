@@ -23,10 +23,11 @@ namespace patches {
 FilesystemPatchStorage::FilesystemPatchStorage(
     platform::VirtualFileSystem &vfs, std::filesystem::path root,
     std::string relative_root_label, PatchMetadataManager *metadata_manager,
-    bool writable)
+    bool writable, std::optional<std::filesystem::path> write_root)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)),
-      metadata_manager_(metadata_manager), writable_(writable) {
+      metadata_manager_(metadata_manager), writable_(writable),
+      write_root_(std::move(write_root)) {
   if (root_label_.empty()) {
     label_ = root_.filename().generic_string();
   } else {
@@ -86,7 +87,7 @@ SavePatchResult FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
     return SavePatchResult::unsupported();
   }
 
-  const auto patches_dir = root_;
+  const auto patches_dir = write_root_.value_or(root_);
   const auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
   const auto patch_path =
       formats::ginpkg::build_package_path(patches_dir, sanitized);

@@ -272,6 +272,7 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
       [&ctx](ui::styles::ThemeId theme_id) {
         ctx.services.gui_manager.set_theme(theme_id);
       },
+      ctx.services.gui_manager.supports_quit(), // desktop-only toggle for data dir UI
   };
 }
 
@@ -316,11 +317,11 @@ void render_all(AppContext &ctx) {
   render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
                       ctx.app_state().ui_state().save_export_state);
 
-#if !defined(MEGATOY_PLATFORM_WEB)
-  auto patch_history_context = make_patch_history_context(ctx);
-  render_patch_history(PATCH_HISTORY_TITLE, patch_history_context,
-                       patch_history_state());
-#endif
+  if (ctx.services.gui_manager.supports_patch_history()) {
+    auto patch_history_context = make_patch_history_context(ctx);
+    render_patch_history(PATCH_HISTORY_TITLE, patch_history_context,
+                         patch_history_state());
+  }
 
   auto patch_selector_context = make_patch_selector_context(ctx);
   render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);
@@ -337,10 +338,10 @@ void render_all(AppContext &ctx) {
   auto patch_lab_context = make_patch_lab_context(ctx);
   render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
 
-#if !defined(MEGATOY_PLATFORM_WEB)
-  auto waveform_context = make_waveform_context(ctx);
-  render_waveform(WAVEFORM_TITLE, waveform_context);
-#endif
+  if (ctx.services.gui_manager.supports_waveform()) {
+    auto waveform_context = make_waveform_context(ctx);
+    render_waveform(WAVEFORM_TITLE, waveform_context);
+  }
 
   render_save_export_popup_host(ctx);
 }

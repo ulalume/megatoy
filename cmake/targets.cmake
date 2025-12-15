@@ -42,6 +42,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/ginpkg.cpp
   src/formats/fui.cpp
   src/formats/patch_loader.cpp
+  src/formats/patch_registry.cpp
   src/formats/rym2612.cpp
   src/gui/components/about_dialog.cpp
   src/gui/components/confirmation_dialog.cpp
@@ -110,7 +111,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   )
 else()
   list(APPEND MEGATOY_CORE_SOURCES
-    src/patches/patch_session_native.cpp
     src/midi/rtmidi_backend.cpp
     src/platform/native/native_file_system.cpp
     src/platform/native/desktop_platform_services.cpp

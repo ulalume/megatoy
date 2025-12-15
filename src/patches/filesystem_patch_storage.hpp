@@ -17,7 +17,8 @@ public:
                          std::filesystem::path root,
                          std::string relative_root_label,
                          PatchMetadataManager *metadata_manager,
-                         bool writable);
+                         bool writable,
+                         std::optional<std::filesystem::path> write_root = {});
 
   void append_entries(std::vector<PatchEntry> &tree) const override;
   bool load_patch(const PatchEntry &entry,
@@ -49,6 +50,7 @@ private:
   PatchMetadataManager *metadata_manager_;
   bool writable_;
   std::string label_;
+  std::optional<std::filesystem::path> write_root_;
 
   void scan_directory(const std::filesystem::path &dir_path,
                       std::vector<PatchEntry> &tree,

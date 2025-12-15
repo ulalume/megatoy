@@ -24,6 +24,7 @@ struct PreferencesContext {
   std::function<void()> request_web_midi;
   std::function<void()> sync_patch_directories;
   std::function<void(ui::styles::ThemeId theme_id)> apply_theme;
+  bool allow_data_directory_ui = true;
 };
 
 void render_preferences_window(const char *title, PreferencesContext &context);
