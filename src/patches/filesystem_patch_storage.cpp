@@ -4,6 +4,8 @@
 #include "formats/patch_loader.hpp"
 #include "patch_metadata.hpp"
 #include "patch_repository.hpp"
+#include "patches/filename_utils.hpp"
+#include "formats/ginpkg.hpp"
 #include <algorithm>
 #include <cctype>
 #include <unordered_map>
@@ -20,10 +22,11 @@ namespace patches {
 
 FilesystemPatchStorage::FilesystemPatchStorage(
     platform::VirtualFileSystem &vfs, std::filesystem::path root,
-    std::string relative_root_label, PatchMetadataManager *metadata_manager)
+    std::string relative_root_label, PatchMetadataManager *metadata_manager,
+    bool writable)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)),
-      metadata_manager_(metadata_manager) {}
+      metadata_manager_(metadata_manager), writable_(writable) {}
 
 void FilesystemPatchStorage::append_entries(
     std::vector<PatchEntry> &tree) const {
@@ -68,6 +71,76 @@ bool FilesystemPatchStorage::load_patch(const PatchEntry &entry,
     return true;
   }
   return false;
+}
+
+SavePatchResult FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
+                                                   const std::string &name,
+                                                   bool overwrite) {
+  if (!writable_) {
+    return SavePatchResult::unsupported();
+  }
+
+  const auto patches_dir = root_;
+  const auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
+  const auto patch_path =
+      formats::ginpkg::build_package_path(patches_dir, sanitized);
+
+  if (vfs_.exists(patch_path) && !overwrite) {
+    return SavePatchResult::duplicate();
+  }
+
+  auto result = formats::ginpkg::save_patch(patches_dir, patch, sanitized);
+  if (result.has_value()) {
+    return SavePatchResult::success(result.value());
+  }
+  return SavePatchResult::error("Failed to save patch");
+}
+
+bool FilesystemPatchStorage::update_patch_metadata(
+    const std::string &relative_path, const PatchMetadata &metadata) {
+  if (!metadata_manager_) {
+    return false;
+  }
+  PatchMetadata updated_metadata = metadata;
+  updated_metadata.path = relative_path;
+  return metadata_manager_->update_metadata(updated_metadata);
+}
+
+std::optional<std::filesystem::path>
+FilesystemPatchStorage::to_relative_path(
+    const std::filesystem::path &path) const {
+  auto relative = path.lexically_relative(root_);
+  if (!relative.empty() && relative.native()[0] != '.') {
+    if (root_label_.empty()) {
+      return relative;
+    }
+    return std::filesystem::path(root_label_) / relative;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::filesystem::path>
+FilesystemPatchStorage::to_absolute_path(
+    const std::filesystem::path &path) const {
+  const std::string relative_str = path.generic_string();
+  if (root_label_.empty()) {
+    if (relative_str.empty() || relative_str[0] == '.') {
+      return std::nullopt;
+    }
+    return root_ / path;
+  }
+
+  const std::string root_prefix = root_label_ + "/";
+  if (relative_str == root_label_) {
+    return root_;
+  }
+  if (!relative_str.empty() &&
+      relative_str.rfind(root_prefix, 0) == 0 &&
+      relative_str.size() > root_prefix.size()) {
+    std::string without_prefix = relative_str.substr(root_prefix.size());
+    return root_ / without_prefix;
+  }
+  return std::nullopt;
 }
 
 void FilesystemPatchStorage::scan_directory(

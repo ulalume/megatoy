@@ -13,7 +13,7 @@ PatchSession::PatchSession(megatoy::system::PathService &directories,
                            AudioManager &audio)
     : directories_(directories), audio_(audio),
       repository_(std::make_unique<PatchRepository>(
-          directories_.file_system(), directories_.paths().patches_root,
+          directories_.file_system(), directories_.paths().user_patches_root,
           directories_.paths().builtin_presets_root,
           directories_.paths().patch_metadata_db)),
       channel_allocator_() {}
@@ -95,7 +95,7 @@ void PatchSession::initialize_patch_defaults() {
 
 void PatchSession::refresh_directories() {
   repository_ = std::make_unique<PatchRepository>(
-      directories_.file_system(), directories_.paths().patches_root,
+      directories_.file_system(), directories_.paths().user_patches_root,
       directories_.paths().builtin_presets_root,
       directories_.paths().patch_metadata_db);
 }
@@ -190,6 +190,36 @@ void PatchSession::restore_snapshot(const PatchSnapshot &snapshot) {
     set_current_patch_path(snapshot.path);
   }
   apply_patch_to_audio();
+}
+
+bool PatchSession::current_patch_is_user_patch() const {
+  if (current_patch_path_.empty()) {
+    return false;
+  }
+
+  const bool has_supported_extension = current_patch_path_.ends_with(".gin") ||
+                                       current_patch_path_.ends_with(".ginpkg");
+  const bool is_user_dir =
+      current_patch_path_.rfind("user/", 0) == 0 && has_supported_extension;
+  const bool is_local_storage =
+      current_patch_path_.rfind("localStorage/", 0) == 0 && has_supported_extension;
+
+  return (is_user_dir || is_local_storage) &&
+         original_patch_.name == current_patch_.name;
+}
+
+const char *PatchSession::save_label_for(bool is_user_patch) const {
+  const bool is_local_storage =
+      current_patch_path_.rfind("localStorage/", 0) == 0;
+  if (is_local_storage) {
+    return is_user_patch ? "Overwrite" : "Save to 'localStorage'";
+  }
+
+  if (is_user_patch) {
+    return current_patch_path_.ends_with(".ginpkg") ? "Save version"
+                                                    : "Overwrite";
+  }
+  return "Save to 'user'";
 }
 
 } // namespace patches

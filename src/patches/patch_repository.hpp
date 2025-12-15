@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -30,7 +31,7 @@ struct PatchEntry {
 class PatchRepository {
 public:
   PatchRepository(platform::VirtualFileSystem &vfs,
-                  const std::filesystem::path &patches_root,
+                  const std::filesystem::path &user_patches_root,
                   const std::filesystem::path &builtin_dir = {},
                   const std::filesystem::path &metadata_db_path = {});
 
@@ -56,6 +57,9 @@ public:
   std::optional<PatchMetadata>
   get_patch_metadata(const std::string &relative_path) const;
 
+  SavePatchResult save_patch(const ym2612::Patch &patch,
+                             const std::string &name, bool overwrite);
+
   // Batch operations
   std::vector<PatchEntry> get_patches_by_metadata_filter(
       const std::function<bool(const PatchMetadata &)> &filter) const;
@@ -65,7 +69,7 @@ public:
 private:
   static constexpr const char *kBuiltinRootName = "presets";
 
-  std::filesystem::path patches_directory_;
+  std::filesystem::path user_patches_directory_;
   std::filesystem::path builtin_patch_directory_;
   platform::VirtualFileSystem &vfs_;
   std::unique_ptr<PatchMetadataManager> metadata_manager_;

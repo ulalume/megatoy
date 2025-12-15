@@ -15,6 +15,15 @@ public:
   bool load_patch(const PatchEntry &entry,
                   ym2612::Patch &out_patch) const override;
   bool remove_patch(const PatchEntry &entry) override;
+  SavePatchResult save_patch(const ym2612::Patch &patch,
+                             const std::string &name,
+                             bool overwrite) override;
+  bool update_patch_metadata(const std::string &relative_path,
+                             const PatchMetadata &metadata) override;
+  std::optional<std::filesystem::path>
+  to_relative_path(const std::filesystem::path &path) const override;
+  std::optional<std::filesystem::path>
+  to_absolute_path(const std::filesystem::path &path) const override;
 };
 
 } // namespace patches

@@ -4,28 +4,28 @@
 
 #include "formats/ctrmml.hpp"
 #include "formats/dmp.hpp"
-#include "formats/ginpkg.hpp"
 #include "patches/filename_utils.hpp"
 #include "platform/file_dialog.hpp"
 
 namespace patches {
 
 SaveResult PatchSession::save_current_patch(bool force_overwrite) {
-  auto patches_dir = directories_.paths().user_patches_root;
-  auto patch_path =
-      formats::ginpkg::build_package_path(patches_dir, current_patch_.name);
-
-  if (std::filesystem::exists(patch_path) && !force_overwrite) {
-    return SaveResult::duplicated();
-  }
-
-  auto result = formats::ginpkg::save_patch(patches_dir, current_patch_,
-                                            current_patch_.name);
-  if (result.has_value()) {
+  auto result =
+      repository_->save_patch(current_patch_, current_patch_.name, force_overwrite);
+  switch (result.status) {
+  case SavePatchResult::Status::Success:
     mark_as_clean();
-    return SaveResult::success(result.value());
+    return SaveResult::success(result.path);
+  case SavePatchResult::Status::Duplicate:
+    return SaveResult::duplicated();
+  case SavePatchResult::Status::Error:
+    return SaveResult::error(result.error_message.empty()
+                                 ? "Failed to save patch"
+                                 : result.error_message);
+  case SavePatchResult::Status::Unsupported:
+  default:
+    return SaveResult::error("Saving patches is unsupported on this platform");
   }
-  return SaveResult::error("Failed to save patch");
 }
 
 SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
@@ -76,23 +76,6 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
   }
 
   return SaveResult::error("Unknown export format");
-}
-
-bool PatchSession::current_patch_is_user_patch() const {
-  const bool has_supported_extension = current_patch_path_.ends_with(".gin") ||
-                                       current_patch_path_.ends_with(".ginpkg");
-  const bool is_user_directory = !current_patch_path_.empty() &&
-                                 current_patch_path_.rfind("user/", 0) == 0 &&
-                                 has_supported_extension;
-  return is_user_directory && original_patch_.name == current_patch_.name;
-}
-
-const char *PatchSession::save_label_for(bool is_user_patch) const {
-  if (is_user_patch) {
-    return current_patch_path_.ends_with(".ginpkg") ? "Save version"
-                                                    : "Overwrite";
-  }
-  return "Save to 'user'";
 }
 
 } // namespace patches

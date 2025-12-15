@@ -3,11 +3,10 @@
 #include "formats/patch_loader.hpp"
 #include "patch_storage.hpp"
 #include "patches/filesystem_patch_storage.hpp"
-#include "platform/platform_config.hpp"
-#include "ym2612/patch.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "patches/web_patch_storage.hpp"
 #endif
+#include "ym2612/patch.hpp"
 #include <algorithm>
 #include <functional>
 #include <iostream>
@@ -16,12 +15,12 @@
 namespace patches {
 
 PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
-                                 const std::filesystem::path &patches_root,
+                                 const std::filesystem::path &user_patches_root,
                                  const std::filesystem::path &builtin_dir,
                                  const std::filesystem::path &metadata_db_path)
-    : patches_directory_(patches_root), builtin_patch_directory_(builtin_dir),
-      vfs_(vfs), has_builtin_directory_(!builtin_dir.empty()),
-      cache_initialized_(false) {
+    : user_patches_directory_(user_patches_root),
+      builtin_patch_directory_(builtin_dir), vfs_(vfs),
+      has_builtin_directory_(!builtin_dir.empty()), cache_initialized_(false) {
 
   // Initialize metadata manager if path is provided
   if (!metadata_db_path.empty()) {
@@ -34,16 +33,16 @@ PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
     }
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  storages_.push_back(std::make_unique<WebPatchStorage>());
-#endif
   storages_.push_back(std::make_unique<FilesystemPatchStorage>(
-      vfs_, patches_directory_, "", metadata_manager_.get()));
+      vfs_, user_patches_directory_, "user", metadata_manager_.get(), true));
   if (has_builtin_directory_) {
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, builtin_patch_directory_, kBuiltinRootName,
-        metadata_manager_.get()));
+        metadata_manager_.get(), false));
   }
+#if defined(MEGATOY_PLATFORM_WEB)
+  storages_.push_back(std::make_unique<WebPatchStorage>());
+#endif
 
   refresh();
 }
@@ -52,8 +51,9 @@ void PatchRepository::refresh() {
   tree_cache_.clear();
 
   user_time_valid_ =
-      vfs_.is_directory(patches_directory_) &&
-      vfs_.last_write_time(patches_directory_, last_user_directory_check_time_);
+      vfs_.is_directory(user_patches_directory_) &&
+      vfs_.last_write_time(user_patches_directory_,
+                           last_user_directory_check_time_);
   if (has_builtin_directory_) {
     builtin_time_valid_ =
         vfs_.is_directory(builtin_patch_directory_) &&
@@ -117,8 +117,8 @@ bool PatchRepository::has_directory_changed() const {
   bool changed = false;
 
   std::filesystem::file_time_type current_time{};
-  if (vfs_.is_directory(patches_directory_)) {
-    if (!vfs_.last_write_time(patches_directory_, current_time)) {
+  if (vfs_.is_directory(user_patches_directory_)) {
+    if (!vfs_.last_write_time(user_patches_directory_, current_time)) {
       changed = true;
     } else if (!user_time_valid_ ||
                current_time != last_user_directory_check_time_) {
@@ -148,6 +148,21 @@ std::vector<std::string> PatchRepository::supported_extensions() {
   return {".gin", ".ginpkg", ".rym2612", ".dmp", ".fui", ".mml"};
 }
 
+SavePatchResult PatchRepository::save_patch(const ym2612::Patch &patch,
+                                            const std::string &name,
+                                            bool overwrite) {
+  for (const auto &storage : storages_) {
+    auto result = storage->save_patch(patch, name, overwrite);
+    if (result.status != SavePatchResult::Status::Unsupported) {
+      if (result.status == SavePatchResult::Status::Success) {
+        refresh();
+      }
+      return result;
+    }
+  }
+  return SavePatchResult::unsupported();
+}
+
 bool PatchRepository::remove_patch(const PatchEntry &entry) {
   for (const auto &storage : storages_) {
     if (storage->remove_patch(entry)) {
@@ -160,51 +175,22 @@ bool PatchRepository::remove_patch(const PatchEntry &entry) {
 
 std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
-#if defined(MEGATOY_PLATFORM_WEB)
-  constexpr std::string_view kLocalStorageRelativeRoot = "localStorage";
-  const std::string generic = path.generic_string();
-  if (!generic.empty() && generic.rfind(kLocalStorageRelativeRoot, 0) == 0) {
-    return path;
-  }
-#endif
-  if (has_builtin_directory_) {
-    auto relative_builtin = path.lexically_relative(builtin_patch_directory_);
-    if (!relative_builtin.empty() && relative_builtin.native()[0] != '.') {
-      return std::filesystem::path(kBuiltinRootName) / relative_builtin;
+  for (const auto &storage : storages_) {
+    if (auto mapped = storage->to_relative_path(path)) {
+      return *mapped;
     }
   }
-
-  auto relative_user = path.lexically_relative(patches_directory_);
-  if (!relative_user.empty() && relative_user.native()[0] != '.') {
-    return relative_user;
-  }
-
   return path;
 }
 
 std::filesystem::path
 PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
-  std::string relative = path.generic_string();
-
-#if defined(MEGATOY_PLATFORM_WEB)
-  constexpr std::string_view kLocalStorageRelativeRoot = "localStorage";
-  if (!relative.empty() && relative.rfind(kLocalStorageRelativeRoot, 0) == 0) {
-    return path;
-  }
-#endif
-  if (has_builtin_directory_) {
-    const std::string builtin_root = kBuiltinRootName;
-    if (relative == builtin_root) {
-      return builtin_patch_directory_;
-    }
-    const std::string builtin_prefix = builtin_root + "/";
-    if (relative.rfind(builtin_prefix, 0) == 0) {
-      std::string without_prefix = relative.substr(builtin_prefix.size());
-      return builtin_patch_directory_ / without_prefix;
+  for (const auto &storage : storages_) {
+    if (auto mapped = storage->to_absolute_path(path)) {
+      return *mapped;
     }
   }
-
-  return patches_directory_ / path;
+  return user_patches_directory_ / path;
 }
 
 bool PatchRepository::save_patch_metadata(const std::string &relative_path,
@@ -226,14 +212,12 @@ bool PatchRepository::save_patch_metadata(const std::string &relative_path,
 
 bool PatchRepository::update_patch_metadata(const std::string &relative_path,
                                             const PatchMetadata &metadata) {
-  if (!metadata_manager_) {
-    return false;
+  for (const auto &storage : storages_) {
+    if (storage->update_patch_metadata(relative_path, metadata)) {
+      return true;
+    }
   }
-
-  PatchMetadata updated_metadata = metadata;
-  updated_metadata.path = relative_path;
-
-  return metadata_manager_->update_metadata(updated_metadata);
+  return false;
 }
 
 std::optional<PatchMetadata>

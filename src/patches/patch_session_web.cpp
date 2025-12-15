@@ -4,23 +4,26 @@
 #include "formats/dmp.hpp"
 #include "patches/filename_utils.hpp"
 #include "platform/web/web_download.hpp"
-#include "platform/web/web_patch_store.hpp"
 
 namespace patches {
 
 SaveResult PatchSession::save_current_patch(bool force_overwrite) {
-  const std::string sanitized_name = sanitize_filename(
-      current_patch_.name.empty() ? "patch" : current_patch_.name);
-  if (!force_overwrite && platform::web::patch_store::exists(sanitized_name)) {
-    return SaveResult::duplicated();
-  }
-  if (platform::web::patch_store::save(current_patch_, sanitized_name)) {
+  auto result =
+      repository_->save_patch(current_patch_, current_patch_.name, force_overwrite);
+  switch (result.status) {
+  case SavePatchResult::Status::Success:
     mark_as_clean();
-    repository_->refresh();
-    return SaveResult::success(
-        std::filesystem::path("localStorage/" + sanitized_name));
+    return SaveResult::success(result.path);
+  case SavePatchResult::Status::Duplicate:
+    return SaveResult::duplicated();
+  case SavePatchResult::Status::Error:
+    return SaveResult::error(result.error_message.empty()
+                                 ? "Failed to save patch in browser storage"
+                                 : result.error_message);
+  case SavePatchResult::Status::Unsupported:
+  default:
+    return SaveResult::error("Saving patches is unsupported on this platform");
   }
-  return SaveResult::error("Failed to save patch in browser storage");
 }
 
 SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
@@ -42,23 +45,6 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
   }
   }
   return SaveResult::error("Unknown export format");
-}
-
-bool PatchSession::current_patch_is_user_patch() const {
-  const bool is_local_storage =
-      !current_patch_path_.empty() &&
-      current_patch_path_.rfind("localStorage/", 0) == 0;
-  const bool has_supported_extension = current_patch_path_.ends_with(".gin") ||
-                                       current_patch_path_.ends_with(".ginpkg");
-  const bool is_user_directory = !current_patch_path_.empty() &&
-                                 current_patch_path_.rfind("user/", 0) == 0 &&
-                                 has_supported_extension;
-  return (is_user_directory || is_local_storage) &&
-         original_patch_.name == current_patch_.name;
-}
-
-const char *PatchSession::save_label_for(bool is_user_patch) const {
-  return is_user_patch ? "Overwrite" : "Save to 'localStorage'";
 }
 
 } // namespace patches

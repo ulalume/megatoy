@@ -15,17 +15,28 @@ public:
   FilesystemPatchStorage(platform::VirtualFileSystem &vfs,
                          std::filesystem::path root,
                          std::string relative_root_label,
-                         PatchMetadataManager *metadata_manager);
+                         PatchMetadataManager *metadata_manager,
+                         bool writable);
 
   void append_entries(std::vector<PatchEntry> &tree) const override;
   bool load_patch(const PatchEntry &entry,
                   ym2612::Patch &out_patch) const override;
+  SavePatchResult save_patch(const ym2612::Patch &patch,
+                             const std::string &name,
+                             bool overwrite) override;
+  bool update_patch_metadata(const std::string &relative_path,
+                             const PatchMetadata &metadata) override;
+  std::optional<std::filesystem::path>
+  to_relative_path(const std::filesystem::path &path) const override;
+  std::optional<std::filesystem::path>
+  to_absolute_path(const std::filesystem::path &path) const override;
 
 private:
   platform::VirtualFileSystem &vfs_;
   std::filesystem::path root_;
   std::string root_label_;
   PatchMetadataManager *metadata_manager_;
+  bool writable_;
 
   void scan_directory(const std::filesystem::path &dir_path,
                       std::vector<PatchEntry> &tree,

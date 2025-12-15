@@ -80,5 +80,46 @@ bool WebPatchStorage::remove_patch(const PatchEntry &entry) {
   return platform::web::patch_store::remove(id);
 }
 
+SavePatchResult WebPatchStorage::save_patch(const ym2612::Patch &patch,
+                                            const std::string &name,
+                                            bool overwrite) {
+  const std::string sanitized =
+      patches::sanitize_filename(name.empty() ? "patch" : name);
+  if (!overwrite && platform::web::patch_store::exists(sanitized)) {
+    return SavePatchResult::duplicate();
+  }
+  if (platform::web::patch_store::save(patch, sanitized)) {
+    return SavePatchResult::success(
+        std::filesystem::path(std::string(kLocalStorageRelativePrefix) +
+                              sanitized));
+  }
+  return SavePatchResult::error("Failed to save patch in browser storage");
+}
+
+bool WebPatchStorage::update_patch_metadata(const std::string &relative_path,
+                                            const PatchMetadata &metadata) {
+  (void)relative_path;
+  (void)metadata;
+  return false;
+}
+
+std::optional<std::filesystem::path>
+WebPatchStorage::to_relative_path(const std::filesystem::path &path) const {
+  const std::string generic = path.generic_string();
+  if (!generic.empty() && generic.rfind(kLocalStorageRelativeRoot, 0) == 0) {
+    return path;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::filesystem::path>
+WebPatchStorage::to_absolute_path(const std::filesystem::path &path) const {
+  const std::string generic = path.generic_string();
+  if (!generic.empty() && generic.rfind(kLocalStorageRelativeRoot, 0) == 0) {
+    return path;
+  }
+  return std::nullopt;
+}
+
 } // namespace patches
 #endif // MEGATOY_PLATFORM_WEB
