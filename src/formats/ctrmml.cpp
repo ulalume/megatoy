@@ -269,7 +269,7 @@ std::string patch_to_string(const ym2612::Patch &patch) {
       << "   " << static_cast<int>(patch.instrument.feedback) << "\n";
   out << ";  AR  DR  SR  RR  SL  TL  KS  ML  DT SSG\n";
 
-  const std::array<std::string, 4> op_labels = {"S1", "S3", "S2", "S4"};
+  const std::array<std::string, 4> op_labels = {"OP1", "OP2", "OP3", "OP4"};
   out << std::setfill(' ');
 
   for (size_t op_idx = 0; op_idx < ym2612::all_operator_indices.size();
