@@ -148,6 +148,16 @@ std::vector<std::string> PatchRepository::supported_extensions() {
   return {".gin", ".ginpkg", ".rym2612", ".dmp", ".fui", ".mml"};
 }
 
+bool PatchRepository::remove_patch(const PatchEntry &entry) {
+  for (const auto &storage : storages_) {
+    if (storage->remove_patch(entry)) {
+      refresh();
+      return true;
+    }
+  }
+  return false;
+}
+
 std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
 #if defined(MEGATOY_PLATFORM_WEB)

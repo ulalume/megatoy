@@ -1,11 +1,10 @@
 #pragma once
 
 #include "gui/styles/theme.hpp"
-#include "platform/platform_config.hpp"
 #include "preferences/preference_manager.hpp"
+#include <string>
 
 #include <SDL3/SDL.h>
-#include <string>
 
 /**
  * GuiManager - Unified GUI system management
@@ -108,6 +107,10 @@ public:
                          void (*callback)(void *user_pointer, int count,
                                           const char **paths));
 
+  // Web-specific ini bridge (no-op on native).
+  void sync_web_imgui_ini();
+  void save_web_imgui_ini_if_needed();
+
 private:
   // Core GUI system
   PreferenceManager &preferences_;
@@ -134,17 +137,11 @@ private:
   // Internal methods
   void set_imgui_ini_file(const std::string &path);
   void apply_imgui_ini_binding();
-#if defined(MEGATOY_PLATFORM_WEB)
-  void load_web_imgui_ini();
-  void save_web_imgui_ini();
-#endif
   void dispatch_drop_event(const char *path);
 
   // Drop callback state
   void *drop_user_pointer_;
   void (*drop_callback_)(void *user_pointer, int count, const char **paths);
 
-#if defined(MEGATOY_PLATFORM_WEB)
   bool web_ini_loaded_ = false;
-#endif
 };

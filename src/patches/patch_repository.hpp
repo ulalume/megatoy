@@ -60,6 +60,7 @@ public:
   std::vector<PatchEntry> get_patches_by_metadata_filter(
       const std::function<bool(const PatchMetadata &)> &filter) const;
   void cleanup_orphaned_metadata();
+  bool remove_patch(const PatchEntry &entry);
 
 private:
   static constexpr const char *kBuiltinRootName = "presets";

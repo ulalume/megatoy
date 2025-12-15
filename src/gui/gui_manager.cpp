@@ -4,10 +4,7 @@
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/window_title.hpp"
-#include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/local_storage.hpp"
-#endif
+#include "gui/imgui_ini_bridge.hpp"
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
@@ -173,9 +170,7 @@ bool GuiManager::initialize(const std::string &window_title, int width,
 
   // Sync ImGui ini file
   sync_imgui_ini();
-#if defined(MEGATOY_PLATFORM_WEB)
-  load_web_imgui_ini();
-#endif
+  sync_web_imgui_ini();
 
   should_close_ = false;
   initialized_ = true;
@@ -284,15 +279,7 @@ void GuiManager::end_frame() {
     return;
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  if (ImGui::GetCurrentContext() != nullptr) {
-    ImGuiIO &io = ImGui::GetIO();
-    if (io.WantSaveIniSettings) {
-      save_web_imgui_ini();
-      io.WantSaveIniSettings = false;
-    }
-  }
-#endif
+  save_web_imgui_ini_if_needed();
 
   // Rendering
   ImGui::Render();
@@ -340,14 +327,8 @@ void GuiManager::poll_events() {
 }
 
 void GuiManager::sync_imgui_ini() {
-#if defined(MEGATOY_PLATFORM_WEB)
-  load_web_imgui_ini();
-  pending_imgui_ini_update_ = true;
-  apply_imgui_ini_binding();
-#else
   const auto ini_path = preferences_.get_imgui_ini_file();
   set_imgui_ini_file(ini_path.generic_string());
-#endif
 }
 
 void GuiManager::apply_theme() {
@@ -419,16 +400,10 @@ void GuiManager::apply_imgui_ini_binding() {
     return;
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  ImGui::GetIO().IniFilename = nullptr;
-  pending_imgui_ini_update_ = false;
-  return;
-#else
   ImGuiIO &io = ImGui::GetIO();
   io.IniFilename =
       imgui_ini_file_path_.empty() ? nullptr : imgui_ini_file_path_.c_str();
   pending_imgui_ini_update_ = false;
-#endif
 }
 
 void GuiManager::set_drop_callback(void *user_pointer,
@@ -439,30 +414,10 @@ void GuiManager::set_drop_callback(void *user_pointer,
   drop_callback_ = callback;
 }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-void GuiManager::load_web_imgui_ini() {
-  if (web_ini_loaded_ || ImGui::GetCurrentContext() == nullptr) {
-    return;
-  }
-  auto stored = platform::web::read_local_storage("megatoy_imgui_ini");
-  if (stored.has_value() && !stored->empty()) {
-    ImGui::LoadIniSettingsFromMemory(stored->c_str(), stored->size());
-    first_frame_ = false;
-  } else {
-    first_frame_ = true;
-  }
-  web_ini_loaded_ = true;
+void GuiManager::sync_web_imgui_ini() {
+  ui::sync_web_imgui_ini(first_frame_, web_ini_loaded_);
 }
 
-void GuiManager::save_web_imgui_ini() {
-  if (ImGui::GetCurrentContext() == nullptr) {
-    return;
-  }
-  size_t size = 0;
-  const char *data = ImGui::SaveIniSettingsToMemory(&size);
-  if (data != nullptr && size > 0) {
-    platform::web::write_local_storage("megatoy_imgui_ini",
-                                       std::string(data, size));
-  }
+void GuiManager::save_web_imgui_ini_if_needed() {
+  ui::save_web_imgui_ini_if_needed(web_ini_loaded_);
 }
-#endif

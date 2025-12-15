@@ -7,16 +7,22 @@
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
+#include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_platform_services.hpp"
-#include <emscripten.h>
 #else
 #include "platform/native/desktop_platform_services.hpp"
 #endif
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
+
+struct RuntimeContext {
+  AppContext *app_context = nullptr;
+  MidiInputManager *midi = nullptr;
+  bool running = true;
+};
 
 namespace {
 
@@ -46,12 +52,6 @@ void handle_file_drop(void *user_pointer, int count, const char **paths) {
   }
 }
 
-struct RuntimeContext {
-  AppContext *app_context = nullptr;
-  MidiInputManager *midi = nullptr;
-  bool running = true;
-};
-
 bool run_frame(RuntimeContext &runtime) {
   auto &services = runtime.app_context->services;
   auto &app_state = runtime.app_context->state;
@@ -80,19 +80,6 @@ bool run_frame(RuntimeContext &runtime) {
   return true;
 }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-void web_main_loop(void *arg) {
-  auto *runtime = static_cast<RuntimeContext *>(arg);
-  if (!runtime->running) {
-    emscripten_cancel_main_loop();
-    return;
-  }
-  if (!run_frame(*runtime)) {
-    emscripten_cancel_main_loop();
-  }
-}
-#endif
-
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -117,15 +104,9 @@ int main(int argc, char *argv[]) {
 
   RuntimeContext runtime{&app_context, &midi, true};
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  emscripten_set_main_loop_arg(web_main_loop, &runtime, 0, true);
+  const auto frame = [&runtime]() { return run_frame(runtime); };
+  platform::run_main_loop(runtime, frame);
   services.shutdown_app();
   std::cout << "Goodbye!\n";
-#else
-  while (run_frame(runtime)) {
-  }
-  services.shutdown_app();
-  std::cout << "Goodbye!\n";
-#endif
   return 0;
 }

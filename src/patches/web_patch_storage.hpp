@@ -12,6 +12,7 @@ public:
   void append_entries(std::vector<PatchEntry> &tree) const override;
   bool load_patch(const PatchEntry &entry,
                   ym2612::Patch &out_patch) const override;
+  bool remove_patch(const PatchEntry &entry) override;
 };
 
 } // namespace patches

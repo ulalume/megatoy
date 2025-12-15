@@ -21,6 +21,9 @@ public:
   // Attempt to load a patch referenced by the entry. Return true if handled.
   virtual bool load_patch(const PatchEntry &entry,
                           ym2612::Patch &out_patch) const = 0;
+
+  // Attempt to remove the patch referenced by the entry. Default: unsupported.
+  virtual bool remove_patch(const PatchEntry &) { return false; }
 };
 
 } // namespace patches

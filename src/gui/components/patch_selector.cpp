@@ -2,10 +2,6 @@
 #include "common.hpp"
 #include "file_manager.hpp"
 #include "gui/styles/megatoy_style.hpp"
-#include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_store.hpp"
-#endif
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <array>
@@ -20,10 +16,6 @@
 #include <vector>
 
 namespace ui {
-#if defined(MEGATOY_PLATFORM_WEB)
-constexpr std::string_view kLocalStorageRelativePrefix = "localStorage/";
-constexpr std::string_view kLocalStorageAbsolutePrefix = "localStorage://";
-#endif
 
 namespace {
 #define INDENT (4.0f)
@@ -144,40 +136,12 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
   ImGui::SetTooltip("%s", tooltip.c_str());
 }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-std::string extract_local_storage_id(const patches::PatchEntry &entry) {
-  const std::string full = entry.full_path.empty()
-                               ? std::string{}
-                               : entry.full_path.generic_string();
-  if (!full.empty() && full.rfind(kLocalStorageAbsolutePrefix, 0) == 0) {
-    return full.substr(kLocalStorageAbsolutePrefix.size());
-  }
-  if (entry.relative_path.rfind(kLocalStorageRelativePrefix, 0) == 0) {
-    return entry.relative_path.substr(kLocalStorageRelativePrefix.size());
-  }
-  return full;
-}
-#endif
-
 void begin_popup_context(PatchSelectorContext &context,
                          const patches::PatchEntry &entry) {
   if (!ImGui::BeginPopupContextItem(nullptr)) {
     return;
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  if (!entry.is_directory && entry.format == "web_gin") {
-    if (ImGui::MenuItem("Delete from localStorage")) {
-      const std::string id = extract_local_storage_id(entry);
-      if (!id.empty() && platform::web::patch_store::remove(id)) {
-        context.repository.refresh();
-        ImGui::CloseCurrentPopup();
-      }
-    }
-  }
-  ImGui::EndPopup();
-  return;
-#else
   if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
     if (context.reveal_in_file_manager) {
       context.reveal_in_file_manager(
@@ -188,7 +152,14 @@ void begin_popup_context(PatchSelectorContext &context,
   if (ImGui::MenuItem("Refresh repository")) {
     context.repository.refresh();
   }
-#endif
+
+  if (!entry.is_directory && entry.format == "web_gin") {
+    if (ImGui::MenuItem("Delete from localStorage")) {
+      if (context.repository.remove_patch(entry)) {
+        ImGui::CloseCurrentPopup();
+      }
+    }
+  }
 
   ImGui::EndPopup();
 }

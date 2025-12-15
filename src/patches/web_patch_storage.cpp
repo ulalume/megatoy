@@ -69,6 +69,17 @@ bool WebPatchStorage::load_patch(const PatchEntry &entry,
   return platform::web::patch_store::load(id, out_patch);
 }
 
+bool WebPatchStorage::remove_patch(const PatchEntry &entry) {
+  if (entry.is_directory || entry.format != "web_gin") {
+    return false;
+  }
+  const std::string id = extract_local_storage_id(entry);
+  if (id.empty()) {
+    return false;
+  }
+  return platform::web::patch_store::remove(id);
+}
+
 } // namespace patches
 
 #endif
