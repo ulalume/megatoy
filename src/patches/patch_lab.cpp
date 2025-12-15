@@ -1,51 +1,18 @@
 #include "patch_lab.hpp"
-
+#include "core/random_utils.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <random>
 #include <string_view>
 
 namespace patch_lab {
 namespace {
 
-struct Range {
-  int min;
-  int max;
-
-  int clamp(int value) const {
-    if (value < min) {
-      return min;
-    }
-    if (value > max) {
-      return max;
-    }
-    return value;
-  }
-
-  int random(std::mt19937 &rng) const {
-    std::uniform_int_distribution<int> dist(min, max);
-    return dist(rng);
-  }
-
-  int random_biased(std::mt19937 &rng, float exponent,
-                    bool bias_to_min = true) const {
-    if (max <= min) {
-      return min;
-    }
-
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
-    double u = dist(rng);
-    double e = std::max(0.001, static_cast<double>(exponent));
-
-    double sample = bias_to_min ? std::pow(u, e) : 1.0 - std::pow(1.0 - u, e);
-
-    int value = static_cast<int>(std::llround(
-        static_cast<double>(min) + sample * static_cast<double>(max - min)));
-    return clamp(value);
-  }
-};
+using core::lerp_value;
+using core::make_rng;
+using core::random_bool;
+using core::Range;
 
 struct CategoryDefinition {
   std::string_view id;
@@ -199,27 +166,6 @@ std::vector<CategoryChoice> category_choices() {
   return result;
 }
 
-std::mt19937 make_rng(int seed, std::uint32_t &resolved_seed) {
-  if (seed < 0) {
-    std::random_device rd;
-    resolved_seed = rd();
-  } else {
-    resolved_seed = static_cast<std::uint32_t>(seed);
-  }
-  return std::mt19937{resolved_seed};
-}
-
-bool random_bool(std::mt19937 &rng, double probability = 0.5) {
-  std::bernoulli_distribution dist(probability);
-  return dist(rng);
-}
-
-template <typename T> T lerp_value(T a, T b, float t) {
-  return static_cast<T>(
-      std::round(static_cast<float>(a) +
-                 (static_cast<float>(b) - static_cast<float>(a)) * t));
-}
-
 void blend_operator(const ym2612::OperatorSettings &src,
                     ym2612::OperatorSettings &dst,
                     const ym2612::OperatorSettings &other, float t,
@@ -285,52 +231,28 @@ int apply_variation(int value, const Range &range, int amount,
 
 void mutate_operator(ym2612::OperatorSettings &op, std::mt19937 &rng,
                      const MutateOptions &options) {
-  std::bernoulli_distribution mutate(options.probability);
-  auto should_mutate = [&]() { return mutate(rng); };
 
-  if (should_mutate()) {
-    int value =
-        apply_variation(op.attack_rate, kAttackRate, options.amount, rng);
-    op.attack_rate = static_cast<uint8_t>(value);
-  }
-  if (should_mutate()) {
-    int value = apply_variation(op.decay_rate, kDecayRate, options.amount, rng);
-    op.decay_rate = static_cast<uint8_t>(value);
-  }
-  if (should_mutate()) {
-    int value =
-        apply_variation(op.sustain_rate, kSustainRate, options.amount, rng);
-    op.sustain_rate = static_cast<uint8_t>(value);
-  }
-  if (should_mutate()) {
-    int value =
-        apply_variation(op.release_rate, kReleaseRate, options.amount, rng);
-    op.release_rate = static_cast<uint8_t>(value);
-  }
-  if (should_mutate()) {
-    int value =
-        apply_variation(op.sustain_level, kSustainLevel, options.amount, rng);
-    op.sustain_level = static_cast<uint8_t>(value);
-  }
-  if (should_mutate()) {
-    int value =
-        apply_variation(op.total_level, kTotalLevel, options.amount * 4, rng);
-    op.total_level = static_cast<uint8_t>(value);
-  }
-  if (should_mutate()) {
-    int value = apply_variation(op.key_scale, kKeyScale, 1, rng);
-    op.key_scale = static_cast<uint8_t>(value);
-  }
-  if (should_mutate()) {
-    int value = apply_variation(op.multiple, kMultiple, options.amount, rng);
-    op.multiple = static_cast<uint8_t>(value);
-  }
-  if (should_mutate()) {
-    int value = apply_variation(op.detune, kDetune, 1, rng);
-    op.detune = static_cast<uint8_t>(value);
-  }
+  auto mutate_param = [&](uint8_t &param, const Range &range,
+                          int multiplier = 1) {
+    if (random_bool(rng, options.probability)) {
+      int value =
+          apply_variation(param, range, options.amount * multiplier, rng);
+      param = static_cast<uint8_t>(value);
+    }
+  };
 
-  if (should_mutate()) {
+  mutate_param(op.attack_rate, kAttackRate);
+  mutate_param(op.decay_rate, kDecayRate);
+  mutate_param(op.sustain_rate, kSustainRate);
+  mutate_param(op.release_rate, kReleaseRate);
+  mutate_param(op.sustain_level, kSustainLevel);
+  mutate_param(op.total_level, kTotalLevel, 4);
+  mutate_param(op.key_scale, kKeyScale); // Amount ignored for key scale in
+                                         // original but we can generalize
+  mutate_param(op.multiple, kMultiple);
+  mutate_param(op.detune, kDetune);
+
+  if (random_bool(rng, options.probability)) {
     op.amplitude_modulation_enable = !op.amplitude_modulation_enable;
   }
 

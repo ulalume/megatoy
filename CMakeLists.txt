@@ -121,6 +121,12 @@ endif()
 
 include(cmake/targets.cmake)
 
+# Tests
+enable_testing()
+add_executable(random_utils_test tests/core/random_utils_test.cpp src/core/random_utils.cpp)
+target_include_directories(random_utils_test PRIVATE src)
+add_test(NAME random_utils_test COMMAND random_utils_test)
+
 # Copy license bundle during installation so release artifacts automatically
 # contain the required notices alongside the binaries.
 if(EXISTS "${CMAKE_SOURCE_DIR}/licenses")

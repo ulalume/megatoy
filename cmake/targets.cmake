@@ -37,6 +37,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/common.cpp
   src/formats/ctrmml.cpp
   src/formats/dmp.cpp
+  src/core/random_utils.cpp
   src/formats/gin.cpp
   src/formats/ginpkg.cpp
   src/formats/fui.cpp

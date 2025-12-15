@@ -143,6 +143,7 @@ private:
   void set_imgui_ini_file(const std::string &path);
   void apply_imgui_ini_binding();
   void dispatch_drop_event(const char *path);
+  void setup_default_layout(unsigned int dockspace_id);
 
   // Drop callback state
   void *drop_user_pointer_;

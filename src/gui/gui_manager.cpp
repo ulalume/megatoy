@@ -2,9 +2,9 @@
 #include "fonts/icon_font.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
+#include "gui/imgui_ini_bridge.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/window_title.hpp"
-#include "gui/imgui_ini_bridge.hpp"
 #include "platform/platform_config.hpp"
 #include <filesystem>
 #include <imgui.h>
@@ -232,43 +232,47 @@ void GuiManager::begin_frame() {
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
 
   if (first_frame_) {
-    first_frame_ = false;
-    first_end_frame_ = true;
+    setup_default_layout(dockspace_id);
+  }
+}
 
-    ImGui::DockBuilderRemoveNode(dockspace_id);
-    ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-    ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+void GuiManager::setup_default_layout(unsigned int dockspace_id) {
+  first_frame_ = false;
+  first_end_frame_ = true;
 
-    auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
-                              std::string(ui::PATCH_EDITOR_TITLE);
+  ImGui::DockBuilderRemoveNode(dockspace_id);
+  ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+  ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
-    ImGuiID dock_main_id = dockspace_id;
+  auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
+                            std::string(ui::PATCH_EDITOR_TITLE);
 
-    ImGuiID doc_id_down = ImGui::DockBuilderSplitNode(
-        dock_main_id, ImGuiDir_Down, 0.23f, nullptr, &dock_main_id);
+  ImGuiID dock_main_id = dockspace_id;
 
-    ImGuiID doc_id_down_left = ImGui::DockBuilderSplitNode(
-        doc_id_down, ImGuiDir_Left, 0.20f, nullptr, &doc_id_down);
+  ImGuiID doc_id_down = ImGui::DockBuilderSplitNode(
+      dock_main_id, ImGuiDir_Down, 0.23f, nullptr, &dock_main_id);
 
-    ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
-        dock_main_id, ImGuiDir_Left, 0.35f, nullptr, &dock_main_id);
+  ImGuiID doc_id_down_left = ImGui::DockBuilderSplitNode(
+      doc_id_down, ImGuiDir_Left, 0.20f, nullptr, &doc_id_down);
 
-    ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
-    ImGui::DockBuilderDockWindow(ui::PATCH_HISTORY_TITLE, dock_main_id);
+  ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
+      dock_main_id, ImGuiDir_Left, 0.35f, nullptr, &dock_main_id);
 
-    ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
+  ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
+  ImGui::DockBuilderDockWindow(ui::PATCH_HISTORY_TITLE, dock_main_id);
 
-    ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);
-    ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, doc_id_down);
-    ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
+  ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
+
+  ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);
+  ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, doc_id_down);
+  ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
 
 #if !defined(MEGATOY_PLATFORM_WEB)
-    ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, doc_id_down_left);
+  ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, doc_id_down_left);
 #endif
 
-    // Finish the dockspace
-    ImGui::DockBuilderFinish(dockspace_id);
-  }
+  // Finish the dockspace
+  ImGui::DockBuilderFinish(dockspace_id);
 }
 
 void GuiManager::end_frame() {
@@ -379,7 +383,9 @@ bool GuiManager::supports_fullscreen() const {
   return megatoy::platform::is_desktop();
 }
 
-bool GuiManager::supports_quit() const { return megatoy::platform::is_desktop(); }
+bool GuiManager::supports_quit() const {
+  return megatoy::platform::is_desktop();
+}
 
 bool GuiManager::supports_waveform() const {
   // Waveform panel relies on native file IO.
