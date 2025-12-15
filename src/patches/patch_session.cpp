@@ -3,6 +3,7 @@
 #include "formats/patch_loader.hpp"
 #include "formats/ctrmml.hpp"
 #include "formats/dmp.hpp"
+#include "formats/patch_registry.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #include "ym2612/channel.hpp"
@@ -155,7 +156,9 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
         selected_path.replace_extension(".dmp");
       }
 
-      if (formats::dmp::write_patch(current_patch_, selected_path)) {
+      if (formats::PatchRegistry::instance().write(
+              selected_path.extension().string(), current_patch_,
+              selected_path)) {
         return SaveResult::success(selected_path);
       }
       return SaveResult::error("Failed to export DMP file: " +
@@ -175,7 +178,9 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
         selected_path.replace_extension(".mml");
       }
 
-      if (formats::ctrmml::write_patch(current_patch_, selected_path)) {
+      if (formats::PatchRegistry::instance().write(
+              selected_path.extension().string(), current_patch_,
+              selected_path)) {
         return SaveResult::success(selected_path);
       }
       return SaveResult::error("Failed to export MML file: " +

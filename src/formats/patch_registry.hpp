@@ -14,9 +14,11 @@ namespace formats {
 struct PatchFormatHandler {
   std::function<std::vector<ym2612::Patch>(const std::filesystem::path &)>
       read_file;
-  // Optional writer for export/save; not all formats support saving.
+  // Optional writers for export/save; not all formats support these.
   std::function<bool(const ym2612::Patch &,
                      const std::filesystem::path &)> write_single;
+  std::function<bool(const ym2612::Patch &,
+                     const std::filesystem::path &)> write_text;
   // Label to present in UI.
   std::string label;
 };
@@ -32,6 +34,9 @@ public:
   handler_for_extension(const std::string &extension) const;
 
   PatchLoadResult load(const std::filesystem::path &path) const;
+  // Optional single-patch writer by extension.
+  bool write(const std::string &extension, const ym2612::Patch &patch,
+             const std::filesystem::path &target) const;
 
 private:
   PatchRegistry();
