@@ -2,6 +2,8 @@
 
 #include "formats/ctrmml.hpp"
 #include "formats/patch_loader.hpp"
+#include "formats/patch_registry.hpp"
+#include "formats/gin.hpp"
 #include "patch_metadata.hpp"
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
@@ -89,16 +91,19 @@ SavePatchResult FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
 
   const auto patches_dir = write_root_.value_or(root_);
   const auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
-  const auto patch_path =
-      formats::ginpkg::build_package_path(patches_dir, sanitized);
-
-  if (vfs_.exists(patch_path) && !overwrite) {
+  // Prefer ginpkg packaged save
+  if (auto path = formats::PatchRegistry::instance().save_package(
+          ".ginpkg", patches_dir, sanitized, patch)) {
+    return SavePatchResult::success(*path);
+  }
+  // Fallback to gin single file if ginpkg unavailable
+  auto gin_path = formats::gin::build_patch_path(patches_dir, sanitized);
+  if (vfs_.exists(gin_path) && !overwrite) {
     return SavePatchResult::duplicate();
   }
-
-  auto result = formats::ginpkg::save_patch(patches_dir, patch, sanitized);
-  if (result.has_value()) {
-    return SavePatchResult::success(result.value());
+  auto gin_result = formats::gin::save_patch(patches_dir, patch, sanitized);
+  if (gin_result.has_value()) {
+    return SavePatchResult::success(gin_result.value());
   }
   return SavePatchResult::error("Failed to save patch");
 }

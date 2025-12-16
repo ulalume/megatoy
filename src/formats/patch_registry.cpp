@@ -95,26 +95,59 @@ bool PatchRegistry::write(const std::string &extension,
   if (handler->write_single) {
     return handler->write_single(patch, target);
   }
+  return false;
+}
+
+bool PatchRegistry::write_text(const std::string &extension,
+                               const ym2612::Patch &patch,
+                               const std::filesystem::path &target) const {
+  auto handler = handler_for_extension(extension);
+  if (!handler) {
+    return false;
+  }
   if (handler->write_text) {
     return handler->write_text(patch, target);
   }
   return false;
 }
 
+std::optional<std::filesystem::path>
+PatchRegistry::save_package(const std::string &extension,
+                            const std::filesystem::path &dir,
+                            const std::string &name,
+                            const ym2612::Patch &patch) const {
+  auto handler = handler_for_extension(extension);
+  if (!handler || !handler->write_packaged) {
+    return std::nullopt;
+  }
+  return handler->write_packaged(dir, patch, name);
+}
 void PatchRegistry::register_defaults() {
   register_format(".gin",
-                  {formats::gin::read_file, nullptr, nullptr, "GIN"});
+                  {formats::gin::read_file,
+                   [](const std::filesystem::path &dir,
+                      const ym2612::Patch &patch, const std::string &name) {
+                     return formats::gin::save_patch(dir, patch, name);
+                   },
+                   nullptr, nullptr, "GIN"});
   register_format(".ginpkg",
-                  {formats::ginpkg::read_file, nullptr, nullptr, "GINPKG"});
+                  {formats::ginpkg::read_file,
+                   [](const std::filesystem::path &dir,
+                      const ym2612::Patch &patch, const std::string &name) {
+                     return formats::ginpkg::save_patch(dir, patch, name);
+                   },
+                   nullptr, nullptr, "GINPKG"});
   register_format(".dmp",
                   {formats::dmp::read_file,
+                   nullptr,
                    formats::dmp::write_patch, nullptr, "DMP"});
   register_format(".rym2612",
-                  {formats::rym2612::read_file, nullptr, nullptr, "RYM2612"});
+                  {formats::rym2612::read_file, nullptr, nullptr, nullptr,
+                   "RYM2612"});
   register_format(".fui",
-                  {formats::fui::read_file, nullptr, nullptr, "FUI"});
+                  {formats::fui::read_file, nullptr, nullptr, nullptr, "FUI"});
   register_format(".mml",
-                  {formats::ctrmml::read_file, nullptr,
+                  {formats::ctrmml::read_file, nullptr, nullptr,
                    formats::ctrmml::write_patch, "MML"});
 }
 

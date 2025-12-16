@@ -119,7 +119,6 @@ void PatchSession::apply_patch_to_audio() {
   audio_.apply_patch_to_all_channels(current_patch_);
 }
 
-#if !defined(MEGATOY_PLATFORM_WEB)
 SaveResult PatchSession::save_current_patch(bool force_overwrite) {
   auto result = repository_->save_patch(current_patch_, current_patch_.name,
                                         force_overwrite);
@@ -178,7 +177,7 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
         selected_path.replace_extension(".mml");
       }
 
-      if (formats::PatchRegistry::instance().write(
+      if (formats::PatchRegistry::instance().write_text(
               selected_path.extension().string(), current_patch_,
               selected_path)) {
         return SaveResult::success(selected_path);
@@ -192,7 +191,6 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
 
   return SaveResult::error("Unknown export format");
 }
-#endif
 
 bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
                            const PreferenceManager::UIPreferences &prefs) {
