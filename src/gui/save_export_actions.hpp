@@ -2,6 +2,7 @@
 
 #include "patches/patch_session.hpp"
 #include "save_export_state.hpp"
+#include <string_view>
 
 namespace ui {
 
@@ -11,7 +12,8 @@ const char *save_label_for(const patches::PatchSession &session,
                            bool is_user_patch);
 
 void trigger_save(patches::PatchSession &session, SaveExportState &state,
-                  bool force_overwrite);
+                  bool force_overwrite,
+                  std::string_view extension_override = {});
 
 void trigger_export(patches::PatchSession &session, SaveExportState &state,
                     const patches::ExportFormatInfo &format);

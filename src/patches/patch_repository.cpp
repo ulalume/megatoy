@@ -12,6 +12,7 @@
 #include <functional>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 namespace patches {
 
@@ -155,9 +156,11 @@ std::vector<std::string> PatchRepository::supported_extensions() {
 
 SavePatchResult PatchRepository::save_patch(const ym2612::Patch &patch,
                                             const std::string &name,
-                                            bool overwrite) {
+                                            bool overwrite,
+                                            std::string_view preferred_extension) {
   for (const auto &storage : storages_) {
-    auto result = storage->save_patch(patch, name, overwrite);
+    auto result =
+        storage->save_patch(patch, name, overwrite, preferred_extension);
     if (result.status != SavePatchResult::Status::Unsupported) {
       if (result.status == SavePatchResult::Status::Success) {
         refresh();

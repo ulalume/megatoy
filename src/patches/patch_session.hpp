@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 
 // Forward declaration
 class AudioManager;
@@ -79,7 +80,8 @@ public:
   void apply_patch_to_audio();
 
   // File operations
-  SaveResult save_current_patch(bool force_overwrite = false);
+  SaveResult save_current_patch(bool force_overwrite = false,
+                                std::string_view preferred_extension = {});
   SaveResult export_current_patch_as(const ExportFormatInfo &format);
   std::optional<ExportFormatInfo>
   find_export_format(const std::string &extension) const;

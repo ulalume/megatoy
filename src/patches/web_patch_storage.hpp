@@ -18,7 +18,8 @@ public:
   bool remove_patch(const PatchEntry &entry) override;
   SavePatchResult save_patch(const ym2612::Patch &patch,
                              const std::string &name,
-                             bool overwrite) override;
+                             bool overwrite,
+                             std::string_view preferred_extension) override;
   bool update_patch_metadata(const std::string &relative_path,
                              const PatchMetadata &metadata) override;
   std::optional<PatchMetadata>

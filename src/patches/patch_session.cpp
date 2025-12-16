@@ -10,6 +10,7 @@
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <string_view>
 #include <utility>
 
 namespace patches {
@@ -119,9 +120,24 @@ void PatchSession::apply_patch_to_audio() {
   audio_.apply_patch_to_all_channels(current_patch_);
 }
 
-SaveResult PatchSession::save_current_patch(bool force_overwrite) {
-  auto result = repository_->save_patch(current_patch_, current_patch_.name,
-                                        force_overwrite);
+SaveResult PatchSession::save_current_patch(bool force_overwrite,
+                                            std::string_view preferred_extension) {
+  std::string preferred = std::string(preferred_extension);
+
+  if (preferred.empty() && !current_patch_path_.empty()) {
+    auto lower = current_patch_path_;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower.size() >= 7 && lower.compare(lower.size() - 7, 7, ".ginpkg") == 0) {
+      preferred = ".ginpkg";
+    } else if (lower.size() >= 4 && lower.compare(lower.size() - 4, 4, ".gin") == 0) {
+      preferred = ".gin";
+    }
+  }
+
+  auto result =
+      repository_->save_patch(current_patch_, current_patch_.name,
+                              force_overwrite, preferred);
   switch (result.status) {
   case SavePatchResult::Status::Success:
     mark_as_clean();

@@ -86,7 +86,9 @@ bool WebPatchStorage::remove_patch(const PatchEntry &entry) {
 
 SavePatchResult WebPatchStorage::save_patch(const ym2612::Patch &patch,
                                             const std::string &name,
-                                            bool overwrite) {
+                                            bool overwrite,
+                                            std::string_view preferred_extension) {
+  (void)preferred_extension;
   const std::string sanitized =
       patches::sanitize_filename(name.empty() ? "patch" : name);
   if (!overwrite && platform::web::patch_store::exists(sanitized)) {

@@ -82,30 +82,82 @@ bool FilesystemPatchStorage::load_patch(const PatchEntry &entry,
   return false;
 }
 
-SavePatchResult FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
-                                                   const std::string &name,
-                                                   bool overwrite) {
+SavePatchResult
+FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
+                                   const std::string &name, bool overwrite,
+                                   std::string_view preferred_extension) {
   if (!writable_) {
     return SavePatchResult::unsupported();
   }
 
   const auto patches_dir = write_root_.value_or(root_);
   const auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
-  // Prefer ginpkg packaged save
-  if (auto path = formats::PatchRegistry::instance().save_package(
-          ".ginpkg", patches_dir, sanitized, patch)) {
-    return SavePatchResult::success(*path);
+
+  const auto ginpkg_path =
+      formats::ginpkg::build_package_path(patches_dir, sanitized);
+  const auto gin_path = formats::gin::build_patch_path(patches_dir, sanitized);
+
+  std::string pref_ext(preferred_extension);
+  std::transform(pref_ext.begin(), pref_ext.end(), pref_ext.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const bool prefer_ginpkg = pref_ext == ".ginpkg";
+  const bool prefer_gin = pref_ext == ".gin";
+
+  const bool ginpkg_exists = vfs_.exists(ginpkg_path);
+  const bool gin_exists = vfs_.exists(gin_path);
+
+  auto save_ginpkg = [&]() -> SavePatchResult {
+    if (!overwrite && ginpkg_exists) {
+      return SavePatchResult::duplicate();
+    }
+    if (auto path = formats::PatchRegistry::instance().save_package(
+            ".ginpkg", patches_dir, sanitized, patch)) {
+      return SavePatchResult::success(*path);
+    }
+    return SavePatchResult::error("Failed to save patch");
+  };
+
+  auto save_gin = [&]() -> SavePatchResult {
+    if (gin_exists && !overwrite) {
+      return SavePatchResult::duplicate();
+    }
+    auto gin_result = formats::gin::save_patch(patches_dir, patch, sanitized);
+    if (gin_result.has_value()) {
+      return SavePatchResult::success(gin_result.value());
+    }
+    return SavePatchResult::error("Failed to save patch");
+  };
+
+  // Preserve the existing format when possible.
+  if (prefer_ginpkg) {
+    auto result = save_ginpkg();
+    if (result.status != SavePatchResult::Status::Error) {
+      return result;
+    }
+    return save_gin();
   }
-  // Fallback to gin single file if ginpkg unavailable
-  auto gin_path = formats::gin::build_patch_path(patches_dir, sanitized);
-  if (vfs_.exists(gin_path) && !overwrite) {
-    return SavePatchResult::duplicate();
+
+  if (prefer_gin) {
+    auto result = save_gin();
+    if (result.status != SavePatchResult::Status::Error) {
+      return result;
+    }
+    return save_ginpkg();
   }
-  auto gin_result = formats::gin::save_patch(patches_dir, patch, sanitized);
-  if (gin_result.has_value()) {
-    return SavePatchResult::success(gin_result.value());
+
+  if (gin_exists) {
+    return save_gin();
   }
-  return SavePatchResult::error("Failed to save patch");
+  if (ginpkg_exists) {
+    return save_ginpkg();
+  }
+
+  // Default to ginpkg, fall back to gin on failure.
+  auto ginpkg_result = save_ginpkg();
+  if (ginpkg_result.status == SavePatchResult::Status::Success) {
+    return ginpkg_result;
+  }
+  return save_gin();
 }
 
 bool FilesystemPatchStorage::save_patch_metadata(
@@ -154,8 +206,10 @@ FilesystemPatchStorage::has_patch_named(const std::string &name) const {
     return std::nullopt;
   }
   auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
-  auto target = formats::ginpkg::build_package_path(root_, sanitized);
-  return vfs_.exists(target);
+  const auto patches_dir = write_root_.value_or(root_);
+  auto ginpkg_target = formats::ginpkg::build_package_path(patches_dir, sanitized);
+  auto gin_target = formats::gin::build_patch_path(patches_dir, sanitized);
+  return vfs_.exists(ginpkg_target) || vfs_.exists(gin_target);
 }
 
 std::optional<std::filesystem::path> FilesystemPatchStorage::to_relative_path(

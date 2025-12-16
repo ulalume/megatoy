@@ -25,7 +25,8 @@ public:
                   ym2612::Patch &out_patch) const override;
   SavePatchResult save_patch(const ym2612::Patch &patch,
                              const std::string &name,
-                             bool overwrite) override;
+                             bool overwrite,
+                             std::string_view preferred_extension) override;
   bool is_writable() const override { return writable_; }
   std::string_view label() const override { return label_; }
   bool save_patch_metadata(const std::string &relative_path,

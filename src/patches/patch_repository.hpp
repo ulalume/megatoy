@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace patches {
@@ -59,7 +60,8 @@ public:
   get_patch_metadata(const std::string &relative_path) const;
 
   SavePatchResult save_patch(const ym2612::Patch &patch,
-                             const std::string &name, bool overwrite);
+                             const std::string &name, bool overwrite,
+                             std::string_view preferred_extension);
 
   // Batch operations
   std::vector<PatchEntry> get_patches_by_metadata_filter(

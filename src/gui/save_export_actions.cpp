@@ -7,6 +7,7 @@
 #include <imgui.h>
 #include <iomanip>
 #include <sstream>
+#include <string_view>
 
 namespace ui {
 
@@ -21,8 +22,9 @@ const char *save_label_for(const patches::PatchSession &session,
 }
 
 void trigger_save(patches::PatchSession &session, SaveExportState &state,
-                  bool force_overwrite) {
-  auto result = session.save_current_patch(force_overwrite);
+                  bool force_overwrite, std::string_view extension_override) {
+  auto result =
+      session.save_current_patch(force_overwrite, extension_override);
   if (result.is_duplicated()) {
     state.last_export_path = result.path.string();
     state.pending_popup = SaveExportState::Pending::OverwriteConfirmation;
@@ -261,7 +263,8 @@ void render_duplicate_dialog(patches::PatchSession &session,
       auto patch_copy = session.current_patch();
       patch_copy.name = state.duplicate.name;
       session.set_current_patch(patch_copy, session.current_patch_path());
-      trigger_save(session, state, false);
+      // Duplicates are always saved as packaged ginpkg files.
+      trigger_save(session, state, false, ".ginpkg");
       state.duplicate.open = false;
       ImGui::CloseCurrentPopup();
     }

@@ -52,8 +52,9 @@ public:
   virtual bool remove_patch(const PatchEntry &) { return false; }
 
   // Attempt to save a patch with the provided name. Default: unsupported.
-  virtual SavePatchResult save_patch(const ym2612::Patch &, const std::string &,
-                                     bool /*overwrite*/) {
+  virtual SavePatchResult
+  save_patch(const ym2612::Patch &, const std::string &, bool /*overwrite*/,
+             std::string_view /*preferred_extension*/) {
     return SavePatchResult::unsupported();
   }
 
