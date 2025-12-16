@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <imgui.h>
 
 namespace ui {
@@ -151,18 +152,28 @@ void render_patch_metadata(PatchEditorContext &context, ym2612::Patch &patch,
 
   render_save_export_buttons(context, name_valid, state);
 
-  bool export_mml = false;
-  bool export_dmp = false;
+  std::optional<patches::ExportFormatInfo> chosen_format;
   if (ImGui::BeginPopup("Export Options")) {
-    export_mml = ImGui::MenuItem(".mml (ctrmml)");
-    export_dmp = ImGui::MenuItem(".dmp");
+    auto formats = context.session.export_formats();
+    bool any = false;
+    for (const auto &fmt : formats) {
+      any = true;
+      std::string label = fmt.label.empty() ? fmt.extension : fmt.label;
+      if (!fmt.extension.empty()) {
+        label += " (" + fmt.extension + ")";
+      }
+      if (ImGui::MenuItem(label.c_str())) {
+        chosen_format = fmt;
+      }
+    }
+    if (!any) {
+      ImGui::MenuItem("No export formats available", nullptr, false, false);
+    }
     ImGui::EndPopup();
   }
 
-  if (export_mml || export_dmp) {
-    const auto export_format =
-        export_mml ? patches::ExportFormat::MML : patches::ExportFormat::DMP;
-    trigger_export(context.session, state, export_format);
+  if (chosen_format) {
+    trigger_export(context.session, state, *chosen_format);
   }
 
   render_patch_name_field(context, patch, name_valid);

@@ -14,7 +14,7 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
                   bool force_overwrite);
 
 void trigger_export(patches::PatchSession &session, SaveExportState &state,
-                    patches::ExportFormat format);
+                    const patches::ExportFormatInfo &format);
 
 void render_save_export_popups(patches::PatchSession &session,
                                SaveExportState &state);

@@ -2,6 +2,7 @@
 
 #include "channel_allocator.hpp"
 #include "patch_repository.hpp"
+#include "formats/patch_registry.hpp"
 #include "patches/filename_utils.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
@@ -44,10 +45,7 @@ struct SaveResult {
   bool is_duplicated() const { return status == Status::Duplicated; }
 };
 
-enum class ExportFormat {
-  DMP,
-  MML,
-};
+using ExportFormatInfo = formats::ExportFormatInfo;
 
 class PatchSession {
 public:
@@ -82,7 +80,10 @@ public:
 
   // File operations
   SaveResult save_current_patch(bool force_overwrite = false);
-  SaveResult export_current_patch_as(ExportFormat format);
+  SaveResult export_current_patch_as(const ExportFormatInfo &format);
+  std::optional<ExportFormatInfo>
+  find_export_format(const std::string &extension) const;
+  std::vector<ExportFormatInfo> export_formats() const;
 
   // Note management
   bool note_on(ym2612::Note note, uint8_t velocity,

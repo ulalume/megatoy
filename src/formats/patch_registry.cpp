@@ -122,6 +122,32 @@ PatchRegistry::save_package(const std::string &extension,
   }
   return handler->write_packaged(dir, patch, name);
 }
+
+std::vector<ExportFormatInfo> PatchRegistry::export_formats() const {
+  std::vector<ExportFormatInfo> formats;
+  formats.reserve(handlers_.size());
+  for (const auto &[ext, handler] : handlers_) {
+    if (handler.write_single) {
+      ExportFormatInfo info;
+      info.extension = ext;
+      info.label = handler.label.empty() ? ext : handler.label;
+      info.is_text = false;
+      formats.push_back(std::move(info));
+    }
+    if (handler.write_text) {
+      ExportFormatInfo info;
+      info.extension = ext;
+      info.label = handler.label.empty() ? ext : handler.label;
+      info.is_text = true;
+      formats.push_back(std::move(info));
+    }
+  }
+  std::sort(formats.begin(), formats.end(),
+            [](const ExportFormatInfo &a, const ExportFormatInfo &b) {
+              return a.label < b.label;
+            });
+  return formats;
+}
 void PatchRegistry::register_defaults() {
   register_format(".gin",
                   {formats::gin::read_file,
@@ -140,7 +166,7 @@ void PatchRegistry::register_defaults() {
   register_format(".dmp",
                   {formats::dmp::read_file,
                    nullptr,
-                   formats::dmp::write_patch, nullptr, "DMP"});
+                   formats::dmp::write_patch, nullptr, "DefleMask"});
   register_format(".rym2612",
                   {formats::rym2612::read_file, nullptr, nullptr, nullptr,
                    "RYM2612"});
@@ -148,7 +174,7 @@ void PatchRegistry::register_defaults() {
                   {formats::fui::read_file, nullptr, nullptr, nullptr, "FUI"});
   register_format(".mml",
                   {formats::ctrmml::read_file, nullptr, nullptr,
-                   formats::ctrmml::write_patch, "MML"});
+                   formats::ctrmml::write_patch, "ctrmml"});
 }
 
 } // namespace formats

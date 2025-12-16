@@ -39,7 +39,7 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
 }
 
 void trigger_export(patches::PatchSession &session, SaveExportState &state,
-                    patches::ExportFormat format) {
+                    const patches::ExportFormatInfo &format) {
   auto result = session.export_current_patch_as(format);
   if (result.is_success()) {
     state.last_export_path = result.path.string();

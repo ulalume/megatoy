@@ -60,13 +60,19 @@ void render_main_menu(MainMenuContext &context) {
       if (!name_valid)
         ImGui::BeginDisabled(true);
       if (ImGui::BeginMenu("Export")) {
-        if (ImGui::MenuItem(".mml (ctrmml)")) {
-          trigger_export(session, context.save_state,
-                         patches::ExportFormat::MML);
+        bool any_export = false;
+        for (const auto &fmt : session.export_formats()) {
+          any_export = true;
+          std::string label = fmt.label.empty() ? fmt.extension : fmt.label;
+          if (!fmt.extension.empty()) {
+            label += " (" + fmt.extension + ")";
+          }
+          if (ImGui::MenuItem(label.c_str())) {
+            trigger_export(session, context.save_state, fmt);
+          }
         }
-        if (ImGui::MenuItem(".dmp")) {
-          trigger_export(session, context.save_state,
-                         patches::ExportFormat::DMP);
+        if (!any_export) {
+          ImGui::MenuItem("No export formats available", nullptr, false, false);
         }
         ImGui::EndMenu();
       }

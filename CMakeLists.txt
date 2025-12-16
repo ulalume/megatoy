@@ -126,6 +126,9 @@ enable_testing()
 add_executable(random_utils_test tests/core/random_utils_test.cpp src/core/random_utils.cpp)
 target_include_directories(random_utils_test PRIVATE src)
 add_test(NAME random_utils_test COMMAND random_utils_test)
+add_executable(patch_registry_test tests/core/patch_registry_test.cpp)
+target_include_directories(patch_registry_test PRIVATE src)
+add_test(NAME patch_registry_test COMMAND patch_registry_test)
 
 # Copy license bundle during installation so release artifacts automatically
 # contain the required notices alongside the binaries.

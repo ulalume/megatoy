@@ -144,73 +144,86 @@ SaveResult PatchSession::save_current_patch(bool force_overwrite) {
   }
 }
 
-SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
+SaveResult PatchSession::export_current_patch_as(
+    const ExportFormatInfo &format) {
   const auto &default_dir = directories_.paths().export_root;
   const std::string sanitized_name = sanitize_filename(
       current_patch_.name.empty() ? "patch" : current_patch_.name);
 
   const bool is_web = megatoy::platform::is_web();
+  const std::string ext = format.extension.empty() ? "" : format.extension;
 
-  auto download_or_error = [&](const std::string &ext) -> SaveResult {
-    if (repository_->download_patch(current_patch_, current_patch_.name, ext)) {
+  auto download_or_error = [&](const std::string &hint) -> SaveResult {
+    if (repository_->download_patch(current_patch_, current_patch_.name,
+                                    hint)) {
       return SaveResult::success(std::filesystem::path("download"));
     }
     return SaveResult::error("Failed to export patch");
   };
 
-  switch (format) {
-  case ExportFormat::DMP: {
-    if (is_web) {
-      return download_or_error(".dmp");
-    }
-    std::filesystem::path selected_path;
-    auto result = platform::file_dialog::save_file(
-        default_dir, sanitized_name + ".dmp",
-        {{"DMP Files", {"dmp"}}, {"All Files", {"*"}}}, selected_path);
+  if (is_web) {
+    return download_or_error(ext.empty() ? ".dmp" : ext);
+  }
 
-    if (result == platform::file_dialog::DialogResult::Ok) {
-      if (selected_path.extension().empty()) {
-        selected_path.replace_extension(".dmp");
-      }
+  std::filesystem::path selected_path;
+  const std::string default_name =
+      sanitized_name + (ext.empty() ? "" : ext.front() == '.' ? ext : "." + ext);
+  std::vector<platform::file_dialog::FileFilter> filters;
+  std::string trimmed_ext = ext;
+  if (!trimmed_ext.empty() && trimmed_ext.front() == '.') {
+    trimmed_ext = trimmed_ext.substr(1);
+  }
+  if (!trimmed_ext.empty()) {
+    filters.push_back({format.label, {trimmed_ext}});
+  }
+  filters.push_back({"All Files", {"*"}});
 
-      if (formats::PatchRegistry::instance().write(
-              selected_path.extension().string(), current_patch_,
-              selected_path)) {
-        return SaveResult::success(selected_path);
-      }
-      return SaveResult::error("Failed to export DMP file: " +
-                               selected_path.string());
+  auto result = platform::file_dialog::save_file(default_dir, default_name,
+                                                 filters, selected_path);
+
+  if (result == platform::file_dialog::DialogResult::Ok) {
+    if (selected_path.extension().empty() && !ext.empty()) {
+      selected_path.replace_extension(ext);
     }
+
+    bool ok = false;
+    if (format.is_text) {
+      ok = formats::PatchRegistry::instance().write_text(
+          selected_path.extension().string(), current_patch_, selected_path);
+    } else {
+      ok = formats::PatchRegistry::instance().write(
+          selected_path.extension().string(), current_patch_, selected_path);
+    }
+
+    if (ok) {
+      return SaveResult::success(selected_path);
+    }
+    return SaveResult::error("Failed to export file: " +
+                             selected_path.string());
+  }
+  if (result == platform::file_dialog::DialogResult::Cancelled) {
     return SaveResult::cancelled();
   }
+  return SaveResult::error("Failed to export patch");
+}
 
-  case ExportFormat::MML: {
-    if (is_web) {
-      return download_or_error(".mml");
-    }
-    std::filesystem::path selected_path;
-    auto result = platform::file_dialog::save_file(
-        default_dir, sanitized_name + ".mml",
-        {{"MML Files", {"mml"}}, {"All Files", {"*"}}}, selected_path);
-
-    if (result == platform::file_dialog::DialogResult::Ok) {
-      if (selected_path.extension().empty()) {
-        selected_path.replace_extension(".mml");
-      }
-
-      if (formats::PatchRegistry::instance().write_text(
-              selected_path.extension().string(), current_patch_,
-              selected_path)) {
-        return SaveResult::success(selected_path);
-      }
-      return SaveResult::error("Failed to export MML file: " +
-                               selected_path.string());
-    }
-    return SaveResult::cancelled();
+std::optional<ExportFormatInfo>
+PatchSession::find_export_format(const std::string &extension) const {
+  auto formats = formats::PatchRegistry::instance().export_formats();
+  std::string ext_norm = extension;
+  if (!ext_norm.empty() && ext_norm.front() != '.') {
+    ext_norm = "." + ext_norm;
   }
+  for (const auto &fmt : formats) {
+    if (fmt.extension == ext_norm) {
+      return fmt;
+    }
   }
+  return std::nullopt;
+}
 
-  return SaveResult::error("Unknown export format");
+std::vector<ExportFormatInfo> PatchSession::export_formats() const {
+  return formats::PatchRegistry::instance().export_formats();
 }
 
 bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
