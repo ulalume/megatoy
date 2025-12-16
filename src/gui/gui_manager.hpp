@@ -138,6 +138,7 @@ private:
   bool pending_imgui_ini_update_;
   std::string imgui_ini_file_path_;
   ui::styles::ThemeId theme_;
+  bool web_layout_loaded_ = false;
 
   // Internal methods
   void set_imgui_ini_file(const std::string &path);

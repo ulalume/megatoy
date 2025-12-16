@@ -231,7 +231,7 @@ void GuiManager::begin_frame() {
 
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
 
-  if (first_frame_) {
+  if (first_frame_ && !web_layout_loaded_) {
     setup_default_layout(dockspace_id);
   }
 }
@@ -427,8 +427,13 @@ void GuiManager::apply_imgui_ini_binding() {
   }
 
   ImGuiIO &io = ImGui::GetIO();
-  io.IniFilename =
-      imgui_ini_file_path_.empty() ? nullptr : imgui_ini_file_path_.c_str();
+  if (imgui_ini_file_path_.empty() && megatoy::platform::is_web()) {
+    static const char kWebIniName[] = "megatoy_imgui_ini";
+    io.IniFilename = kWebIniName;
+  } else {
+    io.IniFilename =
+        imgui_ini_file_path_.empty() ? nullptr : imgui_ini_file_path_.c_str();
+  }
   pending_imgui_ini_update_ = false;
 }
 
@@ -441,7 +446,7 @@ void GuiManager::set_drop_callback(void *user_pointer,
 }
 
 void GuiManager::sync_web_imgui_ini() {
-  ui::sync_web_imgui_ini(first_frame_, web_ini_loaded_);
+  ui::sync_web_imgui_ini(first_frame_, web_ini_loaded_, web_layout_loaded_);
 }
 
 void GuiManager::save_web_imgui_ini_if_needed() {
