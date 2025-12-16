@@ -6,6 +6,7 @@
 #include "platform/web/web_download.hpp"
 #include "platform/web/web_patch_store.hpp"
 #include "formats/dmp.hpp"
+#include "formats/fui.hpp"
 #include "formats/ctrmml.hpp"
 #include <algorithm>
 #include <filesystem>
@@ -141,6 +142,12 @@ bool WebPatchStorage::download_patch(const ym2612::Patch &patch,
     platform::web::download_text(sanitized + ".mml", text, "text/plain");
     return true;
   }
+   if (ext == ".fui") {
+     auto data = formats::fui::serialize_patch(patch);
+     platform::web::download_binary(sanitized + ".fui", data,
+                                    "application/octet-stream");
+     return true;
+   }
   return false;
 }
 

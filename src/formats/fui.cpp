@@ -375,4 +375,124 @@ std::vector<ym2612::Patch> read_file(const std::filesystem::path &file_path) {
   return {};
 }
 
+std::vector<uint8_t> serialize_patch(const ym2612::Patch &patch) {
+  std::vector<uint8_t> bytes;
+  bytes.reserve(4 + 2 + 2 + 64);
+
+  // Header: magic + version (0) + instrument type (1 = FM)
+  bytes.insert(bytes.end(), kFinsMagic.begin(), kFinsMagic.end());
+  const uint16_t version = 0;
+  const uint16_t instrument_type = 1;
+  bytes.push_back(static_cast<uint8_t>(version & 0xFF));
+  bytes.push_back(static_cast<uint8_t>((version >> 8) & 0xFF));
+  bytes.push_back(static_cast<uint8_t>(instrument_type & 0xFF));
+  bytes.push_back(static_cast<uint8_t>((instrument_type >> 8) & 0xFF));
+
+  auto write_feature = [&](const char code[2], const std::vector<uint8_t> &data) {
+    bytes.push_back(static_cast<uint8_t>(code[0]));
+    bytes.push_back(static_cast<uint8_t>(code[1]));
+    const uint16_t len = static_cast<uint16_t>(data.size());
+    bytes.push_back(static_cast<uint8_t>(len & 0xFF));
+    bytes.push_back(static_cast<uint8_t>((len >> 8) & 0xFF));
+    bytes.insert(bytes.end(), data.begin(), data.end());
+  };
+
+  // NA feature (name, zero-terminated)
+  {
+    std::vector<uint8_t> name_block;
+    const std::string &name = patch.name;
+    name_block.insert(name_block.end(), name.begin(), name.end());
+    name_block.push_back(0);
+    const char code[2] = {'N', 'A'};
+    write_feature(code, name_block);
+  }
+
+  // FM feature
+  {
+    std::vector<uint8_t> fm;
+    fm.reserve(4 + 4 * 8);
+
+    // flags: enable all 4 ops, op count = 4. Bit order 0,2,1,3 on bits 4..7.
+    uint8_t flags = 0;
+    flags |= 0x04; // op count = 4
+    flags |= (1u << 4);            // op0
+    flags |= (1u << 5);            // op2
+    flags |= (1u << 6);            // op1
+    flags |= (1u << 7);            // op3
+    fm.push_back(flags);
+
+    const auto &inst = patch.instrument;
+    const auto &chan = patch.channel;
+    uint8_t alg_fb = static_cast<uint8_t>((inst.algorithm & 0x07) << 4 |
+                                          (inst.feedback & 0x07));
+    fm.push_back(alg_fb);
+
+    uint8_t fms_ams = static_cast<uint8_t>(
+        (chan.frequency_modulation_sensitivity & 0x07) |
+        ((chan.amplitude_modulation_sensitivity & 0x03) << 3));
+    fm.push_back(fms_ams);
+
+    fm.push_back(0); // LLPatch/advanced (unused)
+
+    auto encode_op = [](const ym2612::OperatorSettings &op,
+                        std::vector<uint8_t> &out) {
+      const uint8_t reg30 =
+          static_cast<uint8_t>((formats::detune_from_patch_to_dmp(op.detune) & 0x0F) << 4 |
+                               (op.multiple & 0x0F));
+      const uint8_t reg40 = static_cast<uint8_t>(op.total_level & 0x7F);
+      const uint8_t reg50 = static_cast<uint8_t>(op.attack_rate & 0x1F);
+      const uint8_t reg60 = static_cast<uint8_t>(
+          (op.decay_rate & 0x1F) |
+          ((op.key_scale & 0x03) << 5) |
+          (op.amplitude_modulation_enable ? 0x80 : 0x00));
+      const uint8_t reg70 = static_cast<uint8_t>(op.sustain_rate & 0x1F);
+      const uint8_t reg80 = static_cast<uint8_t>(
+          (op.release_rate & 0x0F) | ((op.sustain_level & 0x0F) << 4));
+      uint8_t ssg = 0;
+      if (op.ssg_enable) {
+        ssg = static_cast<uint8_t>(0x08 | (op.ssg_type_envelope_control & 0x07));
+      }
+      const uint8_t reg90 = ssg;
+      const uint8_t reg94 = 0;
+
+      out.push_back(reg30);
+      out.push_back(reg40);
+      out.push_back(reg50);
+      out.push_back(reg60);
+      out.push_back(reg70);
+      out.push_back(reg80);
+      out.push_back(reg90);
+      out.push_back(reg94);
+    };
+
+    // Operator order matches parse: 0,1,2,3 in storage.
+    for (int i = 0; i < 4; ++i) {
+      encode_op(inst.operators[i], fm);
+    }
+
+    const char code[2] = {'F', 'M'};
+    write_feature(code, fm);
+  }
+
+  // EN feature
+  {
+    const char code[2] = {'E', 'N'};
+    write_feature(code, {});
+  }
+
+  return bytes;
+}
+
+bool write_patch(const ym2612::Patch &patch,
+                 const std::filesystem::path &target_path) {
+  auto bytes = serialize_patch(patch);
+  std::ofstream file(target_path, std::ios::binary);
+  if (!file) {
+    return false;
+  }
+  file.write(reinterpret_cast<const char *>(bytes.data()),
+             static_cast<std::streamsize>(bytes.size()));
+  return file.good();
+}
+
 } // namespace formats::fui

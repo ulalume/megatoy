@@ -169,7 +169,9 @@ void PatchRegistry::register_defaults() {
   register_format(".rym2612", {formats::rym2612::read_file, nullptr, nullptr,
                                nullptr, "RYM2612"});
   register_format(
-      ".fui", {formats::fui::read_file, nullptr, nullptr, nullptr, "Furnace"});
+      ".fui",
+      {formats::fui::read_file, nullptr, formats::fui::write_patch, nullptr,
+       "Furnace"});
   register_format(".mml", {formats::ctrmml::read_file, nullptr, nullptr,
                            formats::ctrmml::write_patch, "ctrmml"});
 }
