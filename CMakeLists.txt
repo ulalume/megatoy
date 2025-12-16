@@ -128,7 +128,12 @@ target_include_directories(random_utils_test PRIVATE src)
 add_test(NAME random_utils_test COMMAND random_utils_test)
 add_executable(patch_registry_test tests/core/patch_registry_test.cpp)
 target_include_directories(patch_registry_test PRIVATE src)
+target_link_libraries(patch_registry_test PRIVATE megatoy_core)
 add_test(NAME patch_registry_test COMMAND patch_registry_test)
+add_executable(patch_io_roundtrip_test tests/core/patch_io_roundtrip_test.cpp)
+target_include_directories(patch_io_roundtrip_test PRIVATE src)
+target_link_libraries(patch_io_roundtrip_test PRIVATE megatoy_core)
+add_test(NAME patch_io_roundtrip_test COMMAND patch_io_roundtrip_test)
 
 # Copy license bundle during installation so release artifacts automatically
 # contain the required notices alongside the binaries.
