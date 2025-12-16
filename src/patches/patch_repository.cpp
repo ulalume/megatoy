@@ -294,4 +294,15 @@ bool PatchRepository::patch_name_conflicts(const std::string &name) const {
   return false;
 }
 
+bool PatchRepository::download_patch(const ym2612::Patch &patch,
+                                     const std::string &name,
+                                     const std::string &extension_hint) const {
+  for (const auto &storage : storages_) {
+    if (storage->download_patch(patch, name, extension_hint)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace patches

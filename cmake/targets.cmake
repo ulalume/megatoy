@@ -101,7 +101,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   list(APPEND MEGATOY_CORE_SOURCES
     src/audio/webaudio_transport.cpp
     src/gui/imgui_ini_bridge_web.cpp
-    src/patches/patch_session_web.cpp
     src/platform/web/web_platform_services.cpp
     src/platform/web/web_file_system.cpp
     src/platform/web/web_download.cpp

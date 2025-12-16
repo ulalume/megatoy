@@ -28,6 +28,8 @@ public:
   std::string_view label() const override { return "localStorage"; }
   std::optional<bool>
   has_patch_named(const std::string &name) const override;
+  bool download_patch(const ym2612::Patch &patch, const std::string &name,
+                      const std::string &extension_hint) override;
   std::optional<std::filesystem::path>
   to_relative_path(const std::filesystem::path &path) const override;
   std::optional<std::filesystem::path>

@@ -3,7 +3,10 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "patches/filename_utils.hpp"
 #include "patches/web_patch_storage.hpp"
+#include "platform/web/web_download.hpp"
 #include "platform/web/web_patch_store.hpp"
+#include "formats/dmp.hpp"
+#include "formats/ctrmml.hpp"
 #include <algorithm>
 #include <filesystem>
 
@@ -119,6 +122,26 @@ std::optional<bool> WebPatchStorage::has_patch_named(
   const std::string sanitized =
       patches::sanitize_filename(name.empty() ? "patch" : name);
   return platform::web::patch_store::exists(sanitized);
+}
+
+bool WebPatchStorage::download_patch(const ym2612::Patch &patch,
+                                     const std::string &name,
+                                     const std::string &extension_hint) {
+  const std::string sanitized =
+      patches::sanitize_filename(name.empty() ? "patch" : name);
+  const std::string ext = extension_hint.empty() ? ".dmp" : extension_hint;
+  if (ext == ".dmp") {
+    auto data = formats::dmp::serialize_patch(patch);
+    platform::web::download_binary(sanitized + ".dmp", data,
+                                   "application/octet-stream");
+    return true;
+  }
+  if (ext == ".mml") {
+    auto text = formats::ctrmml::patch_to_string(patch);
+    platform::web::download_text(sanitized + ".mml", text, "text/plain");
+    return true;
+  }
+  return false;
 }
 
 std::optional<std::filesystem::path>

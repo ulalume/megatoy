@@ -134,6 +134,12 @@ SaveResult PatchSession::save_current_patch(bool force_overwrite) {
                                  : result.error_message);
   case SavePatchResult::Status::Unsupported:
   default:
+    // If the storage cannot save but can download (web), fall back to download.
+    if (repository_->download_patch(current_patch_, current_patch_.name,
+                                    ".dmp")) {
+      mark_as_clean();
+      return SaveResult::success(std::filesystem::path("download"));
+    }
     return SaveResult::error("Saving patches is unsupported on this platform");
   }
 }
@@ -143,8 +149,20 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
   const std::string sanitized_name = sanitize_filename(
       current_patch_.name.empty() ? "patch" : current_patch_.name);
 
+  const bool is_web = megatoy::platform::is_web();
+
+  auto download_or_error = [&](const std::string &ext) -> SaveResult {
+    if (repository_->download_patch(current_patch_, current_patch_.name, ext)) {
+      return SaveResult::success(std::filesystem::path("download"));
+    }
+    return SaveResult::error("Failed to export patch");
+  };
+
   switch (format) {
   case ExportFormat::DMP: {
+    if (is_web) {
+      return download_or_error(".dmp");
+    }
     std::filesystem::path selected_path;
     auto result = platform::file_dialog::save_file(
         default_dir, sanitized_name + ".dmp",
@@ -167,6 +185,9 @@ SaveResult PatchSession::export_current_patch_as(ExportFormat format) {
   }
 
   case ExportFormat::MML: {
+    if (is_web) {
+      return download_or_error(".mml");
+    }
     std::filesystem::path selected_path;
     auto result = platform::file_dialog::save_file(
         default_dir, sanitized_name + ".mml",

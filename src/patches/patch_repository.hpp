@@ -70,6 +70,8 @@ public:
   // Capabilities
   std::string primary_writable_label() const;
   bool patch_name_conflicts(const std::string &name) const;
+  bool download_patch(const ym2612::Patch &patch, const std::string &name,
+                      const std::string &extension_hint) const;
 
 private:
   static constexpr const char *kBuiltinRootName = "presets";

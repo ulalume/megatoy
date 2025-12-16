@@ -86,6 +86,16 @@ public:
     return std::nullopt;
   }
 
+  // Optional download/export hook for storages that cannot map to filesystem
+  // paths (e.g., web download). Returns success/failure.
+  virtual bool download_patch(const ym2612::Patch &,
+                              const std::string &name,
+                              const std::string &extension_hint) {
+    (void)name;
+    (void)extension_hint;
+    return false;
+  }
+
   // Optional path mapping helpers so PatchRepository doesn't need platform
   // checks. Return engaged optional if the storage owns the path.
   virtual std::optional<std::filesystem::path>
