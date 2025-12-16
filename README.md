@@ -28,9 +28,8 @@ Changes apply directly to your active patch with full undo support.
 
 ### Patch Management
 
-- **Load patches** from multiple formats: `.dmp`, `.fui`, `.rym2612`, `.mml`
-- **Save patches** in custom format with full metadata
-- **Export patches** to DefleMask (`.dmp`) and [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`) formats
+- **Load patches** from multiple formats: DefleMask (`.dmp`), Furnace (`.fui`), [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`), `.rym2612`
+- **Export patches** to multiple formats: `.dmp`, `.fui`, `.mml`
 - **Organize patches** with metadata (star ratings and categories) for quick retrieval and filtering
 - **Drag & drop** support for easy file loading
 
@@ -48,7 +47,6 @@ Changes apply directly to your active patch with full undo support.
 
 ### MML Integration
 
-- **Export to MML** for use with [ctrmml](https://github.com/superctr/ctrmml)
 - **Real-time code preview** shows MML as you edit
 - **One-click copy** to clipboard
 
