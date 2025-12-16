@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.5.6" CACHE STRING "megatoy application version")
+set(MEGATOY_VERSION "0.5.7" CACHE STRING "megatoy application version")
 project(megatoy VERSION ${MEGATOY_VERSION})
 
 # Objective-C sources are used for macOS integrations
