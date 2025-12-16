@@ -20,16 +20,18 @@ PatchRegistry::PatchRegistry() { register_defaults(); }
 void PatchRegistry::register_format(const std::string &extension,
                                     PatchFormatHandler handler) {
   std::string ext_lower = extension;
-  std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(
+      ext_lower.begin(), ext_lower.end(), ext_lower.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   handlers_[ext_lower] = std::move(handler);
 }
 
 const PatchFormatHandler *
 PatchRegistry::handler_for_extension(const std::string &extension) const {
   std::string ext_lower = extension;
-  std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(
+      ext_lower.begin(), ext_lower.end(), ext_lower.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   auto it = handlers_.find(ext_lower);
   if (it != handlers_.end()) {
     return &it->second;
@@ -48,8 +50,9 @@ PatchLoadResult PatchRegistry::load(const std::filesystem::path &path) const {
   }
 
   std::string ext = path.extension().string();
-  std::transform(ext.begin(), ext.end(), ext.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
 
   auto handler = handler_for_extension(ext);
   if (!handler || !handler->read_file) {
@@ -111,11 +114,9 @@ bool PatchRegistry::write_text(const std::string &extension,
   return false;
 }
 
-std::optional<std::filesystem::path>
-PatchRegistry::save_package(const std::string &extension,
-                            const std::filesystem::path &dir,
-                            const std::string &name,
-                            const ym2612::Patch &patch) const {
+std::optional<std::filesystem::path> PatchRegistry::save_package(
+    const std::string &extension, const std::filesystem::path &dir,
+    const std::string &name, const ym2612::Patch &patch) const {
   auto handler = handler_for_extension(extension);
   if (!handler || !handler->write_packaged) {
     return std::nullopt;
@@ -163,18 +164,14 @@ void PatchRegistry::register_defaults() {
                      return formats::ginpkg::save_patch(dir, patch, name);
                    },
                    nullptr, nullptr, "GINPKG"});
-  register_format(".dmp",
-                  {formats::dmp::read_file,
-                   nullptr,
-                   formats::dmp::write_patch, nullptr, "DefleMask"});
-  register_format(".rym2612",
-                  {formats::rym2612::read_file, nullptr, nullptr, nullptr,
-                   "RYM2612"});
-  register_format(".fui",
-                  {formats::fui::read_file, nullptr, nullptr, nullptr, "FUI"});
-  register_format(".mml",
-                  {formats::ctrmml::read_file, nullptr, nullptr,
-                   formats::ctrmml::write_patch, "ctrmml"});
+  register_format(".dmp", {formats::dmp::read_file, nullptr,
+                           formats::dmp::write_patch, nullptr, "DefleMask"});
+  register_format(".rym2612", {formats::rym2612::read_file, nullptr, nullptr,
+                               nullptr, "RYM2612"});
+  register_format(
+      ".fui", {formats::fui::read_file, nullptr, nullptr, nullptr, "Furnace"});
+  register_format(".mml", {formats::ctrmml::read_file, nullptr, nullptr,
+                           formats::ctrmml::write_patch, "ctrmml"});
 }
 
 } // namespace formats

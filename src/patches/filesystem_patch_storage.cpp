@@ -1,13 +1,13 @@
 #include "patches/filesystem_patch_storage.hpp"
 
 #include "formats/ctrmml.hpp"
+#include "formats/gin.hpp"
+#include "formats/ginpkg.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
-#include "formats/gin.hpp"
 #include "patch_metadata.hpp"
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
-#include "formats/ginpkg.hpp"
 #include <algorithm>
 #include <cctype>
 #include <unordered_map>
@@ -132,8 +132,7 @@ bool FilesystemPatchStorage::update_patch_metadata(
   return metadata_manager_->update_metadata(updated_metadata);
 }
 
-std::optional<PatchMetadata>
-FilesystemPatchStorage::get_patch_metadata(
+std::optional<PatchMetadata> FilesystemPatchStorage::get_patch_metadata(
     const std::string &relative_path) const {
   if (!metadata_manager_) {
     return std::nullopt;
@@ -159,8 +158,7 @@ FilesystemPatchStorage::has_patch_named(const std::string &name) const {
   return vfs_.exists(target);
 }
 
-std::optional<std::filesystem::path>
-FilesystemPatchStorage::to_relative_path(
+std::optional<std::filesystem::path> FilesystemPatchStorage::to_relative_path(
     const std::filesystem::path &path) const {
   auto relative = path.lexically_relative(root_);
   if (!relative.empty() && relative.native()[0] != '.') {
@@ -172,8 +170,7 @@ FilesystemPatchStorage::to_relative_path(
   return std::nullopt;
 }
 
-std::optional<std::filesystem::path>
-FilesystemPatchStorage::to_absolute_path(
+std::optional<std::filesystem::path> FilesystemPatchStorage::to_absolute_path(
     const std::filesystem::path &path) const {
   const std::string relative_str = path.generic_string();
   if (root_label_.empty()) {
@@ -187,8 +184,7 @@ FilesystemPatchStorage::to_absolute_path(
   if (relative_str == root_label_) {
     return root_;
   }
-  if (!relative_str.empty() &&
-      relative_str.rfind(root_prefix, 0) == 0 &&
+  if (!relative_str.empty() && relative_str.rfind(root_prefix, 0) == 0 &&
       relative_str.size() > root_prefix.size()) {
     std::string without_prefix = relative_str.substr(root_prefix.size());
     return root_ / without_prefix;
@@ -304,7 +300,8 @@ FilesystemPatchStorage::detect_format(const std::filesystem::path &file_path) {
 
   static const std::unordered_map<std::string, std::string> format_map = {
       {".gin", "gin"}, {".ginpkg", "ginpkg"}, {".rym2612", "rym2612"},
-      {".dmp", "dmp"}, {".fui", "fui"},       {".mml", "ctrmml"}};
+      {".dmp", "dmp"}, {".fui", "fui"},       {".mml", "ctrmml"},
+  };
 
   auto it = format_map.find(extension);
   return it != format_map.end() ? it->second : "unknown";
