@@ -135,6 +135,12 @@ target_include_directories(patch_io_roundtrip_test PRIVATE src)
 target_link_libraries(patch_io_roundtrip_test PRIVATE megatoy_core)
 add_test(NAME patch_io_roundtrip_test COMMAND patch_io_roundtrip_test)
 
+# Convenience target to build and run tests
+add_custom_target(check
+  DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test subsystem_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # Copy license bundle during installation so release artifacts automatically
 # contain the required notices alongside the binaries.
 if(EXISTS "${CMAKE_SOURCE_DIR}/licenses")
