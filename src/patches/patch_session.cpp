@@ -332,10 +332,12 @@ bool PatchSession::current_patch_is_user_patch() const {
   const bool is_user_dir =
       current_patch_path_.rfind("user/", 0) == 0 && has_supported_extension;
   const bool is_local_storage =
-      current_patch_path_.rfind("localStorage/", 0) == 0 && has_supported_extension;
+      current_patch_path_.rfind("localStorage/", 0) == 0 ||
+      current_patch_path_.rfind("localStorage://", 0) == 0;
 
-  return (is_user_dir || is_local_storage) &&
-         original_patch_.name == current_patch_.name;
+  // Treat localStorage entries as user patches even when extensionless so the
+  // Save action can be disabled until modified.
+  return ((is_user_dir || is_local_storage) && original_patch_.name == current_patch_.name);
 }
 
 const char *PatchSession::save_label_for(bool is_user_patch) const {
