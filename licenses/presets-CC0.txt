@@ -28,6 +28,7 @@
 | trumpet.dmp           | ulalume | CC0 1.0 Universal |
 | trumpet2.dmp          | ulalume | CC0 1.0 Universal |
 | violin.dmp            | ulalume | CC0 1.0 Universal |
+| harp.dmp              | ulalume | CC0 1.0 Universal |
 
 CC0 1.0 Universal allows copying, modification, and redistribution without
 restriction. For details, see https://creativecommons.org/publicdomain/zero/1.0/
