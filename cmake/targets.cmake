@@ -106,6 +106,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/web_download.cpp
     src/platform/web/local_storage.cpp
     src/platform/web/web_patch_store.cpp
+    src/platform/web/web_patch_url.cpp
     src/platform/web/web_midi_backend.cpp
   )
 else()

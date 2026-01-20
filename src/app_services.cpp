@@ -1,11 +1,21 @@
 #include "app_services.hpp"
 #include "app_state.hpp"
+#include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_patch_url.hpp"
+#endif
 #include <algorithm>
 #include <iostream>
 
 void AppServices::initialize_app(AppState &state) {
   path_service.ensure_directories();
   patch_session.initialize_patch_defaults();
+#if defined(MEGATOY_PLATFORM_WEB)
+  if (auto patch = platform::web::patch_url::load_patch_from_current_url(
+          patch_session.current_patch())) {
+    patch_session.set_current_patch(*patch, {});
+  }
+#endif
 
   if (!audio_manager.initialize(SampleRate)) {
     std::cerr << "Audio manager failed to start; functionality will be limited"
