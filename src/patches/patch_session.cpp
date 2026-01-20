@@ -6,6 +6,9 @@
 #include "formats/patch_registry.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_patch_url.hpp"
+#endif
 #include "ym2612/channel.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
@@ -114,6 +117,9 @@ void PatchSession::set_current_patch(const ym2612::Patch &patch,
   set_current_patch_path(source_path);
   mark_as_clean(); // New patch loaded, not modified yet
   apply_patch_to_audio();
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(current_patch_);
+#endif
 }
 
 void PatchSession::apply_patch_to_audio() {

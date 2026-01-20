@@ -1,5 +1,10 @@
 #include "history_manager.hpp"
 #include "app_context.hpp"
+#include "app_services.hpp"
+#include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_patch_url.hpp"
+#endif
 #include <imgui.h>
 #include <utility>
 
@@ -40,6 +45,10 @@ void HistoryManager::undo(AppContext &app_context) {
   undo_stack_.pop_back();
   entry->undo(app_context);
   redo_stack_.push_back(std::move(entry));
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(
+      app_context.services.patch_session.current_patch());
+#endif
 }
 
 void HistoryManager::redo(AppContext &app_context) {
@@ -53,6 +62,10 @@ void HistoryManager::redo(AppContext &app_context) {
   redo_stack_.pop_back();
   entry->redo(app_context);
   undo_stack_.push_back(std::move(entry));
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(
+      app_context.services.patch_session.current_patch());
+#endif
 }
 
 void HistoryManager::handle_shortcuts(AppContext &app_context) {
@@ -110,6 +123,10 @@ void HistoryManager::commit_transaction(AppContext &app_context) {
   }
 
   push_entry(std::move(entry));
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(
+      app_context.services.patch_session.current_patch());
+#endif
 }
 
 void HistoryManager::cancel_transaction() { active_transaction_.reset(); }
