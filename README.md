@@ -56,7 +56,7 @@ Load patches by placing files in `~/megatoy/patches/` (created automatically) or
 
 Built-in patches:
 
-- [built-in CC0 patches](https://github.com/ulalume/megatoy/tree/main/assets/presets) - Contributions welcome! See [Issue #15](https://github.com/ulalume/megatoy/issues/15)
+- [built-in CC0 patches](https://github.com/ulalume/ym2612-patches)
 
 Recommended external collections:
 
@@ -67,8 +67,8 @@ Recommended external collections:
 ## Build Instructions
 
 ```bash
-# Clone repository
-git clone https://github.com/ulalume/megatoy.git
+# Clone repository (--recursive fetches the built-in preset patches)
+git clone --recursive https://github.com/ulalume/megatoy.git
 cd megatoy
 
 # Debug build
@@ -78,6 +78,12 @@ cmake --build build --config Debug --parallel
 # Release build
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --config Release --parallel
+```
+
+If you already cloned without `--recursive`, run:
+
+```bash
+git submodule update --init
 ```
 
 For distribution-specific notes on dependencies and audio drivers, see the Linux guide at [docs/BUILD_LINUX.md](docs/BUILD_LINUX.md).
