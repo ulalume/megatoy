@@ -267,9 +267,7 @@ void GuiManager::setup_default_layout(unsigned int dockspace_id) {
   ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, doc_id_down);
   ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
 
-#if !defined(MEGATOY_PLATFORM_WEB)
   ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, doc_id_down_left);
-#endif
 
   // Finish the dockspace
   ImGui::DockBuilderFinish(dockspace_id);
