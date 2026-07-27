@@ -20,7 +20,7 @@ if(NOT EMSCRIPTEN)
   FetchContent_Declare(
     nfd
     GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended
-    GIT_TAG        v1.2.1
+    GIT_TAG        v1.3.0
   )
   set(NFD_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(nfd)
@@ -30,7 +30,7 @@ endif()
 FetchContent_Declare(
   SDL3
   GIT_REPOSITORY https://github.com/libsdl-org/SDL
-  GIT_TAG        release-3.2.26
+  GIT_TAG        release-3.4.12
 )
 FetchContent_MakeAvailable(SDL3)
 
@@ -38,7 +38,10 @@ FetchContent_MakeAvailable(SDL3)
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui
-  GIT_TAG        docking
+  # The docking feature lives on its own branch; -docking tags are its
+  # releases. Pinned rather than tracking the branch so a build is
+  # reproducible and an upstream change cannot break CI unannounced.
+  GIT_TAG        v1.92.9-docking
 )
 FetchContent_MakeAvailable(imgui)
 
@@ -76,8 +79,8 @@ endif()
 FetchContent_Declare(
   stb
   GIT_REPOSITORY https://github.com/nothings/stb.git
-  GIT_TAG        master
-  GIT_SHALLOW    TRUE
+  # stb publishes no releases; pinned to a known-good commit.
+  GIT_TAG        31c1ad37456438565541f4919958214b6e762fb4
 )
 FetchContent_MakeAvailable(stb)
 
@@ -93,7 +96,7 @@ FetchContent_MakeAvailable(chord_detector)
 FetchContent_Declare(
   kissfft
   GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
-  GIT_TAG        master
+  GIT_TAG        131.2.0
 )
 set(KISSFFT_STATIC ON CACHE BOOL "" FORCE)
 set(KISSFFT_SHARED OFF CACHE BOOL "" FORCE)
@@ -107,7 +110,8 @@ FetchContent_MakeAvailable(kissfft)
 FetchContent_Declare(
   IconFontCppHeaders
   GIT_REPOSITORY https://github.com/juliettef/IconFontCppHeaders.git
-  GIT_TAG        main
+  # No releases upstream; pinned to a known-good commit.
+  GIT_TAG        210b5a399a64270674560d633638952d1e8d804d
 )
 FetchContent_MakeAvailable(IconFontCppHeaders)
 
@@ -116,7 +120,7 @@ FetchContent_MakeAvailable(IconFontCppHeaders)
 FetchContent_Declare(
   ym2612_format
   GIT_REPOSITORY https://github.com/ulalume/ym2612_format
-  GIT_TAG        main
+  GIT_TAG        v0.1.5
 )
 set(YM2612_FORMAT_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(YM2612_FORMAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)

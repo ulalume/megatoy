@@ -17,6 +17,7 @@ megatoy uses SDL3 which supports both **Wayland** and **X11** display servers th
 sudo apt update
 sudo apt install build-essential pkg-config git \
     libwayland-dev libxkbcommon-dev xorg-dev \
+    libgtk-3-dev \
     libcurl4-openssl-dev \
     libasound2-dev libpulse-dev
 ```
@@ -24,6 +25,7 @@ sudo apt install build-essential pkg-config git \
 **Package notes:**
 - `libwayland-dev libxkbcommon-dev`: Enable native Wayland support
 - `xorg-dev`: Meta-package providing all X11 development libraries (replaces individual X11 packages)
+- `libgtk-3-dev`: Required by Native File Dialog Extended for the folder/save dialogs
 - `libcurl4-openssl-dev`: Required for update checking functionality
 - `libasound2-dev libpulse-dev`: Provide ALSA/PulseAudio backends for SDL3 audio and RtMidi, so the built binary can output sound on most Linux systems
 

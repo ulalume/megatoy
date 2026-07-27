@@ -244,7 +244,23 @@ if(APPLE)
   set_source_files_properties(${MEGATOY_BUNDLE_ICON}
     PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
   target_sources(megatoy PRIVATE ${MEGATOY_BUNDLE_ICON})
-  set_target_properties(megatoy PROPERTIES MACOSX_BUNDLE_ICON_FILE "icon.icns")
+  # CMake's default Info.plist template fills these from MACOSX_BUNDLE_*
+  # variables, and leaves them as empty strings when they are not set.
+  #
+  # An empty CFBundleIdentifier is not merely cosmetic: AppKit refuses to run
+  # NSOpenPanel/NSSavePanel for such a bundle, so [dialog runModal] returns
+  # immediately without ever showing a window. That is what made the native
+  # file dialogs look broken on macOS.
+  set_target_properties(megatoy PROPERTIES
+    MACOSX_BUNDLE_ICON_FILE "icon.icns"
+    MACOSX_BUNDLE_BUNDLE_NAME "megatoy"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.${MEGATOY_GITHUB_USER}.megatoy"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_INFO_STRING "megatoy ${PROJECT_VERSION}"
+    MACOSX_BUNDLE_COPYRIGHT "MIT License"
+  )
 endif()
 
 install(TARGETS megatoy
