@@ -33,6 +33,24 @@ python3 -m http.server 8080 --directory ./build-web/web_dist
 
 Navigate to `http://localhost:8080/index.html` in a WebGL2-capable browser.
 
+## Troubleshooting
+
+### `Emscripten.cmake` or `emcc` not found after upgrading the SDK
+
+```
+include could not find requested file:
+  /opt/homebrew/Cellar/emscripten/<old version>/libexec/cmake/Modules/Platform/Emscripten.cmake
+```
+
+CMake caches the toolchain by absolute path, so a build directory configured
+against one Emscripten version stops working when the SDK is upgraded. Delete
+it and configure again:
+
+```bash
+rm -rf build-web
+emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+```
+
 ## Current limitations
 
 - Only the built-in preset library is available; importing user patches and metadata storage are disabled.

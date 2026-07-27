@@ -20,14 +20,15 @@ target_link_libraries(imgui_lib PUBLIC
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   target_compile_definitions(imgui_lib PUBLIC IMGUI_IMPL_OPENGL_ES3 IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
-  # Selecting WebAssembly SIMD instructions for ImGui::NewFrame sends LLVM
-  # into unbounded recursion in SelectionDAG::isKnownNeverNaN, crashing the
-  # compiler (and, under LTO, wasm-ld). Only imgui.cpp is affected, and only
-  # at -O2 or above with -msimd128.
+  # Up to Emscripten 6.0.3, selecting WebAssembly SIMD instructions for
+  # ImGui::NewFrame sent LLVM into unbounded recursion in
+  # SelectionDAG::isKnownNeverNaN and crashed the compiler -- or, under LTO
+  # where codegen runs in the linker, wasm-ld. Only imgui.cpp was affected,
+  # and only at -O2 or above with -msimd128.
   #
-  # SIMD is turned off for the GUI rather than for the whole build: it earns
-  # its keep in the audio path (ymfm, the resampler, kissfft), not in ImGui's
-  # layout code.
+  # 6.0.4 fixes it upstream. This is kept so older SDKs still build: SIMD
+  # earns its keep in the audio path (ymfm, the resampler, kissfft), not in
+  # ImGui's layout code, so dropping it here costs nothing measurable.
   target_compile_options(imgui_lib PRIVATE -mno-simd128)
 endif()
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
