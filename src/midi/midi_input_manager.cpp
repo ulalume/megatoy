@@ -11,6 +11,12 @@ MidiInputManager::MidiInputManager(std::unique_ptr<MidiBackend> backend)
 
 MidiInputManager::~MidiInputManager() { shutdown(); }
 
+void MidiInputManager::set_note_sink(MidiBackend::NoteSink sink) {
+  if (backend_) {
+    backend_->set_note_sink(std::move(sink));
+  }
+}
+
 bool MidiInputManager::init() {
   if (!backend_) {
     std::cerr << "No MIDI backend available\n";
@@ -45,26 +51,8 @@ void MidiInputManager::dispatch(AppContext &context) {
     ports_dirty_ = false;
   }
 
-  for (const auto &event : pending_events_) {
-    switch (event.type) {
-    case MidiMessage::Type::NoteOn:
-      if (!context.services.patch_session.note_on(event.note, event.velocity,
-                                                  context.ui_state().prefs)) {
-        std::clog
-            << "MIDI note-on ignored (no free channel or already active): "
-            << event.note << " velocity " << static_cast<int>(event.velocity)
-            << " (" << event.port_name << ")\n";
-      }
-      break;
-    case MidiMessage::Type::NoteOff:
-      if (!context.services.patch_session.note_off(event.note)) {
-        std::clog << "MIDI note-off ignored (note not active): " << event.note
-                  << " (" << event.port_name << ")\n";
-      }
-      break;
-    }
-  }
-
+  // Notes no longer come through here -- the backend hands them to the audio
+  // thread the moment they arrive. This only keeps the port list current.
   pending_events_.clear();
 }
 

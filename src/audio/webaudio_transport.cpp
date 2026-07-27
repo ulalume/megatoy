@@ -29,6 +29,17 @@ bool WebAudioTransport::start(std::uint32_t sample_rate,
     owns_audio_subsystem_ = true;
   }
 
+  // SDL picks 1024 frames for 44.1 kHz and then the Emscripten backend
+  // doubles it, so the browser default is 2048 frames -- 46 ms per callback.
+  // That is twice the desktop buffer, and it sets the rate at which the scope
+  // can possibly update as well as the floor on note latency.
+  //
+  // Asking for 512 lands on 1024 after the doubling, matching desktop.
+  // Going lower is tempting but riskier here than on desktop: Emscripten runs
+  // the audio callback on the main thread, so it competes with rendering and
+  // has less slack, not more.
+  SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "512");
+
   SDL_AudioSpec desired{};
   desired.freq = static_cast<int>(sample_rate);
   desired.channels = 2;

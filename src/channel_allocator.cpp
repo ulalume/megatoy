@@ -3,7 +3,48 @@
 #include "ym2612/device.hpp"
 #include <algorithm>
 
-ChannelAllocator::ChannelAllocator() : channel_key_on_{} {}
+ChannelAllocator::ChannelAllocator() : channel_key_on_{} { publish(); }
+
+void ChannelAllocator::publish() {
+  for (std::size_t index = 0; index < published_.size(); ++index) {
+    const auto &note = channel_to_note_[index];
+    const uint16_t value =
+        (note && channel_key_on_[index])
+            ? static_cast<uint16_t>(note->midi_note() + 1)
+            : 0;
+    published_[index].store(value, std::memory_order_release);
+  }
+}
+
+std::vector<ym2612::Note> ChannelAllocator::published_notes() const {
+  std::vector<ym2612::Note> notes;
+  for (const auto &slot : published_) {
+    const uint16_t value = slot.load(std::memory_order_acquire);
+    if (value != 0) {
+      notes.push_back(ym2612::Note::from_midi_note(
+          static_cast<uint8_t>(value - 1)));
+    }
+  }
+  return notes;
+}
+
+bool ChannelAllocator::published_contains(const ym2612::Note &note) const {
+  const uint16_t wanted = static_cast<uint16_t>(note.midi_note() + 1);
+  for (const auto &slot : published_) {
+    if (slot.load(std::memory_order_acquire) == wanted) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::array<bool, 6> ChannelAllocator::published_channels() const {
+  std::array<bool, 6> busy{};
+  for (std::size_t index = 0; index < published_.size(); ++index) {
+    busy[index] = published_[index].load(std::memory_order_acquire) != 0;
+  }
+  return busy;
+}
 
 bool ChannelAllocator::is_note_active(const ym2612::Note &note) const {
   return note_to_channel_.find(note) != note_to_channel_.end();
@@ -47,6 +88,7 @@ ChannelAllocator::note_on(const ym2612::Note &note, bool allow_voice_steal) {
   note_to_channel_[note] = channel;
   channel_order_[selected_index] = ++allocation_counter_;
 
+  publish();
   return ChannelClaim{channel, replaced_note};
 }
 
@@ -64,6 +106,8 @@ bool ChannelAllocator::note_off(const ym2612::Note &note,
   channel_key_on_[channel_idx] = false;
   channel_to_note_[channel_idx].reset();
   note_to_channel_.erase(it);
+
+  publish();
   return true;
 }
 
@@ -77,4 +121,6 @@ void ChannelAllocator::release_all(ym2612::Device &device) {
   }
   note_to_channel_.clear();
   allocation_counter_ = 0;
+
+  publish();
 }

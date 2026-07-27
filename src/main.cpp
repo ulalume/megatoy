@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_services.hpp"
+#include "audio/audio_command.hpp"
 #include "app_state.hpp"
 #include "drop_actions.hpp"
 #include "gui/ui_renderer.hpp"
@@ -94,6 +95,14 @@ int main(int argc, char *argv[]) {
   services.gui_manager.set_drop_callback(&app_context, handle_file_drop);
 
   MidiInputManager midi(platform_services.create_midi_backend());
+  // Notes go straight from the driver's thread to the audio thread, so their
+  // timing no longer depends on how fast the UI is drawing.
+  midi.set_note_sink([&services](const MidiMessage &message) {
+    services.audio_manager.submit_from_midi(
+        message.type == MidiMessage::Type::NoteOn
+            ? audio::AudioCommand::note_on(message.note, message.velocity)
+            : audio::AudioCommand::note_off(message.note));
+  });
   midi.init();
   app_context.midi = &midi;
 

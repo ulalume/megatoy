@@ -27,6 +27,10 @@ public:
   MidiBackend::StatusInfo status() const override;
   void request_access() override;
 
+  /// Called from JS the moment a MIDI message arrives.
+  void deliver(unsigned char status, unsigned char note,
+               unsigned char velocity);
+
 private:
   void setup_js_state() const;
   struct WebStatus {

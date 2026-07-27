@@ -48,7 +48,26 @@ public:
   }
 
   /**
-   * Apply patch settings to all channels
+   * Hand a chip write to the audio thread. See AudioEngine::submit.
+   */
+  bool submit(const audio::AudioCommand &command) {
+    return engine_.submit(command);
+  }
+
+  /// Same, from a MIDI driver callback.
+  bool submit_from_midi(const audio::AudioCommand &command) {
+    return engine_.submit_from_midi(command);
+  }
+
+  void set_note_options(bool use_velocity, bool steal_oldest) {
+    engine_.set_note_options(use_velocity, steal_oldest);
+  }
+
+  /// Note state, safe to read from the UI thread.
+  const ChannelAllocator &notes() const { return engine_.notes(); }
+
+  /**
+   * Apply patch settings to all channels. Only safe while stopped.
    */
   void apply_patch_to_all_channels(const ym2612::Patch &patch);
 

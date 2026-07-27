@@ -1,4 +1,6 @@
 #include "patch_session.hpp"
+
+#include "audio/audio_command.hpp"
 #include "audio/audio_manager.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/ym2612_format_adapter.hpp"
@@ -23,8 +25,7 @@ PatchSession::PatchSession(megatoy::system::PathService &directories,
     : directories_(directories), preferences_(preferences), audio_(audio),
       repository_(std::make_unique<PatchRepository>(
           directories_.file_system(), preferences_.workspace(),
-          directories_.paths().builtin_presets_root)),
-      channel_allocator_() {
+          directories_.paths().builtin_presets_root)) {
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
 }
 
@@ -120,7 +121,11 @@ void PatchSession::set_current_patch(const ym2612::Patch &patch,
 }
 
 void PatchSession::apply_patch_to_audio() {
-  audio_.apply_patch_to_all_channels(current_patch_);
+  // Patch edits take the same route as notes so that a slider drag cannot
+  // rewrite registers underneath the renderer.
+  audio_.submit(audio::AudioCommand::apply_patch(current_patch_.global,
+                                                 current_patch_.channel,
+                                                 current_patch_.instrument));
 }
 
 namespace {
@@ -364,63 +369,33 @@ std::vector<ExportFormatInfo> PatchSession::export_formats() const {
 
 bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
                            const PreferenceManager::UIPreferences &prefs) {
+  // Handed to the audio thread rather than written here: the chip has exactly
+  // one writer, and the note starts on the next audio callback instead of
+  // waiting for whenever this frame happens to finish.
+  audio_.set_note_options(prefs.use_velocity, prefs.steal_oldest_note_when_full);
   const uint8_t clamped_velocity =
       std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
-  const uint8_t effective_velocity =
-      prefs.use_velocity ? clamped_velocity : static_cast<uint8_t>(127);
-
-  auto claim =
-      channel_allocator_.note_on(note, prefs.steal_oldest_note_when_full);
-  if (!claim) {
-    return false;
-  }
-
-  if (claim->replaced_note) {
-    audio_.device().channel(claim->channel).write_key_off();
-  }
-
-  auto ym_channel = audio_.device().channel(claim->channel);
-  ym_channel.write_frequency(note);
-  auto instrument =
-      current_patch_.instrument.clone_with_velocity(effective_velocity);
-  ym_channel.write_instrument(instrument);
-  ym_channel.write_key_on(
-      instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op1)]
-          .enable,
-      instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op2)]
-          .enable,
-      instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op3)]
-          .enable,
-      instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op4)]
-          .enable);
-  return true;
+  return audio_.submit(audio::AudioCommand::note_on(note, clamped_velocity));
 }
 
 bool PatchSession::note_off(ym2612::Note note) {
-  return channel_allocator_.note_off(note, audio_.device());
+  return audio_.submit(audio::AudioCommand::note_off(note));
 }
 
 bool PatchSession::note_is_active(const ym2612::Note &note) const {
-  return channel_allocator_.is_note_active(note);
+  return audio_.notes().published_contains(note);
 }
 
 void PatchSession::release_all_notes() {
-  channel_allocator_.release_all(audio_.device());
+  audio_.submit(audio::AudioCommand::all_notes_off());
 }
 
-const std::array<bool, 6> &PatchSession::active_channels() const {
-  return channel_allocator_.channel_usage();
+std::array<bool, 6> PatchSession::active_channels() const {
+  return audio_.notes().published_channels();
 }
 
 const std::vector<ym2612::Note> PatchSession::active_notes() const {
-  const std::map<ym2612::Note, ym2612::ChannelIndex> &active_notes =
-      channel_allocator_.active_notes();
-  std::vector<ym2612::Note> notes;
-  notes.reserve(active_notes.size());
-  for (const auto &note : active_notes) {
-    notes.push_back(note.first);
-  }
-  return notes;
+  return audio_.notes().published_notes();
 }
 
 PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {

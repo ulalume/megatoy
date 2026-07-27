@@ -1,6 +1,5 @@
 #pragma once
 
-#include "channel_allocator.hpp"
 #include "patch_repository.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/filename_utils.hpp"
@@ -106,7 +105,7 @@ public:
   bool note_off(ym2612::Note note);
   bool note_is_active(const ym2612::Note &note) const;
   void release_all_notes();
-  const std::array<bool, 6> &active_channels() const;
+  std::array<bool, 6> active_channels() const;
   const std::vector<ym2612::Note> active_notes() const;
 
   // Snapshot functionality for undo/redo
@@ -141,7 +140,6 @@ private:
   PreferenceManager &preferences_;
   AudioManager &audio_;
   std::unique_ptr<PatchRepository> repository_;
-  ChannelAllocator channel_allocator_;
   ym2612::Patch current_patch_;
   std::string current_patch_path_;
   ym2612::Patch original_patch_; // For tracking modifications

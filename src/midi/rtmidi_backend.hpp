@@ -24,19 +24,23 @@ public:
 private:
   struct Connection {
     std::unique_ptr<RtMidiIn> midi_in;
-    std::vector<unsigned char> message;
     std::string port_name;
+    RtMidiBackend *backend = nullptr;
   };
+
+  static void handle_message(double timestamp,
+                             std::vector<unsigned char> *message,
+                             void *user_data);
 
   std::vector<std::string> enumerate_ports();
   void close_connection(Connection &connection);
   bool open_connection(const std::string &port_name);
   void sync_connections(const std::vector<std::string> &ports);
   void handle_port_changes();
-  void collect_events(std::vector<MidiMessage> &events);
 
   std::unique_ptr<RtMidiIn> enumerator_;
-  std::vector<Connection> connections_;
+  // Stable addresses: RtMidi holds a pointer to each Connection.
+  std::vector<std::unique_ptr<Connection>> connections_;
   std::vector<std::string> available_ports_;
   bool waiting_for_ports_;
   bool ports_dirty_;

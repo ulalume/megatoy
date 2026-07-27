@@ -15,6 +15,12 @@ public:
   explicit MidiInputManager(std::unique_ptr<MidiBackend> backend);
   ~MidiInputManager();
 
+  /**
+   * @param sink Receives notes as they arrive, on the driver's thread.
+   *             Install before init() so no event is missed.
+   */
+  void set_note_sink(MidiBackend::NoteSink sink);
+
   bool init();
   void shutdown();
 
