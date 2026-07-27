@@ -5,7 +5,6 @@
 #include "platform/platform_config.hpp"
 #include "patches/filesystem_patch_storage.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
-#include "patches/web_patch_storage.hpp"
 #endif
 #include "ym2612/patch.hpp"
 #include <algorithm>
@@ -47,10 +46,6 @@ bool PatchRepository::sync_workspace() {
 void PatchRepository::rebuild_storages() {
   storages_.clear();
   watched_directories_.clear();
-
-#if defined(MEGATOY_PLATFORM_WEB)
-  storages_.push_back(std::make_unique<WebPatchStorage>());
-#endif
 
   // Root labels prefix every relative path in the tree, so they have to be
   // unique even when two folders share a basename.

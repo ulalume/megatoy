@@ -45,6 +45,14 @@ public:
   /// Where a save or export dialog starts when nothing better is known.
   static std::filesystem::path default_documents_directory();
 
+  /**
+   * Root of the browser's persistent storage (an IDBFS mount backed by
+   * IndexedDB). Imported folders and newly saved patches live under here.
+   *
+   * Empty on desktop, where patches live wherever the user keeps them.
+   */
+  static std::filesystem::path web_storage_root();
+
 private:
   DirectoryPaths paths_;
 

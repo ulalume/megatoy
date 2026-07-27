@@ -1,0 +1,46 @@
+// Give the web build a real, persistent filesystem.
+//
+// Emscripten's default MEMFS lives in wasm memory and is gone on reload, so
+// the web version used to keep the whole patch library in a single
+// localStorage JSON blob. IDBFS is a normal Emscripten filesystem backed by
+// IndexedDB: patches become actual files in actual directories, which lets
+// the web build use the same workspace and storage code as the desktop one.
+//
+// The mount has to be populated from IndexedDB *before* main() runs, since
+// startup reads the workspace immediately. addRunDependency holds main() back
+// until the asynchronous load finishes.
+
+Module["preRun"] = Module["preRun"] || [];
+Module["preRun"].push(function () {
+  var root = "/megatoy";
+
+  try {
+    FS.mkdir(root);
+  } catch (e) {
+    // Already present when the runtime is re-initialized; not a problem.
+    if (!e || e.errno !== ERRNO_CODES.EEXIST) {
+      console.error("megatoy: could not create " + root, e);
+      return;
+    }
+  }
+
+  try {
+    // autoPersist writes changes back to IndexedDB as they happen, so nothing
+    // in the C++ code has to know about syncing.
+    FS.mount(IDBFS, { autoPersist: true }, root);
+  } catch (e) {
+    console.error(
+      "megatoy: persistent storage unavailable, this session will not be saved",
+      e
+    );
+    return;
+  }
+
+  addRunDependency("megatoy-idbfs");
+  FS.syncfs(true, function (err) {
+    if (err) {
+      console.error("megatoy: could not load persistent storage", err);
+    }
+    removeRunDependency("megatoy-idbfs");
+  });
+});

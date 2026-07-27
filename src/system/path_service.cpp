@@ -115,9 +115,18 @@ fs::path PathService::builtin_presets_directory() {
 #endif
 }
 
+fs::path PathService::web_storage_root() {
+#if defined(MEGATOY_PLATFORM_WEB)
+  // Must match the mount point in dist/web_pre.js.
+  return fs::path("/megatoy");
+#else
+  return {};
+#endif
+}
+
 fs::path PathService::default_documents_directory() {
 #if defined(MEGATOY_PLATFORM_WEB)
-  return fs::path("/app");
+  return web_storage_root();
 #else
   const auto documents = home_path() / "Documents";
   std::error_code ec;

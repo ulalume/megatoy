@@ -3,6 +3,7 @@
 #include "preferences_data.hpp"
 #include "system/path_service.hpp"
 #include "workspace/workspace.hpp"
+#include <functional>
 
 #include <filesystem>
 #include <memory>
@@ -31,9 +32,20 @@ public:
   bool remove_workspace_folder(const std::filesystem::path &path);
   bool reorder_workspace_folder(std::size_t from, std::size_t to);
 
-  /// Show a folder picker and add whatever the user chooses.
-  /// Returns true if a folder was actually added.
-  bool prompt_add_workspace_folder();
+  /**
+   * Bring a folder of patches into the workspace.
+   *
+   * On desktop this opens the native folder picker and the folder is read in
+   * place. The browser cannot reference a folder on disk that way -- Firefox
+   * and Safari ship no directory picker at all -- so there it imports a copy
+   * into persistent storage instead, and because the picker and the reads are
+   * asynchronous `on_changed` may run several frames later. It is not called
+   * if the user cancels.
+   */
+  void request_add_workspace_folder(std::function<void()> on_changed);
+
+  /// True when adding a folder copies it rather than referencing it.
+  static bool folder_add_is_import();
 
   bool show_builtin_presets() const { return show_builtin_presets_; }
   void set_show_builtin_presets(bool show);

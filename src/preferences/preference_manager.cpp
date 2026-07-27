@@ -1,6 +1,11 @@
 #include "preference_manager.hpp"
 
 #include "platform/file_dialog.hpp"
+#include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_folder_import.hpp"
+#include "platform/web/web_storage_bootstrap.hpp"
+#endif
 #include "preference_storage.hpp"
 #include <cstdlib>
 #include <system_error>
@@ -13,6 +18,15 @@ PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
                                             paths_.file_system())) {
   load_preferences();
   ensure_directories_exist();
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  // The browser has no folder for the user to point at, so the workspace is
+  // seeded with a writable one inside persistent storage.
+  if (platform::web::bootstrap_workspace(
+          workspace_, megatoy::system::PathService::web_storage_root())) {
+    save_preferences();
+  }
+#endif
 }
 
 PreferenceManager::~PreferenceManager() { platform::file_dialog::shutdown(); }
@@ -44,14 +58,42 @@ bool PreferenceManager::reorder_workspace_folder(std::size_t from,
   return true;
 }
 
-bool PreferenceManager::prompt_add_workspace_folder() {
+bool PreferenceManager::folder_add_is_import() {
+#if defined(MEGATOY_PLATFORM_WEB)
+  return true;
+#else
+  return false;
+#endif
+}
+
+void PreferenceManager::request_add_workspace_folder(
+    std::function<void()> on_changed) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::import_folder(
+      megatoy::system::PathService::web_storage_root(),
+      [this, on_changed](platform::web::FolderImportResult result) {
+        if (!result.ok) {
+          if (!result.error.empty()) {
+            std::cerr << "megatoy: folder import failed: " << result.error
+                      << std::endl;
+          }
+          return;
+        }
+        if (add_workspace_folder(result.path) && on_changed) {
+          on_changed();
+        }
+      });
+#else
   std::filesystem::path chosen;
   const auto start = last_save_directory();
   if (platform::file_dialog::pick_folder(start, chosen) !=
       platform::file_dialog::DialogResult::Ok) {
-    return false;
+    return;
   }
-  return add_workspace_folder(chosen);
+  if (add_workspace_folder(chosen) && on_changed) {
+    on_changed();
+  }
+#endif
 }
 
 void PreferenceManager::set_show_builtin_presets(bool show) {

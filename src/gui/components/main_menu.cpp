@@ -82,9 +82,14 @@ void render_main_menu(MainMenuContext &context) {
       if (!name_valid)
         ImGui::EndDisabled();
 
-      if (megatoy::platform::is_desktop()) {
+      {
         ImGui::Separator();
-        if (ImGui::MenuItem("Add Folder to Workspace...")) {
+        // In the browser a folder is copied in rather than referenced, so it
+        // is labelled for what it does.
+        const char *label = PreferenceManager::folder_add_is_import()
+                                ? "Import Folder into Workspace..."
+                                : "Add Folder to Workspace...";
+        if (ImGui::MenuItem(label)) {
           context.open_add_folder_dialog = true;
         }
 
@@ -112,10 +117,12 @@ void render_main_menu(MainMenuContext &context) {
     // The folder picker is modal, so it is opened after the menu closes.
     if (context.open_add_folder_dialog) {
       context.open_add_folder_dialog = false;
-      if (context.preferences.prompt_add_workspace_folder() &&
-          context.sync_workspace) {
-        context.sync_workspace();
-      }
+      auto sync = context.sync_workspace;
+      context.preferences.request_add_workspace_folder([sync]() {
+        if (sync) {
+          sync();
+        }
+      });
     }
 
     if (context.gui.supports_quit() && !save_disabled) {

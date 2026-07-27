@@ -107,7 +107,6 @@ set(MEGATOY_CORE_SOURCES
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
   src/patches/filesystem_patch_storage.cpp
-  src/patches/web_patch_storage.cpp
   src/patches/folder_metadata.cpp
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
@@ -131,7 +130,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/web_file_system.cpp
     src/platform/web/web_download.cpp
     src/platform/web/local_storage.cpp
-    src/platform/web/web_patch_store.cpp
+    src/platform/web/web_folder_import.cpp
+    src/platform/web/web_storage_bootstrap.cpp
     src/platform/web/web_patch_url.cpp
     src/platform/web/web_midi_backend.cpp
   )
@@ -297,6 +297,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     "-sMIN_WEBGL_VERSION=2"
     "-sWASM=1"
     "-sINITIAL_MEMORY=134217728"
+    # IDBFS backs /megatoy with IndexedDB so the patch library survives a
+    # reload; dist/web_pre.js mounts it before main() runs.
+    "-lidbfs.js"
+    "--pre-js" "${CMAKE_SOURCE_DIR}/dist/web_pre.js"
     # main() holds AppServices by value, and Emscripten's default stack is a
     # mere 64 KB. Give it room so a new member does not overflow the stack at
     # startup, which surfaces only as "memory access out of bounds".
