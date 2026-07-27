@@ -5,7 +5,7 @@
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
 
-#include <cassert>
+#include "test_check.hpp"
 #include <filesystem>
 #include <iostream>
 
@@ -37,7 +37,7 @@ void test_patch_snapshot_roundtrip(TestEnvironment &env) {
   auto before = env.session.capture_snapshot();
   env.session.current_patch().name = "modified";
   env.session.restore_snapshot(before);
-  assert(env.session.current_patch().name == before.patch.name);
+  CHECK(env.session.current_patch().name == before.patch.name);
 }
 
 void test_note_allocation(TestEnvironment &env) {
@@ -48,16 +48,16 @@ void test_note_allocation(TestEnvironment &env) {
   ym2612::Note c4 = ym2612::Note::from_midi_note(60);
   ym2612::Note e4 = ym2612::Note::from_midi_note(64);
 
-  assert(env.session.note_on(c4, 90, prefs));
-  assert(env.session.note_is_active(c4));
-  assert(env.session.note_on(e4, 70, prefs));
-  assert(env.session.note_is_active(e4));
+  CHECK(env.session.note_on(c4, 90, prefs));
+  CHECK(env.session.note_is_active(c4));
+  CHECK(env.session.note_on(e4, 70, prefs));
+  CHECK(env.session.note_is_active(e4));
 
-  assert(env.session.note_off(c4));
-  assert(!env.session.note_is_active(c4));
+  CHECK(env.session.note_off(c4));
+  CHECK(!env.session.note_is_active(c4));
   env.session.release_all_notes();
   for (bool active : env.session.active_channels()) {
-    assert(!active);
+    CHECK(!active);
   }
 }
 

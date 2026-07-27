@@ -3,7 +3,7 @@
 #include "ym2612/device.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/wave_sampler.hpp"
-#include <emu/EmuStructs.h>
+#include <cstdint>
 #include <vector>
 
 class AudioEngine {
@@ -16,10 +16,12 @@ public:
   AudioEngine(AudioEngine &&) = delete;
   AudioEngine &operator=(AudioEngine &&) = delete;
 
-  bool initialize(UINT32 sample_rate);
+  bool initialize(uint32_t sample_rate);
   void shutdown();
 
-  UINT32 render(UINT32 buf_size, void *data);
+  /// Fill `data` with up to `buf_size` bytes of interleaved stereo s16 audio.
+  /// Returns the number of bytes written.
+  uint32_t render(uint32_t buf_size, void *data);
 
   void apply_patch_to_all_channels(const ym2612::Patch &patch);
 
@@ -29,18 +31,15 @@ public:
   ym2612::WaveSampler &wave_sampler() { return wave_sampler_; }
   const ym2612::WaveSampler &wave_sampler() const { return wave_sampler_; }
 
-  UINT32 sample_rate() const { return sample_rate_; }
-  UINT32 frame_size() const { return frame_size_; }
+  uint32_t sample_rate() const { return sample_rate_; }
+  uint32_t frame_size() const { return frame_size_; }
   bool is_running() const { return running_; }
 
 private:
-  UINT32 ensure_sample_storage(UINT32 smpl_count);
+  uint32_t sample_rate_;
+  uint32_t frame_size_;
 
-  UINT32 sample_rate_;
-  UINT32 frame_size_;
-  UINT32 sample_capacity_;
-
-  std::vector<DEV_SMPL> smpl_data_[2];
+  std::vector<float> mix_buffer_; // interleaved stereo, [-1, 1]
   ym2612::Device device_;
   ym2612::WaveSampler wave_sampler_;
   bool running_;

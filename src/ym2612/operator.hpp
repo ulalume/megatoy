@@ -1,10 +1,6 @@
 #pragma once
 #include "core/types.hpp"
 #include "ym2612/types.hpp"
-#include <emu/EmuCores.h>
-#include <emu/EmuStructs.h>
-#include <emu/SoundDevs.h>
-#include <emu/SoundEmu.h>
 
 namespace ym2612 {
 

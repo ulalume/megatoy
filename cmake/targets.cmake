@@ -25,6 +25,24 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 target_link_libraries(imgui_lib PUBLIC OpenGL::GL)
 endif()
 
+# ymfm: only the OPN family is needed, but ymfm_opn.cpp pulls in the ADPCM and
+# SSG engines that the YM2610/YM2608 share, so all three must be compiled.
+add_library(ymfm_core STATIC
+  ${ymfm_SOURCE_DIR}/src/ymfm_opn.cpp
+  ${ymfm_SOURCE_DIR}/src/ymfm_adpcm.cpp
+  ${ymfm_SOURCE_DIR}/src/ymfm_ssg.cpp
+)
+target_include_directories(ymfm_core PUBLIC ${ymfm_SOURCE_DIR}/src)
+
+# Sample rate conversion, vendored from libvgm (src/audio/resampler). Kept as
+# a separate C target so the project-wide C++ standard is not applied to it.
+add_library(megatoy_resampler STATIC
+  src/audio/resampler/Resampler.c
+  src/audio/resampler/logging.c
+)
+target_compile_definitions(megatoy_resampler PUBLIC HAVE_STDINT_H)
+target_include_directories(megatoy_resampler PUBLIC ${CMAKE_SOURCE_DIR}/src)
+
 set(MEGATOY_PRESETS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets/presets")
 
 set(MEGATOY_CORE_SOURCES
@@ -94,6 +112,7 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
   src/ym2612/wave_sampler.cpp
+  src/ym2612/ymfm_chip.cpp
   src/ym2612/fft_analyzer.cpp
 )
 
@@ -128,7 +147,6 @@ endif()
 add_library(megatoy_core ${MEGATOY_CORE_SOURCES})
 
 target_include_directories(megatoy_core PUBLIC
-  ${libvgm_SOURCE_DIR}
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${stb_SOURCE_DIR}
@@ -152,7 +170,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 target_link_libraries(megatoy_core PUBLIC
-  vgm-player
+  ymfm_core
+  megatoy_resampler
   imgui_lib
   SDL3::SDL3
   nlohmann_json::nlohmann_json
@@ -251,7 +270,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   target_link_options(megatoy PRIVATE
     "--bind"
     "-sFORCE_FILESYSTEM=1"
-    "-sUSE_ZLIB=1"
     "-sFULL_ES3=1"
     "-sMAX_WEBGL_VERSION=2"
     "-sMIN_WEBGL_VERSION=2"

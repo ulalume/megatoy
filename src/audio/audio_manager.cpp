@@ -18,7 +18,7 @@ AudioManager::AudioManager(std::unique_ptr<AudioTransport> transport)
 
 AudioManager::~AudioManager() { shutdown(); }
 
-bool AudioManager::initialize(UINT32 sample_rate) {
+bool AudioManager::initialize(uint32_t sample_rate) {
   if (engine_.is_running()) {
     return true;
   }

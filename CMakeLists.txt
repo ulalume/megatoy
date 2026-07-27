@@ -88,23 +88,6 @@ include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
-  if(NOT MEGATOY_EMSCRIPTEN_SYSROOT AND DEFINED ENV{EM_CACHE})
-    set(MEGATOY_EMSCRIPTEN_SYSROOT "$ENV{EM_CACHE}/sysroot")
-  endif()
-  if(NOT TARGET ZLIB::ZLIB AND MEGATOY_EMSCRIPTEN_SYSROOT)
-    add_library(ZLIB::ZLIB UNKNOWN IMPORTED)
-    set_target_properties(ZLIB::ZLIB PROPERTIES
-      IMPORTED_LOCATION "${MEGATOY_EMSCRIPTEN_SYSROOT}/lib/wasm32-emscripten/libz.a"
-    )
-  endif()
-  if(TARGET ZLIB::ZLIB)
-    # Prevent the Emscripten zlib port from injecting the sysroot include path ahead of libc++ headers.
-    set_target_properties(ZLIB::ZLIB PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES ""
-      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ""
-    )
-  endif()
-
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msimd128")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msimd128")
   option(MEGATOY_GENERATE_SIMPLE_HTML
@@ -134,10 +117,15 @@ add_executable(patch_io_roundtrip_test tests/core/patch_io_roundtrip_test.cpp)
 target_include_directories(patch_io_roundtrip_test PRIVATE src)
 target_link_libraries(patch_io_roundtrip_test PRIVATE megatoy_core)
 add_test(NAME patch_io_roundtrip_test COMMAND patch_io_roundtrip_test)
+add_executable(ym2612_render_test tests/audio/ym2612_render_test.cpp)
+target_include_directories(ym2612_render_test PRIVATE src)
+target_link_libraries(ym2612_render_test PRIVATE megatoy_core)
+add_test(NAME ym2612_render_test COMMAND ym2612_render_test)
 
 # Convenience target to build and run tests
 add_custom_target(check
-  DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test subsystem_tests
+  DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test
+          subsystem_tests ym2612_render_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

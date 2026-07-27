@@ -16,9 +16,9 @@ void WaveSampler::clear() {
   volume_warning_.store(false, std::memory_order_relaxed);
 }
 
-void WaveSampler::push_samples(const int32_t *left, const int32_t *right,
-                               std::size_t sample_count) {
-  if (!left || !right || sample_count == 0) {
+void WaveSampler::push_frames(const float *interleaved,
+                              std::size_t frame_count) {
+  if (!interleaved || frame_count == 0) {
     return;
   }
 
@@ -26,15 +26,15 @@ void WaveSampler::push_samples(const int32_t *left, const int32_t *right,
   uint32_t valid = valid_count_.load(std::memory_order_relaxed);
   bool found_loud_sample = false;
 
-  for (std::size_t i = 0; i < sample_count; ++i) {
+  for (std::size_t i = 0; i < frame_count; ++i) {
+    const float left_sample = interleaved[i * 2 + 0];
+    const float right_sample = interleaved[i * 2 + 1];
     found_loud_sample =
         found_loud_sample ||
-        std::max(std::abs(left[i]), std::abs(right[i])) >= 32767;
-    float left_sample = std::clamp(left[i] * kNormalization, -1.0f, 1.0f);
-    float right_sample = std::clamp(right[i] * kNormalization, -1.0f, 1.0f);
+        std::max(std::abs(left_sample), std::abs(right_sample)) >= 1.0f;
 
-    left_buffer_[index] = left_sample;
-    right_buffer_[index] = right_sample;
+    left_buffer_[index] = std::clamp(left_sample, -1.0f, 1.0f);
+    right_buffer_[index] = std::clamp(right_sample, -1.0f, 1.0f);
 
     index = (index + 1) % kBufferSize;
     if (valid < kBufferSize) {

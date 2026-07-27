@@ -1,45 +1,44 @@
 #include "audio/audio_engine.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstring>
 
 #include "ym2612/channel.hpp"
 
 namespace {
 
-constexpr UINT32 kFallbackSampleRate = 44100;
-constexpr UINT32 kDefaultFrameSize = sizeof(INT16) * 2; // stereo s16
+constexpr uint32_t kFallbackSampleRate = 44100;
+constexpr uint32_t kDefaultFrameSize = sizeof(int16_t) * 2; // stereo s16
+
+int16_t to_pcm16(float sample) {
+  const float clamped = std::clamp(sample, -1.0f, 1.0f);
+  return static_cast<int16_t>(clamped * 32767.0f);
+}
 
 } // namespace
 
 AudioEngine::AudioEngine()
     : sample_rate_(kFallbackSampleRate), frame_size_(kDefaultFrameSize),
-      sample_capacity_(0), running_(false) {}
+      running_(false) {}
 
-bool AudioEngine::initialize(UINT32 sample_rate) {
+bool AudioEngine::initialize(uint32_t sample_rate) {
   sample_rate_ = sample_rate != 0 ? sample_rate : kFallbackSampleRate;
   frame_size_ = kDefaultFrameSize;
-  sample_capacity_ = 0;
-  smpl_data_[0].clear();
-  smpl_data_[1].clear();
+  mix_buffer_.clear();
   wave_sampler_.clear();
-  device_.stop();
   device_.init(sample_rate_);
-  running_ = true;
-  return true;
+  running_ = device_.is_initialized();
+  return running_;
 }
 
 void AudioEngine::shutdown() {
   running_ = false;
   wave_sampler_.clear();
-  smpl_data_[0].clear();
-  smpl_data_[1].clear();
-  sample_capacity_ = 0;
+  mix_buffer_.clear();
   device_.stop();
 }
 
-UINT32 AudioEngine::render(UINT32 buf_size, void *data) {
+uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   if (!running_ || frame_size_ == 0 || buf_size == 0) {
     if (data != nullptr && buf_size != 0) {
       std::memset(data, 0x00, buf_size);
@@ -47,28 +46,25 @@ UINT32 AudioEngine::render(UINT32 buf_size, void *data) {
     return 0;
   }
 
-  const UINT32 smpl_count = buf_size / frame_size_;
-  if (smpl_count == 0) {
+  const uint32_t frames = buf_size / frame_size_;
+  if (frames == 0) {
     return 0;
   }
 
-  ensure_sample_storage(smpl_count);
-
-  std::fill_n(smpl_data_[0].data(), smpl_count, DEV_SMPL{});
-  std::fill_n(smpl_data_[1].data(), smpl_count, DEV_SMPL{});
-
-  std::array<DEV_SMPL *, 2> outputs{smpl_data_[0].data(), smpl_data_[1].data()};
-  device_.update(smpl_count, outputs);
-  wave_sampler_.push_samples(outputs[0], outputs[1], smpl_count);
-
-  auto *smpl_ptr_16 = static_cast<INT16 *>(data);
-  for (UINT32 cur_smpl = 0; cur_smpl < smpl_count;
-       cur_smpl++, smpl_ptr_16 += 2) {
-    smpl_ptr_16[0] = std::clamp(smpl_data_[0][cur_smpl], -32768, 32767);
-    smpl_ptr_16[1] = std::clamp(smpl_data_[1][cur_smpl], -32768, 32767);
+  const size_t required = static_cast<size_t>(frames) * 2;
+  if (mix_buffer_.size() < required) {
+    mix_buffer_.resize(required);
   }
 
-  return smpl_count * frame_size_;
+  device_.render(frames, mix_buffer_.data());
+  wave_sampler_.push_frames(mix_buffer_.data(), frames);
+
+  auto *pcm = static_cast<int16_t *>(data);
+  for (size_t i = 0; i < required; ++i) {
+    pcm[i] = to_pcm16(mix_buffer_[i]);
+  }
+
+  return frames * frame_size_;
 }
 
 void AudioEngine::apply_patch_to_all_channels(const ym2612::Patch &patch) {
@@ -78,13 +74,4 @@ void AudioEngine::apply_patch_to_all_channels(const ym2612::Patch &patch) {
     channel.write_settings(patch.channel);
     channel.write_instrument(patch.instrument);
   }
-}
-
-UINT32 AudioEngine::ensure_sample_storage(UINT32 smpl_count) {
-  if (smpl_count > sample_capacity_) {
-    sample_capacity_ = smpl_count;
-    smpl_data_[0].resize(sample_capacity_);
-    smpl_data_[1].resize(sample_capacity_);
-  }
-  return sample_capacity_;
 }

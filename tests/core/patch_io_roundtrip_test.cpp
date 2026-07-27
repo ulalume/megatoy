@@ -3,7 +3,7 @@
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
 #include "ym2612/patch.hpp"
-#include <cassert>
+#include "../test_check.hpp"
 #include <filesystem>
 #include <iostream>
 
@@ -42,39 +42,39 @@ int main() {
   auto ginpkg_path =
       formats::ginpkg::save_patch(tmp, patch, "pkg_roundtrip").value();
   auto ginpkg_loaded = formats::load_patch_from_file(ginpkg_path);
-  assert(ginpkg_loaded.status == formats::PatchLoadStatus::Success);
-  assert(ginpkg_loaded.patches.size() == 1);
-  assert(ginpkg_loaded.patches[0] == patch);
+  CHECK(ginpkg_loaded.status == formats::PatchLoadStatus::Success);
+  CHECK(ginpkg_loaded.patches.size() == 1);
+  CHECK(ginpkg_loaded.patches[0] == patch);
 
   // patch -> dmp -> load
   std::filesystem::path dmp_path = tmp / "roundtrip.dmp";
   bool wrote_dmp =
       formats::PatchRegistry::instance().write(".dmp", patch, dmp_path);
-  assert(wrote_dmp);
+  CHECK(wrote_dmp);
   auto dmp_loaded = formats::load_patch_from_file(dmp_path);
-  assert(dmp_loaded.status == formats::PatchLoadStatus::Success);
-  assert(dmp_loaded.patches.size() == 1);
-  assert(dmp_loaded.patches[0] == patch);
+  CHECK(dmp_loaded.status == formats::PatchLoadStatus::Success);
+  CHECK(dmp_loaded.patches.size() == 1);
+  CHECK(dmp_loaded.patches[0] == patch);
 
   // patch -> mml -> load
   std::filesystem::path mml_path = tmp / "roundtrip.mml";
   bool wrote_mml =
       formats::PatchRegistry::instance().write_text(".mml", patch, mml_path);
-  assert(wrote_mml);
+  CHECK(wrote_mml);
   auto mml_loaded = formats::load_patch_from_file(mml_path);
-  assert(mml_loaded.status == formats::PatchLoadStatus::Success);
-  assert(mml_loaded.patches.size() >= 1);
-  assert(mml_loaded.patches[0] == patch);
+  CHECK(mml_loaded.status == formats::PatchLoadStatus::Success);
+  CHECK(mml_loaded.patches.size() >= 1);
+  CHECK(mml_loaded.patches[0] == patch);
 
   // patch -> fui -> load
   std::filesystem::path fui_path = tmp / "roundtrip.fui";
   bool wrote_fui =
       formats::PatchRegistry::instance().write(".fui", patch, fui_path);
-  assert(wrote_fui);
+  CHECK(wrote_fui);
   auto fui_loaded = formats::load_patch_from_file(fui_path);
-  assert(fui_loaded.status == formats::PatchLoadStatus::Success);
-  assert(fui_loaded.patches.size() == 1);
-  assert(fui_loaded.patches[0] == patch);
+  CHECK(fui_loaded.status == formats::PatchLoadStatus::Success);
+  CHECK(fui_loaded.patches.size() == 1);
+  CHECK(fui_loaded.patches[0] == patch);
 
   std::cout << "patch_io_roundtrip_test passed\n";
   return 0;

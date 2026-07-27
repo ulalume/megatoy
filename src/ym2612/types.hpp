@@ -42,25 +42,27 @@ inline const std::array<OperatorIndex, 4> all_operator_indices = {
     OperatorIndex::Op4,
 };
 
+// Every field carries a default so a default-constructed Patch is a valid,
+// reproducible patch rather than indeterminate memory.
 struct GlobalSettings {
-  bool dac_enable;
-  bool lfo_enable;
-  uint8_t lfo_frequency; // 0 ~ 7
+  bool dac_enable = false;
+  bool lfo_enable = false;
+  uint8_t lfo_frequency = 0; // 0 ~ 7
 };
 
 struct OperatorSettings {
-  uint8_t attack_rate;               // 0 ~ 31
-  uint8_t decay_rate;                // 0 ~ 31
-  uint8_t sustain_rate;              // 0 ~ 31
-  uint8_t release_rate;              // 0 ~ 15
-  uint8_t sustain_level;             // 0 ~ 15
-  uint8_t total_level;               // 0 ~ 127
-  uint8_t key_scale;                 // 0 ~ 3
-  uint8_t multiple;                  // 0 ~ 15
-  uint8_t detune;                    // 0 ~ 7
-  uint8_t ssg_type_envelope_control; // 0 ~ 7
-  bool ssg_enable;
-  bool amplitude_modulation_enable;
+  uint8_t attack_rate = 0;               // 0 ~ 31
+  uint8_t decay_rate = 0;                // 0 ~ 31
+  uint8_t sustain_rate = 0;              // 0 ~ 31
+  uint8_t release_rate = 0;              // 0 ~ 15
+  uint8_t sustain_level = 0;             // 0 ~ 15
+  uint8_t total_level = 0;               // 0 ~ 127
+  uint8_t key_scale = 0;                 // 0 ~ 3
+  uint8_t multiple = 0;                  // 0 ~ 15
+  uint8_t detune = 0;                    // 0 ~ 7
+  uint8_t ssg_type_envelope_control = 0; // 0 ~ 7
+  bool ssg_enable = false;
+  bool amplitude_modulation_enable = false;
 
   bool enable = true; // global register
 };
@@ -68,14 +70,14 @@ struct OperatorSettings {
 struct ChannelSettings {
   bool left_speaker = true;
   bool right_speaker = true;
-  uint8_t amplitude_modulation_sensitivity; // 0 ~ 3 ams for lfo
-  uint8_t frequency_modulation_sensitivity; // 0 ~ 7 pms for lfo
+  uint8_t amplitude_modulation_sensitivity = 0; // 0 ~ 3 ams for lfo
+  uint8_t frequency_modulation_sensitivity = 0; // 0 ~ 7 pms for lfo
 };
 
 struct ChannelInstrument {
-  uint8_t feedback;  // 0 ~ 7
-  uint8_t algorithm; // 0 ~ 7
-  OperatorSettings operators[4];
+  uint8_t feedback = 0;  // 0 ~ 7
+  uint8_t algorithm = 0; // 0 ~ 7
+  OperatorSettings operators[4]{};
 
   inline ym2612::ChannelInstrument clone_with_velocity(uint8_t velocity) const {
     int vol = velocity >> 3;

@@ -3,6 +3,7 @@
 #include "audio/audio_engine.hpp"
 #include "audio/audio_transport.hpp"
 #include "ym2612/patch.hpp"
+#include <cstdint>
 #include <memory>
 
 /**
@@ -25,7 +26,7 @@ public:
    * @param sample_rate Target sample rate
    * @return true on success, false on failure
    */
-  bool initialize(UINT32 sample_rate);
+  bool initialize(uint32_t sample_rate);
 
   /**
    * Shutdown and cleanup complete audio system
@@ -59,7 +60,7 @@ public:
   /**
    * Get current sample rate
    */
-  UINT32 sample_rate() const { return engine_.sample_rate(); }
+  uint32_t sample_rate() const { return engine_.sample_rate(); }
 
 private:
   AudioEngine engine_;

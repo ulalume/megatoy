@@ -5,33 +5,6 @@ include(FetchContent)
 if(NOT EMSCRIPTEN)
   find_package(OpenGL REQUIRED)
   find_package(CURL REQUIRED)
-else()
-  if(DEFINED ENV{EM_CACHE} AND NOT "$ENV{EM_CACHE}" STREQUAL "")
-    set(_ems_sysroot "$ENV{EM_CACHE}/sysroot")
-  elseif(DEFINED CMAKE_SYSROOT AND NOT CMAKE_SYSROOT STREQUAL "")
-    set(_ems_sysroot "${CMAKE_SYSROOT}")
-  elseif(DEFINED EMSCRIPTEN_ROOT_PATH)
-    set(_ems_sysroot "${EMSCRIPTEN_ROOT_PATH}/cache/sysroot")
-  elseif(DEFINED ENV{EMSDK})
-    set(_ems_sysroot "$ENV{EMSDK}/upstream/emscripten/cache/sysroot")
-  else()
-    message(FATAL_ERROR "Unable to determine Emscripten sysroot for zlib.")
-  endif()
-  if(NOT EXISTS "${_ems_sysroot}/lib/wasm32-emscripten/libz.a")
-    find_program(EMBUILDER_EXECUTABLE embuilder)
-    if(EMBUILDER_EXECUTABLE)
-      execute_process(COMMAND "${EMBUILDER_EXECUTABLE}" build zlib)
-    else()
-      message(WARNING "embuilder not found; zlib may be unavailable for Emscripten builds.")
-    endif()
-  endif()
-  set(ZLIB_LIBRARY "${_ems_sysroot}/lib/wasm32-emscripten/libz.a" CACHE FILEPATH "" FORCE)
-  set(ZLIB_LIBRARIES "${ZLIB_LIBRARY}" CACHE FILEPATH "" FORCE)
-  set(ZLIB_INCLUDE_DIR "${_ems_sysroot}/include" CACHE PATH "" FORCE)
-  set(ZLIB_INCLUDE_DIRS "${ZLIB_INCLUDE_DIR}" CACHE PATH "" FORCE)
-  set(MEGATOY_EMSCRIPTEN_SYSROOT "${_ems_sysroot}" CACHE PATH "" FORCE)
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sUSE_ZLIB=1")
-  set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
 endif()
 
 # nlohmann_json
@@ -69,35 +42,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
-# libvgm
+# ymfm - YM2612 emulation core.
+# ymfm ships no CMake project, so only the sources are fetched; the library
+# target is defined in cmake/targets.cmake.
 FetchContent_Declare(
-  libvgm
-  GIT_REPOSITORY https://github.com/ValleyBell/libvgm
-  GIT_TAG        e9f2b023e8918b56be0d2e634b3f5aab2a589ffe
+  ymfm
+  GIT_REPOSITORY https://github.com/aaronsgiles/ymfm
+  GIT_TAG        17decfae857b92ab55fbb30ade2287ace095a381
 )
-if(WIN32)
-  set(LIBRARY_TYPE STATIC CACHE STRING "" FORCE)
-  set(BUILD_PLAYER OFF CACHE BOOL "" FORCE)
-  set(BUILD_VGM2WAV OFF CACHE BOOL "" FORCE)
-  set(LINK_STATIC_LIBS ON CACHE BOOL "" FORCE)
-  set(USE_SANITIZERS OFF CACHE BOOL "" FORCE)
-  set(UTIL_CHARCNV_ICONV OFF CACHE BOOL "" FORCE)
-  set(UTIL_CHARCNV_WINAPI ON CACHE BOOL "" FORCE)
-  set(_LIBVGM_FETCH_ROOT "${CMAKE_BINARY_DIR}/_deps/libvgm-src")
-  set(ZLIB_ROOT "${_LIBVGM_FETCH_ROOT}/libs" CACHE PATH "" FORCE)
-  set(ZLIB_INCLUDE_DIR "${_LIBVGM_FETCH_ROOT}/libs/include" CACHE PATH "" FORCE)
-  set(ZLIB_INCLUDE_DIRS "${_LIBVGM_FETCH_ROOT}/libs/include" CACHE PATH "" FORCE)
-  set(ZLIB_LIBRARY "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
-  set(ZLIB_LIBRARIES "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
-  set(ZLIB_LIBRARY_RELEASE "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64.lib" CACHE FILEPATH "" FORCE)
-  set(ZLIB_LIBRARY_DEBUG "${_LIBVGM_FETCH_ROOT}/libs/lib/zlib64d.lib" CACHE FILEPATH "" FORCE)
+if(POLICY CMP0169)
+  cmake_policy(SET CMP0169 OLD)
 endif()
-set(BUILD_LIBAUDIO OFF CACHE BOOL "" FORCE)
-set(BUILD_PLAYER OFF CACHE BOOL "" FORCE)
-set(BUILD_VGM2WAV OFF CACHE BOOL "" FORCE)
-set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(USE_SANITIZERS OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(libvgm)
+FetchContent_GetProperties(ymfm)
+if(NOT ymfm_POPULATED)
+  FetchContent_Populate(ymfm)
+endif()
 
 if(NOT EMSCRIPTEN)
   # RtMidi

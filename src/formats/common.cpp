@@ -10,8 +10,11 @@ uint8_t detune_from_dmp_to_patch(int dt) {
     return 6;
   case 2: // -1
     return 5;
-  case 3:     // 0
-    return 4; // rym2612 zero maps to two values; default to 4
+  case 3: // 0
+    // Registers 0 and 4 both mean "no detune". Canonicalize on 0 so that a
+    // patch written with detune 0 -- by far the common case -- comes back
+    // unchanged.
+    return 0;
   case 4:     // 1
     return 1;
   case 5: // 2

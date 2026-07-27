@@ -14,8 +14,9 @@ public:
 
   void clear();
 
-  void push_samples(const int32_t *left, const int32_t *right,
-                    std::size_t sample_count);
+  /// Append `frame_count` interleaved stereo frames, each nominally in
+  /// [-1, 1].
+  void push_frames(const float *interleaved, std::size_t frame_count);
 
   void latest_samples(std::size_t sample_count, std::vector<float> &samples,
                       bool is_left) const;
@@ -26,7 +27,6 @@ public:
 
 private:
   static constexpr std::size_t kBufferSize = 2048;
-  static constexpr float kNormalization = 1.0f / 32768.0f;
 
   using Buffer = std::array<float, kBufferSize>;
 

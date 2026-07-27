@@ -92,7 +92,8 @@ For experimental WebAssembly builds, see [docs/BUILD_WEB.md](docs/BUILD_WEB.md).
 
 ## Thanks
 
-- [libvgm](https://github.com/ValleyBell/libvgm/)
+- [ymfm](https://github.com/aaronsgiles/ymfm) - YM2612 emulation core
+- [libvgm](https://github.com/ValleyBell/libvgm/) - sample rate conversion
 - [YM2612 registers reference](https://plutiedev.com/ym2612-registers)
 - [Official manual](https://segaretro.org/images/e/ef/YM2612_manual.pdf)
 - [Emulating the YM2612](https://jsgroth.dev/blog/posts/emulating-ym2612-part-1/)

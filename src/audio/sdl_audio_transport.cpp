@@ -1,11 +1,10 @@
 #include "audio/sdl_audio_transport.hpp"
 #include <algorithm>
-#include <emu/EmuStructs.h>
 #include <iostream>
 
 namespace {
 constexpr std::uint32_t kFallbackSampleRate = 44100;
-constexpr std::uint32_t kFallbackFrameSize = sizeof(INT16) * 2;
+constexpr std::uint32_t kFallbackFrameSize = sizeof(std::int16_t) * 2;
 } // namespace
 
 SdlAudioTransport::SdlAudioTransport()
