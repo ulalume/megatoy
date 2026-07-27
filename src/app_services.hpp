@@ -1,13 +1,13 @@
 #pragma once
 
 #include "audio/audio_manager.hpp"
+#include "audio/spectrum_analyzer.hpp"
 #include "gui/gui_manager.hpp"
 #include "history/history_manager.hpp"
 #include "patches/patch_session.hpp"
 #include "platform/platform_services.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
-#include "ym2612/fft_analyzer.hpp"
 #include <cstdint>
 #include <string>
 
@@ -22,7 +22,7 @@ struct AppServices {
         preference_manager(path_service),
         audio_manager(platform_services.create_audio_transport()),
         gui_manager(preference_manager),
-        patch_session(path_service, audio_manager), fft_analyzer(1024) {}
+        patch_session(path_service, audio_manager), spectrum_analyzer(2048) {}
 
   bool initialize_gui(const std::string &title, int width, int height) {
     return gui_manager.initialize(title, width, height);
@@ -38,5 +38,5 @@ struct AppServices {
   GuiManager gui_manager;
   patches::PatchSession patch_session;
   history::HistoryManager history;
-  ym2612::FFTAnalyzer fft_analyzer;
+  audio::SpectrumAnalyzer spectrum_analyzer;
 };

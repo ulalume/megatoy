@@ -1,8 +1,8 @@
 #pragma once
 
+#include "audio/scope_buffer.hpp"
 #include "ym2612/device.hpp"
 #include "ym2612/patch.hpp"
-#include "ym2612/wave_sampler.hpp"
 #include <cstdint>
 #include <vector>
 
@@ -28,8 +28,8 @@ public:
   ym2612::Device &device() { return device_; }
   const ym2612::Device &device() const { return device_; }
 
-  ym2612::WaveSampler &wave_sampler() { return wave_sampler_; }
-  const ym2612::WaveSampler &wave_sampler() const { return wave_sampler_; }
+  audio::ScopeBuffer &scope_buffer() { return scope_buffer_; }
+  const audio::ScopeBuffer &scope_buffer() const { return scope_buffer_; }
 
   uint32_t sample_rate() const { return sample_rate_; }
   uint32_t frame_size() const { return frame_size_; }
@@ -41,6 +41,6 @@ private:
 
   std::vector<float> mix_buffer_; // interleaved stereo, [-1, 1]
   ym2612::Device device_;
-  ym2612::WaveSampler wave_sampler_;
+  audio::ScopeBuffer scope_buffer_;
   bool running_;
 };

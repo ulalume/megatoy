@@ -25,7 +25,7 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
   sample_rate_ = sample_rate != 0 ? sample_rate : kFallbackSampleRate;
   frame_size_ = kDefaultFrameSize;
   mix_buffer_.clear();
-  wave_sampler_.clear();
+  scope_buffer_.clear();
   device_.init(sample_rate_);
   running_ = device_.is_initialized();
   return running_;
@@ -33,7 +33,7 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
 
 void AudioEngine::shutdown() {
   running_ = false;
-  wave_sampler_.clear();
+  scope_buffer_.clear();
   mix_buffer_.clear();
   device_.stop();
 }
@@ -57,7 +57,7 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   }
 
   device_.render(frames, mix_buffer_.data());
-  wave_sampler_.push_frames(mix_buffer_.data(), frames);
+  scope_buffer_.write(mix_buffer_.data(), frames);
 
   auto *pcm = static_cast<int16_t *>(data);
   for (size_t i = 0; i < required; ++i) {

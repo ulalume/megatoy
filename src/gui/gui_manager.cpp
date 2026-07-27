@@ -387,11 +387,6 @@ bool GuiManager::supports_quit() const {
   return megatoy::platform::is_desktop();
 }
 
-bool GuiManager::supports_waveform() const {
-  // Waveform panel relies on native file IO.
-  return megatoy::platform::is_desktop();
-}
-
 bool GuiManager::supports_patch_history() const {
   // ginpkg history is not supported on web builds.
   return megatoy::platform::is_desktop();

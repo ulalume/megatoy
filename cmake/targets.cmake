@@ -49,6 +49,9 @@ set(MEGATOY_CORE_SOURCES
   src/app_services.cpp
   src/app_state.cpp
   src/audio/audio_engine.cpp
+  src/audio/scope_buffer.cpp
+  src/audio/scope_trigger.cpp
+  src/audio/spectrum_analyzer.cpp
   src/audio/audio_manager.cpp
   src/audio/sdl_audio_transport.cpp
   src/channel_allocator.cpp
@@ -111,9 +114,7 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/channel.cpp
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
-  src/ym2612/wave_sampler.cpp
   src/ym2612/ymfm_chip.cpp
-  src/ym2612/fft_analyzer.cpp
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")

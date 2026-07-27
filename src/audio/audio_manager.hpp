@@ -40,11 +40,11 @@ public:
   const ym2612::Device &device() const { return engine_.device(); }
 
   /**
-   * Direct access to wave sampler
+   * Direct access to the scope buffer holding recent output
    */
-  ym2612::WaveSampler &wave_sampler() { return engine_.wave_sampler(); }
-  const ym2612::WaveSampler &wave_sampler() const {
-    return engine_.wave_sampler();
+  audio::ScopeBuffer &scope_buffer() { return engine_.scope_buffer(); }
+  const audio::ScopeBuffer &scope_buffer() const {
+    return engine_.scope_buffer();
   }
 
   /**
