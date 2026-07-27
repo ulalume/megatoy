@@ -1,12 +1,9 @@
 #include "patch_registry.hpp"
 
-#include "ctrmml.hpp"
-#include "dmp.hpp"
-#include "fui.hpp"
-#include "gin.hpp"
 #include "ginpkg.hpp"
-#include "rym2612.hpp"
+#include "ym2612_format_adapter.hpp"
 #include <algorithm>
+#include <fstream>
 
 namespace formats {
 
@@ -150,13 +147,64 @@ std::vector<ExportFormatInfo> PatchRegistry::export_formats() const {
   return formats;
 }
 void PatchRegistry::register_defaults() {
-  register_format(".gin",
-                  {formats::gin::read_file,
-                   [](const std::filesystem::path &dir,
-                      const ym2612::Patch &patch, const std::string &name) {
-                     return formats::gin::save_patch(dir, patch, name);
-                   },
-                   nullptr, nullptr, "GIN"});
+  // Everything ym2612_format supports is registered from its own table, so a
+  // format added upstream shows up here without further changes.
+  for (const auto &info : adapter::known_formats()) {
+    const auto format = info.format;
+
+    // .ginpkg stays megatoy's own: it is a versioned container with a patch
+    // history, which the library only reads.
+    if (format == ym2612_format::Format::Ginpkg) {
+      continue;
+    }
+
+    PatchFormatHandler handler;
+    handler.label = info.name;
+
+    if (info.can_read) {
+      handler.read_file = [format](const std::filesystem::path &path) {
+        return adapter::read_file(format, path);
+      };
+    }
+
+    if (info.can_write && info.is_text) {
+      handler.write_text = [format](const ym2612::Patch &patch,
+                                    const std::filesystem::path &target) {
+        auto text = adapter::serialize_text(format, patch);
+        if (!text) {
+          return false;
+        }
+        std::ofstream file(target);
+        if (!file) {
+          return false;
+        }
+        file << *text;
+        return static_cast<bool>(file);
+      };
+    } else if (info.can_write) {
+      handler.write_single = [format](const ym2612::Patch &patch,
+                                      const std::filesystem::path &target) {
+        return adapter::write_file(format, patch, target);
+      };
+    }
+
+    // .gin is megatoy's plain save format, so it also gets a packaged writer
+    // that names the file from the patch.
+    if (format == ym2612_format::Format::Gin) {
+      handler.write_packaged =
+          [format](const std::filesystem::path &dir, const ym2612::Patch &patch,
+                   const std::string &name)
+          -> std::optional<std::filesystem::path> {
+        const auto path = dir / (name + ".gin");
+        return adapter::write_file(format, patch, path)
+                   ? std::optional<std::filesystem::path>(path)
+                   : std::nullopt;
+      };
+    }
+
+    register_format(adapter::extension_for(format), std::move(handler));
+  }
+
   register_format(".ginpkg",
                   {formats::ginpkg::read_file,
                    [](const std::filesystem::path &dir,
@@ -164,16 +212,6 @@ void PatchRegistry::register_defaults() {
                      return formats::ginpkg::save_patch(dir, patch, name);
                    },
                    nullptr, nullptr, "GINPKG"});
-  register_format(".dmp", {formats::dmp::read_file, nullptr,
-                           formats::dmp::write_patch, nullptr, "DefleMask"});
-  register_format(".rym2612", {formats::rym2612::read_file, nullptr, nullptr,
-                               nullptr, "RYM2612"});
-  register_format(
-      ".fui",
-      {formats::fui::read_file, nullptr, formats::fui::write_patch, nullptr,
-       "Furnace"});
-  register_format(".mml", {formats::ctrmml::read_file, nullptr, nullptr,
-                           formats::ctrmml::write_patch, "ctrmml"});
 }
 
 } // namespace formats

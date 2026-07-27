@@ -1,7 +1,6 @@
 #include "patches/filesystem_patch_storage.hpp"
 
-#include "formats/ctrmml.hpp"
-#include "formats/gin.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include "formats/ginpkg.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
@@ -15,7 +14,9 @@
 namespace {
 
 std::vector<std::string> supported_extensions() {
-  return {".gin", ".ginpkg", ".rym2612", ".dmp", ".fui", ".mml"};
+  auto extensions = formats::adapter::readable_extensions();
+  extensions.push_back(".ginpkg");
+  return extensions;
 }
 
 } // namespace
@@ -74,7 +75,7 @@ bool FilesystemPatchStorage::load_patch(const PatchEntry &entry,
     out_patch = result.patches[0];
     return true;
   }
-  size_t instrument_index = entry.ctrmml_index;
+  size_t instrument_index = entry.instrument_index;
   if (instrument_index < result.patches.size()) {
     out_patch = result.patches[instrument_index];
     return true;
@@ -95,7 +96,7 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
 
   const auto ginpkg_path =
       formats::ginpkg::build_package_path(patches_dir, sanitized);
-  const auto gin_path = formats::gin::build_patch_path(patches_dir, sanitized);
+  const auto gin_path = patches_dir / (sanitized + ".gin");
 
   std::string pref_ext(preferred_extension);
   std::transform(pref_ext.begin(), pref_ext.end(), pref_ext.begin(),
@@ -121,9 +122,9 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
     if (gin_exists && !overwrite) {
       return SavePatchResult::duplicate();
     }
-    auto gin_result = formats::gin::save_patch(patches_dir, patch, sanitized);
-    if (gin_result.has_value()) {
-      return SavePatchResult::success(gin_result.value());
+    if (auto path = formats::PatchRegistry::instance().save_package(
+            ".gin", patches_dir, sanitized, patch)) {
+      return SavePatchResult::success(*path);
     }
     return SavePatchResult::error("Failed to save patch");
   };
@@ -208,7 +209,7 @@ FilesystemPatchStorage::has_patch_named(const std::string &name) const {
   auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
   const auto patches_dir = write_root_.value_or(root_);
   auto ginpkg_target = formats::ginpkg::build_package_path(patches_dir, sanitized);
-  auto gin_target = formats::gin::build_patch_path(patches_dir, sanitized);
+  auto gin_target = patches_dir / (sanitized + ".gin");
   return vfs_.exists(ginpkg_target) || vfs_.exists(gin_target);
 }
 
@@ -297,31 +298,42 @@ void FilesystemPatchStorage::scan_directory(
       std::transform(extension.begin(), extension.end(), extension.begin(),
                      ::tolower);
 
-      if (extension == ".mml") {
+      // Bank formats (.mml, .dmf, .fur, .opm) hold many instruments, so they
+      // are shown as a folder of patches rather than a single entry. Only
+      // these are parsed during the scan; single-patch files are left alone
+      // so browsing a large library stays cheap.
+      const auto format = formats::adapter::format_for_extension(extension);
+      if (format && formats::adapter::is_multi_patch(*format) &&
+          *format != ym2612_format::Format::Ginpkg) {
         std::vector<ym2612::Patch> instruments =
-            formats::ctrmml::read_file(path);
+            formats::adapter::read_file(*format, path);
         if (!instruments.empty()) {
+          const std::string format_name =
+              ym2612_format::format_to_extension(*format);
+
           PatchEntry container;
           container.name = path.stem().string();
           container.full_path = path;
           container.relative_path = info.relative_path;
           container.is_directory = true;
-          container.format = "ctrmml";
+          container.format = format_name;
 
           for (size_t idx = 0; idx < instruments.size(); ++idx) {
             const auto &instrument = instruments[idx];
             PatchEntry child;
-            child.name = instrument.name;
+            child.name = instrument.name.empty()
+                             ? path.stem().string() + " " + std::to_string(idx)
+                             : instrument.name;
             child.full_path = path;
-            std::string identifier = instrument.name;
+            std::string identifier = child.name;
             std::replace(identifier.begin(), identifier.end(), '/', '_');
             std::replace(identifier.begin(), identifier.end(), '\\', '_');
             child.relative_path = container.relative_path + "/" +
                                   std::to_string(idx) + "_" + identifier;
-            child.format = "ctrmml";
+            child.format = format_name;
             child.is_directory = false;
             child.children.clear();
-            child.ctrmml_index = idx;
+            child.instrument_index = idx;
 
             load_metadata_for_entry(child);
             container.children.push_back(std::move(child));

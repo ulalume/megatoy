@@ -1,6 +1,6 @@
 #include "platform/web/web_patch_url.hpp"
 
-#include "formats/common.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include "platform/platform_config.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
@@ -354,7 +354,7 @@ bool parse_operator(std::string_view value, ym2612::OperatorSettings &op) {
   op.total_level = static_cast<uint8_t>(clamp_int(values[5], 0, 127));
   op.key_scale = static_cast<uint8_t>(clamp_int(values[6], 0, 3));
   op.multiple = static_cast<uint8_t>(clamp_int(values[7], 0, 15));
-  op.detune = formats::detune_from_dmp_to_patch(clamp_int(values[8], 0, 7));
+  op.detune = formats::adapter::detune_from_linear(clamp_int(values[8], 0, 7));
   op.ssg_type_envelope_control =
       static_cast<uint8_t>(clamp_int(values[9], 0, 7));
   op.ssg_enable = values[10] != 0;

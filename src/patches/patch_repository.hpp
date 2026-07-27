@@ -25,8 +25,8 @@ struct PatchEntry {
   // Metadata (only valid for files, not directories)
   std::optional<PatchMetadata> metadata;
 
-  // For ctrmml files: instrument index within the file
-  size_t ctrmml_index = 0;
+  // For bank formats (.mml, .dmf, .fur, .opm): which instrument in the file
+  size_t instrument_index = 0;
 };
 
 class PatchRepository {

@@ -5,9 +5,7 @@
 #include "patches/web_patch_storage.hpp"
 #include "platform/web/web_download.hpp"
 #include "platform/web/web_patch_store.hpp"
-#include "formats/dmp.hpp"
-#include "formats/fui.hpp"
-#include "formats/ctrmml.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include <algorithm>
 #include <filesystem>
 
@@ -133,23 +131,34 @@ bool WebPatchStorage::download_patch(const ym2612::Patch &patch,
   const std::string sanitized =
       patches::sanitize_filename(name.empty() ? "patch" : name);
   const std::string ext = extension_hint.empty() ? ".dmp" : extension_hint;
-  if (ext == ".dmp") {
-    auto data = formats::dmp::serialize_patch(patch);
-    platform::web::download_binary(sanitized + ".dmp", data,
+
+  const auto format = formats::adapter::format_for_extension(ext);
+  if (!format) {
+    return false;
+  }
+
+  // Text formats have to go out as text so the browser saves them with the
+  // platform's line endings rather than as an opaque blob.
+  for (const auto &info : formats::adapter::known_formats()) {
+    if (info.format != *format || !info.can_write) {
+      continue;
+    }
+    if (info.is_text) {
+      auto text = formats::adapter::serialize_text(*format, patch);
+      if (!text) {
+        return false;
+      }
+      platform::web::download_text(sanitized + ext, *text, "text/plain");
+      return true;
+    }
+    auto data = formats::adapter::serialize(*format, patch);
+    if (!data) {
+      return false;
+    }
+    platform::web::download_binary(sanitized + ext, *data,
                                    "application/octet-stream");
     return true;
   }
-  if (ext == ".mml") {
-    auto text = formats::ctrmml::patch_to_string(patch);
-    platform::web::download_text(sanitized + ".mml", text, "text/plain");
-    return true;
-  }
-   if (ext == ".fui") {
-     auto data = formats::fui::serialize_patch(patch);
-     platform::web::download_binary(sanitized + ".fui", data,
-                                    "application/octet-stream");
-     return true;
-   }
   return false;
 }
 

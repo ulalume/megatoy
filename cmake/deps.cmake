@@ -127,26 +127,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(IconFontCppHeaders)
 
+# ym2612_format - patch file readers and writers.
+# It also brings in miniz, which megatoy uses directly for .ginpkg packaging.
 FetchContent_Declare(
-  miniz
-  GIT_REPOSITORY https://github.com/richgel999/miniz
-  GIT_TAG        2.2.0
+  ym2612_format
+  GIT_REPOSITORY https://github.com/ulalume/ym2612_format
+  GIT_TAG        main
 )
-if(POLICY CMP0169)
-  cmake_policy(SET CMP0169 OLD)
-endif()
-FetchContent_GetProperties(miniz)
-if(NOT miniz_POPULATED)
-  FetchContent_Populate(miniz)
-  set(miniz_export_header "${miniz_SOURCE_DIR}/miniz_export.h")
-  if(NOT EXISTS "${miniz_export_header}")
-    file(WRITE "${miniz_export_header}" "#pragma once\n\n#if defined(_WIN32)\n#if defined(MINIZ_SHARED)\n#if defined(MINIZ_EXPORTS)\n#define MINIZ_EXPORT __declspec(dllexport)\n#else\n#define MINIZ_EXPORT __declspec(dllimport)\n#endif\n#else\n#define MINIZ_EXPORT\n#endif\n#elif defined(__GNUC__) && __GNUC__ >= 4\n#define MINIZ_EXPORT __attribute__((visibility(\"default\")))\n#else\n#define MINIZ_EXPORT\n#endif\n")
-  endif()
-endif()
-add_library(miniz STATIC
-  ${miniz_SOURCE_DIR}/miniz.c
-  ${miniz_SOURCE_DIR}/miniz_tdef.c
-  ${miniz_SOURCE_DIR}/miniz_tinfl.c
-  ${miniz_SOURCE_DIR}/miniz_zip.c
-)
-target_include_directories(miniz PUBLIC ${miniz_SOURCE_DIR})
+set(YM2612_FORMAT_BUILD_CLI OFF CACHE BOOL "" FORCE)
+set(YM2612_FORMAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(ym2612_format)

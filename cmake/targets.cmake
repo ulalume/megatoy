@@ -55,16 +55,11 @@ set(MEGATOY_CORE_SOURCES
   src/audio/audio_manager.cpp
   src/audio/sdl_audio_transport.cpp
   src/channel_allocator.cpp
-  src/formats/common.cpp
-  src/formats/ctrmml.cpp
-  src/formats/dmp.cpp
   src/core/random_utils.cpp
-  src/formats/gin.cpp
   src/formats/ginpkg.cpp
-  src/formats/fui.cpp
   src/formats/patch_loader.cpp
+  src/formats/ym2612_format_adapter.cpp
   src/formats/patch_registry.cpp
-  src/formats/rym2612.cpp
   src/gui/components/about_dialog.cpp
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
@@ -179,6 +174,7 @@ target_link_libraries(megatoy_core PUBLIC
   chord_detector::chord_detector
   kissfft
   miniz
+  ym2612_format
 )
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")

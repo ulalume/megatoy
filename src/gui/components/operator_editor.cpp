@@ -1,6 +1,6 @@
 #include "operator_editor.hpp"
 #include "envelope_image.hpp"
-#include "formats/common.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "patch_editor.hpp"
 #include "ym2612/types.hpp"
@@ -298,12 +298,12 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   const char *detune_labels[] = {
       "-3", "-2", "-1", "0", "1", "2", "3",
   };
-  int detune = formats::detune_from_patch_to_dmp(op.detune);
+  int detune = formats::adapter::detune_to_linear(op.detune);
   bool detune_changed =
       ImGui::SliderInt("Detune", &detune, 0, 6, detune_labels[detune]);
   track_patch_history(context, op_label + " Detune", key_prefix + ".detune");
   if (detune_changed) {
-    op.detune = static_cast<uint8_t>(formats::detune_from_dmp_to_patch(detune));
+    op.detune = static_cast<uint8_t>(formats::adapter::detune_from_linear(detune));
     setting_changed = true;
   }
 

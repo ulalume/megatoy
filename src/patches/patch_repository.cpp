@@ -1,5 +1,5 @@
 #include "patch_repository.hpp"
-#include "formats/ctrmml.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include "formats/patch_loader.hpp"
 #include "patch_storage.hpp"
 #include "platform/platform_config.hpp"
@@ -101,7 +101,7 @@ bool PatchRepository::load_patch(const PatchEntry &entry,
     return true;
   }
   try {
-    size_t instrument_index = entry.ctrmml_index;
+    size_t instrument_index = entry.instrument_index;
     if (instrument_index >= result.patches.size()) {
       return false;
     }
@@ -151,7 +151,9 @@ bool PatchRepository::has_directory_changed() const {
 }
 
 std::vector<std::string> PatchRepository::supported_extensions() {
-  return {".gin", ".ginpkg", ".rym2612", ".dmp", ".fui", ".mml"};
+  auto extensions = formats::adapter::readable_extensions();
+  extensions.push_back(".ginpkg");
+  return extensions;
 }
 
 SavePatchResult PatchRepository::save_patch(const ym2612::Patch &patch,
