@@ -12,13 +12,12 @@ static_assert((ScopeBuffer::kCapacity & kMask) == 0,
 } // namespace
 
 ScopeBuffer::ScopeBuffer()
-    : write_position_(0), last_clip_position_(0), has_clipped_(false) {
-  clear();
-}
+    : left_(kCapacity, 0.0f), right_(kCapacity, 0.0f), write_position_(0),
+      last_clip_position_(0), has_clipped_(false) {}
 
 void ScopeBuffer::clear() {
-  left_.fill(0.0f);
-  right_.fill(0.0f);
+  std::fill(left_.begin(), left_.end(), 0.0f);
+  std::fill(right_.begin(), right_.end(), 0.0f);
   write_position_.store(0, std::memory_order_relaxed);
   last_clip_position_.store(0, std::memory_order_relaxed);
   has_clipped_.store(false, std::memory_order_relaxed);

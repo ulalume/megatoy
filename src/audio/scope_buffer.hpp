@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -44,8 +43,13 @@ public:
   bool clipped_within(std::uint64_t window) const;
 
 private:
-  std::array<float, kCapacity> left_;
-  std::array<float, kCapacity> right_;
+  // Heap-allocated, not std::array: at kCapacity this pair is 64 KB, and a
+  // ScopeBuffer lives inside AudioEngine -> AudioManager -> AppServices,
+  // which main() holds by value. That is fine on a desktop's 8 MB stack and
+  // exactly overflows Emscripten's 64 KB one. Allocated once in the
+  // constructor and never resized, so the audio thread's pointer stays valid.
+  std::vector<float> left_;
+  std::vector<float> right_;
 
   std::atomic<std::uint64_t> write_position_;
   std::atomic<std::uint64_t> last_clip_position_;

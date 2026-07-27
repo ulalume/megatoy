@@ -20,6 +20,15 @@ target_link_libraries(imgui_lib PUBLIC
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   target_compile_definitions(imgui_lib PUBLIC IMGUI_IMPL_OPENGL_ES3 IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
+  # Selecting WebAssembly SIMD instructions for ImGui::NewFrame sends LLVM
+  # into unbounded recursion in SelectionDAG::isKnownNeverNaN, crashing the
+  # compiler (and, under LTO, wasm-ld). Only imgui.cpp is affected, and only
+  # at -O2 or above with -msimd128.
+  #
+  # SIMD is turned off for the GUI rather than for the whole build: it earns
+  # its keep in the audio path (ymfm, the resampler, kissfft), not in ImGui's
+  # layout code.
+  target_compile_options(imgui_lib PRIVATE -mno-simd128)
 endif()
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 target_link_libraries(imgui_lib PUBLIC OpenGL::GL)
@@ -287,6 +296,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     "-sMIN_WEBGL_VERSION=2"
     "-sWASM=1"
     "-sINITIAL_MEMORY=134217728"
+    # main() holds AppServices by value, and Emscripten's default stack is a
+    # mere 64 KB. Give it room so a new member does not overflow the stack at
+    # startup, which surfaces only as "memory access out of bounds".
+    "-sSTACK_SIZE=1048576"
     "--preload-file" "${CMAKE_SOURCE_DIR}/assets@/app/assets"
   )
   if(MEGATOY_GENERATE_SIMPLE_HTML)

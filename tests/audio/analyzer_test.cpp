@@ -12,6 +12,13 @@
 #include <iostream>
 #include <vector>
 
+// The sample storage has to live on the heap. AudioEngine holds a ScopeBuffer
+// by value, AppServices holds an AudioEngine, and main() holds AppServices --
+// so an inline kCapacity-sized array lands on the stack, which is 64 KB in
+// Emscripten builds and overflows at startup.
+static_assert(sizeof(audio::ScopeBuffer) < 1024,
+              "ScopeBuffer must not store its ring buffer inline");
+
 namespace {
 
 constexpr uint32_t kSampleRate = 44100;
