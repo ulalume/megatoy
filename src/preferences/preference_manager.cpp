@@ -3,6 +3,7 @@
 #include "platform/file_dialog.hpp"
 #include "preference_storage.hpp"
 #include <cstdlib>
+#include <system_error>
 #include <iostream>
 
 PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
@@ -10,36 +11,77 @@ PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
       theme_(ui::styles::ThemeId::MegatoyDark),
       storage_(make_json_preference_storage(get_preferences_file_path(),
                                             paths_.file_system())) {
-  paths_.set_data_root(get_default_data_directory());
   load_preferences();
   ensure_directories_exist();
 }
 
 PreferenceManager::~PreferenceManager() { platform::file_dialog::shutdown(); }
 
-std::filesystem::path PreferenceManager::get_default_data_directory() const {
-  return megatoy::system::PathService::default_data_directory();
+bool PreferenceManager::add_workspace_folder(
+    const std::filesystem::path &path) {
+  if (!workspace_.add(path)) {
+    return false;
+  }
+  save_preferences();
+  return true;
 }
 
-void PreferenceManager::set_data_directory(const std::filesystem::path &path) {
-  paths_.set_data_root(path);
-  ensure_directories_exist();
+bool PreferenceManager::remove_workspace_folder(
+    const std::filesystem::path &path) {
+  if (!workspace_.remove(path)) {
+    return false;
+  }
+  save_preferences();
+  return true;
+}
+
+bool PreferenceManager::reorder_workspace_folder(std::size_t from,
+                                                 std::size_t to) {
+  if (!workspace_.reorder(from, to)) {
+    return false;
+  }
+  save_preferences();
+  return true;
+}
+
+bool PreferenceManager::prompt_add_workspace_folder() {
+  std::filesystem::path chosen;
+  const auto start = last_save_directory();
+  if (platform::file_dialog::pick_folder(start, chosen) !=
+      platform::file_dialog::DialogResult::Ok) {
+    return false;
+  }
+  return add_workspace_folder(chosen);
+}
+
+void PreferenceManager::set_show_builtin_presets(bool show) {
+  if (show == show_builtin_presets_) {
+    return;
+  }
+  show_builtin_presets_ = show;
   save_preferences();
 }
 
-std::filesystem::path PreferenceManager::get_data_directory() const {
-  return paths_.paths().data_root;
+std::filesystem::path PreferenceManager::last_save_directory() const {
+  if (!last_save_directory_.empty()) {
+    std::error_code ec;
+    if (std::filesystem::is_directory(last_save_directory_, ec) && !ec) {
+      return last_save_directory_;
+    }
+  }
+  if (auto folder = workspace_.default_save_folder()) {
+    return *folder;
+  }
+  return megatoy::system::PathService::default_documents_directory();
 }
 
-bool PreferenceManager::select_data_directory() {
-  std::filesystem::path chosen_path;
-  auto result =
-      platform::file_dialog::pick_folder(get_data_directory(), chosen_path);
-  if (result == platform::file_dialog::DialogResult::Ok) {
-    set_data_directory(chosen_path);
-    return true;
+void PreferenceManager::set_last_save_directory(
+    const std::filesystem::path &path) {
+  if (path.empty() || path == last_save_directory_) {
+    return;
   }
-  return result != platform::file_dialog::DialogResult::Error;
+  last_save_directory_ = path;
+  save_preferences();
 }
 
 bool PreferenceManager::ensure_directories_exist() {
@@ -74,12 +116,6 @@ bool PreferenceManager::load_preferences() {
 
   apply_loaded_data(data);
   return true;
-}
-
-void PreferenceManager::reset_data_directory() {
-  paths_.set_data_root(get_default_data_directory());
-  ensure_directories_exist();
-  save_preferences();
 }
 
 void PreferenceManager::reset_ui_preferences() {
@@ -132,14 +168,18 @@ void PreferenceManager::set_ui_preferences(
 
 PreferenceData PreferenceManager::to_data() const {
   PreferenceData data;
-  data.data_directory = paths_.paths().data_root;
+  data.workspace_folders = workspace_.paths();
+  data.last_save_directory = last_save_directory_;
+  data.show_builtin_presets = show_builtin_presets_;
   data.theme = theme_;
   data.ui_preferences = ui_preferences_;
   return data;
 }
 
 void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
-  paths_.set_data_root(data.data_directory);
+  workspace_.set_paths(data.workspace_folders);
+  last_save_directory_ = data.last_save_directory;
+  show_builtin_presets_ = data.show_builtin_presets;
   theme_ = data.theme;
   ui_preferences_ = data.ui_preferences;
 }

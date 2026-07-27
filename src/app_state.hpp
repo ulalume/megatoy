@@ -11,7 +11,7 @@
 
 struct UIState {
   PreferenceManager::UIPreferences prefs;
-  bool open_directory_dialog = false;
+  bool open_add_folder_dialog = false;
 
   struct DropState {
     bool show_error_popup = false;

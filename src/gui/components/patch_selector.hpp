@@ -19,6 +19,10 @@ struct PatchSelectorContext {
   PreferenceManager::UIPreferences &prefs;
   std::function<void(const patches::PatchEntry &)> safe_load_patch;
   std::function<void(const std::filesystem::path &)> reveal_in_file_manager;
+  /// True when the workspace has no folders, so the browser can offer to add
+  /// one instead of showing an empty tree.
+  bool workspace_is_empty = false;
+  std::function<void()> add_folder;
 
   TableSortColumn get_sort_column() const {
     return static_cast<TableSortColumn>(prefs.patch_sort_column);

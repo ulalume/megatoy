@@ -73,7 +73,13 @@ struct UIPreferences {
 };
 
 struct PreferenceData {
-  std::filesystem::path data_directory;
+  /// Patch folders the user has added, in browser order.
+  std::vector<std::filesystem::path> workspace_folders;
+  /// Where the last save/export dialog was pointed, so the next one starts
+  /// there rather than at a fixed location.
+  std::filesystem::path last_save_directory;
+  bool show_builtin_presets = true;
+
   ui::styles::ThemeId theme = ui::styles::ThemeId::MegatoyDark;
   UIPreferences ui_preferences;
 };

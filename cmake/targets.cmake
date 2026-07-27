@@ -93,11 +93,12 @@ set(MEGATOY_CORE_SOURCES
   src/midi/midi_input_manager.cpp
 
   src/patches/patch_session.cpp
+  src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
   src/patches/filesystem_patch_storage.cpp
   src/patches/web_patch_storage.cpp
-  src/patches/patch_metadata.cpp
+  src/patches/folder_metadata.cpp
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp
@@ -146,7 +147,6 @@ target_include_directories(megatoy_core PUBLIC
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${stb_SOURCE_DIR}
-  ${SQLiteCpp_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_BINARY_DIR}
   ${iconfontcppheaders_SOURCE_DIR}
@@ -183,7 +183,6 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     CURL::libcurl
     nfd
     rtmidi
-    SQLiteCpp
   )
   if(WIN32)
     target_link_libraries(megatoy_core PUBLIC shell32)

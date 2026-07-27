@@ -1,6 +1,6 @@
 #pragma once
 
-#include "patch_metadata.hpp"
+#include "patches/folder_metadata.hpp"
 #include "ym2612/patch.hpp"
 #include <filesystem>
 #include <optional>

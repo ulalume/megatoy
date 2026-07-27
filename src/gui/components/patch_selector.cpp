@@ -609,6 +609,17 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     preset_repository.refresh();
   }
 
+  if (context.workspace_is_empty && context.add_folder) {
+    ImGui::TextWrapped(
+        "No patch folders yet. Add a folder of patches to get started -- "
+        "megatoy reads them in place and never moves your files.");
+    ImGui::Spacing();
+    if (ImGui::Button(ICON_FA_FOLDER_TREE " Add Folder...")) {
+      context.add_folder();
+    }
+    ImGui::Separator();
+  }
+
   if (megatoy::platform::is_desktop()) {
     if (ImGui::BeginTabBar("##PatchViewMode")) {
       if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Tree view")) {

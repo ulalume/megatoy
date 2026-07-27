@@ -11,6 +11,7 @@
 #include <array>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -50,7 +51,8 @@ using ExportFormatInfo = formats::ExportFormatInfo;
 
 class PatchSession {
 public:
-  PatchSession(megatoy::system::PathService &directories, AudioManager &audio);
+  PatchSession(megatoy::system::PathService &directories,
+               PreferenceManager &preferences, AudioManager &audio);
 
   // Patch access
   ym2612::Patch &current_patch();
@@ -68,9 +70,10 @@ public:
   PatchRepository &repository();
   const PatchRepository &repository() const;
 
-  // Initialization and directory management
+  // Initialization and workspace management
   void initialize_patch_defaults();
-  void refresh_directories();
+  /// Rebuild the repository if the workspace folder list has changed.
+  void sync_workspace();
 
   // Patch loading
   void set_current_patch(const ym2612::Patch &patch,
@@ -80,8 +83,18 @@ public:
   void apply_patch_to_audio();
 
   // File operations
+  /**
+   * Write the patch back to its source file when that is safe, otherwise fall
+   * back to Save As.
+   *
+   * In-place overwriting requires a single-patch, writable format in a
+   * writable workspace folder. Read-only formats (.dmf, .fur, .opm,
+   * .rym2612), instrument banks and the built-in presets all go through the
+   * dialog instead, so nothing is destroyed by a stray Ctrl+S.
+   */
   SaveResult save_current_patch(bool force_overwrite = false,
                                 std::string_view preferred_extension = {});
+  SaveResult save_current_patch_as(std::string_view preferred_extension = {});
   SaveResult export_current_patch_as(const ExportFormatInfo &format);
   std::optional<ExportFormatInfo>
   find_export_format(const std::string &extension) const;
@@ -109,11 +122,23 @@ public:
   PatchSnapshot capture_snapshot() const;
   void restore_snapshot(const PatchSnapshot &snapshot);
 
+  /**
+   * True when Save writes straight back to the current file. False means the
+   * next Save opens a dialog -- because the patch has no file yet, came from
+   * a read-only folder, or is one instrument out of a bank.
+   */
+  bool can_save_in_place() const;
+
   bool current_patch_is_user_patch() const;
   const char *save_label_for(bool is_user_patch) const;
 
 private:
+  bool can_overwrite_in_place(const std::filesystem::path &path) const;
+  std::optional<std::filesystem::path> writable_source_folder() const;
+  bool write_patch_to(const std::filesystem::path &path);
+
   megatoy::system::PathService &directories_;
+  PreferenceManager &preferences_;
   AudioManager &audio_;
   std::unique_ptr<PatchRepository> repository_;
   ChannelAllocator channel_allocator_;

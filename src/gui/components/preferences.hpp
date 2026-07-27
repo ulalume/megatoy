@@ -15,16 +15,17 @@ namespace ui {
 struct PreferencesContext {
   PreferenceManager &preferences;
   PreferenceManager::UIPreferences &ui_prefs;
-  bool &open_directory_dialog;
+  bool &open_add_folder_dialog;
   const megatoy::system::DirectoryPaths &paths;
   const std::vector<std::string> &connected_midi_devices;
   std::string midi_status_message;
   bool show_web_midi_button = false;
   bool web_midi_button_disabled = false;
   std::function<void()> request_web_midi;
-  std::function<void()> sync_patch_directories;
+  /// Called after the workspace folder list changes.
+  std::function<void()> sync_workspace;
   std::function<void(ui::styles::ThemeId theme_id)> apply_theme;
-  bool allow_data_directory_ui = true;
+  bool allow_workspace_ui = true;
 };
 
 void render_preferences_window(const char *title, PreferencesContext &context);

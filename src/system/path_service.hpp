@@ -5,56 +5,51 @@
 
 namespace megatoy::system {
 
+/**
+ * The few paths megatoy owns.
+ *
+ * Patches no longer live in a directory the application manages -- they live
+ * in whatever folders the user adds to the workspace (see
+ * megatoy::workspace::Workspace). What remains here is configuration, which
+ * belongs to the app, and the read-only presets shipped inside the bundle.
+ */
 struct DirectoryPaths {
-  std::filesystem::path data_root;
-  std::filesystem::path patches_root;
-  std::filesystem::path user_patches_root;
-  std::filesystem::path export_root;
   std::filesystem::path builtin_presets_root;
   std::filesystem::path preferences_file;
   std::filesystem::path imgui_ini_file;
-  std::filesystem::path patch_metadata_db;
 };
 
 class PathService {
 public:
   PathService();
-  explicit PathService(::platform::VirtualFileSystem &vfs);
+  /**
+   * @param config_root Overrides where preferences.json and imgui.ini live.
+   *                    Tests pass a temporary directory so they cannot
+   *                    overwrite the real user configuration.
+   */
+  explicit PathService(::platform::VirtualFileSystem &vfs,
+                       std::filesystem::path config_root = {});
 
-  // Directory paths access
   const DirectoryPaths &paths() const { return paths_; }
   ::platform::VirtualFileSystem &file_system() { return vfs_; }
   const ::platform::VirtualFileSystem &file_system() const { return vfs_; }
 
-  // Directory management
-  void set_data_root(const std::filesystem::path &root);
+  /// Create the configuration directory. Patch folders belong to the user.
   bool ensure_directories() const;
 
-  // Static path resolution methods
   static std::filesystem::path executable_directory();
   static std::filesystem::path builtin_presets_directory();
-  static std::filesystem::path default_data_directory();
   static std::filesystem::path preferences_file_path();
   static std::filesystem::path imgui_ini_file_path();
-  static std::filesystem::path patch_metadata_db_path();
+
+  /// Where a save or export dialog starts when nothing better is known.
+  static std::filesystem::path default_documents_directory();
 
 private:
   DirectoryPaths paths_;
 
-  // Internal path utilities
-  static std::filesystem::path normalize(const std::filesystem::path &path);
   static std::filesystem::path
   canonical_or_normal(const std::filesystem::path &path);
-
-  // Directory builders
-  static std::filesystem::path
-  patches_directory(const std::filesystem::path &root);
-  static std::filesystem::path
-  user_patches_directory(const std::filesystem::path &root);
-  static std::filesystem::path
-  export_directory(const std::filesystem::path &root);
-
-  // Platform-specific implementations
   static std::filesystem::path executable_directory_impl();
 
   ::platform::VirtualFileSystem &vfs_;

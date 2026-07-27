@@ -4,7 +4,6 @@
 #include "formats/ginpkg.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
-#include "patch_metadata.hpp"
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
 #include <algorithm>
@@ -25,47 +24,55 @@ namespace patches {
 
 FilesystemPatchStorage::FilesystemPatchStorage(
     platform::VirtualFileSystem &vfs, std::filesystem::path root,
-    std::string relative_root_label, PatchMetadataManager *metadata_manager,
-    bool writable, std::optional<std::filesystem::path> write_root)
+    std::string relative_root_label, bool writable, bool enable_metadata)
     : vfs_(vfs), root_(std::move(root)),
-      root_label_(std::move(relative_root_label)),
-      metadata_manager_(metadata_manager), writable_(writable),
-      write_root_(std::move(write_root)) {
-  if (root_label_.empty()) {
+      root_label_(std::move(relative_root_label)), writable_(writable),
+      label_(root_label_) {
+  if (label_.empty()) {
     label_ = root_.filename().generic_string();
-  } else {
-    label_ = root_label_;
+    root_label_ = label_;
   }
+  if (enable_metadata) {
+    metadata_ = std::make_unique<FolderMetadataStore>(
+        root_ / ".megatoy" / "patches.json");
+    metadata_->load();
+  }
+}
+
+std::string
+FilesystemPatchStorage::metadata_key(const std::string &relative_path) const {
+  const std::string prefix = root_label_ + "/";
+  if (relative_path.rfind(prefix, 0) == 0) {
+    return relative_path.substr(prefix.size());
+  }
+  return relative_path;
+}
+
+bool FilesystemPatchStorage::owns_relative_path(
+    const std::string &relative_path) const {
+  return relative_path == root_label_ ||
+         relative_path.rfind(root_label_ + "/", 0) == 0;
 }
 
 void FilesystemPatchStorage::append_entries(
     std::vector<PatchEntry> &tree) const {
-  if (!vfs_.is_directory(root_)) {
-    return;
-  }
+  PatchEntry root_entry;
+  root_entry.name = label_;
+  root_entry.relative_path = root_label_;
+  root_entry.full_path = root_;
+  root_entry.is_directory = true;
 
-  std::vector<PatchEntry> children;
-  scan_directory(root_, children, root_label_);
-  if (children.empty()) {
-    return;
+  // An added folder is listed even when it is empty or missing, so the user
+  // can see it is part of the workspace and remove it again.
+  if (vfs_.is_directory(root_)) {
+    scan_directory(root_, root_entry.children, root_label_);
   }
-
-  if (!root_label_.empty()) {
-    PatchEntry root_entry;
-    root_entry.name = root_label_;
-    root_entry.relative_path = root_label_;
-    root_entry.full_path = root_;
-    root_entry.is_directory = true;
-    root_entry.children = std::move(children);
-    tree.push_back(std::move(root_entry));
-  } else {
-    tree.insert(tree.end(), children.begin(), children.end());
-  }
+  tree.push_back(std::move(root_entry));
 }
 
 bool FilesystemPatchStorage::load_patch(const PatchEntry &entry,
                                         ym2612::Patch &out_patch) const {
-  if (entry.is_directory) {
+  if (entry.is_directory || !owns_relative_path(entry.relative_path)) {
     return false;
   }
   auto result = formats::load_patch_from_file(entry.full_path);
@@ -91,7 +98,7 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
     return SavePatchResult::unsupported();
   }
 
-  const auto patches_dir = write_root_.value_or(root_);
+  const auto patches_dir = root_;
   const auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
 
   const auto ginpkg_path =
@@ -164,41 +171,54 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
 bool FilesystemPatchStorage::save_patch_metadata(
     const std::string &relative_path, const ym2612::Patch &patch,
     const PatchMetadata &metadata) {
-  if (!metadata_manager_) {
+  if (!metadata_ || !owns_relative_path(relative_path)) {
     return false;
   }
 
-  PatchMetadata metadata_with_hash = metadata;
-  metadata_with_hash.path = relative_path;
-  metadata_with_hash.hash = patch.hash();
-
-  return metadata_manager_->save_metadata(metadata_with_hash);
+  PatchMetadata stored = metadata;
+  stored.path = metadata_key(relative_path);
+  stored.hash = patch.hash();
+  return metadata_->put(std::move(stored));
 }
 
 bool FilesystemPatchStorage::update_patch_metadata(
     const std::string &relative_path, const PatchMetadata &metadata) {
-  if (!metadata_manager_) {
+  if (!metadata_ || !owns_relative_path(relative_path)) {
     return false;
   }
-  PatchMetadata updated_metadata = metadata;
-  updated_metadata.path = relative_path;
-  return metadata_manager_->update_metadata(updated_metadata);
+
+  const auto key = metadata_key(relative_path);
+  PatchMetadata stored = metadata;
+  stored.path = key;
+  // Keep the recorded hash: this path only edits ratings and categories, and
+  // the caller has no patch to hash.
+  if (auto existing = metadata_->get(key)) {
+    stored.hash = existing->hash;
+  }
+  return metadata_->put(std::move(stored));
 }
 
 std::optional<PatchMetadata> FilesystemPatchStorage::get_patch_metadata(
     const std::string &relative_path) const {
-  if (!metadata_manager_) {
+  if (!metadata_ || !owns_relative_path(relative_path)) {
     return std::nullopt;
   }
-  return metadata_manager_->get_metadata(relative_path);
+  return metadata_->get(metadata_key(relative_path));
 }
 
 void FilesystemPatchStorage::cleanup_metadata(
     const std::vector<std::string> &paths) const {
-  if (!metadata_manager_) {
+  if (!metadata_) {
     return;
   }
-  metadata_manager_->cleanup_missing_files(paths);
+  std::vector<std::string> mine;
+  mine.reserve(paths.size());
+  for (const auto &path : paths) {
+    if (owns_relative_path(path)) {
+      mine.push_back(metadata_key(path));
+    }
+  }
+  metadata_->retain_only(mine);
 }
 
 std::optional<bool>
@@ -207,7 +227,7 @@ FilesystemPatchStorage::has_patch_named(const std::string &name) const {
     return std::nullopt;
   }
   auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
-  const auto patches_dir = write_root_.value_or(root_);
+  const auto patches_dir = root_;
   auto ginpkg_target = formats::ginpkg::build_package_path(patches_dir, sanitized);
   auto gin_target = patches_dir / (sanitized + ".gin");
   return vfs_.exists(ginpkg_target) || vfs_.exists(gin_target);
@@ -385,10 +405,10 @@ bool FilesystemPatchStorage::is_supported_file(
 }
 
 void FilesystemPatchStorage::load_metadata_for_entry(PatchEntry &entry) const {
-  if (!metadata_manager_ || entry.is_directory) {
+  if (!metadata_ || entry.is_directory) {
     return;
   }
-  entry.metadata = metadata_manager_->get_metadata(entry.relative_path);
+  entry.metadata = metadata_->get(metadata_key(entry.relative_path));
 }
 
 } // namespace patches

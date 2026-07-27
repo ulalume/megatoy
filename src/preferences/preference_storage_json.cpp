@@ -53,8 +53,25 @@ public:
         (*stream) >> j;
       }
 
-      if (j.contains("data_directory")) {
-        data.data_directory = j["data_directory"].get<std::string>();
+      // "data_directory" was the single managed patch tree megatoy used
+      // before workspaces. It is deliberately not read: the concept is gone,
+      // and silently adopting the old path would recreate it.
+      if (j.contains("workspace_folders") &&
+          j["workspace_folders"].is_array()) {
+        data.workspace_folders.clear();
+        for (const auto &entry : j["workspace_folders"]) {
+          if (entry.is_string()) {
+            data.workspace_folders.emplace_back(entry.get<std::string>());
+          }
+        }
+      }
+
+      if (j.contains("last_save_directory")) {
+        data.last_save_directory = j["last_save_directory"].get<std::string>();
+      }
+
+      if (j.contains("show_builtin_presets")) {
+        data.show_builtin_presets = j["show_builtin_presets"].get<bool>();
       }
 
       if (j.contains("theme")) {
@@ -170,7 +187,13 @@ public:
   bool save(const PreferenceData &data) override {
     try {
       nlohmann::json j;
-      j["data_directory"] = data.data_directory.string();
+      nlohmann::json folders = nlohmann::json::array();
+      for (const auto &folder : data.workspace_folders) {
+        folders.push_back(folder.string());
+      }
+      j["workspace_folders"] = std::move(folders);
+      j["last_save_directory"] = data.last_save_directory.string();
+      j["show_builtin_presets"] = data.show_builtin_presets;
       j["theme"] = ui::styles::storage_key(data.theme);
 
       nlohmann::json ui;

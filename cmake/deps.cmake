@@ -103,22 +103,6 @@ set(KISSFFT_TOOLS    OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(kissfft)
 
-if(NOT EMSCRIPTEN)
-  # SQLiteCpp
-  FetchContent_Declare(
-    SQLiteCpp
-    GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp.git
-    GIT_TAG        3.3.1
-  )
-  set(SQLITECPP_INTERNAL_SQLITE ON CACHE BOOL "" FORCE)
-  set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
-  set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
-  set(SQLITECPP_RUN_DOXYGEN OFF CACHE BOOL "" FORCE)
-  set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-  set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-  FetchContent_MakeAvailable(SQLiteCpp)
-endif()
-
 # FontAwesome Headers
 FetchContent_Declare(
   IconFontCppHeaders

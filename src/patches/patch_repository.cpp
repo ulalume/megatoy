@@ -16,57 +16,91 @@
 
 namespace patches {
 
-PatchRepository::PatchRepository(platform::VirtualFileSystem &vfs,
-                                 const std::filesystem::path &patches_root,
-                                 const std::filesystem::path &user_save_root,
-                                 const std::filesystem::path &builtin_dir,
-                                 const std::filesystem::path &metadata_db_path)
-    : patches_root_directory_(patches_root),
-      user_save_directory_(user_save_root), builtin_patch_directory_(builtin_dir),
-      vfs_(vfs),
-      has_builtin_directory_(!builtin_dir.empty()), cache_initialized_(false) {
+PatchRepository::PatchRepository(
+    platform::VirtualFileSystem &vfs,
+    const megatoy::workspace::Workspace &workspace,
+    const std::filesystem::path &builtin_presets_dir)
+    : workspace_(workspace), builtin_presets_directory_(builtin_presets_dir),
+      vfs_(vfs) {
+  rebuild_storages();
+  refresh();
+}
 
-  // Initialize metadata manager if path is provided
-  if (!metadata_db_path.empty()) {
-    metadata_manager_ =
-        std::make_unique<PatchMetadataManager>(metadata_db_path.string());
-    if (!metadata_manager_->initialize()) {
-      std::cerr << "Warning: Failed to initialize patch metadata database"
-                << std::endl;
-      metadata_manager_.reset();
-    }
+void PatchRepository::set_show_builtin_presets(bool show) {
+  if (show == show_builtin_presets_) {
+    return;
   }
+  show_builtin_presets_ = show;
+  rebuild_storages();
+  refresh();
+}
+
+bool PatchRepository::sync_workspace() {
+  if (storages_built_ && synced_revision_ == workspace_.revision()) {
+    return false;
+  }
+  rebuild_storages();
+  refresh();
+  return true;
+}
+
+void PatchRepository::rebuild_storages() {
+  storages_.clear();
+  watched_directories_.clear();
 
 #if defined(MEGATOY_PLATFORM_WEB)
   storages_.push_back(std::make_unique<WebPatchStorage>());
 #endif
 
-  storages_.push_back(std::make_unique<FilesystemPatchStorage>(
-      vfs_, patches_root_directory_, "", metadata_manager_.get(), true,
-      user_save_directory_));
-  if (has_builtin_directory_) {
+  // Root labels prefix every relative path in the tree, so they have to be
+  // unique even when two folders share a basename.
+  std::vector<std::string> used_labels;
+  auto unique_label = [&used_labels](std::string base) {
+    if (base.empty()) {
+      base = "folder";
+    }
+    std::string candidate = base;
+    for (int suffix = 2;
+         std::find(used_labels.begin(), used_labels.end(), candidate) !=
+         used_labels.end();
+         ++suffix) {
+      candidate = base + " (" + std::to_string(suffix) + ")";
+    }
+    used_labels.push_back(candidate);
+    return candidate;
+  };
+
+  // The presets label is reserved so a user folder called "presets" cannot
+  // shadow the built-in one.
+  used_labels.emplace_back(kBuiltinRootName);
+
+  for (const auto &folder : workspace_.folders()) {
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
-        vfs_, builtin_patch_directory_, kBuiltinRootName,
-        metadata_manager_.get(), false));
+        vfs_, folder.path, unique_label(folder.name), folder.writable,
+        /*enable_metadata=*/folder.writable));
+    if (folder.available) {
+      watched_directories_.push_back(folder.path);
+    }
   }
 
-  refresh();
+  if (show_builtin_presets_ && !builtin_presets_directory_.empty()) {
+    storages_.push_back(std::make_unique<FilesystemPatchStorage>(
+        vfs_, builtin_presets_directory_, kBuiltinRootName,
+        /*writable=*/false, /*enable_metadata=*/false));
+    watched_directories_.push_back(builtin_presets_directory_);
+  }
+
+  synced_revision_ = workspace_.revision();
+  storages_built_ = true;
 }
 
 void PatchRepository::refresh() {
   tree_cache_.clear();
 
-  user_time_valid_ =
-      vfs_.is_directory(patches_root_directory_) &&
-      vfs_.last_write_time(patches_root_directory_,
-                           last_user_directory_check_time_);
-  if (has_builtin_directory_) {
-    builtin_time_valid_ =
-        vfs_.is_directory(builtin_patch_directory_) &&
-        vfs_.last_write_time(builtin_patch_directory_,
-                             last_builtin_directory_check_time_);
-  } else {
-    builtin_time_valid_ = false;
+  watched_times_.assign(watched_directories_.size(),
+                        std::filesystem::file_time_type{});
+  for (std::size_t i = 0; i < watched_directories_.size(); ++i) {
+    vfs_.last_write_time(watched_directories_[i], watched_times_[i]);
   }
 
   for (const auto &storage : storages_) {
@@ -119,35 +153,24 @@ bool PatchRepository::has_directory_changed() const {
   if (!cache_initialized_) {
     return true;
   }
-
-  bool changed = false;
-
-  std::filesystem::file_time_type current_time{};
-  if (vfs_.is_directory(patches_root_directory_)) {
-    if (!vfs_.last_write_time(patches_root_directory_, current_time)) {
-      changed = true;
-    } else if (!user_time_valid_ ||
-               current_time != last_user_directory_check_time_) {
-      changed = true;
-    }
-  } else if (user_time_valid_) {
-    changed = true;
+  if (watched_times_.size() != watched_directories_.size()) {
+    return true;
   }
 
-  if (has_builtin_directory_) {
-    if (vfs_.is_directory(builtin_patch_directory_)) {
-      if (!vfs_.last_write_time(builtin_patch_directory_, current_time)) {
-        changed = true;
-      } else if (!builtin_time_valid_ ||
-                 current_time != last_builtin_directory_check_time_) {
-        changed = true;
+  for (std::size_t i = 0; i < watched_directories_.size(); ++i) {
+    std::filesystem::file_time_type current{};
+    if (!vfs_.last_write_time(watched_directories_[i], current)) {
+      // The folder went away, or came back after being unreadable.
+      if (watched_times_[i] != std::filesystem::file_time_type{}) {
+        return true;
       }
-    } else if (builtin_time_valid_) {
-      changed = true;
+      continue;
+    }
+    if (current != watched_times_[i]) {
+      return true;
     }
   }
-
-  return changed;
+  return false;
 }
 
 std::vector<std::string> PatchRepository::supported_extensions() {
@@ -156,10 +179,10 @@ std::vector<std::string> PatchRepository::supported_extensions() {
   return extensions;
 }
 
-SavePatchResult PatchRepository::save_patch(const ym2612::Patch &patch,
-                                            const std::string &name,
-                                            bool overwrite,
-                                            std::string_view preferred_extension) {
+SavePatchResult
+PatchRepository::save_patch(const ym2612::Patch &patch, const std::string &name,
+                            bool overwrite,
+                            std::string_view preferred_extension) {
   for (const auto &storage : storages_) {
     auto result =
         storage->save_patch(patch, name, overwrite, preferred_extension);
@@ -169,6 +192,28 @@ SavePatchResult PatchRepository::save_patch(const ym2612::Patch &patch,
       }
       return result;
     }
+  }
+  return SavePatchResult::unsupported();
+}
+
+SavePatchResult
+PatchRepository::save_patch_in(const std::filesystem::path &folder,
+                               const ym2612::Patch &patch,
+                               const std::string &name, bool overwrite,
+                               std::string_view preferred_extension) {
+  for (const auto &storage : storages_) {
+    auto *filesystem_storage =
+        dynamic_cast<FilesystemPatchStorage *>(storage.get());
+    if (filesystem_storage == nullptr ||
+        filesystem_storage->root() != folder) {
+      continue;
+    }
+    auto result = filesystem_storage->save_patch(patch, name, overwrite,
+                                                 preferred_extension);
+    if (result.status == SavePatchResult::Status::Success) {
+      refresh();
+    }
+    return result;
   }
   return SavePatchResult::unsupported();
 }
@@ -200,7 +245,8 @@ PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
       return *mapped;
     }
   }
-  return patches_root_directory_ / path;
+  // Nothing claimed it, so there is no folder to resolve against.
+  return path;
 }
 
 bool PatchRepository::save_patch_metadata(const std::string &relative_path,

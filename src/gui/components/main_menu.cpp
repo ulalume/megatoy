@@ -1,4 +1,7 @@
 #include "main_menu.hpp"
+#include "platform/platform_config.hpp"
+#include <filesystem>
+#include <optional>
 
 #include "about_dialog.hpp"
 #include "gui/save_export_actions.hpp"
@@ -79,7 +82,40 @@ void render_main_menu(MainMenuContext &context) {
       if (!name_valid)
         ImGui::EndDisabled();
 
+      if (megatoy::platform::is_desktop()) {
+        ImGui::Separator();
+        if (ImGui::MenuItem("Add Folder to Workspace...")) {
+          context.open_add_folder_dialog = true;
+        }
+
+        const auto &folders = context.preferences.workspace().folders();
+        if (ImGui::BeginMenu("Remove Folder", !folders.empty())) {
+          std::optional<std::filesystem::path> to_remove;
+          for (const auto &folder : folders) {
+            if (ImGui::MenuItem(folder.path.string().c_str())) {
+              to_remove = folder.path;
+            }
+          }
+          ImGui::EndMenu();
+          if (to_remove) {
+            context.preferences.remove_workspace_folder(*to_remove);
+            if (context.sync_workspace) {
+              context.sync_workspace();
+            }
+          }
+        }
+      }
+
       ImGui::EndMenu();
+    }
+
+    // The folder picker is modal, so it is opened after the menu closes.
+    if (context.open_add_folder_dialog) {
+      context.open_add_folder_dialog = false;
+      if (context.preferences.prompt_add_workspace_folder() &&
+          context.sync_workspace) {
+        context.sync_workspace();
+      }
     }
 
     if (context.gui.supports_quit() && !save_disabled) {
@@ -168,7 +204,7 @@ void render_main_menu(MainMenuContext &context) {
       if (ImGui::MenuItem("Reset to Default View")) {
         context.preferences.reset_ui_preferences();
         context.ui_prefs = context.preferences.ui_preferences();
-        context.open_directory_dialog = false;
+        context.open_add_folder_dialog = false;
         context.gui.reset_layout();
         context.gui.set_theme(ui::styles::ThemeId::MegatoyDark);
       }

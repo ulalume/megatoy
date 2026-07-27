@@ -1,4 +1,6 @@
 #include "preferences.hpp"
+#include <optional>
+#include <utility>
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -294,35 +296,92 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
 
-    if (context.allow_data_directory_ui) {
-      // Show the current directory
-      ImGui::SeparatorText("Data Directory");
-      ImGui::TextWrapped("%s", context.paths.data_root.c_str());
+    if (context.allow_workspace_ui) {
+      ImGui::SeparatorText("Patch Folders");
+      ImGui::TextWrapped(
+          "megatoy reads patches from the folders you add here. Nothing is "
+          "copied or moved -- your files stay where they are.");
       ImGui::Spacing();
 
-      if (ImGui::Button("Select Directory...")) {
-        context.open_directory_dialog = true;
+      const auto &folders = context.preferences.workspace().folders();
+      if (folders.empty()) {
+        ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                           "No folders added yet.");
       }
 
-      ImGui::SameLine();
-      if (ImGui::Button("Reset to Default")) {
-        prefs.reset_data_directory();
-        if (context.sync_patch_directories) {
-          context.sync_patch_directories();
+      std::optional<std::filesystem::path> folder_to_remove;
+      std::optional<std::pair<std::size_t, std::size_t>> reorder;
+
+      for (std::size_t i = 0; i < folders.size(); ++i) {
+        const auto &folder = folders[i];
+        ImGui::PushID(static_cast<int>(i));
+
+        ImGui::BeginDisabled(i == 0);
+        if (ImGui::ArrowButton("##up", ImGuiDir_Up)) {
+          reorder = {i, i - 1};
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(i + 1 >= folders.size());
+        if (ImGui::ArrowButton("##down", ImGuiDir_Down)) {
+          reorder = {i, i + 1};
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        if (ImGui::Button("Remove")) {
+          folder_to_remove = folder.path;
+        }
+
+        ImGui::SameLine();
+        if (!folder.available) {
+          ImGui::TextColored(styles::color(styles::MegatoyCol::StatusError),
+                             "%s (missing)", folder.name.c_str());
+        } else if (!folder.writable) {
+          ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                             "%s (read-only)", folder.name.c_str());
+        } else {
+          ImGui::TextUnformatted(folder.name.c_str());
+        }
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("%s", folder.path.string().c_str());
+        }
+
+        // The first writable folder is where new patches land.
+        if (folder.available && folder.writable &&
+            context.preferences.workspace().default_save_folder() ==
+                folder.path) {
+          ImGui::SameLine();
+          ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
+                             "(default)");
+        }
+
+        ImGui::PopID();
+      }
+
+      ImGui::Spacing();
+      if (ImGui::Button("Add Folder...")) {
+        context.open_add_folder_dialog = true;
+      }
+
+      bool show_presets = context.preferences.show_builtin_presets();
+      if (ImGui::Checkbox("Show built-in presets", &show_presets)) {
+        context.preferences.set_show_builtin_presets(show_presets);
+        if (context.sync_workspace) {
+          context.sync_workspace();
         }
       }
-      if (prefs.is_initialized()) {
-        ImGui::TextColored(styles::color(styles::MegatoyCol::StatusSuccess),
-                           "Directories initialized");
-      } else {
-        ImGui::TextColored(styles::color(styles::MegatoyCol::StatusError),
-                           "Directory initialization failed");
-        if (ImGui::Button("Retry Directory Creation")) {
-          if (prefs.ensure_directories_exist()) {
-            if (context.sync_patch_directories) {
-              context.sync_patch_directories();
-            }
-          }
+
+      if (folder_to_remove) {
+        context.preferences.remove_workspace_folder(*folder_to_remove);
+        if (context.sync_workspace) {
+          context.sync_workspace();
+        }
+      } else if (reorder) {
+        context.preferences.reorder_workspace_folder(reorder->first,
+                                                     reorder->second);
+        if (context.sync_workspace) {
+          context.sync_workspace();
         }
       }
     }
@@ -418,13 +477,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
   ImGui::End();
 
-  if (context.open_directory_dialog) {
-    context.open_directory_dialog = false;
-    if (prefs.select_data_directory()) {
-      if (context.sync_patch_directories) {
-        context.sync_patch_directories();
-      }
-    }
-  }
+  // The flag is consumed by the main menu, which owns the single folder
+  // picker so the two entry points cannot open it twice.
 }
 } // namespace ui

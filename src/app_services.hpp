@@ -22,7 +22,7 @@ struct AppServices {
         preference_manager(path_service),
         audio_manager(platform_services.create_audio_transport()),
         gui_manager(preference_manager),
-        patch_session(path_service, audio_manager), spectrum_analyzer(2048) {}
+        patch_session(path_service, preference_manager, audio_manager), spectrum_analyzer(2048) {}
 
   bool initialize_gui(const std::string &title, int width, int height) {
     return gui_manager.initialize(title, width, height);

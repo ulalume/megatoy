@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdlib>
+#include <system_error>
 #include <filesystem>
 #include <iostream>
 
@@ -114,61 +115,47 @@ fs::path PathService::builtin_presets_directory() {
 #endif
 }
 
-fs::path PathService::default_data_directory() {
+fs::path PathService::default_documents_directory() {
 #if defined(MEGATOY_PLATFORM_WEB)
-  return fs::path("/app/data");
+  return fs::path("/app");
 #else
-  return home_path() / "Documents" / "megatoy";
+  const auto documents = home_path() / "Documents";
+  std::error_code ec;
+  if (fs::is_directory(documents, ec) && !ec) {
+    return documents;
+  }
+  return home_path();
 #endif
 }
 
 fs::path PathService::preferences_file_path() {
   return config_path("preferences.json");
 }
-fs::path PathService::imgui_ini_file_path() { return config_path("imgui.ini"); }
-fs::path PathService::patch_metadata_db_path() {
-  return config_path("patch_metadata.db");
-}
 
-fs::path PathService::patches_directory(const fs::path &root) {
-  return root / "patches";
-}
-fs::path PathService::user_patches_directory(const fs::path &root) {
-  return root / "patches" / "user";
-}
-fs::path PathService::export_directory(const fs::path &root) {
-  return root / "export";
-}
+fs::path PathService::imgui_ini_file_path() { return config_path("imgui.ini"); }
 
 PathService::PathService() : PathService(default_vfs()) {}
 
-PathService::PathService(::platform::VirtualFileSystem &vfs) : vfs_(vfs) {
-  set_data_root(default_data_directory());
+PathService::PathService(::platform::VirtualFileSystem &vfs,
+                         fs::path config_root)
+    : vfs_(vfs) {
   paths_.builtin_presets_root = builtin_presets_directory();
-  paths_.preferences_file = preferences_file_path();
-  paths_.imgui_ini_file = imgui_ini_file_path();
-  paths_.patch_metadata_db = patch_metadata_db_path();
-}
-
-void PathService::set_data_root(const fs::path &root) {
-  paths_.data_root = root.lexically_normal();
-  paths_.patches_root = patches_directory(paths_.data_root);
-  paths_.user_patches_root = user_patches_directory(paths_.data_root);
-  paths_.export_root = export_directory(paths_.data_root);
+  if (config_root.empty()) {
+    paths_.preferences_file = preferences_file_path();
+    paths_.imgui_ini_file = imgui_ini_file_path();
+  } else {
+    paths_.preferences_file = config_root / "preferences.json";
+    paths_.imgui_ini_file = config_root / "imgui.ini";
+  }
 }
 
 bool PathService::ensure_directories() const {
-  bool success = true;
-  success = success && vfs_.create_directories(paths_.data_root);
-  success = success && vfs_.create_directories(paths_.patches_root);
-  success = success && vfs_.create_directories(paths_.user_patches_root);
-  success = success && vfs_.create_directories(paths_.export_root);
-  success = success &&
-            vfs_.create_directories(paths_.patch_metadata_db.parent_path());
-  if (!success) {
-    std::cerr << "Failed to create directories using virtual file system\n";
+  if (!vfs_.create_directories(paths_.preferences_file.parent_path())) {
+    std::cerr << "Failed to create the configuration directory at "
+              << paths_.preferences_file.parent_path() << "\n";
+    return false;
   }
-  return success;
+  return true;
 }
 
 } // namespace megatoy::system

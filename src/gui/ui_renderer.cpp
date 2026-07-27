@@ -130,7 +130,8 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
           ctx.services.gui_manager,
           ctx.services.preference_manager,
           ui_state.prefs,
-          ui_state.open_directory_dialog,
+          ui_state.open_add_folder_dialog,
+          [&ctx]() { ctx.services.patch_session.sync_workspace(); },
           ctx.services.patch_session,
           ui_state.save_export_state,
           [history_actions]() { history_actions.undo(); },
@@ -216,7 +217,9 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
           },
           [](const std::filesystem::path &path) {
             reveal_in_file_manager(path.string());
-          }};
+          },
+          ctx.services.preference_manager.workspace().empty(),
+          [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; }};
 }
 
 PatchHistoryContext make_patch_history_context(AppContext &ctx) {
@@ -253,7 +256,7 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
   return {
       ctx.services.preference_manager,
       ui_state.prefs,
-      ui_state.open_directory_dialog,
+      ui_state.open_add_folder_dialog,
       ctx.services.path_service.paths(),
       state.connected_midi_inputs(),
       midi_status.message,
@@ -264,15 +267,12 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
           ctx.midi->request_web_midi_access();
         }
       },
-      [&ctx]() {
-        // sync patch directories
-        ctx.services.path_service.ensure_directories();
-        ctx.services.patch_session.refresh_directories();
-      },
+      [&ctx]() { ctx.services.patch_session.sync_workspace(); },
       [&ctx](ui::styles::ThemeId theme_id) {
         ctx.services.gui_manager.set_theme(theme_id);
       },
-      ctx.services.gui_manager.supports_quit(), // desktop-only toggle for data dir UI
+      // Adding folders needs a native picker, so the list is desktop-only.
+      megatoy::platform::is_desktop(),
   };
 }
 

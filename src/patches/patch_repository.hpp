@@ -1,9 +1,11 @@
 #pragma once
 
-#include "patch_metadata.hpp"
 #include "patch_storage.hpp"
+#include "patches/folder_metadata.hpp"
 #include "platform/virtual_file_system.hpp"
+#include "workspace/workspace.hpp"
 #include "ym2612/patch.hpp"
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -29,13 +31,23 @@ struct PatchEntry {
   size_t instrument_index = 0;
 };
 
+/**
+ * Presents the workspace's folders, plus the built-in presets, as one tree of
+ * patches.
+ *
+ * The repository owns no directories of its own: it mirrors whatever folders
+ * the user has added. When the workspace changes, sync_workspace() rebuilds
+ * the storage list.
+ */
 class PatchRepository {
 public:
   PatchRepository(platform::VirtualFileSystem &vfs,
-                  const std::filesystem::path &patches_root,
-                  const std::filesystem::path &user_save_root,
-                  const std::filesystem::path &builtin_dir = {},
-                  const std::filesystem::path &metadata_db_path = {});
+                  const megatoy::workspace::Workspace &workspace,
+                  const std::filesystem::path &builtin_presets_dir = {});
+
+  /// Rebuild the storage list if the workspace has changed since last call.
+  /// Returns true when something changed.
+  bool sync_workspace();
 
   void refresh();
   const std::vector<PatchEntry> &tree() const;
@@ -63,6 +75,12 @@ public:
                              const std::string &name, bool overwrite,
                              std::string_view preferred_extension);
 
+  /// Save into one specific workspace folder rather than the default one.
+  SavePatchResult save_patch_in(const std::filesystem::path &folder,
+                                const ym2612::Patch &patch,
+                                const std::string &name, bool overwrite,
+                                std::string_view preferred_extension);
+
   // Batch operations
   std::vector<PatchEntry> get_patches_by_metadata_filter(
       const std::function<bool(const PatchMetadata &)> &filter) const;
@@ -75,22 +93,25 @@ public:
   bool download_patch(const ym2612::Patch &patch, const std::string &name,
                       const std::string &extension_hint) const;
 
+  bool show_builtin_presets() const { return show_builtin_presets_; }
+  void set_show_builtin_presets(bool show);
+
 private:
   static constexpr const char *kBuiltinRootName = "presets";
 
-  std::filesystem::path patches_root_directory_;
-  std::filesystem::path user_save_directory_;
-  std::filesystem::path builtin_patch_directory_;
+  void rebuild_storages();
+
+  const megatoy::workspace::Workspace &workspace_;
+  std::filesystem::path builtin_presets_directory_;
   platform::VirtualFileSystem &vfs_;
-  std::unique_ptr<PatchMetadataManager> metadata_manager_;
 
   std::vector<PatchEntry> tree_cache_;
-  std::filesystem::file_time_type last_user_directory_check_time_{};
-  std::filesystem::file_time_type last_builtin_directory_check_time_{};
-  bool has_builtin_directory_ = false;
-  bool user_time_valid_ = false;
-  bool builtin_time_valid_ = false;
-  bool cache_initialized_;
+  std::vector<std::filesystem::path> watched_directories_;
+  std::vector<std::filesystem::file_time_type> watched_times_;
+  bool cache_initialized_ = false;
+  bool show_builtin_presets_ = true;
+  std::uint64_t synced_revision_ = 0;
+  bool storages_built_ = false;
 
   std::vector<std::unique_ptr<PatchStorage>> storages_;
 };

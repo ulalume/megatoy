@@ -2,6 +2,7 @@
 #include "audio/audio_manager.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/ym2612_format_adapter.hpp"
+#include "formats/ginpkg.hpp"
 #include "formats/patch_registry.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
@@ -18,14 +19,14 @@
 namespace patches {
 
 PatchSession::PatchSession(megatoy::system::PathService &directories,
-                           AudioManager &audio)
-    : directories_(directories), audio_(audio),
+                           PreferenceManager &preferences, AudioManager &audio)
+    : directories_(directories), preferences_(preferences), audio_(audio),
       repository_(std::make_unique<PatchRepository>(
-          directories_.file_system(), directories_.paths().patches_root,
-          directories_.paths().user_patches_root,
-          directories_.paths().builtin_presets_root,
-          directories_.paths().patch_metadata_db)),
-      channel_allocator_() {}
+          directories_.file_system(), preferences_.workspace(),
+          directories_.paths().builtin_presets_root)),
+      channel_allocator_() {
+  repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
+}
 
 ym2612::Patch &PatchSession::current_patch() { return current_patch_; }
 
@@ -102,12 +103,9 @@ void PatchSession::initialize_patch_defaults() {
   mark_as_clean();
 }
 
-void PatchSession::refresh_directories() {
-  repository_ = std::make_unique<PatchRepository>(
-      directories_.file_system(), directories_.paths().patches_root,
-      directories_.paths().user_patches_root,
-      directories_.paths().builtin_presets_root,
-      directories_.paths().patch_metadata_db);
+void PatchSession::sync_workspace() {
+  repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
+  repository_->sync_workspace();
 }
 
 void PatchSession::set_current_patch(const ym2612::Patch &patch,
@@ -125,37 +123,121 @@ void PatchSession::apply_patch_to_audio() {
   audio_.apply_patch_to_all_channels(current_patch_);
 }
 
-SaveResult PatchSession::save_current_patch(bool force_overwrite,
-                                            std::string_view preferred_extension) {
-  std::string preferred = std::string(preferred_extension);
+namespace {
 
-  if (preferred.empty() && !current_patch_path_.empty()) {
-    auto lower = current_patch_path_;
-    std::transform(lower.begin(), lower.end(), lower.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (lower.size() >= 7 && lower.compare(lower.size() - 7, 7, ".ginpkg") == 0) {
-      preferred = ".ginpkg";
-    } else if (lower.size() >= 4 && lower.compare(lower.size() - 4, 4, ".gin") == 0) {
-      preferred = ".gin";
+std::string lowercase_extension(const std::filesystem::path &path) {
+  std::string ext = path.extension().string();
+  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return ext;
+}
+
+} // namespace
+
+bool PatchSession::can_overwrite_in_place(
+    const std::filesystem::path &path) const {
+  const auto extension = lowercase_extension(path);
+
+  // .ginpkg is megatoy's own container: saving appends a version rather than
+  // replacing the file, so it is always safe to write back.
+  if (extension == ".ginpkg") {
+    return true;
+  }
+
+  const auto format = formats::adapter::format_for_extension(extension);
+  if (!format) {
+    return false;
+  }
+  // A bank holds other instruments; writing one patch over it would throw
+  // them away.
+  if (formats::adapter::is_multi_patch(*format)) {
+    return false;
+  }
+  for (const auto &info : formats::adapter::known_formats()) {
+    if (info.format == *format) {
+      return info.can_write;
+    }
+  }
+  return false;
+}
+
+std::optional<std::filesystem::path>
+PatchSession::writable_source_folder() const {
+  if (current_patch_path_.empty()) {
+    return std::nullopt;
+  }
+  const auto absolute = repository_->to_absolute_path(current_patch_path_);
+  if (absolute.empty() || !absolute.is_absolute()) {
+    return std::nullopt;
+  }
+  const auto folder = absolute.parent_path();
+  const auto *owner = preferences_.workspace().owner_of(folder);
+  if (owner == nullptr || !owner->writable) {
+    return std::nullopt;
+  }
+  return folder;
+}
+
+SaveResult
+PatchSession::save_current_patch(bool force_overwrite,
+                                 std::string_view preferred_extension) {
+  (void)force_overwrite;
+
+  // Overwrite in place only when the source is a single-patch, writable
+  // format sitting in a folder we may write to. Everything else -- read-only
+  // formats, instrument banks, the built-in presets -- goes through Save As.
+  if (const auto folder = writable_source_folder()) {
+    const auto absolute = repository_->to_absolute_path(current_patch_path_);
+    if (can_overwrite_in_place(absolute)) {
+      if (write_patch_to(absolute)) {
+        mark_as_clean();
+        repository_->refresh();
+        return SaveResult::success(absolute);
+      }
+      return SaveResult::error("Failed to write " + absolute.string());
     }
   }
 
-  auto result =
-      repository_->save_patch(current_patch_, current_patch_.name,
-                              force_overwrite, preferred);
-  switch (result.status) {
-  case SavePatchResult::Status::Success:
-    mark_as_clean();
-    return SaveResult::success(result.path);
-  case SavePatchResult::Status::Duplicate:
-    return SaveResult::duplicated();
-  case SavePatchResult::Status::Error:
-    return SaveResult::error(result.error_message.empty()
-                                 ? "Failed to save patch"
-                                 : result.error_message);
-  case SavePatchResult::Status::Unsupported:
-  default:
-    // If the storage cannot save but can download (web), fall back to download.
+  return save_current_patch_as(preferred_extension);
+}
+
+bool PatchSession::write_patch_to(const std::filesystem::path &path) {
+  const auto extension = lowercase_extension(path);
+
+  if (extension == ".ginpkg") {
+    return formats::ginpkg::save_patch(path.parent_path(), current_patch_,
+                                       path.stem().string())
+        .has_value();
+  }
+
+  auto &registry = formats::PatchRegistry::instance();
+  if (auto format = find_export_format(extension); format && format->is_text) {
+    return registry.write_text(extension, current_patch_, path);
+  }
+  return registry.write(extension, current_patch_, path);
+}
+
+SaveResult
+PatchSession::save_current_patch_as(std::string_view preferred_extension) {
+  const std::string sanitized_name = sanitize_filename(
+      current_patch_.name.empty() ? "patch" : current_patch_.name);
+
+  std::string extension(preferred_extension);
+  if (extension.empty()) {
+    extension = ".ginpkg";
+  }
+  if (extension.front() != '.') {
+    extension = "." + extension;
+  }
+
+  if (megatoy::platform::is_web()) {
+    auto result = repository_->save_patch(current_patch_, current_patch_.name,
+                                          /*overwrite=*/true, extension);
+    if (result.status == SavePatchResult::Status::Success) {
+      mark_as_clean();
+      return SaveResult::success(result.path);
+    }
     if (repository_->download_patch(current_patch_, current_patch_.name,
                                     ".dmp")) {
       mark_as_clean();
@@ -163,11 +245,43 @@ SaveResult PatchSession::save_current_patch(bool force_overwrite,
     }
     return SaveResult::error("Saving patches is unsupported on this platform");
   }
+
+  // Start in the folder the patch came from when that folder is writable,
+  // otherwise wherever the user last saved something.
+  const auto start_directory =
+      writable_source_folder().value_or(preferences_.last_save_directory());
+
+  std::vector<platform::file_dialog::FileFilter> filters;
+  filters.push_back({"megatoy patch", {"ginpkg", "gin"}});
+  filters.push_back({"All Files", {"*"}});
+
+  std::filesystem::path selected;
+  const auto dialog = platform::file_dialog::save_file(
+      start_directory, sanitized_name + extension, filters, selected);
+  if (dialog == platform::file_dialog::DialogResult::Cancelled) {
+    return SaveResult::cancelled();
+  }
+  if (dialog != platform::file_dialog::DialogResult::Ok) {
+    return SaveResult::error("Failed to save patch");
+  }
+
+  if (selected.extension().empty()) {
+    selected.replace_extension(extension);
+  }
+  if (!write_patch_to(selected)) {
+    return SaveResult::error("Failed to write " + selected.string());
+  }
+
+  preferences_.set_last_save_directory(selected.parent_path());
+  set_current_patch_path(selected);
+  mark_as_clean();
+  repository_->refresh();
+  return SaveResult::success(selected);
 }
 
 SaveResult PatchSession::export_current_patch_as(
     const ExportFormatInfo &format) {
-  const auto &default_dir = directories_.paths().export_root;
+  const auto default_dir = preferences_.last_save_directory();
   const std::string sanitized_name = sanitize_filename(
       current_patch_.name.empty() ? "patch" : current_patch_.name);
 
@@ -217,6 +331,7 @@ SaveResult PatchSession::export_current_patch_as(
     }
 
     if (ok) {
+      preferences_.set_last_save_directory(selected_path.parent_path());
       return SaveResult::success(selected_path);
     }
     return SaveResult::error("Failed to export file: " +
@@ -327,36 +442,38 @@ void PatchSession::restore_snapshot(const PatchSnapshot &snapshot) {
   apply_patch_to_audio();
 }
 
+bool PatchSession::can_save_in_place() const {
+  const auto folder = writable_source_folder();
+  if (!folder) {
+    return false;
+  }
+  return can_overwrite_in_place(
+      repository_->to_absolute_path(current_patch_path_));
+}
+
 bool PatchSession::current_patch_is_user_patch() const {
   if (current_patch_path_.empty()) {
     return false;
   }
 
-  const bool has_supported_extension = current_patch_path_.ends_with(".gin") ||
-                                       current_patch_path_.ends_with(".ginpkg");
-  const bool is_user_dir =
-      current_patch_path_.rfind("user/", 0) == 0 && has_supported_extension;
   const bool is_local_storage =
       current_patch_path_.rfind("localStorage/", 0) == 0 ||
       current_patch_path_.rfind("localStorage://", 0) == 0;
 
-  // Treat localStorage entries as user patches even when extensionless so the
-  // Save action can be disabled until modified.
-  return ((is_user_dir || is_local_storage) && original_patch_.name == current_patch_.name);
+  return (can_save_in_place() || is_local_storage) &&
+         original_patch_.name == current_patch_.name;
 }
 
 const char *PatchSession::save_label_for(bool is_user_patch) const {
-  const bool is_local_storage =
-      current_patch_path_.rfind("localStorage/", 0) == 0;
-  if (is_local_storage) {
+  if (current_patch_path_.rfind("localStorage/", 0) == 0) {
     return is_user_patch ? "Overwrite" : "Save to 'localStorage'";
   }
-
-  if (is_user_patch) {
-    return current_patch_path_.ends_with(".ginpkg") ? "Save version"
-                                                    : "Overwrite";
+  if (!is_user_patch) {
+    return "Save As...";
   }
-  return "Save to 'user'";
+  // Saving a .ginpkg adds a version rather than replacing the file.
+  return current_patch_path_.ends_with(".ginpkg") ? "Save version"
+                                                  : "Overwrite";
 }
 
 } // namespace patches
