@@ -11,7 +11,9 @@
 #include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_folder_import.hpp"
 #include "platform/web/web_platform_services.hpp"
+#include "system/path_service.hpp"
 #else
 #include "platform/native/desktop_platform_services.hpp"
 #endif
@@ -93,6 +95,24 @@ int main(int argc, char *argv[]) {
   AppContext app_context{services, app_state};
 
   services.gui_manager.set_drop_callback(&app_context, handle_file_drop);
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  // Folders dragged onto the page are imported into persistent storage; SDL's
+  // own drop handler cannot read directories.
+  platform::web::set_drop_import_handler(
+      [&services](platform::web::FolderImportResult result) {
+        if (!result.ok) {
+          std::cerr << "megatoy: folder drop failed: " << result.error
+                    << std::endl;
+          return;
+        }
+        if (services.preference_manager.add_workspace_folder(result.path)) {
+          services.patch_session.sync_workspace();
+        }
+      });
+  platform::web::install_drop_import(
+      megatoy::system::PathService::web_storage_root());
+#endif
 
   MidiInputManager midi(platform_services.create_midi_backend());
   // Notes go straight from the driver's thread to the audio thread, so their

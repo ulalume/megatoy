@@ -2,6 +2,7 @@
 
 #include "app_services.hpp"
 #include "formats/patch_loader.hpp"
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -58,6 +59,19 @@ void reset_drop_state(UIState::DropState &drop) {
 void handle_drop(Environment &env, const std::filesystem::path &path) {
   auto &drop = env.ui_state.drop_state;
   drop.error_message.clear();
+
+  // A dropped directory is a workspace addition, not a patch load: the same
+  // gesture as dragging a folder into an editor. Files keep the old behavior.
+  std::error_code ec;
+  if (std::filesystem::is_directory(path, ec)) {
+    if (env.services.preference_manager.add_workspace_folder(path)) {
+      env.services.patch_session.sync_workspace();
+      reset_drop_state(drop);
+    } else {
+      handle_failure(env, "Folder is already in the workspace.");
+    }
+    return;
+  }
 
   auto result = formats::load_patch_from_file(path);
   switch (result.status) {

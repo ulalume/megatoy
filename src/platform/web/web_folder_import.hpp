@@ -37,6 +37,19 @@ struct FolderImportResult {
 void import_folder(const std::filesystem::path &destination_root,
                    std::function<void(FolderImportResult)> on_complete);
 
+/**
+ * Accept folders dragged onto the page.
+ *
+ * SDL's own drop handler covers plain files (it copies them into MEMFS and
+ * raises SDL_EVENT_DROP_FILE), but it cannot read directories, so those drops
+ * silently did nothing. This installs a capture-phase listener that takes
+ * over only when a drop contains a directory: the tree is copied under
+ * `destination_root` -- same as an Import Folder -- and `handler` is called
+ * once per dropped directory. File-only drops still fall through to SDL.
+ */
+void set_drop_import_handler(std::function<void(FolderImportResult)> handler);
+void install_drop_import(const std::filesystem::path &destination_root);
+
 } // namespace platform::web
 
 #endif
