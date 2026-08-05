@@ -18,6 +18,7 @@
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
 #include "platform/platform_config.hpp"
+#include <cassert>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -299,43 +300,77 @@ WaveformContext make_waveform_context(AppContext &ctx) {
   };
 }
 
+/**
+ * Every window's context, built once.
+ *
+ * A context is references and callbacks into objects that live for the whole
+ * run -- AppContext sits on main()'s stack, UIState and the services inside
+ * it never move. Rebuilding all eleven every frame allocated a few dozen
+ * std::functions per frame for no change in behavior. The handful of fields
+ * that are values rather than references are refreshed in render_all.
+ */
+struct FrameContexts {
+  explicit FrameContexts(AppContext &ctx)
+      : owner(&ctx), main_menu(make_main_menu_context(ctx)),
+        patch_drop(make_patch_drop_context(ctx)),
+        confirmation(make_confirmation_context(ctx)),
+        patch_editor(make_patch_editor_context(ctx)),
+        patch_history(make_patch_history_context(ctx)),
+        patch_selector(make_patch_selector_context(ctx)),
+        preferences(make_preferences_context(ctx)),
+        midi_keyboard(make_midi_keyboard_context(ctx)),
+        mml_console(make_mml_console_context(ctx)),
+        patch_lab(make_patch_lab_context(ctx)),
+        waveform(make_waveform_context(ctx)) {}
+
+  AppContext *owner;
+  MainMenuContext main_menu;
+  PatchDropContext patch_drop;
+  ConfirmationDialogContext confirmation;
+  PatchEditorContext patch_editor;
+  PatchHistoryContext patch_history;
+  PatchSelectorContext patch_selector;
+  PreferencesContext preferences;
+  MidiKeyboardContext midi_keyboard;
+  MmlConsoleContext mml_console;
+  PatchLabContext patch_lab;
+  WaveformContext waveform;
+};
+
 } // namespace
 
 void render_all(AppContext &ctx) {
-  auto menu_context = make_main_menu_context(ctx);
-  render_main_menu(menu_context);
+  static FrameContexts contexts(ctx);
+  // The cache is only valid for the AppContext it captured.
+  assert(contexts.owner == &ctx);
 
-  auto drop_context = make_patch_drop_context(ctx);
-  render_patch_drop_feedback(drop_context);
+  // Per-frame values; everything else in the contexts is stable references.
+  contexts.patch_selector.workspace_is_empty =
+      ctx.services.preference_manager.workspace().empty();
+  {
+    MidiInputManager::StatusInfo status =
+        ctx.midi ? ctx.midi->status()
+                 : MidiInputManager::StatusInfo{
+                       .message = "MIDI backend unavailable."};
+    contexts.preferences.midi_status_message = std::move(status.message);
+    contexts.preferences.show_web_midi_button = status.show_enable_button;
+    contexts.preferences.web_midi_button_disabled =
+        status.enable_button_disabled;
+  }
 
-  auto confirmation_context = make_confirmation_context(ctx);
-  render_confirmation_dialog(confirmation_context);
-
-  auto patch_editor_context = make_patch_editor_context(ctx);
-  render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
+  render_main_menu(contexts.main_menu);
+  render_patch_drop_feedback(contexts.patch_drop);
+  render_confirmation_dialog(contexts.confirmation);
+  render_patch_editor(PATCH_EDITOR_TITLE, contexts.patch_editor,
                       ctx.app_state().ui_state().save_export_state);
-
-  auto patch_history_context = make_patch_history_context(ctx);
-  render_patch_history(PATCH_HISTORY_TITLE, patch_history_context,
+  render_patch_history(PATCH_HISTORY_TITLE, contexts.patch_history,
                        patch_history_state());
-
-  auto patch_selector_context = make_patch_selector_context(ctx);
-  render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);
-
-  auto preferences_context = make_preferences_context(ctx);
-  render_preferences_window(PREFERENCES_TITLE, preferences_context);
-
-  auto midi_keyboard_context = make_midi_keyboard_context(ctx);
-  render_midi_keyboard(SOFT_KEYBOARD_TITLE, midi_keyboard_context);
-
-  auto mml_context = make_mml_console_context(ctx);
-  render_mml_console(MML_CONSOLE_TITLE, mml_context);
-
-  auto patch_lab_context = make_patch_lab_context(ctx);
-  render_patch_lab(PATCH_LAB_TITLE, patch_lab_context, patch_lab_state());
-
-  auto waveform_context = make_waveform_context(ctx);
-  render_waveform(WAVEFORM_TITLE, waveform_context);
+  render_patch_selector(PATCH_BROWSER_TITLE, contexts.patch_selector);
+  render_preferences_window(PREFERENCES_TITLE, contexts.preferences);
+  render_midi_keyboard(SOFT_KEYBOARD_TITLE, contexts.midi_keyboard);
+  render_mml_console(MML_CONSOLE_TITLE, contexts.mml_console);
+  render_patch_lab(PATCH_LAB_TITLE, contexts.patch_lab, patch_lab_state());
+  render_waveform(WAVEFORM_TITLE, contexts.waveform);
 
   render_save_export_popup_host(ctx);
 }
