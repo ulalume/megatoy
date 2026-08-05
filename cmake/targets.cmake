@@ -83,6 +83,9 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/patch_history.cpp
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
+  src/gui/components/patch_selector_shared.cpp
+  src/gui/components/patch_table_view.cpp
+  src/gui/components/patch_tree_view.cpp
   src/gui/components/preferences.cpp
   src/gui/save_export_actions.cpp
   src/gui/components/preview/algorithm_preview.cpp

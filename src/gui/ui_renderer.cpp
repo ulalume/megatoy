@@ -215,9 +215,13 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
           [patch_actions_facade](const patches::PatchEntry &entry) {
             patch_actions_facade.safe_load(entry);
           },
-          [](const std::filesystem::path &path) {
-            reveal_in_file_manager(path.string());
-          },
+          // No file manager exists in a browser; the context menu keys off
+          // the callback's absence.
+          megatoy::platform::is_desktop()
+              ? [](const std::filesystem::path &path) {
+                  reveal_in_file_manager(path.string());
+                }
+              : std::function<void(const std::filesystem::path &)>{},
           ctx.services.preference_manager.workspace().empty(),
           [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; }};
 }

@@ -48,9 +48,6 @@ public:
   virtual bool load_patch(const PatchEntry &entry,
                           ym2612::Patch &out_patch) const = 0;
 
-  // Attempt to remove the patch referenced by the entry. Default: unsupported.
-  virtual bool remove_patch(const PatchEntry &) { return false; }
-
   // Attempt to save a patch with the provided name. Default: unsupported.
   virtual SavePatchResult
   save_patch(const ym2612::Patch &, const std::string &, bool /*overwrite*/,

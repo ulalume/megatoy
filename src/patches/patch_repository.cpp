@@ -213,16 +213,6 @@ PatchRepository::save_patch_in(const std::filesystem::path &folder,
   return SavePatchResult::unsupported();
 }
 
-bool PatchRepository::remove_patch(const PatchEntry &entry) {
-  for (const auto &storage : storages_) {
-    if (storage->remove_patch(entry)) {
-      refresh();
-      return true;
-    }
-  }
-  return false;
-}
-
 std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
   for (const auto &storage : storages_) {
