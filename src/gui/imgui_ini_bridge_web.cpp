@@ -17,8 +17,9 @@ namespace {
 // is discarded once, instead of pinning users to a layout that has no place
 // for a window that now exists. Bump this whenever the default layout gains
 // or loses a panel.
-constexpr const char *kLayoutKey = "megatoy_imgui_ini_v2";
-constexpr const char *kPreviousLayoutKey = "megatoy_imgui_ini";
+constexpr const char *kLayoutKey = "megatoy_imgui_ini_v3";
+constexpr const char *kPreviousLayoutKeys[] = {"megatoy_imgui_ini",
+                                               "megatoy_imgui_ini_v2"};
 
 } // namespace
 
@@ -30,9 +31,11 @@ void sync_web_imgui_ini(bool &first_frame, bool &web_ini_loaded,
   if (ImGui::GetCurrentContext() == nullptr) {
     return;
   }
-  // Layouts saved before the waveform panel existed on web have no node for
-  // it, so it would come back floating. Drop them and rebuild the default.
-  platform::web::remove_local_storage(kPreviousLayoutKey);
+  // Layouts saved before a panel existed on web have no node for it, so it
+  // would come back floating. Drop them and rebuild the default.
+  for (const char *key : kPreviousLayoutKeys) {
+    platform::web::remove_local_storage(key);
+  }
 
   auto stored = platform::web::read_local_storage(kLayoutKey);
   if (stored.has_value() && !stored->empty()) {

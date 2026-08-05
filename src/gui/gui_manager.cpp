@@ -385,11 +385,6 @@ bool GuiManager::supports_quit() const {
   return megatoy::platform::is_desktop();
 }
 
-bool GuiManager::supports_patch_history() const {
-  // ginpkg history is not supported on web builds.
-  return megatoy::platform::is_desktop();
-}
-
 void GuiManager::set_theme(ui::styles::ThemeId theme) {
   theme_ = theme;
   ui::styles::apply_theme(theme_);

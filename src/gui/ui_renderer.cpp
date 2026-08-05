@@ -311,11 +311,9 @@ void render_all(AppContext &ctx) {
   render_patch_editor(PATCH_EDITOR_TITLE, patch_editor_context,
                       ctx.app_state().ui_state().save_export_state);
 
-  if (ctx.services.gui_manager.supports_patch_history()) {
-    auto patch_history_context = make_patch_history_context(ctx);
-    render_patch_history(PATCH_HISTORY_TITLE, patch_history_context,
-                         patch_history_state());
-  }
+  auto patch_history_context = make_patch_history_context(ctx);
+  render_patch_history(PATCH_HISTORY_TITLE, patch_history_context,
+                       patch_history_state());
 
   auto patch_selector_context = make_patch_selector_context(ctx);
   render_patch_selector(PATCH_BROWSER_TITLE, patch_selector_context);

@@ -10,12 +10,6 @@
 
 namespace ui {
 
-#if defined(MEGATOY_PLATFORM_WEB)
-void render_patch_history(const char *, PatchHistoryContext &,
-                          PatchHistoryState &) {
-  // ginpkg is not supported on web builds.
-}
-#else
 namespace {
 
 bool is_ginpkg_path(const std::string &path) {
@@ -185,6 +179,5 @@ void render_patch_history(const char *title, PatchHistoryContext &context,
 
   ImGui::End();
 }
-#endif
 
 } // namespace ui
