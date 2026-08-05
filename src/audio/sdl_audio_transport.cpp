@@ -1,5 +1,6 @@
 #include "audio/sdl_audio_transport.hpp"
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
 
 namespace {
@@ -9,7 +10,7 @@ constexpr std::uint32_t kFallbackFrameSize = sizeof(std::int16_t) * 2;
 
 SdlAudioTransport::SdlAudioTransport()
     : audio_stream_(nullptr), owns_audio_subsystem_(false), frame_size_(0),
-      target_buffer_bytes_(0), initialized_(false) {}
+      initialized_(false) {}
 
 SdlAudioTransport::~SdlAudioTransport() { stop(); }
 
@@ -65,16 +66,24 @@ bool SdlAudioTransport::start(std::uint32_t sample_rate,
     frame_size_ = kFallbackFrameSize;
   }
 
-  target_buffer_bytes_ = std::max<std::uint32_t>(
-      frame_size_ * (effective_sample_rate / 40), frame_size_ * 8);
+  // SDL's device thread pulls data through this callback as the device
+  // drains, so rendering is paced by the hardware itself.
+  if (!SDL_SetAudioStreamGetCallback(audio_stream_, stream_callback, this)) {
+    std::cerr << "Failed to set audio stream callback: " << SDL_GetError()
+              << std::endl;
+    SDL_DestroyAudioStream(audio_stream_);
+    audio_stream_ = nullptr;
+    if (owns_audio_subsystem_) {
+      SDL_QuitSubSystem(SDL_INIT_AUDIO);
+      owns_audio_subsystem_ = false;
+    }
+    return false;
+  }
 
   if (!SDL_ResumeAudioStreamDevice(audio_stream_)) {
     std::cerr << "Failed to start SDL audio device: " << SDL_GetError()
               << std::endl;
   }
-
-  audio_thread_alive_ = true;
-  audio_thread_ = std::thread([this]() { audio_thread_func(); });
 
   initialized_ = true;
   return true;
@@ -85,13 +94,10 @@ void SdlAudioTransport::stop() {
     return;
   }
 
-  audio_thread_alive_ = false;
-  if (audio_thread_.joinable()) {
-    audio_thread_.join();
-  }
-
   if (audio_stream_ != nullptr) {
     SDL_PauseAudioStreamDevice(audio_stream_);
+    // Destroying the stream detaches the callback; SDL guarantees it is not
+    // running once this returns.
     SDL_DestroyAudioStream(audio_stream_);
     audio_stream_ = nullptr;
   }
@@ -106,51 +112,45 @@ void SdlAudioTransport::stop() {
   initialized_ = false;
 }
 
-void SdlAudioTransport::audio_thread_func() {
-  while (audio_thread_alive_) {
-    if (audio_stream_ != nullptr) {
-      pump_audio_stream();
-    } else {
-      SDL_Delay(5);
-    }
+void SDLCALL SdlAudioTransport::stream_callback(void *userdata,
+                                                SDL_AudioStream *stream,
+                                                int additional_amount,
+                                                int total_amount) {
+  if (auto *self = static_cast<SdlAudioTransport *>(userdata)) {
+    self->handle_stream_callback(stream, additional_amount, total_amount);
   }
 }
 
-void SdlAudioTransport::pump_audio_stream() {
-  if (!callback_ || audio_stream_ == nullptr || frame_size_ == 0) {
+void SdlAudioTransport::handle_stream_callback(SDL_AudioStream *stream,
+                                               int additional_amount,
+                                               int total_amount) {
+  if (!callback_ || stream == nullptr || frame_size_ == 0) {
     return;
   }
 
-  while (true) {
-    const int available = SDL_GetAudioStreamAvailable(audio_stream_);
-    if (available < 0) {
-      return;
-    }
+  const int available = SDL_GetAudioStreamAvailable(stream);
+  int required = total_amount - available;
+  if (required < additional_amount) {
+    required = additional_amount;
+  }
+  if (required <= 0) {
+    return;
+  }
 
-    if (available >= static_cast<int>(target_buffer_bytes_)) {
-      return;
-    }
+  const std::uint32_t bytes =
+      align_to_frame(static_cast<std::uint32_t>(required), frame_size_);
+  stream_buffer_.resize(bytes);
 
-    std::uint32_t deficit =
-        target_buffer_bytes_ - static_cast<std::uint32_t>(available);
-    deficit = align_to_frame(deficit, frame_size_);
-    if (deficit == 0) {
-      deficit = frame_size_;
-    }
+  const std::uint32_t produced =
+      callback_(bytes, static_cast<void *>(stream_buffer_.data()));
+  if (produced == 0) {
+    return;
+  }
 
-    stream_buffer_.resize(deficit);
-    const std::uint32_t produced =
-        callback_(deficit, static_cast<void *>(stream_buffer_.data()));
-    if (produced == 0) {
-      return;
-    }
-
-    if (!SDL_PutAudioStreamData(audio_stream_, stream_buffer_.data(),
-                                static_cast<int>(produced))) {
-      std::cerr << "SDL_PutAudioStreamData failed: " << SDL_GetError()
-                << std::endl;
-      return;
-    }
+  if (!SDL_PutAudioStreamData(audio_stream_, stream_buffer_.data(),
+                              static_cast<int>(produced))) {
+    std::cerr << "SDL_PutAudioStreamData failed: " << SDL_GetError()
+              << std::endl;
   }
 }
 
