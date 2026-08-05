@@ -90,8 +90,6 @@ public:
   // Capabilities
   std::string primary_writable_label() const;
   bool patch_name_conflicts(const std::string &name) const;
-  bool download_patch(const ym2612::Patch &patch, const std::string &name,
-                      const std::string &extension_hint) const;
 
   bool show_builtin_presets() const { return show_builtin_presets_; }
   void set_show_builtin_presets(bool show);

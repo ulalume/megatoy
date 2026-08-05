@@ -9,6 +9,7 @@
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_patch_export.hpp"
 #include "platform/web/web_patch_url.hpp"
 #endif
 #include "ym2612/channel.hpp"
@@ -243,11 +244,13 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
       mark_as_clean();
       return SaveResult::success(result.path);
     }
-    if (repository_->download_patch(current_patch_, current_patch_.name,
+#if defined(MEGATOY_PLATFORM_WEB)
+    if (platform::web::export_patch(current_patch_, current_patch_.name,
                                     ".dmp")) {
       mark_as_clean();
       return SaveResult::success(std::filesystem::path("download"));
     }
+#endif
     return SaveResult::error("Saving patches is unsupported on this platform");
   }
 
@@ -293,16 +296,15 @@ SaveResult PatchSession::export_current_patch_as(
   const bool is_web = megatoy::platform::is_web();
   const std::string ext = format.extension.empty() ? "" : format.extension;
 
-  auto download_or_error = [&](const std::string &hint) -> SaveResult {
-    if (repository_->download_patch(current_patch_, current_patch_.name,
+  if (is_web) {
+#if defined(MEGATOY_PLATFORM_WEB)
+    const std::string hint = ext.empty() ? ".dmp" : ext;
+    if (platform::web::export_patch(current_patch_, current_patch_.name,
                                     hint)) {
       return SaveResult::success(std::filesystem::path("download"));
     }
+#endif
     return SaveResult::error("Failed to export patch");
-  };
-
-  if (is_web) {
-    return download_or_error(ext.empty() ? ".dmp" : ext);
   }
 
   std::filesystem::path selected_path;

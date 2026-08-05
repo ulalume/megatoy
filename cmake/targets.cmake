@@ -132,6 +132,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/local_storage.cpp
     src/platform/web/web_folder_import.cpp
     src/platform/web/web_storage_bootstrap.cpp
+    src/platform/web/web_patch_export.cpp
     src/platform/web/web_patch_url.cpp
     src/platform/web/web_midi_backend.cpp
   )
