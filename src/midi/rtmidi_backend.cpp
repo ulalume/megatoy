@@ -54,7 +54,14 @@ void RtMidiBackend::poll(std::vector<MidiMessage> &events,
   }
 
   try {
-    handle_port_changes();
+    // Asking the OS for the port list is not free (CoreMIDI and WinMM both
+    // allocate), and hotplug is a human-timescale event -- once a second is
+    // plenty. Notes are unaffected; they arrive through per-port callbacks.
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= next_enumeration_) {
+      next_enumeration_ = now + std::chrono::seconds(1);
+      handle_port_changes();
+    }
 
     if (ports_dirty_) {
       available_ports = available_ports_;
@@ -171,8 +178,13 @@ void RtMidiBackend::handle_port_changes() {
   auto ports = enumerate_ports();
 
   const bool had_ports = !available_ports_.empty();
-  available_ports_ = std::move(ports);
-  ports_dirty_ = true;
+  if (ports != available_ports_) {
+    available_ports_ = std::move(ports);
+    ports_dirty_ = true;
+  } else if (ports.empty()) {
+    // Nothing changed and nothing to manage.
+    return;
+  }
 
   if (available_ports_.empty()) {
     if (had_ports) {

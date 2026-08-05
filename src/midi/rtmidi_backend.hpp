@@ -2,6 +2,7 @@
 
 #include "midi/midi_backend.hpp"
 #include <RtMidi.h>
+#include <chrono>
 #include <memory>
 #include <vector>
 
@@ -39,6 +40,7 @@ private:
   void handle_port_changes();
 
   std::unique_ptr<RtMidiIn> enumerator_;
+  std::chrono::steady_clock::time_point next_enumeration_{};
   // Stable addresses: RtMidi holds a pointer to each Connection.
   std::vector<std::unique_ptr<Connection>> connections_;
   std::vector<std::string> available_ports_;
