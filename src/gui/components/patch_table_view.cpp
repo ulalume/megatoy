@@ -226,9 +226,13 @@ void render_patch_table(PatchSelectorContext &context) {
       context.session.current_patch_path();
   bool refresh_required = false;
 
+  // The column widths below are proportional weights, which ImGui only
+  // accepts under an explicit stretch sizing policy -- 1.92 turned that
+  // former silent assumption into a user-error report.
   if (ImGui::BeginTable("PatchMetadataTable", 5,
                         ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
-                            ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg)) {
+                            ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_SizingStretchProp)) {
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort, 0.3f);
     ImGui::TableSetupColumn("Stars", ImGuiTableColumnFlags_None, 0.1f);
