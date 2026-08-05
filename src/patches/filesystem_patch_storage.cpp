@@ -384,13 +384,20 @@ FilesystemPatchStorage::detect_format(const std::filesystem::path &file_path) {
   std::transform(extension.begin(), extension.end(), extension.begin(),
                  ::tolower);
 
-  static const std::unordered_map<std::string, std::string> format_map = {
-      {".gin", "gin"}, {".ginpkg", "ginpkg"}, {".rym2612", "rym2612"},
-      {".dmp", "dmp"}, {".fui", "fui"},       {".mml", "ctrmml"},
-  };
-
-  auto it = format_map.find(extension);
-  return it != format_map.end() ? it->second : "unknown";
+  // Derived from the format library rather than a local table, so a format
+  // added there is labelled here without another edit. A stale copy of this
+  // table is how .tfi files ended up listed as "unknown".
+  if (extension == ".ginpkg") {
+    return "ginpkg";
+  }
+  if (const auto format = formats::adapter::format_for_extension(extension)) {
+    // Historical display name; the extension alone would read as just "mml".
+    if (*format == ym2612_format::Format::Mml) {
+      return "ctrmml";
+    }
+    return extension.substr(1);
+  }
+  return "unknown";
 }
 
 bool FilesystemPatchStorage::is_supported_file(
