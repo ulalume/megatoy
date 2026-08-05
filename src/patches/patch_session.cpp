@@ -3,9 +3,8 @@
 #include "audio/audio_command.hpp"
 #include "audio/audio_manager.hpp"
 #include "formats/patch_loader.hpp"
-#include "formats/ym2612_format_adapter.hpp"
-#include "formats/ginpkg.hpp"
 #include "formats/patch_registry.hpp"
+#include "patches/patch_write.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -129,45 +128,6 @@ void PatchSession::apply_patch_to_audio() {
                                                  current_patch_.instrument));
 }
 
-namespace {
-
-std::string lowercase_extension(const std::filesystem::path &path) {
-  std::string ext = path.extension().string();
-  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-  return ext;
-}
-
-} // namespace
-
-bool PatchSession::can_overwrite_in_place(
-    const std::filesystem::path &path) const {
-  const auto extension = lowercase_extension(path);
-
-  // .ginpkg is megatoy's own container: saving appends a version rather than
-  // replacing the file, so it is always safe to write back.
-  if (extension == ".ginpkg") {
-    return true;
-  }
-
-  const auto format = formats::adapter::format_for_extension(extension);
-  if (!format) {
-    return false;
-  }
-  // A bank holds other instruments; writing one patch over it would throw
-  // them away.
-  if (formats::adapter::is_multi_patch(*format)) {
-    return false;
-  }
-  for (const auto &info : formats::adapter::known_formats()) {
-    if (info.format == *format) {
-      return info.can_write;
-    }
-  }
-  return false;
-}
-
 std::optional<std::filesystem::path>
 PatchSession::writable_source_folder() const {
   if (current_patch_path_.empty()) {
@@ -186,17 +146,14 @@ PatchSession::writable_source_folder() const {
 }
 
 SaveResult
-PatchSession::save_current_patch(bool force_overwrite,
-                                 std::string_view preferred_extension) {
-  (void)force_overwrite;
-
+PatchSession::save_current_patch(std::string_view preferred_extension) {
   // Overwrite in place only when the source is a single-patch, writable
   // format sitting in a folder we may write to. Everything else -- read-only
   // formats, instrument banks, the built-in presets -- goes through Save As.
   if (const auto folder = writable_source_folder()) {
     const auto absolute = repository_->to_absolute_path(current_patch_path_);
-    if (can_overwrite_in_place(absolute)) {
-      if (write_patch_to(absolute)) {
+    if (patches::can_overwrite_in_place(absolute)) {
+      if (patches::write_patch(current_patch_, absolute)) {
         mark_as_clean();
         repository_->refresh();
         return SaveResult::success(absolute);
@@ -206,22 +163,6 @@ PatchSession::save_current_patch(bool force_overwrite,
   }
 
   return save_current_patch_as(preferred_extension);
-}
-
-bool PatchSession::write_patch_to(const std::filesystem::path &path) {
-  const auto extension = lowercase_extension(path);
-
-  if (extension == ".ginpkg") {
-    return formats::ginpkg::save_patch(path.parent_path(), current_patch_,
-                                       path.stem().string())
-        .has_value();
-  }
-
-  auto &registry = formats::PatchRegistry::instance();
-  if (auto format = find_export_format(extension); format && format->is_text) {
-    return registry.write_text(extension, current_patch_, path);
-  }
-  return registry.write(extension, current_patch_, path);
 }
 
 SaveResult
@@ -276,7 +217,7 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
   if (selected.extension().empty()) {
     selected.replace_extension(extension);
   }
-  if (!write_patch_to(selected)) {
+  if (!patches::write_patch(current_patch_, selected)) {
     return SaveResult::error("Failed to write " + selected.string());
   }
 
@@ -424,7 +365,7 @@ bool PatchSession::can_save_in_place() const {
   if (!folder) {
     return false;
   }
-  return can_overwrite_in_place(
+  return patches::can_overwrite_in_place(
       repository_->to_absolute_path(current_patch_path_));
 }
 
@@ -432,19 +373,10 @@ bool PatchSession::current_patch_is_user_patch() const {
   if (current_patch_path_.empty()) {
     return false;
   }
-
-  const bool is_local_storage =
-      current_patch_path_.rfind("localStorage/", 0) == 0 ||
-      current_patch_path_.rfind("localStorage://", 0) == 0;
-
-  return (can_save_in_place() || is_local_storage) &&
-         original_patch_.name == current_patch_.name;
+  return can_save_in_place() && original_patch_.name == current_patch_.name;
 }
 
 const char *PatchSession::save_label_for(bool is_user_patch) const {
-  if (current_patch_path_.rfind("localStorage/", 0) == 0) {
-    return is_user_patch ? "Overwrite" : "Save to 'localStorage'";
-  }
   if (!is_user_patch) {
     return "Save As...";
   }

@@ -43,7 +43,7 @@ void render_main_menu(MainMenuContext &context) {
       if (save_disabled)
         ImGui::BeginDisabled(true);
       if (ImGui::MenuItem(save_label, save_shortcut)) {
-        trigger_save(session, context.save_state, is_user_patch);
+        trigger_save(session, context.save_state);
       }
       if (save_disabled)
         ImGui::EndDisabled();
@@ -128,7 +128,7 @@ void render_main_menu(MainMenuContext &context) {
     if (context.gui.supports_quit() && !save_disabled) {
       const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && !io.KeyShift;
       if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
-        trigger_save(session, context.save_state, is_user_patch);
+        trigger_save(session, context.save_state);
       }
     }
     if (name_valid) {

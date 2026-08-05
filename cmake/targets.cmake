@@ -109,6 +109,7 @@ set(MEGATOY_CORE_SOURCES
   src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
+  src/patches/patch_write.cpp
   src/patches/filesystem_patch_storage.cpp
   src/patches/folder_metadata.cpp
   src/platform/file_dialog.cpp

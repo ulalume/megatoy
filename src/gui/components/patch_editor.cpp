@@ -58,7 +58,7 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
   const char *save_label = save_label_for(patch_session, is_user_patch);
   ImVec2 pos = ImGui::GetCursorPos();
   if (ImGui::Button(save_label)) {
-    trigger_save(patch_session, state, is_user_patch);
+    trigger_save(patch_session, state);
   }
 
   // for hover

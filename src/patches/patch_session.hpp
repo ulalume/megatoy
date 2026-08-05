@@ -91,8 +91,7 @@ public:
    * .rym2612), instrument banks and the built-in presets all go through the
    * dialog instead, so nothing is destroyed by a stray Ctrl+S.
    */
-  SaveResult save_current_patch(bool force_overwrite = false,
-                                std::string_view preferred_extension = {});
+  SaveResult save_current_patch(std::string_view preferred_extension = {});
   SaveResult save_current_patch_as(std::string_view preferred_extension = {});
   SaveResult export_current_patch_as(const ExportFormatInfo &format);
   std::optional<ExportFormatInfo>
@@ -132,9 +131,7 @@ public:
   const char *save_label_for(bool is_user_patch) const;
 
 private:
-  bool can_overwrite_in_place(const std::filesystem::path &path) const;
   std::optional<std::filesystem::path> writable_source_folder() const;
-  bool write_patch_to(const std::filesystem::path &path);
 
   megatoy::system::PathService &directories_;
   PreferenceManager &preferences_;

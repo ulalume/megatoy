@@ -22,9 +22,8 @@ const char *save_label_for(const patches::PatchSession &session,
 }
 
 void trigger_save(patches::PatchSession &session, SaveExportState &state,
-                  bool force_overwrite, std::string_view extension_override) {
-  auto result =
-      session.save_current_patch(force_overwrite, extension_override);
+                  std::string_view extension_override) {
+  auto result = session.save_current_patch(extension_override);
   if (result.is_duplicated()) {
     state.last_export_path = result.path.string();
     state.pending_popup = SaveExportState::Pending::OverwriteConfirmation;
@@ -101,7 +100,7 @@ void render_save_export_popups(patches::PatchSession &session,
     ImGui::EndPopup();
 
     if (overwrite_button) {
-      auto result = session.save_current_patch(true);
+      auto result = session.save_current_patch();
       if (result.is_success()) {
         state.last_export_path = result.path.string();
         session.set_current_patch_path(
@@ -264,7 +263,7 @@ void render_duplicate_dialog(patches::PatchSession &session,
       patch_copy.name = state.duplicate.name;
       session.set_current_patch(patch_copy, session.current_patch_path());
       // Duplicates are always saved as packaged ginpkg files.
-      trigger_save(session, state, false, ".ginpkg");
+      trigger_save(session, state, ".ginpkg");
       state.duplicate.open = false;
       ImGui::CloseCurrentPopup();
     }

@@ -133,6 +133,10 @@ add_executable(ginpkg_history_test tests/formats/ginpkg_history_test.cpp)
 target_include_directories(ginpkg_history_test PRIVATE src)
 target_link_libraries(ginpkg_history_test PRIVATE megatoy_core)
 add_test(NAME ginpkg_history_test COMMAND ginpkg_history_test)
+add_executable(patch_write_test tests/patches/patch_write_test.cpp)
+target_include_directories(patch_write_test PRIVATE src)
+target_link_libraries(patch_write_test PRIVATE megatoy_core)
+add_test(NAME patch_write_test COMMAND patch_write_test)
 add_executable(workspace_test tests/workspace/workspace_test.cpp)
 target_include_directories(workspace_test PRIVATE src)
 target_link_libraries(workspace_test PRIVATE megatoy_core)
@@ -142,7 +146,7 @@ add_test(NAME workspace_test COMMAND workspace_test)
 add_custom_target(check
   DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test
           subsystem_tests ym2612_render_test analyzer_test command_queue_test
-          ginpkg_history_test
+          ginpkg_history_test patch_write_test
           workspace_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
