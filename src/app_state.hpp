@@ -14,8 +14,6 @@ struct UIState {
   bool open_add_folder_dialog = false;
 
   struct DropState {
-    bool show_error_popup = false;
-    std::string error_message;
     bool show_picker_for_multiple_instruments = false;
     std::filesystem::path pending_instruments_path;
     std::vector<ym2612::Patch> instruments;

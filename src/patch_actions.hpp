@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_context.hpp"
+#include "core/status.hpp"
 #include "app_services.hpp"
 #include "app_state.hpp"
 #include "history/history_manager.hpp"
@@ -36,8 +37,7 @@ inline bool load(AppContext &context, const patches::PatchEntry &patch_info) {
 
   ym2612::Patch loaded_patch;
   if (!patch_session.repository().load_patch(patch_info, loaded_patch)) {
-    std::cerr << "Failed to load preset patch: " << patch_info.name
-              << std::endl;
+    megatoy::status::error("Failed to load \"" + patch_info.name + "\"");
     return false;
   }
 

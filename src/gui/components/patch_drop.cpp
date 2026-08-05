@@ -4,36 +4,18 @@
 
 namespace ui {
 namespace {
-constexpr const char *kErrorPopupTitle = "Patch Load Error";
 constexpr const char *kInstrumentPopupTitle = "Select Instrument";
 constexpr const char *kFallbackErrorMessage = "Unsupported file format.";
 } // namespace
 
+// Load failures are announced as status toasts; only the instrument picker
+// -- an actual decision -- still opens a dialog.
 void render_patch_drop_feedback(PatchDropContext &context) {
   auto &drop = context.drop_state;
-
-  if (drop.show_error_popup) {
-    ImGui::OpenPopup(kErrorPopupTitle);
-    drop.show_error_popup = false;
-  }
 
   if (drop.show_picker_for_multiple_instruments) {
     ImGui::OpenPopup(kInstrumentPopupTitle);
     drop.show_picker_for_multiple_instruments = false;
-  }
-
-  if (ImGui::BeginPopupModal(kErrorPopupTitle, nullptr,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
-    const char *message = drop.error_message.empty()
-                              ? kFallbackErrorMessage
-                              : drop.error_message.c_str();
-    ImGui::TextWrapped("%s", message);
-    if (ImGui::Button("OK", ImVec2(120, 0))) {
-      drop.error_message.clear();
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::SetItemDefaultFocus();
-    ImGui::EndPopup();
   }
 
   if (ImGui::BeginPopupModal(kInstrumentPopupTitle, nullptr,

@@ -1,5 +1,7 @@
 #include "preference_manager.hpp"
 
+#include "core/status.hpp"
+
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -73,14 +75,19 @@ void PreferenceManager::request_add_workspace_folder(
       megatoy::system::PathService::web_storage_root(),
       [this, on_changed](platform::web::FolderImportResult result) {
         if (!result.ok) {
-          if (!result.error.empty()) {
-            std::cerr << "megatoy: folder import failed: " << result.error
-                      << std::endl;
-          }
+          megatoy::status::error("Folder import failed: " + result.error);
           return;
         }
-        if (add_workspace_folder(result.path) && on_changed) {
-          on_changed();
+        if (add_workspace_folder(result.path)) {
+          megatoy::status::success(
+              "Imported \"" + result.folder_name + "\" (" +
+              std::to_string(result.file_count) + " files)");
+          if (on_changed) {
+            on_changed();
+          }
+        } else {
+          megatoy::status::warning("\"" + result.folder_name +
+                                   "\" is already in the workspace.");
         }
       });
 #else

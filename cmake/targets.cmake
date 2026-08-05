@@ -66,6 +66,7 @@ set(MEGATOY_CORE_SOURCES
   src/audio/sdl_audio_transport.cpp
   src/channel_allocator.cpp
   src/core/random_utils.cpp
+  src/core/status.cpp
   src/formats/ginpkg.cpp
   src/formats/patch_loader.cpp
   src/formats/ym2612_format_adapter.cpp
@@ -88,6 +89,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/patch_tree_view.cpp
   src/gui/components/preferences.cpp
   src/gui/save_export_actions.cpp
+  src/gui/components/status_toasts.cpp
   src/gui/components/preview/algorithm_preview.cpp
   src/gui/components/preview/preview.cpp
   src/gui/components/preview/ssg_preview.cpp

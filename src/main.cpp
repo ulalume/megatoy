@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_services.hpp"
 #include "audio/audio_command.hpp"
+#include "core/status.hpp"
 #include "app_state.hpp"
 #include "drop_actions.hpp"
 #include "gui/ui_renderer.hpp"
@@ -102,12 +103,17 @@ int main(int argc, char *argv[]) {
   platform::web::set_drop_import_handler(
       [&services](platform::web::FolderImportResult result) {
         if (!result.ok) {
-          std::cerr << "megatoy: folder drop failed: " << result.error
-                    << std::endl;
+          megatoy::status::error("Folder drop failed: " + result.error);
           return;
         }
         if (services.preference_manager.add_workspace_folder(result.path)) {
           services.patch_session.sync_workspace();
+          megatoy::status::success(
+              "Added \"" + result.folder_name + "\" (" +
+              std::to_string(result.file_count) + " files)");
+        } else {
+          megatoy::status::warning("\"" + result.folder_name +
+                                   "\" is already in the workspace.");
         }
       });
   platform::web::install_drop_import(

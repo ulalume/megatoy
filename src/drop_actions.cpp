@@ -1,6 +1,7 @@
 #include "drop_actions.hpp"
 
 #include "app_services.hpp"
+#include "core/status.hpp"
 #include "formats/patch_loader.hpp"
 #include <system_error>
 #include <utility>
@@ -31,18 +32,12 @@ void handle_multi(Environment &env, std::vector<ym2612::Patch> patches,
   drop.pending_instruments_path = path;
   drop.selected_instrument = 0;
   drop.show_picker_for_multiple_instruments = true;
-  drop.show_error_popup = false;
-  drop.error_message.clear();
 }
 
 void handle_failure(Environment &env, const std::string &message) {
-  auto &drop = env.ui_state.drop_state;
-  drop.instruments.clear();
-  drop.pending_instruments_path.clear();
-  drop.selected_instrument = 0;
-  drop.show_picker_for_multiple_instruments = false;
-  drop.error_message = message;
-  drop.show_error_popup = true;
+  reset_drop_state(env.ui_state.drop_state);
+  megatoy::status::error(message.empty() ? "Unsupported file format."
+                                         : message);
 }
 
 } // namespace
@@ -52,13 +47,10 @@ void reset_drop_state(UIState::DropState &drop) {
   drop.pending_instruments_path.clear();
   drop.selected_instrument = 0;
   drop.show_picker_for_multiple_instruments = false;
-  drop.show_error_popup = false;
-  drop.error_message.clear();
 }
 
 void handle_drop(Environment &env, const std::filesystem::path &path) {
   auto &drop = env.ui_state.drop_state;
-  drop.error_message.clear();
 
   // A dropped directory is a workspace addition, not a patch load: the same
   // gesture as dragging a folder into an editor. Files keep the old behavior.
@@ -66,10 +58,13 @@ void handle_drop(Environment &env, const std::filesystem::path &path) {
   if (std::filesystem::is_directory(path, ec)) {
     if (env.services.preference_manager.add_workspace_folder(path)) {
       env.services.patch_session.sync_workspace();
-      reset_drop_state(drop);
+      megatoy::status::success("Added \"" + path.filename().string() +
+                               "\" to the workspace.");
     } else {
-      handle_failure(env, "Folder is already in the workspace.");
+      megatoy::status::warning("\"" + path.filename().string() +
+                               "\" is already in the workspace.");
     }
+    reset_drop_state(drop);
     return;
   }
 

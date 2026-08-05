@@ -4,19 +4,10 @@
 
 namespace ui {
 
+// Results (saved, exported, failed) are announced as status toasts; only
+// genuine decisions still open a dialog.
 struct SaveExportState {
-  std::string last_export_path;
-  std::string last_export_error;
-
-  enum class Pending {
-    None,
-    OverwriteConfirmation,
-    SaveSuccess,
-    ExportSuccess,
-    Error,
-  };
-
-  Pending pending_popup = Pending::None;
+  bool overwrite_confirmation_pending = false;
 
   struct DuplicateDialog {
     bool open = false;

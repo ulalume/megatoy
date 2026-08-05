@@ -3,6 +3,7 @@
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
+#include "core/status.hpp"
 #include <algorithm>
 #include <imgui.h>
 #include <iomanip>
@@ -21,59 +22,65 @@ const char *save_label_for(const patches::PatchSession &session,
   return session.save_label_for(is_user_patch);
 }
 
+namespace {
+
+// The path as the user knows it, not the absolute one.
+std::string saved_path_label(const patches::PatchSession &session,
+                             const std::filesystem::path &path) {
+  const auto relative = session.repository().to_relative_path(path);
+  return display_preset_path(relative.generic_string());
+}
+
+void announce_save(patches::PatchSession &session,
+                   const patches::SaveResult &result) {
+  if (result.is_success()) {
+    megatoy::status::success("Saved " +
+                             saved_path_label(session, result.path));
+  } else if (result.is_error()) {
+    megatoy::status::error(result.error_message.empty()
+                               ? "Failed to save patch"
+                               : result.error_message);
+  }
+}
+
+} // namespace
+
 void trigger_save(patches::PatchSession &session, SaveExportState &state,
                   std::string_view extension_override) {
   auto result = session.save_current_patch(extension_override);
   if (result.is_duplicated()) {
-    state.last_export_path = result.path.string();
-    state.pending_popup = SaveExportState::Pending::OverwriteConfirmation;
-  } else if (result.is_success()) {
-    state.last_export_path = result.path.string();
-    state.pending_popup = SaveExportState::Pending::SaveSuccess;
+    state.overwrite_confirmation_pending = true;
+    return;
+  }
+  if (result.is_success()) {
     session.repository().refresh();
     session.set_current_patch_path(
         session.repository().to_relative_path(result.path));
-  } else if (result.is_error()) {
-    state.last_export_error = result.error_message;
-    state.pending_popup = SaveExportState::Pending::Error;
   }
+  announce_save(session, result);
 }
 
 void trigger_export(patches::PatchSession &session, SaveExportState &state,
                     const patches::ExportFormatInfo &format) {
+  (void)state;
   auto result = session.export_current_patch_as(format);
   if (result.is_success()) {
-    state.last_export_path = result.path.string();
-    state.pending_popup = SaveExportState::Pending::ExportSuccess;
+    // The web build hands the file to the browser instead of a path.
+    megatoy::status::success(result.path == "download"
+                                 ? "Download started."
+                                 : "Exported " + result.path.string());
   } else if (result.is_error()) {
-    state.last_export_error = result.error_message;
-    state.pending_popup = SaveExportState::Pending::Error;
+    megatoy::status::error(result.error_message.empty()
+                               ? "Failed to export patch"
+                               : result.error_message);
   }
 }
 
 void render_save_export_popups(patches::PatchSession &session,
                                SaveExportState &state) {
-  const char *popup_to_open = nullptr;
-  switch (state.pending_popup) {
-  case SaveExportState::Pending::OverwriteConfirmation:
-    popup_to_open = "Overwrite Confirmation";
-    break;
-  case SaveExportState::Pending::SaveSuccess:
-    popup_to_open = "Save Success";
-    break;
-  case SaveExportState::Pending::ExportSuccess:
-    popup_to_open = "Export Success";
-    break;
-  case SaveExportState::Pending::Error:
-    popup_to_open = "Error##SaveOrExport";
-    break;
-  case SaveExportState::Pending::None:
-    break;
-  }
-  if (popup_to_open) {
-    ImGui::OpenPopup(popup_to_open);
-    // Do not clear pending here; allow popup to open this frame.
-    state.pending_popup = SaveExportState::Pending::None;
+  if (state.overwrite_confirmation_pending) {
+    ImGui::OpenPopup("Overwrite Confirmation");
+    state.overwrite_confirmation_pending = false;
   }
 
   const auto &patch = session.current_patch();
@@ -102,60 +109,12 @@ void render_save_export_popups(patches::PatchSession &session,
     if (overwrite_button) {
       auto result = session.save_current_patch();
       if (result.is_success()) {
-        state.last_export_path = result.path.string();
         session.set_current_patch_path(
             session.repository().to_relative_path(result.path));
-        state.pending_popup = SaveExportState::Pending::SaveSuccess;
-      } else if (result.is_error()) {
-        state.last_export_error = result.error_message;
-        state.pending_popup = SaveExportState::Pending::Error;
       }
+      announce_save(session, result);
       ImGui::CloseCurrentPopup();
     }
-  }
-
-  center_next_window();
-  if (ImGui::BeginPopupModal("Save Success", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-    ImGui::Text("Patch saved successfully.");
-    ImGui::TextWrapped("%s", state.last_export_path.c_str());
-    ImGui::Spacing();
-    if (ImGui::Button("OK", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-
-  center_next_window();
-  if (ImGui::BeginPopupModal("Export Success", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-    ImGui::Text("Patch exported successfully.");
-    ImGui::TextWrapped("%s", state.last_export_path.c_str());
-    ImGui::Spacing();
-    if (ImGui::Button("OK", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-
-  center_next_window();
-  if (ImGui::BeginPopupModal("Error##SaveOrExport", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-    ImGui::TextWrapped("%s", state.last_export_error.c_str());
-    ImGui::Spacing();
-    if (ImGui::Button("OK", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
   }
 }
 

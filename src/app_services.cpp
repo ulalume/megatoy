@@ -1,4 +1,6 @@
 #include "app_services.hpp"
+
+#include "core/status.hpp"
 #include "app_state.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -18,8 +20,8 @@ void AppServices::initialize_app(AppState &state) {
 #endif
 
   if (!audio_manager.initialize(SampleRate)) {
-    std::cerr << "Audio manager failed to start; functionality will be limited"
-              << std::endl;
+    megatoy::status::error(
+        "Audio device unavailable -- megatoy is running without sound.");
   } else {
     patch_session.apply_patch_to_audio();
   }

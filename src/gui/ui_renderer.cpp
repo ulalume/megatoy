@@ -11,6 +11,7 @@
 #include "gui/components/patch_lab_window.hpp"
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
+#include "gui/components/status_toasts.hpp"
 #include "gui/components/waveform.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
@@ -373,6 +374,7 @@ void render_all(AppContext &ctx) {
   render_waveform(WAVEFORM_TITLE, contexts.waveform);
 
   render_save_export_popup_host(ctx);
+  render_status_toasts();
 }
 
 } // namespace ui

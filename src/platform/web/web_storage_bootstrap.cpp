@@ -4,6 +4,7 @@
 
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/filename_utils.hpp"
+#include "core/status.hpp"
 #include "platform/web/local_storage.hpp"
 #include "workspace/workspace.hpp"
 #include "ym2612/patch.hpp"
@@ -71,8 +72,8 @@ std::size_t migrate_legacy_library(const std::filesystem::path &destination) {
       }
     }
   } catch (const std::exception &error) {
-    std::cerr << "megatoy: could not migrate saved patches: " << error.what()
-              << std::endl;
+    megatoy::status::error(std::string("Could not migrate saved patches: ") +
+                           error.what());
     // Leave the key in place so a future version can try again rather than
     // destroying the only copy.
     return migrated;
@@ -80,9 +81,8 @@ std::size_t migrate_legacy_library(const std::filesystem::path &destination) {
 
   remove_local_storage(kLegacyKey);
   if (migrated > 0) {
-    std::cout << "megatoy: migrated " << migrated
-              << " patch(es) out of localStorage into " << destination
-              << std::endl;
+    megatoy::status::success("Moved " + std::to_string(migrated) +
+                             " saved patch(es) into \"My Patches\".");
   }
   return migrated;
 }
@@ -98,8 +98,9 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
   std::error_code ec;
   std::filesystem::create_directories(storage_root, ec);
   if (ec) {
-    std::cerr << "megatoy: persistent storage unavailable: " << ec.message()
-              << std::endl;
+    megatoy::status::error(
+        "Persistent storage unavailable -- changes will not survive a "
+        "reload. (" + ec.message() + ")");
     return false;
   }
 
@@ -108,8 +109,8 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
   if (!existed) {
     std::filesystem::create_directories(home, ec);
     if (ec) {
-      std::cerr << "megatoy: could not create " << home << ": " << ec.message()
-                << std::endl;
+      megatoy::status::error("Could not create \"My Patches\": " +
+                             ec.message());
       return false;
     }
   }
