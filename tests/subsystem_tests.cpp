@@ -1,4 +1,5 @@
 #include "audio/audio_manager.hpp"
+#include "patches/patch_write.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/patch_session.hpp"
 #include "platform/native/native_file_system.hpp"
@@ -9,7 +10,10 @@
 #include "test_check.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <string>
 
 namespace {
 
@@ -161,6 +165,46 @@ void test_note_allocation(TestEnvironment &env) {
   }
 }
 
+std::string file_bytes(const std::filesystem::path &path) {
+  std::ifstream file(path, std::ios::binary);
+  return {std::istreambuf_iterator<char>(file),
+          std::istreambuf_iterator<char>()};
+}
+
+// "Duplicate" must create a new file and leave the original alone. It used to
+// route through the ordinary save, which overwrote the original in place --
+// and for formats that store no patch name that was a byte-identical write,
+// so it looked like nothing had happened at all.
+void test_duplicate_creates_new_file(TestEnvironment &env) {
+  env.session.current_patch().name = "dup source";
+  env.session.current_patch().instrument.algorithm = 2;
+  const auto source = env.patches_folder / "dup source.ginpkg";
+  CHECK(patches::write_patch(env.session.current_patch(), source));
+  env.session.set_current_patch(env.session.current_patch(), source);
+  env.session.repository().refresh();
+
+  const std::string original = file_bytes(source);
+
+  auto result = env.session.duplicate_current_patch("dup copy");
+  CHECK(result.is_success());
+  CHECK(result.path == env.patches_folder / "dup copy.ginpkg");
+  CHECK(std::filesystem::exists(result.path));
+
+  // The original file is byte-for-byte untouched...
+  CHECK(file_bytes(source) == original);
+
+  // ...and the working patch is now the duplicate.
+  CHECK(env.session.current_patch().name == "dup copy");
+  CHECK(env.session.repository().to_absolute_path(
+            env.session.current_patch_path()) == result.path);
+
+  // Duplicating onto an existing name refuses instead of overwriting.
+  env.session.set_current_patch(env.session.current_patch(), source);
+  auto conflict = env.session.duplicate_current_patch("dup copy");
+  CHECK(conflict.is_error());
+  CHECK(std::filesystem::exists(result.path));
+}
+
 } // namespace
 
 int main() {
@@ -168,6 +212,7 @@ int main() {
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);
   test_workspace_folder_is_visible(env);
+  test_duplicate_creates_new_file(env);
   test_save_and_metadata_roundtrip(env);
   test_save_in_place_rules(env);
 

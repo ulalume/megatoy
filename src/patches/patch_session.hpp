@@ -93,6 +93,12 @@ public:
    */
   SaveResult save_current_patch(std::string_view preferred_extension = {});
   SaveResult save_current_patch_as(std::string_view preferred_extension = {});
+  /**
+   * Write a copy of the current patch as a new .ginpkg named `new_name`,
+   * next to the original when its folder is writable, otherwise into the
+   * first writable workspace folder. The original file is never touched.
+   */
+  SaveResult duplicate_current_patch(const std::string &new_name);
   SaveResult export_current_patch_as(const ExportFormatInfo &format);
   std::optional<ExportFormatInfo>
   find_export_format(const std::string &extension) const;

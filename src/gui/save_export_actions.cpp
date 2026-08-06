@@ -215,12 +215,13 @@ void render_duplicate_dialog(patches::PatchSession &session,
     if (disable_save)
       ImGui::BeginDisabled(true);
     if (ImGui::Button("Save", ImVec2(120, 0))) {
-      auto original_name = session.current_patch().name;
-      auto patch_copy = session.current_patch();
-      patch_copy.name = state.duplicate.name;
-      session.set_current_patch(patch_copy, session.current_patch_path());
-      // Duplicates are always saved as packaged ginpkg files.
-      trigger_save(session, state, ".ginpkg");
+      // A duplicate is a NEW file. Routing this through the ordinary save
+      // would overwrite the original in place, since the current patch still
+      // carries the original's path -- which is exactly the bug this
+      // replaced: "Duplicate" quietly rewrote the source file and created
+      // nothing.
+      auto result = session.duplicate_current_patch(state.duplicate.name);
+      announce_save(session, result);
       state.duplicate.open = false;
       ImGui::CloseCurrentPopup();
     }

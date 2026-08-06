@@ -165,6 +165,39 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
   return save_current_patch_as(preferred_extension);
 }
 
+SaveResult PatchSession::duplicate_current_patch(const std::string &new_name) {
+  const std::string sanitized = sanitize_filename(new_name);
+  if (sanitized.empty()) {
+    return SaveResult::error("Invalid name");
+  }
+
+  // Prefer the original's folder; a duplicate belongs next to its source.
+  std::optional<std::filesystem::path> folder = writable_source_folder();
+  if (!folder) {
+    folder = preferences_.workspace().default_save_folder();
+  }
+  if (!folder) {
+    return SaveResult::error("Add a writable folder to the workspace first.");
+  }
+
+  const auto target = *folder / (sanitized + ".ginpkg");
+  std::error_code ec;
+  if (std::filesystem::exists(target, ec)) {
+    return SaveResult::error("\"" + sanitized + "\" already exists.");
+  }
+
+  ym2612::Patch copy = current_patch_;
+  copy.name = new_name;
+  if (!patches::write_patch(copy, target)) {
+    return SaveResult::error("Failed to write " + target.string());
+  }
+
+  // The duplicate becomes the working patch; the original stays as it was.
+  set_current_patch(copy, target);
+  repository_->refresh();
+  return SaveResult::success(target);
+}
+
 SaveResult
 PatchSession::save_current_patch_as(std::string_view preferred_extension) {
   const std::string sanitized_name = sanitize_filename(
