@@ -1,6 +1,4 @@
 #include "preferences.hpp"
-#include <optional>
-#include <utility>
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -10,7 +8,9 @@
 #include <array>
 #include <imgui.h>
 #include <map>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace ui {
 

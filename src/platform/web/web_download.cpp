@@ -7,6 +7,7 @@
 namespace {
 
 #if defined(__EMSCRIPTEN__)
+// clang-format off
 EM_JS(void, megatoy_download_bytes,
       (const char *filename, const uint8_t *data, int length, const char *mime),
       {
@@ -28,6 +29,9 @@ EM_JS(void, megatoy_download_bytes,
             0);
       });
 
+// clang-format on
+
+// clang-format off
 EM_JS(void, megatoy_download_text,
       (const char *filename, const char *text, const char *mime), {
         const name = UTF8ToString(filename);
@@ -47,6 +51,7 @@ EM_JS(void, megatoy_download_text,
             },
             0);
       });
+// clang-format on
 #endif
 
 } // namespace

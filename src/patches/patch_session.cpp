@@ -228,8 +228,8 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
   return SaveResult::success(selected);
 }
 
-SaveResult PatchSession::export_current_patch_as(
-    const ExportFormatInfo &format) {
+SaveResult
+PatchSession::export_current_patch_as(const ExportFormatInfo &format) {
   const auto default_dir = preferences_.last_save_directory();
   const std::string sanitized_name = sanitize_filename(
       current_patch_.name.empty() ? "patch" : current_patch_.name);
@@ -250,7 +250,9 @@ SaveResult PatchSession::export_current_patch_as(
 
   std::filesystem::path selected_path;
   const std::string default_name =
-      sanitized_name + (ext.empty() ? "" : ext.front() == '.' ? ext : "." + ext);
+      sanitized_name + (ext.empty()          ? ""
+                        : ext.front() == '.' ? ext
+                                             : "." + ext);
   std::vector<platform::file_dialog::FileFilter> filters;
   std::string trimmed_ext = ext;
   if (!trimmed_ext.empty() && trimmed_ext.front() == '.') {
@@ -315,7 +317,8 @@ bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
   // Handed to the audio thread rather than written here: the chip has exactly
   // one writer, and the note starts on the next audio callback instead of
   // waiting for whenever this frame happens to finish.
-  audio_.set_note_options(prefs.use_velocity, prefs.steal_oldest_note_when_full);
+  audio_.set_note_options(prefs.use_velocity,
+                          prefs.steal_oldest_note_when_full);
   const uint8_t clamped_velocity =
       std::min<uint8_t>(velocity, static_cast<uint8_t>(127));
   return audio_.submit(audio::AudioCommand::note_on(note, clamped_velocity));

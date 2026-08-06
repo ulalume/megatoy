@@ -1,9 +1,9 @@
 #include "patch_repository.hpp"
-#include "formats/ym2612_format_adapter.hpp"
 #include "formats/patch_loader.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include "patch_storage.hpp"
-#include "platform/platform_config.hpp"
 #include "patches/filesystem_patch_storage.hpp"
+#include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #endif
 #include "ym2612/patch.hpp"
@@ -55,9 +55,8 @@ void PatchRepository::rebuild_storages() {
       base = "folder";
     }
     std::string candidate = base;
-    for (int suffix = 2;
-         std::find(used_labels.begin(), used_labels.end(), candidate) !=
-         used_labels.end();
+    for (int suffix = 2; std::find(used_labels.begin(), used_labels.end(),
+                                   candidate) != used_labels.end();
          ++suffix) {
       candidate = base + " (" + std::to_string(suffix) + ")";
     }
@@ -199,8 +198,7 @@ PatchRepository::save_patch_in(const std::filesystem::path &folder,
   for (const auto &storage : storages_) {
     auto *filesystem_storage =
         dynamic_cast<FilesystemPatchStorage *>(storage.get());
-    if (filesystem_storage == nullptr ||
-        filesystem_storage->root() != folder) {
+    if (filesystem_storage == nullptr || filesystem_storage->root() != folder) {
       continue;
     }
     auto result = filesystem_storage->save_patch(patch, name, overwrite,

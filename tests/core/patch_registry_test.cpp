@@ -1,5 +1,5 @@
-#include "formats/patch_registry.hpp"
 #include "../test_check.hpp"
+#include "formats/patch_registry.hpp"
 #include <iostream>
 
 int main() {

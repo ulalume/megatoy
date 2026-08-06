@@ -1,7 +1,7 @@
 #pragma once
 
-#include "patch_repository.hpp"
 #include "formats/patch_registry.hpp"
+#include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"

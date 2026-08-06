@@ -73,18 +73,15 @@ void draw_channel(const Panel &panel, const std::vector<float> &samples,
   // One vertex per horizontal pixel at most: a 1024-sample trace across a
   // 200px panel would otherwise cost five times the geometry for no visible
   // benefit.
-  const std::size_t steps =
-      std::min<std::size_t>(count, static_cast<std::size_t>(
-                                       std::max(2.0f, std::floor(width))));
+  const std::size_t steps = std::min<std::size_t>(
+      count, static_cast<std::size_t>(std::max(2.0f, std::floor(width))));
 
   panel.draw_list->PathClear();
   for (std::size_t step = 0; step < steps; ++step) {
-    const std::size_t index =
-        offset + (step * (count - 1)) / (steps - 1);
+    const std::size_t index = offset + (step * (count - 1)) / (steps - 1);
     const float value = std::clamp(samples[index] - mean, -1.0f, 1.0f);
-    const float x =
-        panel.min.x + width * static_cast<float>(step) /
-                          static_cast<float>(steps - 1);
+    const float x = panel.min.x + width * static_cast<float>(step) /
+                                      static_cast<float>(steps - 1);
     panel.draw_list->PathLineTo(ImVec2(x, center_y - value * half_height));
   }
   panel.draw_list->PathStroke(color, ImDrawFlags_None, 1.5f);
@@ -102,8 +99,8 @@ float mean_of(const std::vector<float> &samples) {
 }
 
 void draw_scope(const Panel &panel, const std::vector<float> &left,
-                const std::vector<float> &right,
-                const std::vector<float> &mono, bool clipped) {
+                const std::vector<float> &right, const std::vector<float> &mono,
+                bool clipped) {
   const float height = panel.max.y - panel.min.y;
   const ImU32 grid = with_alpha(ImGui::GetColorU32(ImGuiCol_Border), 0.6f);
 
@@ -111,9 +108,7 @@ void draw_scope(const Panel &panel, const std::vector<float> &left,
   for (float level : {-0.5f, 0.0f, 0.5f}) {
     const float y = panel.min.y + height * (0.5f - level * 0.5f);
     panel.draw_list->AddLine(ImVec2(panel.min.x, y), ImVec2(panel.max.x, y),
-                             level == 0.0f
-                                 ? grid
-                                 : with_alpha(grid, 0.5f));
+                             level == 0.0f ? grid : with_alpha(grid, 0.5f));
   }
 
   if (left.size() < 2) {
@@ -158,17 +153,17 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
   const float log_span = log_max - log_min;
 
   const ImU32 grid = with_alpha(ImGui::GetColorU32(ImGuiCol_Border), 0.5f);
-  const ImU32 label = with_alpha(
-      styles::color_u32(styles::MegatoyCol::TextMuted), 0.9f);
+  const ImU32 label =
+      with_alpha(styles::color_u32(styles::MegatoyCol::TextMuted), 0.9f);
 
   auto x_for_hz = [&](float hz) {
-    const float t = (std::log10(std::max(hz, kSpectrumMinHz)) - log_min) /
-                    log_span;
+    const float t =
+        (std::log10(std::max(hz, kSpectrumMinHz)) - log_min) / log_span;
     return panel.min.x + width * std::clamp(t, 0.0f, 1.0f);
   };
   auto y_for_db = [&](float db) {
-    const float t = (kSpectrumTopDb - db) /
-                    (kSpectrumTopDb - kSpectrumBottomDb);
+    const float t =
+        (kSpectrumTopDb - db) / (kSpectrumTopDb - kSpectrumBottomDb);
     return panel.min.y + height * std::clamp(t, 0.0f, 1.0f);
   };
 
@@ -178,8 +173,7 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
                              grid);
     char text[16];
     std::snprintf(text, sizeof(text), "%.0f", db);
-    panel.draw_list->AddText(ImVec2(panel.min.x + 3.0f, y + 1.0f), label,
-                             text);
+    panel.draw_list->AddText(ImVec2(panel.min.x + 3.0f, y + 1.0f), label, text);
   }
 
   for (float hz : {100.0f, 1000.0f, 10000.0f}) {
@@ -216,8 +210,8 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
   // Below ~1 kHz the bins are wider than a pixel, leaving gaps; carry the
   // previous column's value across them.
   float carried = audio::SpectrumAnalyzer::kFloorDb;
-  const ImU32 fill = with_alpha(ImGui::GetColorU32(ImGuiCol_PlotHistogram),
-                                0.85f);
+  const ImU32 fill =
+      with_alpha(ImGui::GetColorU32(ImGuiCol_PlotHistogram), 0.85f);
   for (int column = 0; column < columns; ++column) {
     float db = peaks[static_cast<std::size_t>(column)];
     if (db <= audio::SpectrumAnalyzer::kFloorDb) {
@@ -229,8 +223,8 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
       continue;
     }
     const float x = panel.min.x + static_cast<float>(column);
-    panel.draw_list->AddLine(ImVec2(x, y_for_db(db)),
-                             ImVec2(x, panel.max.y), fill);
+    panel.draw_list->AddLine(ImVec2(x, y_for_db(db)), ImVec2(x, panel.max.y),
+                             fill);
   }
 }
 

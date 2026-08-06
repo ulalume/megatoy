@@ -2,9 +2,9 @@
 
 #if defined(MEGATOY_PLATFORM_WEB)
 
+#include "core/status.hpp"
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/filename_utils.hpp"
-#include "core/status.hpp"
 #include "platform/web/local_storage.hpp"
 #include "workspace/workspace.hpp"
 #include "ym2612/patch.hpp"
@@ -62,8 +62,8 @@ std::size_t migrate_legacy_library(const std::filesystem::path &destination) {
 
       auto target = destination / (filename + ".gin");
       for (int suffix = 2; std::filesystem::exists(target); ++suffix) {
-        target = destination /
-                 (filename + " (" + std::to_string(suffix) + ").gin");
+        target =
+            destination / (filename + " (" + std::to_string(suffix) + ").gin");
       }
 
       if (formats::adapter::write_file(ym2612_format::Format::Gin, patch,
@@ -100,7 +100,8 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
   if (ec) {
     megatoy::status::error(
         "Persistent storage unavailable -- changes will not survive a "
-        "reload. (" + ec.message() + ")");
+        "reload. (" +
+        ec.message() + ")");
     return false;
   }
 

@@ -69,8 +69,8 @@ void clean_dir(const std::filesystem::path &dir) {
 
 // Formats that carry the full megatoy patch, so equality must hold exactly.
 bool is_lossless(const std::string &extension) {
-  return extension == ".gin" || extension == ".ginpkg" ||
-         extension == ".dmp" || extension == ".fui" || extension == ".mml";
+  return extension == ".gin" || extension == ".ginpkg" || extension == ".dmp" ||
+         extension == ".fui" || extension == ".mml";
 }
 
 } // namespace

@@ -25,6 +25,7 @@ std::optional<std::string> read_local_storage(const std::string &key) {
 bool write_local_storage(const std::string &key, const std::string &value) {
   // Wrap in try/catch to avoid uncaught exceptions when localStorage is
   // unavailable (e.g., private mode or blocked).
+  // clang-format off
   return EM_ASM_INT(
              {
                try {
@@ -39,6 +40,7 @@ bool write_local_storage(const std::string &key, const std::string &value) {
                }
              },
       key.c_str(), value.c_str()) != 0;
+  // clang-format on
 }
 
 void remove_local_storage(const std::string &key) {

@@ -3,8 +3,8 @@
 // in one direction (a bank overwritten by a single patch) and annoying in
 // the other (a pointless Save As dialog), so the table is pinned here.
 
-#include "patches/patch_write.hpp"
 #include "formats/patch_loader.hpp"
+#include "patches/patch_write.hpp"
 #include "ym2612/patch.hpp"
 
 #include "../test_check.hpp"

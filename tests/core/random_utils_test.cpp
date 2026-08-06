@@ -1,5 +1,5 @@
-#include "core/random_utils.hpp"
 #include "../test_check.hpp"
+#include "core/random_utils.hpp"
 #include <iostream>
 
 void test_range_clamp() {

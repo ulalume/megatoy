@@ -36,8 +36,8 @@ EMSCRIPTEN_KEEPALIVE void megatoy_folder_import_done(void *handle, int ok,
   FolderImportResult result;
   result.ok = ok != 0;
   result.folder_name = folder_name != nullptr ? folder_name : "";
-  result.path = path != nullptr ? std::filesystem::path(path)
-                                : std::filesystem::path();
+  result.path =
+      path != nullptr ? std::filesystem::path(path) : std::filesystem::path();
   result.file_count = file_count > 0 ? static_cast<std::size_t>(file_count) : 0;
   result.error = error != nullptr ? error : "";
   pending->on_complete(std::move(result));
@@ -47,19 +47,17 @@ EMSCRIPTEN_KEEPALIVE void megatoy_folder_import_cancelled(void *handle) {
   delete static_cast<PendingImport *>(handle);
 }
 
-EMSCRIPTEN_KEEPALIVE void megatoy_folder_dropped(int ok,
-                                                 const char *folder_name,
-                                                 const char *path,
-                                                 int file_count,
-                                                 const char *error) {
+EMSCRIPTEN_KEEPALIVE void
+megatoy_folder_dropped(int ok, const char *folder_name, const char *path,
+                       int file_count, const char *error) {
   if (!g_drop_handler) {
     return;
   }
   FolderImportResult result;
   result.ok = ok != 0;
   result.folder_name = folder_name != nullptr ? folder_name : "";
-  result.path = path != nullptr ? std::filesystem::path(path)
-                                : std::filesystem::path();
+  result.path =
+      path != nullptr ? std::filesystem::path(path) : std::filesystem::path();
   result.file_count = file_count > 0 ? static_cast<std::size_t>(file_count) : 0;
   result.error = error != nullptr ? error : "";
   g_drop_handler(std::move(result));
@@ -171,7 +169,6 @@ EM_JS(void, megatoy_open_folder_import, (const char *destination,
   input.click();
 });
 // clang-format on
-
 
 // clang-format off
 EM_JS(void, megatoy_install_drop_import_js, (const char *destination), {

@@ -45,8 +45,8 @@ SpectrumAnalyzer::SpectrumAnalyzer(std::size_t fft_size)
   // makes such a sine read exactly 0 dBFS.
   scale_ = window_sum > 0.0 ? static_cast<float>(2.0 / window_sum) : 1.0f;
 
-  plan_->cfg = kiss_fftr_alloc(static_cast<int>(fft_size_), 0, nullptr,
-                               nullptr);
+  plan_->cfg =
+      kiss_fftr_alloc(static_cast<int>(fft_size_), 0, nullptr, nullptr);
   plan_->output.resize(fft_size_ / 2 + 1);
 }
 

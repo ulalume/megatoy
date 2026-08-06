@@ -161,11 +161,11 @@ void RtMidiBackend::sync_connections(const std::vector<std::string> &ports) {
   }
 
   for (const auto &port : ports) {
-    const bool already_open = std::any_of(
-        connections_.begin(), connections_.end(),
-        [&](const std::unique_ptr<Connection> &conn) {
-          return conn->port_name == port;
-        });
+    const bool already_open =
+        std::any_of(connections_.begin(), connections_.end(),
+                    [&](const std::unique_ptr<Connection> &conn) {
+                      return conn->port_name == port;
+                    });
 
     if (!already_open) {
       std::cout << "MIDI input connected: " << port << "\n";

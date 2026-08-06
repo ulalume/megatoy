@@ -15,7 +15,9 @@ class Interface : public ymfm::ymfm_interface {};
 } // namespace
 
 struct YmfmChip::Impl {
-  explicit Impl(uint32_t clock) : clock(clock), chip(interface) { chip.reset(); }
+  explicit Impl(uint32_t clock) : clock(clock), chip(interface) {
+    chip.reset();
+  }
 
   uint32_t clock;
   Interface interface;

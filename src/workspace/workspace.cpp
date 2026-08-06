@@ -71,10 +71,10 @@ bool Workspace::add(const fs::path &path) {
 
 bool Workspace::remove(const fs::path &path) {
   const auto resolved = normalize(path);
-  const auto it = std::find_if(folders_.begin(), folders_.end(),
-                               [&](const Folder &folder) {
-                                 return folder.path == resolved;
-                               });
+  const auto it =
+      std::find_if(folders_.begin(), folders_.end(), [&](const Folder &folder) {
+        return folder.path == resolved;
+      });
   if (it == folders_.end()) {
     return false;
   }

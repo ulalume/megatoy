@@ -212,20 +212,20 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
   auto patch_actions_facade = PatchActions{ctx};
-  return {ctx.services.patch_session.repository(), ctx.services.patch_session,
-          ui_state.prefs,
-          [patch_actions_facade](const patches::PatchEntry &entry) {
-            patch_actions_facade.safe_load(entry);
-          },
-          // No file manager exists in a browser; the context menu keys off
-          // the callback's absence.
-          megatoy::platform::is_desktop()
-              ? [](const std::filesystem::path &path) {
-                  reveal_in_file_manager(path.string());
-                }
-              : std::function<void(const std::filesystem::path &)>{},
-          ctx.services.preference_manager.workspace().empty(),
-          [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; }};
+  return {
+      ctx.services.patch_session.repository(), ctx.services.patch_session,
+      ui_state.prefs,
+      [patch_actions_facade](const patches::PatchEntry &entry) {
+        patch_actions_facade.safe_load(entry);
+      },
+      // No file manager exists in a browser; the context menu keys off
+      // the callback's absence.
+      megatoy::platform::is_desktop()
+          ? [](const std::filesystem::path
+                   &path) { reveal_in_file_manager(path.string()); }
+          : std::function<void(const std::filesystem::path &)>{},
+      ctx.services.preference_manager.workspace().empty(),
+      [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; }};
 }
 
 PatchHistoryContext make_patch_history_context(AppContext &ctx) {

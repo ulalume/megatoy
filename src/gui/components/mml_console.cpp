@@ -18,7 +18,7 @@ void render_mml_console(const char *title, MmlConsoleContext &context) {
   }
 
   auto mml = formats::adapter::serialize_text(ym2612_format::Format::Mml,
-                                             context.current_patch())
+                                              context.current_patch())
                  .value_or(std::string{});
   auto mml_c = mml.c_str();
 

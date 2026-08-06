@@ -192,9 +192,9 @@ void PatchRegistry::register_defaults() {
     // that names the file from the patch.
     if (format == ym2612_format::Format::Gin) {
       handler.write_packaged =
-          [format](const std::filesystem::path &dir, const ym2612::Patch &patch,
-                   const std::string &name)
-          -> std::optional<std::filesystem::path> {
+          [format](
+              const std::filesystem::path &dir, const ym2612::Patch &patch,
+              const std::string &name) -> std::optional<std::filesystem::path> {
         const auto path = dir / (name + ".gin");
         return adapter::write_file(format, patch, path)
                    ? std::optional<std::filesystem::path>(path)

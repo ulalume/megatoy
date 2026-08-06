@@ -1,9 +1,9 @@
 #include "patches/filesystem_patch_storage.hpp"
 
-#include "formats/ym2612_format_adapter.hpp"
 #include "formats/ginpkg.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
 #include <algorithm>
@@ -22,9 +22,11 @@ std::vector<std::string> supported_extensions() {
 
 namespace patches {
 
-FilesystemPatchStorage::FilesystemPatchStorage(
-    platform::VirtualFileSystem &vfs, std::filesystem::path root,
-    std::string relative_root_label, bool writable, bool enable_metadata)
+FilesystemPatchStorage::FilesystemPatchStorage(platform::VirtualFileSystem &vfs,
+                                               std::filesystem::path root,
+                                               std::string relative_root_label,
+                                               bool writable,
+                                               bool enable_metadata)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)), writable_(writable),
       label_(root_label_) {
@@ -33,8 +35,8 @@ FilesystemPatchStorage::FilesystemPatchStorage(
     root_label_ = label_;
   }
   if (enable_metadata) {
-    metadata_ = std::make_unique<FolderMetadataStore>(
-        root_ / ".megatoy" / "patches.json");
+    metadata_ = std::make_unique<FolderMetadataStore>(root_ / ".megatoy" /
+                                                      "patches.json");
     metadata_->load();
   }
 }
@@ -106,8 +108,9 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
   const auto gin_path = patches_dir / (sanitized + ".gin");
 
   std::string pref_ext(preferred_extension);
-  std::transform(pref_ext.begin(), pref_ext.end(), pref_ext.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(
+      pref_ext.begin(), pref_ext.end(), pref_ext.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   const bool prefer_ginpkg = pref_ext == ".ginpkg";
   const bool prefer_gin = pref_ext == ".gin";
 
@@ -228,7 +231,8 @@ FilesystemPatchStorage::has_patch_named(const std::string &name) const {
   }
   auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
   const auto patches_dir = root_;
-  auto ginpkg_target = formats::ginpkg::build_package_path(patches_dir, sanitized);
+  auto ginpkg_target =
+      formats::ginpkg::build_package_path(patches_dir, sanitized);
   auto gin_target = patches_dir / (sanitized + ".gin");
   return vfs_.exists(ginpkg_target) || vfs_.exists(gin_target);
 }

@@ -10,8 +10,8 @@
 #endif
 #include "preference_storage.hpp"
 #include <cstdlib>
-#include <system_error>
 #include <iostream>
+#include <system_error>
 
 PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
     : paths_(paths), directories_initialized(false),
@@ -79,9 +79,9 @@ void PreferenceManager::request_add_workspace_folder(
           return;
         }
         if (add_workspace_folder(result.path)) {
-          megatoy::status::success(
-              "Imported \"" + result.folder_name + "\" (" +
-              std::to_string(result.file_count) + " files)");
+          megatoy::status::success("Imported \"" + result.folder_name + "\" (" +
+                                   std::to_string(result.file_count) +
+                                   " files)");
           if (on_changed) {
             on_changed();
           }

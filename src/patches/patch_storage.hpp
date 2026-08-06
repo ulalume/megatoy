@@ -49,9 +49,9 @@ public:
                           ym2612::Patch &out_patch) const = 0;
 
   // Attempt to save a patch with the provided name. Default: unsupported.
-  virtual SavePatchResult
-  save_patch(const ym2612::Patch &, const std::string &, bool /*overwrite*/,
-             std::string_view /*preferred_extension*/) {
+  virtual SavePatchResult save_patch(const ym2612::Patch &, const std::string &,
+                                     bool /*overwrite*/,
+                                     std::string_view /*preferred_extension*/) {
     return SavePatchResult::unsupported();
   }
 

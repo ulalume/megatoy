@@ -1,9 +1,9 @@
 #include "save_export_actions.hpp"
 #include "components/common.hpp"
+#include "core/status.hpp"
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
-#include "core/status.hpp"
 #include <algorithm>
 #include <imgui.h>
 #include <iomanip>
@@ -34,12 +34,10 @@ std::string saved_path_label(const patches::PatchSession &session,
 void announce_save(patches::PatchSession &session,
                    const patches::SaveResult &result) {
   if (result.is_success()) {
-    megatoy::status::success("Saved " +
-                             saved_path_label(session, result.path));
+    megatoy::status::success("Saved " + saved_path_label(session, result.path));
   } else if (result.is_error()) {
-    megatoy::status::error(result.error_message.empty()
-                               ? "Failed to save patch"
-                               : result.error_message);
+    megatoy::status::error(result.error_message.empty() ? "Failed to save patch"
+                                                        : result.error_message);
   }
 }
 

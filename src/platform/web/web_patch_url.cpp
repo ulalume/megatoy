@@ -5,8 +5,8 @@
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <cctype>
+#include <charconv>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -131,8 +131,7 @@ std::string base64url_encode(const std::vector<uint8_t> &data) {
   return out;
 }
 
-std::optional<std::vector<uint8_t>>
-base64url_decode(std::string_view text) {
+std::optional<std::vector<uint8_t>> base64url_decode(std::string_view text) {
   while (!text.empty() && text.back() == '=') {
     text.remove_suffix(1);
   }
@@ -163,8 +162,7 @@ base64url_decode(std::string_view text) {
     }
     uint32_t value = (static_cast<uint32_t>(a) << 18) |
                      (static_cast<uint32_t>(b) << 12) |
-                     (static_cast<uint32_t>(c) << 6) |
-                     static_cast<uint32_t>(d);
+                     (static_cast<uint32_t>(c) << 6) | static_cast<uint32_t>(d);
     out.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
     out.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
     out.push_back(static_cast<uint8_t>(value & 0xFF));
@@ -176,8 +174,8 @@ base64url_decode(std::string_view text) {
     if (a < 0 || b < 0) {
       return std::nullopt;
     }
-    uint32_t value = (static_cast<uint32_t>(a) << 18) |
-                     (static_cast<uint32_t>(b) << 12);
+    uint32_t value =
+        (static_cast<uint32_t>(a) << 18) | (static_cast<uint32_t>(b) << 12);
     if (remainder == 2) {
       out.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
     } else {
@@ -257,10 +255,8 @@ std::optional<int> parse_int(std::string_view text) {
     return std::nullopt;
   }
   int value = 0;
-  auto result =
-      std::from_chars(text.data(), text.data() + text.size(), value);
-  if (result.ec != std::errc() ||
-      result.ptr != text.data() + text.size()) {
+  auto result = std::from_chars(text.data(), text.data() + text.size(), value);
+  if (result.ec != std::errc() || result.ptr != text.data() + text.size()) {
     return std::nullopt;
   }
   return value;
@@ -312,8 +308,7 @@ bool parse_global(std::string_view value, ym2612::GlobalSettings &global) {
   }
   global.dac_enable = values[0] != 0;
   global.lfo_enable = values[1] != 0;
-  global.lfo_frequency =
-      static_cast<uint8_t>(clamp_int(values[2], 0, 7));
+  global.lfo_frequency = static_cast<uint8_t>(clamp_int(values[2], 0, 7));
   return true;
 }
 
@@ -379,19 +374,17 @@ bool parse_operator(std::string_view value, ym2612::OperatorSettings &op) {
   }
 }
 
-const ym2612::OperatorSettings &operator_for_ui_index(
-    const ym2612::Patch &patch, size_t ui_index) {
+const ym2612::OperatorSettings &
+operator_for_ui_index(const ym2612::Patch &patch, size_t ui_index) {
   // UI operator order uses all_operator_indices (Op1, Op2, Op3, Op4).
-  auto op_index =
-      static_cast<size_t>(ym2612::all_operator_indices[ui_index]);
+  auto op_index = static_cast<size_t>(ym2612::all_operator_indices[ui_index]);
   return patch.instrument.operators[op_index];
 }
 
 ym2612::OperatorSettings &operator_for_ui_index(ym2612::Patch &patch,
                                                 size_t ui_index) {
   // UI operator order uses all_operator_indices (Op1, Op2, Op3, Op4).
-  auto op_index =
-      static_cast<size_t>(ym2612::all_operator_indices[ui_index]);
+  auto op_index = static_cast<size_t>(ym2612::all_operator_indices[ui_index]);
   return patch.instrument.operators[op_index];
 }
 
@@ -507,13 +500,11 @@ unpack_patch_binary(const std::vector<uint8_t> &data,
   if (!reader.read_bits(2, value)) {
     return fail("Patch binary data is incomplete.");
   }
-  patch.channel.amplitude_modulation_sensitivity =
-      static_cast<uint8_t>(value);
+  patch.channel.amplitude_modulation_sensitivity = static_cast<uint8_t>(value);
   if (!reader.read_bits(3, value)) {
     return fail("Patch binary data is incomplete.");
   }
-  patch.channel.frequency_modulation_sensitivity =
-      static_cast<uint8_t>(value);
+  patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(value);
 
   if (!reader.read_bits(3, value)) {
     return fail("Patch binary data is incomplete.");
@@ -610,15 +601,14 @@ void ensure_cached_query() {
 } // namespace
 
 std::string build_query(const ym2612::Patch &patch) {
-  std::string query =
-      "?v=" + std::to_string(kQueryVersion) + "&p=";
+  std::string query = "?v=" + std::to_string(kQueryVersion) + "&p=";
   query += base64url_encode(pack_patch_binary(patch));
   return query;
 }
 
-std::optional<ym2612::Patch>
-parse_query(std::string_view query, const ym2612::Patch &defaults,
-            std::string *error) {
+std::optional<ym2612::Patch> parse_query(std::string_view query,
+                                         const ym2612::Patch &defaults,
+                                         std::string *error) {
   std::string normalized = strip_query_prefix(query);
   if (normalized.empty()) {
     return std::nullopt;
@@ -732,8 +722,7 @@ parse_query(std::string_view query, const ym2612::Patch &defaults,
 }
 
 std::optional<ym2612::Patch>
-load_patch_from_current_url(const ym2612::Patch &defaults,
-                            std::string *error) {
+load_patch_from_current_url(const ym2612::Patch &defaults, std::string *error) {
 #if defined(MEGATOY_PLATFORM_WEB)
   ensure_cached_query();
   if (cached_query().empty()) {
@@ -755,6 +744,7 @@ void sync_patch_to_url_if_needed(const ym2612::Patch &patch) {
     return;
   }
   std::string query_copy = query;
+  // clang-format off
   EM_ASM(
       {
         const query = UTF8ToString($0);
@@ -767,6 +757,7 @@ void sync_patch_to_url_if_needed(const ym2612::Patch &patch) {
         }
       },
       query_copy.c_str());
+  // clang-format on
   cached_query() = std::move(query);
 #else
   (void)patch;

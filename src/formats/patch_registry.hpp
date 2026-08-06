@@ -1,7 +1,7 @@
 #pragma once
 
-#include "patch_loader.hpp"
 #include "../ym2612/patch.hpp"
+#include "patch_loader.hpp"
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -16,13 +16,14 @@ struct PatchFormatHandler {
       read_file;
   // Optional writers for export/save; not all formats support these.
   std::function<std::optional<std::filesystem::path>(
-      const std::filesystem::path &, const ym2612::Patch &, const std::string &)>
+      const std::filesystem::path &, const ym2612::Patch &,
+      const std::string &)>
       write_packaged; // writes to directory + name
   std::function<bool(const ym2612::Patch &,
                      const std::filesystem::path &)>
       write_single; // writes to explicit path
-  std::function<bool(const ym2612::Patch &,
-                     const std::filesystem::path &)> write_text;
+  std::function<bool(const ym2612::Patch &, const std::filesystem::path &)>
+      write_text;
   // Label to present in UI.
   std::string label;
 };

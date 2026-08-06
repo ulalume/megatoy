@@ -44,8 +44,7 @@ bool export_patch(const ym2612::Patch &patch, const std::string &name,
     if (!data) {
       return false;
     }
-    download_binary(sanitized + extension, *data,
-                    "application/octet-stream");
+    download_binary(sanitized + extension, *data, "application/octet-stream");
     return true;
   }
 

@@ -18,13 +18,11 @@ using namespace selector_detail;
 void render_empty_workspace_prompt(PatchSelectorContext &context) {
   if (PreferenceManager::folder_add_is_import()) {
     ImGui::TextWrapped(
-        "No patch folders yet. Import a folder of patches to get started -- "
-        "the browser cannot read a folder on your disk directly, so megatoy "
-        "copies it into storage that survives a reload.");
+        "Import a local folder of patches -- "
+        "megatoy copies it into storage that survives a reload.");
   } else {
     ImGui::TextWrapped(
-        "No patch folders yet. Add a folder of patches to get started -- "
-        "megatoy reads them in place and never moves your files.");
+        "No patch folders yet. Add a folder of patches to get started.");
   }
   ImGui::Spacing();
   const char *label = PreferenceManager::folder_add_is_import()
@@ -44,8 +42,8 @@ void render_tree_tab(PatchSelectorContext &context) {
     const bool rendered =
         render_patch_tree(context.repository.tree(), context, query_lower,
                           context.prefs.metadata_star_filter);
-    if (!rendered && (!query_lower.empty() ||
-                      context.prefs.metadata_star_filter > 0)) {
+    if (!rendered &&
+        (!query_lower.empty() || context.prefs.metadata_star_filter > 0)) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                          "No results for current filters");
     }

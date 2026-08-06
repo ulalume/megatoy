@@ -303,7 +303,8 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       ImGui::SliderInt("Detune", &detune, 0, 6, detune_labels[detune]);
   track_patch_history(context, op_label + " Detune", key_prefix + ".detune");
   if (detune_changed) {
-    op.detune = static_cast<uint8_t>(formats::adapter::detune_from_linear(detune));
+    op.detune =
+        static_cast<uint8_t>(formats::adapter::detune_from_linear(detune));
     setting_changed = true;
   }
 

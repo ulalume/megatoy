@@ -32,8 +32,7 @@ filtered_patches(PatchSelectorContext &context) {
   std::vector<const patches::PatchEntry *> all;
   collect_leaf_patches(context.repository.tree(), all);
 
-  const std::string query_lower =
-      to_lower(context.prefs.metadata_search_query);
+  const std::string query_lower = to_lower(context.prefs.metadata_search_query);
   const int star_filter = context.prefs.metadata_star_filter;
 
   std::vector<const patches::PatchEntry *> filtered;
@@ -121,7 +120,8 @@ struct PendingEdits {
     for (const auto *entry : visible) {
       paths.insert(entry->relative_path);
     }
-    std::erase_if(stars, [&](const auto &kv) { return !paths.count(kv.first); });
+    std::erase_if(stars,
+                  [&](const auto &kv) { return !paths.count(kv.first); });
     std::erase_if(categories,
                   [&](const auto &kv) { return !paths.count(kv.first); });
   }

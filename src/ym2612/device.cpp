@@ -76,14 +76,14 @@ void Device::write(uint8_t reg, uint8_t data, bool port) {
     return;
   }
   const uint8_t offset = static_cast<uint8_t>(static_cast<uint8_t>(port) << 1);
-  chip_->write(offset, reg);                          // register address
+  chip_->write(offset, reg);                            // register address
   chip_->write(static_cast<uint8_t>(offset + 1), data); // data payload
 }
 
 void Device::write_settings(const GlobalSettings &settings) {
   write(0x2B, static_cast<uint8_t>(settings.dac_enable << 7));
-  write(0x22,
-        static_cast<uint8_t>(settings.lfo_enable << 3 | settings.lfo_frequency));
+  write(0x22, static_cast<uint8_t>(settings.lfo_enable << 3 |
+                                   settings.lfo_frequency));
 }
 
 void Device::render(uint32_t frames, float *out) {

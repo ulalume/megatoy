@@ -1,0 +1,10 @@
+# megatoy's formatting: LLVM style, which is what the codebase has always
+# followed -- 2-space indent, attached braces, no namespace indentation,
+# 80-column limit, right-aligned pointers.
+#
+# This file exists so editors stop guessing. Without it, VSCode's C++
+# extension falls back to its own default (Allman braces, indented
+# namespaces) and format-on-save rewrites whole files into a foreign style.
+# clang-format, clangd and the VSCode extension all pick this up
+# automatically once it is present.
+BasedOnStyle: LLVM

@@ -19,8 +19,12 @@ const std::array<std::string_view, 6> kStarLabels = {
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
 };
 const std::array<std::string_view, 6> kStarLabelsMini = {
-    "-",           ICON_FA_STAR "1", ICON_FA_STAR "2",
-    ICON_FA_STAR "3", ICON_FA_STAR "4", ICON_FA_STAR "5",
+    "-",
+    ICON_FA_STAR "1",
+    ICON_FA_STAR "2",
+    ICON_FA_STAR "3",
+    ICON_FA_STAR "4",
+    ICON_FA_STAR "5",
 };
 
 std::string to_lower(const std::string &value) {

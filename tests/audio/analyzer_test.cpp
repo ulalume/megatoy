@@ -25,12 +25,12 @@ constexpr uint32_t kSampleRate = 44100;
 constexpr double kPi = 3.14159265358979323846;
 
 std::vector<float> make_sine(float hz, float amplitude, std::size_t count,
-                            float phase = 0.0f, float dc = 0.0f) {
+                             float phase = 0.0f, float dc = 0.0f) {
   std::vector<float> samples(count);
   for (std::size_t i = 0; i < count; ++i) {
     const double t = static_cast<double>(i) / kSampleRate;
-    samples[i] = dc + amplitude * static_cast<float>(std::sin(
-                                      2.0 * kPi * hz * t + phase));
+    samples[i] = dc + amplitude * static_cast<float>(
+                                      std::sin(2.0 * kPi * hz * t + phase));
   }
   return samples;
 }

@@ -8,8 +8,8 @@
 #include <cctype>
 #include <cstring>
 #include <filesystem>
-#include <optional>
 #include <imgui.h>
+#include <optional>
 
 namespace ui {
 
@@ -79,9 +79,10 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
       if (path.ends_with(".ginpkg")) {
         ImGui::SetTooltip("Save version to %s", path.c_str());
       } else {
-        ImGui::SetTooltip("Save to %s/%s.ginpkg",
-                          patch_session.repository().primary_writable_label().c_str(),
-                          patch_session.current_patch().name.c_str());
+        ImGui::SetTooltip(
+            "Save to %s/%s.ginpkg",
+            patch_session.repository().primary_writable_label().c_str(),
+            patch_session.current_patch().name.c_str());
       }
     } else if (!is_patch_modified) {
       ImGui::SetTooltip("Patch is not modified");

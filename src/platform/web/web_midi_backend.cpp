@@ -47,8 +47,8 @@ void WebMidiBackend::deliver(unsigned char status, unsigned char note,
 namespace {
 #if defined(MEGATOY_PLATFORM_WEB)
 void request_access_js() {
+  // clang-format off
   EM_ASM({
-    // clang-format off
     var state = Module['megatoyMidiState'];
     if (!state || !state.available) {
       return;
@@ -107,16 +107,16 @@ void request_access_js() {
           state.error =
               (err && err.message) ? err.message : "Failed to access WebMIDI.";
         });
-    // clang-format on
   });
+  // clang-format on
 }
 #endif
 } // namespace
 
 void WebMidiBackend::setup_js_state() const {
 #if defined(MEGATOY_PLATFORM_WEB)
+  // clang-format off
   EM_ASM({
-    // clang-format off
     if (Module['megatoyMidiSetup']) {
       return;
     }
@@ -133,8 +133,8 @@ void WebMidiBackend::setup_js_state() const {
         available ? "needs-permission" : "unavailable";
     Module['megatoyMidiState'].pending = false;
     Module['megatoyMidiState'].error = "";
-    // clang-format on
   });
+  // clang-format on
 #endif
 }
 
@@ -190,17 +190,16 @@ bool WebMidiBackend::initialize() {
 void WebMidiBackend::shutdown() {
   if (g_active_backend == this) {
     g_active_backend = nullptr;
-  }}
+  }
+}
 
 MidiBackend::StatusInfo WebMidiBackend::status() const {
   auto web_status = read_status_from_js();
   MidiBackend::StatusInfo info;
   info.message = web_status.message;
-  info.show_enable_button =
-      web_status.state == State::NeedsPermission ||
-      web_status.state == State::Error;
-  info.enable_button_disabled =
-      web_status.state == State::Pending;
+  info.show_enable_button = web_status.state == State::NeedsPermission ||
+                            web_status.state == State::Error;
+  info.enable_button_disabled = web_status.state == State::Pending;
   return info;
 }
 

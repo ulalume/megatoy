@@ -46,7 +46,7 @@ public:
                     std::vector<std::string> &available_ports,
                     bool &ports_changed) = 0;
 
-   // Optional status reporting (e.g., WebMIDI permission state).
+  // Optional status reporting (e.g., WebMIDI permission state).
   virtual StatusInfo status() const {
     return {"System MIDI backend active.", false, false};
   }
