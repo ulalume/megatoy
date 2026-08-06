@@ -90,6 +90,9 @@ void test_sample_rates() {
 void test_key_on_produces_audio(AudioEngine &engine) {
   engine.apply_patch_to_all_channels(make_sustained_patch());
 
+  // Let the DC blocker absorb the chip's startup offset before asserting
+  // silence.
+  render_ac_peak(engine, kSampleRate / 2);
   CHECK(render_ac_peak(engine, kSampleRate / 10) < 0.001f);
 
   auto channel = engine.device().channel(ym2612::ChannelIndex::Fm1);
@@ -133,10 +136,32 @@ void test_retrigger_restarts_envelope(AudioEngine &engine) {
   CHECK(retriggered > decayed * 4.0f);
 }
 
+// The chip idles at a constant DAC offset; the engine must remove it so an
+// idle app emits true digital silence. Shipping the offset to the DAC made
+// amplifiers gate in and out of standby, popping every few seconds.
+void test_idle_settles_to_digital_silence() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+
+  // One second is over twenty time constants of the blocker.
+  std::vector<int16_t> pcm(static_cast<size_t>(kSampleRate) * 2, 0);
+  engine.render(kSampleRate * 2 * static_cast<uint32_t>(sizeof(int16_t)),
+                pcm.data());
+
+  engine.render(kSampleRate / 2 * static_cast<uint32_t>(sizeof(int16_t)),
+                pcm.data());
+  int16_t peak = 0;
+  for (size_t i = 0; i < static_cast<size_t>(kSampleRate) / 2; ++i) {
+    peak = std::max<int16_t>(peak, static_cast<int16_t>(std::abs(pcm[i])));
+  }
+  CHECK(peak <= 1);
+}
+
 } // namespace
 
 int main() {
   test_sample_rates();
+  test_idle_settles_to_digital_silence();
 
   AudioEngine engine;
   CHECK(engine.initialize(kSampleRate));

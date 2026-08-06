@@ -10,6 +10,11 @@
 namespace {
 
 constexpr uint32_t kFallbackSampleRate = 44100;
+
+// DC blocker pole: first-order high-pass with a cutoff around 3 Hz at
+// 44.1 kHz -- far below anything audible, and fast enough that the offset is
+// gone within a fraction of a second of startup.
+constexpr float kDcBlockerPole = 0.9995f;
 // How long a note-off will wait for queue space before being abandoned.
 constexpr int kFullQueueRetries = 1000;
 constexpr uint32_t kDefaultFrameSize = sizeof(int16_t) * 2; // stereo s16
@@ -30,6 +35,8 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
   frame_size_ = kDefaultFrameSize;
   mix_buffer_.clear();
   scope_buffer_.clear();
+  dc_x_[0] = dc_x_[1] = 0.0f;
+  dc_y_[0] = dc_y_[1] = 0.0f;
   device_.init(sample_rate_);
   running_ = device_.is_initialized();
   return running_;
@@ -65,6 +72,18 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   drain_commands();
 
   device_.render(frames, mix_buffer_.data());
+
+  // The YM2612's DAC is discontinuous around zero and ymfm reproduces that
+  // faithfully, so even an idle chip emits a constant offset (about 500 LSB
+  // at 16 bits). Real hardware never lets that reach the speaker -- the
+  // console AC-couples its audio output -- but shipping it to a modern DAC
+  // means the "silent" signal is a nonzero constant. Amplifiers that gate on
+  // signal energy then drop in and out of standby, and every transition is
+  // an audible pop; users reported exactly that, a tick every several
+  // seconds while the app sat idle. Blocking DC restores the coupling the
+  // hardware had: idle output decays to true digital silence.
+  remove_dc(mix_buffer_.data(), frames);
+
   scope_buffer_.write(mix_buffer_.data(), frames);
 
   auto *pcm = static_cast<int16_t *>(data);
@@ -73,6 +92,18 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   }
 
   return frames * frame_size_;
+}
+
+void AudioEngine::remove_dc(float *interleaved, uint32_t frames) {
+  for (uint32_t i = 0; i < frames; ++i) {
+    for (int ch = 0; ch < 2; ++ch) {
+      const float x = interleaved[i * 2 + ch];
+      const float y = x - dc_x_[ch] + kDcBlockerPole * dc_y_[ch];
+      dc_x_[ch] = x;
+      dc_y_[ch] = y;
+      interleaved[i * 2 + ch] = y;
+    }
+  }
 }
 
 void AudioEngine::set_note_options(bool use_velocity, bool steal_oldest) {

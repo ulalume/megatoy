@@ -75,8 +75,12 @@ private:
   void drain_commands();
   void drain(audio::AudioCommandQueue &queue);
   void apply(const audio::AudioCommand &command);
+  void remove_dc(float *interleaved, uint32_t frames);
 
   std::vector<float> mix_buffer_; // interleaved stereo, [-1, 1]
+  // DC blocker state, one x/y pair per channel.
+  float dc_x_[2] = {0.0f, 0.0f};
+  float dc_y_[2] = {0.0f, 0.0f};
   ym2612::Device device_;
   audio::ScopeBuffer scope_buffer_;
   audio::AudioCommandQueue commands_;
