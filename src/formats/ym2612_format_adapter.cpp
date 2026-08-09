@@ -36,12 +36,6 @@ std::string to_lower(std::string value) {
   return value;
 }
 
-// Detune registers 0 and 4 both mean "no detune". Formats that store a linear
-// -3..+3 scale cannot tell them apart and the library decodes the zero point
-// as 4, which would make every round trip of a detune-0 patch look like an
-// edit. Settling on 0 keeps saving and reloading a no-op.
-uint8_t canonical_detune(uint8_t detune) { return detune == 4 ? 0 : detune; }
-
 } // namespace
 
 ym2612_format::Patch to_library(const ym2612::Patch &patch) {
@@ -108,7 +102,7 @@ ym2612::Patch from_library(const ym2612_format::Patch &patch) {
     target.total_level = source.tl;
     target.key_scale = source.ks;
     target.multiple = source.ml;
-    target.detune = canonical_detune(source.dt);
+    target.detune = source.dt;
     target.ssg_type_envelope_control = source.ssg;
     target.ssg_enable = source.ssg_enable;
     target.amplitude_modulation_enable = source.am;
@@ -177,7 +171,7 @@ uint8_t detune_to_linear(uint8_t register_detune) {
 }
 
 uint8_t detune_from_linear(int linear) {
-  return canonical_detune(ym2612_format::detune_from_linear(linear));
+  return ym2612_format::detune_from_linear(linear);
 }
 
 std::vector<ym2612::Patch> read_file(ym2612_format::Format format,

@@ -52,9 +52,9 @@ bool is_multi_patch(ym2612_format::Format format);
  * megatoy stores and the linear -3..+3 scale that editors and most file
  * formats present.
  *
- * from_linear canonicalizes the zero point on register 0. Registers 0 and 4
- * both mean "no detune", and picking 4 would make a save/reload cycle, or a
- * round trip through the editor's slider, look like an edit.
+ * Conversion delegates to the library. Since ym2612_format v0.2.1 it decodes
+ * the linear zero point as register 0, so a save/reload of a detune-0 patch
+ * stays a no-op.
  */
 uint8_t detune_to_linear(uint8_t register_detune);
 uint8_t detune_from_linear(int linear);
