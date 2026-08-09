@@ -28,9 +28,9 @@ Changes apply directly to your active patch with full undo support.
 
 ### Patch Management
 
-- **Load patches** from many formats, via [ym2612_format](https://github.com/ulalume/ym2612_format): DefleMask preset (`.dmp`) and module (`.dmf`), Furnace instrument (`.fui`) and module (`.fur`), [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`), VOPM/MiOPMdrv (`.opm`), TFM Music Maker (`.tfi`), `.rym2612`
-- **Export patches** to `.dmp`, `.fui`, `.mml`, `.tfi`, `.gin`
-- **Browse instrument banks** — multi-instrument files (`.mml`, `.dmf`, `.fur`, `.opm`) expand into a folder of patches
+- **Load patches** from many formats, via [ym2612_format](https://github.com/ulalume/ym2612_format): DefleMask preset (`.dmp`) and module (`.dmf`), Furnace instrument (`.fui`) and module (`.fur`), [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`), VOPM/MiOPMdrv (`.opm`), TFM Music Maker (`.tfi`), `.rym2612`, VGM Music Maker (`.vgi`), Echo (`.eif`), VGM/VGZ register log (`.vgm`/`.vgz`)
+- **Export patches** to `.dmp`, `.fui`, `.mml`, `.tfi`, `.gin`, `.vgi`, `.eif`
+- **Browse instrument banks** — multi-instrument files (`.mml`, `.dmf`, `.fur`, `.opm`, `.vgm`, `.vgz`) expand into a folder of patches
 - **Organize patches** with metadata (star ratings and categories) for quick retrieval and filtering
 - **Drag & drop** support for easy file loading
 
@@ -59,7 +59,7 @@ megatoy works like an editor, not a library manager: you add folders of patches 
 - **Drag & drop** a patch file onto the window to load it without adding a folder.
 - Star ratings and categories are stored in a `.megatoy/patches.json` sidecar **inside each folder**, so they travel with it when you move, sync, or share the folder.
 
-Saving writes back to the file you opened when that is safe. Read-only formats (`.dmf`, `.fur`, `.opm`, `.rym2612`), instrument banks, and the built-in presets open a Save As dialog instead, so a stray save cannot destroy a bank or a preset.
+Saving writes back to the file you opened when that is safe. Read-only formats (`.dmf`, `.fur`, `.opm`, `.rym2612`, `.vgm`, `.vgz`), instrument banks, and the built-in presets open a Save As dialog instead, so a stray save cannot destroy a bank or a preset.
 
 Built-in patches:
 

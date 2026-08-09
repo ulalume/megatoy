@@ -202,6 +202,11 @@ void PatchRegistry::register_defaults() {
       };
     }
 
+    // FormatInfo carries a single extension ("vgm"), but vgm::parse()
+    // transparently gunzips, so the same handler serves .vgz.
+    if (format == ym2612_format::Format::Vgm) {
+      register_format(".vgz", handler);
+    }
     register_format(adapter::extension_for(format), std::move(handler));
   }
 

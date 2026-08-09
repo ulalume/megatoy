@@ -146,6 +146,10 @@ const std::vector<std::string> &readable_extensions() {
     for (const auto &info : known_formats()) {
       if (info.can_read) {
         result.push_back("." + info.extension);
+        // vgm::parse() transparently gunzips, so .vgz is readable too.
+        if (info.format == ym2612_format::Format::Vgm) {
+          result.push_back(".vgz");
+        }
       }
     }
     std::sort(result.begin(), result.end());
@@ -161,6 +165,7 @@ bool is_multi_patch(ym2612_format::Format format) {
   case ym2612_format::Format::Fur:    // module instrument list
   case ym2612_format::Format::Opm:    // VOPM bank
   case ym2612_format::Format::Ginpkg: // current patch plus its history
+  case ym2612_format::Format::Vgm:    // register log, extracted instruments
     return true;
   default:
     return false;

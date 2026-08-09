@@ -19,6 +19,8 @@ int main() {
   CHECK(can_overwrite_in_place("song.fui"));
   CHECK(can_overwrite_in_place("song.gin"));
   CHECK(can_overwrite_in_place("song.tfi"));
+  CHECK(can_overwrite_in_place("song.vgi"));
+  CHECK(can_overwrite_in_place("song.eif"));
   CHECK(can_overwrite_in_place("SONG.DMP")); // case-insensitive
 
   // megatoy's container appends a version instead of replacing.
@@ -32,6 +34,8 @@ int main() {
 
   // Read-only and unknown formats cannot be written at all.
   CHECK(!can_overwrite_in_place("preset.rym2612"));
+  CHECK(!can_overwrite_in_place("song.vgm"));
+  CHECK(!can_overwrite_in_place("song.vgz"));
   CHECK(!can_overwrite_in_place("file.wav"));
   CHECK(!can_overwrite_in_place("noextension"));
 

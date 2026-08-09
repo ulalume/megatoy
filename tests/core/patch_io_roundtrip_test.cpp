@@ -130,13 +130,14 @@ int main() {
   }
 
   // Guard against the registry quietly losing a format.
-  for (const char *required : {".dmp", ".fui", ".mml", ".gin"}) {
+  for (const char *required : {".dmp", ".fui", ".mml", ".gin", ".vgi", ".eif"}) {
     CHECK(std::find(covered.begin(), covered.end(), required) != covered.end());
   }
 
   // Formats gained by moving to ym2612_format must be readable.
   const auto readable = formats::adapter::readable_extensions();
-  for (const char *required : {".dmf", ".fur", ".opm", ".tfi", ".rym2612"}) {
+  for (const char *required : {".dmf", ".fur", ".opm", ".tfi", ".rym2612",
+                               ".vgi", ".eif", ".vgm", ".vgz"}) {
     CHECK(std::find(readable.begin(), readable.end(), required) !=
           readable.end());
   }
