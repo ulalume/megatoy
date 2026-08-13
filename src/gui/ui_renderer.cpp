@@ -18,6 +18,10 @@
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
 #include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "core/status.hpp"
+#include "platform/web/web_workspace_download.hpp"
+#endif
 #include <cassert>
 #include <filesystem>
 #include <string>
@@ -218,6 +222,25 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
           ? [](const std::filesystem::path
                    &path) { reveal_in_file_manager(path.string()); }
           : std::function<void(const std::filesystem::path &)>{},
+#if defined(MEGATOY_PLATFORM_WEB)
+      [&ctx](const patches::PatchEntry &entry) {
+        if (platform::web::download_workspace_path(
+                ctx.services.path_service.file_system(), entry.full_path)) {
+          megatoy::status::success("Download started.");
+        } else {
+          megatoy::status::error("Failed to prepare download.");
+        }
+      },
+#else
+      {},
+#endif
+      [&ctx]() {
+        trigger_save(ctx.services.patch_session,
+                     ctx.app_state().ui_state().save_export_state);
+      },
+      [&ctx]() {
+        request_save_as(ctx.app_state().ui_state().save_export_state);
+      },
       ctx.services.preference_manager.workspace().empty(),
       [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; }};
 }

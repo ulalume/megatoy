@@ -70,8 +70,11 @@ bool render_subtree(const std::vector<patches::PatchEntry> &tree,
     ImGui::PushID(item.relative_path.c_str());
     ImGui::Indent(kDepthIndent * depth);
 
+    const std::string &selection_path = item.source_relative_path.empty()
+                                            ? item.relative_path
+                                            : item.source_relative_path;
     const bool is_current =
-        item.relative_path == context.session.current_patch_path();
+        selection_path == context.session.current_patch_path();
     if (is_current) {
       ImGui::PushStyleColor(ImGuiCol_Text,
                             styles::color(styles::MegatoyCol::TextHighlight));

@@ -92,6 +92,45 @@ void entry_context_menu(PatchSelectorContext &context,
     return;
   }
 
+  const std::string &selection_path = entry.source_relative_path.empty()
+                                          ? entry.relative_path
+                                          : entry.source_relative_path;
+  const bool is_current = !entry.is_directory &&
+                          selection_path ==
+                              context.session.current_patch_path();
+
+  if (!entry.is_directory && !is_current && context.safe_load_patch) {
+    if (ImGui::MenuItem("Open")) {
+      context.safe_load_patch(entry);
+    }
+  }
+
+  if (is_current) {
+    const bool can_primary_save = context.session.current_patch_is_user_patch();
+    if (can_primary_save && context.save_current_patch) {
+      const bool disabled = !context.session.is_modified();
+      ImGui::BeginDisabled(disabled);
+      if (ImGui::MenuItem(context.session.save_label_for(true))) {
+        context.save_current_patch();
+      }
+      ImGui::EndDisabled();
+    }
+    if (context.save_current_patch_as && ImGui::MenuItem("Save As...")) {
+      context.save_current_patch_as();
+    }
+  }
+
+  if (context.download_entry) {
+    if (ImGui::MenuItem("Download")) {
+      context.download_entry(entry);
+    }
+  }
+
+  if ((!entry.is_directory && !is_current) || is_current ||
+      context.download_entry) {
+    ImGui::Separator();
+  }
+
   // Whether a file manager exists is the composition root's call -- the
   // callback is simply absent on platforms without one.
   if (context.reveal_in_file_manager) {

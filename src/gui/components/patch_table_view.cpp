@@ -249,8 +249,11 @@ void render_patch_table(PatchSelectorContext &context) {
       ImGui::TableNextRow();
 
       ImGui::TableSetColumnIndex(0);
+      const std::string &selection_path = entry->source_relative_path.empty()
+                                              ? entry->relative_path
+                                              : entry->source_relative_path;
       const bool is_current = !current_relative_path.empty() &&
-                              current_relative_path == entry->relative_path;
+                              current_relative_path == selection_path;
       if (is_current) {
         ImGui::PushStyleColor(ImGuiCol_Text,
                               styles::color(styles::MegatoyCol::TextHighlight));
