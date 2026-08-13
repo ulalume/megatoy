@@ -53,13 +53,11 @@ Changes apply directly to your active patch with full undo support.
 
 ## Patch Sources
 
-megatoy works like an editor, not a library manager: you add folders of patches and it reads them where they are. Nothing is copied, moved, or renamed.
+You add folders of patches and it reads them where they are.
 
-- **File ▸ Add Folder to Workspace...** — add as many folders as you like; they persist across sessions and appear as separate roots in the patch browser.
+- **File ▸ Add Folder to Workspace...** — add as many folders as you like.
 - **Drag & drop** a patch file onto the window to load it without adding a folder.
-- Star ratings and categories are stored in a `.megatoy/patches.json` sidecar **inside each folder**, so they travel with it when you move, sync, or share the folder.
-
-Saving writes back to the file you opened when that is safe. Read-only formats (`.dmf`, `.fur`, `.opm`, `.rym2612`, `.vgm`, `.vgz`), instrument banks, and the built-in presets use Save As instead, so a stray save cannot destroy a bank or a preset.
+- Star ratings and categories are stored in a `.megatoy/patches.json` sidecar inside each folder.
 
 Built-in patches:
 
