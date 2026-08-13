@@ -28,7 +28,7 @@ struct PatchFormatHandler {
   std::string label;
 };
 
-struct ExportFormatInfo {
+struct SaveFormatInfo {
   std::string extension;
   std::string label;
   bool is_text = false;
@@ -53,7 +53,7 @@ public:
   std::optional<std::filesystem::path>
   save_package(const std::string &extension, const std::filesystem::path &dir,
                const std::string &name, const ym2612::Patch &patch) const;
-  std::vector<ExportFormatInfo> export_formats() const;
+  std::vector<SaveFormatInfo> save_formats() const;
 
 private:
   PatchRegistry();

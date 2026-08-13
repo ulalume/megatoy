@@ -4,10 +4,7 @@
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
-#include <algorithm>
 #include <imgui.h>
-#include <iomanip>
-#include <sstream>
 #include <string_view>
 
 namespace ui {
@@ -58,27 +55,43 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
   announce_save(session, result);
 }
 
-void trigger_export(patches::PatchSession &session, SaveExportState &state,
-                    const patches::ExportFormatInfo &format) {
-  (void)state;
-  auto result = session.export_current_patch_as(format);
-  if (result.is_success()) {
-    // The web build hands the file to the browser instead of a path.
-    megatoy::status::success(result.path == "download"
-                                 ? "Download started."
-                                 : "Exported " + result.path.string());
-  } else if (result.is_error()) {
-    megatoy::status::error(result.error_message.empty()
-                               ? "Failed to export patch"
-                               : result.error_message);
-  }
-}
+void request_save_as(SaveExportState &state) { state.save_as_requested = true; }
 
 void render_save_export_popups(patches::PatchSession &session,
                                SaveExportState &state) {
   if (state.overwrite_confirmation_pending) {
     ImGui::OpenPopup("Overwrite Confirmation");
     state.overwrite_confirmation_pending = false;
+  }
+  if (state.save_as_requested) {
+    ImGui::OpenPopup("Save As...");
+    state.save_as_requested = false;
+  }
+
+  center_next_window();
+  if (ImGui::BeginPopupModal("Save As...", nullptr,
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::TextUnformatted("Choose a file format:");
+    ImGui::Spacing();
+    for (const auto &format : session.save_formats()) {
+      std::string label = format.label.empty() ? format.extension : format.label;
+      if (!format.extension.empty()) {
+        label += " (" + format.extension + ")";
+      }
+      if (ImGui::Selectable(label.c_str())) {
+        auto result = session.save_current_patch_as(format.extension);
+        announce_save(session, result);
+        if (!result.is_cancelled()) {
+          ImGui::CloseCurrentPopup();
+        }
+      }
+    }
+    ImGui::Spacing();
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
   }
 
   const auto &patch = session.current_patch();
@@ -113,122 +126,6 @@ void render_save_export_popups(patches::PatchSession &session,
       announce_save(session, result);
       ImGui::CloseCurrentPopup();
     }
-  }
-}
-
-namespace {
-
-std::string format_number(int number) {
-  std::ostringstream oss;
-  oss << std::setw(2) << std::setfill('0') << number;
-  return oss.str();
-}
-
-std::string base_name_without_counter(const std::string &name, int &start) {
-  start = 2;
-  auto pos = name.find_last_of(' ');
-  if (pos != std::string::npos && pos + 1 < name.size()) {
-    std::string suffix = name.substr(pos + 1);
-    bool all_digits =
-        !suffix.empty() && std::all_of(suffix.begin(), suffix.end(), ::isdigit);
-    if (all_digits) {
-      try {
-        int parsed = std::stoi(suffix);
-        if (parsed >= 1) {
-          start = parsed + 1;
-          return name.substr(0, pos);
-        }
-      } catch (...) {
-      }
-    }
-  }
-  return name;
-}
-
-bool name_conflicts(const patches::PatchSession &session,
-                    const std::string &name) {
-  return session.repository().patch_name_conflicts(name);
-}
-
-std::string generate_duplicate_name(const patches::PatchSession &session) {
-  const std::string current = session.current_patch().name;
-  int counter = 0;
-  auto base = base_name_without_counter(current, counter);
-  if (base.empty()) {
-    base = "patch";
-  }
-
-  std::string candidate;
-  while (true) {
-    candidate = base + " " + format_number(counter);
-    if (!name_conflicts(session, candidate)) {
-      break;
-    }
-    ++counter;
-  }
-  return candidate;
-}
-
-} // namespace
-
-void start_duplicate_dialog(patches::PatchSession &session,
-                            SaveExportState &state) {
-  state.duplicate.open = true;
-  state.duplicate.name = generate_duplicate_name(session);
-}
-
-void render_duplicate_dialog(patches::PatchSession &session,
-                             SaveExportState &state) {
-  if (!state.duplicate.open) {
-    return;
-  }
-
-  ImGui::OpenPopup("Duplicate Patch");
-  if (ImGui::BeginPopupModal("Duplicate Patch", &state.duplicate.open,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
-    char buffer[128];
-    std::strncpy(buffer, state.duplicate.name.c_str(), sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';
-
-    ImGui::Text("Enter a new name for the duplicate:");
-    ImGui::InputText("##dup_name", buffer, sizeof(buffer));
-    state.duplicate.name = buffer;
-
-    ym2612::Patch temp = session.current_patch();
-    temp.name = state.duplicate.name;
-    bool name_valid = is_patch_name_valid(temp);
-    bool exists = name_conflicts(session, state.duplicate.name);
-    bool disable_save = !name_valid || exists || state.duplicate.name.empty();
-
-    if (exists) {
-      ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "Name already exists");
-    } else if (!name_valid) {
-      ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "Invalid name");
-    }
-
-    ImGui::Spacing();
-    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-      state.duplicate.open = false;
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    if (disable_save)
-      ImGui::BeginDisabled(true);
-    if (ImGui::Button("Save", ImVec2(120, 0))) {
-      // A duplicate is a NEW file. Routing this through the ordinary save
-      // would overwrite the original in place, since the current patch still
-      // carries the original's path -- which is exactly the bug this
-      // replaced: "Duplicate" quietly rewrote the source file and created
-      // nothing.
-      auto result = session.duplicate_current_patch(state.duplicate.name);
-      announce_save(session, result);
-      state.duplicate.open = false;
-      ImGui::CloseCurrentPopup();
-    }
-    if (disable_save)
-      ImGui::EndDisabled();
-
-    ImGui::EndPopup();
   }
 }
 

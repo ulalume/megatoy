@@ -29,6 +29,12 @@ struct PatchEntry {
 
   // For bank formats (.mml, .dmf, .fur, .opm): which instrument in the file
   size_t instrument_index = 0;
+
+  // GINPKG versions are presented like instruments in other container files.
+  // The source path keeps Save Version and file-level actions attached to the
+  // parent package while container_item_id identifies the selected snapshot.
+  std::string source_relative_path;
+  std::string container_item_id;
 };
 
 /**

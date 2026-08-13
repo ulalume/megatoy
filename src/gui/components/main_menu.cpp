@@ -43,41 +43,22 @@ void render_main_menu(MainMenuContext &context) {
       if (save_disabled)
         ImGui::BeginDisabled(true);
       if (ImGui::MenuItem(save_label, save_shortcut)) {
-        trigger_save(session, context.save_state);
+        if (is_user_patch) {
+          trigger_save(session, context.save_state);
+        } else {
+          request_save_as(context.save_state);
+        }
       }
       if (save_disabled)
         ImGui::EndDisabled();
 
       if (!name_valid)
         ImGui::BeginDisabled(true);
-      const char *duplicate_shortcut =
+      const char *save_as_shortcut =
           mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
-      if (ImGui::MenuItem("Duplicate...", duplicate_shortcut)) {
-        start_duplicate_dialog(session, context.save_state);
-      }
-      if (!name_valid)
-        ImGui::EndDisabled();
-
-      ImGui::Separator();
-
-      if (!name_valid)
-        ImGui::BeginDisabled(true);
-      if (ImGui::BeginMenu("Export")) {
-        bool any_export = false;
-        for (const auto &fmt : session.export_formats()) {
-          any_export = true;
-          std::string label = fmt.label.empty() ? fmt.extension : fmt.label;
-          if (!fmt.extension.empty()) {
-            label += " (" + fmt.extension + ")";
-          }
-          if (ImGui::MenuItem(label.c_str())) {
-            trigger_export(session, context.save_state, fmt);
-          }
-        }
-        if (!any_export) {
-          ImGui::MenuItem("No export formats available", nullptr, false, false);
-        }
-        ImGui::EndMenu();
+      if (is_user_patch &&
+          ImGui::MenuItem("Save As...", save_as_shortcut)) {
+        request_save_as(context.save_state);
       }
       if (!name_valid)
         ImGui::EndDisabled();
@@ -128,13 +109,17 @@ void render_main_menu(MainMenuContext &context) {
     if (context.gui.supports_quit() && !save_disabled) {
       const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && !io.KeyShift;
       if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
-        trigger_save(session, context.save_state);
+        if (is_user_patch) {
+          trigger_save(session, context.save_state);
+        } else {
+          request_save_as(context.save_state);
+        }
       }
     }
     if (name_valid) {
       const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && io.KeyShift;
       if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
-        start_duplicate_dialog(session, context.save_state);
+        request_save_as(context.save_state);
       }
     }
 
@@ -195,8 +180,6 @@ void render_main_menu(MainMenuContext &context) {
                       &ui_prefs.show_patch_selector);
       ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
       ImGui::MenuItem(PATCH_LAB_TITLE, nullptr, &ui_prefs.show_patch_lab);
-      ImGui::MenuItem(PATCH_HISTORY_TITLE, nullptr,
-                      &ui_prefs.show_patch_history);
       ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
                       &ui_prefs.show_midi_keyboard);
       ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);

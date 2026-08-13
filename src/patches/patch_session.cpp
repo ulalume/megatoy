@@ -8,7 +8,6 @@
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_export.hpp"
 #include "platform/web/web_patch_url.hpp"
 #endif
 #include "ym2612/channel.hpp"
@@ -165,39 +164,6 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
   return save_current_patch_as(preferred_extension);
 }
 
-SaveResult PatchSession::duplicate_current_patch(const std::string &new_name) {
-  const std::string sanitized = sanitize_filename(new_name);
-  if (sanitized.empty()) {
-    return SaveResult::error("Invalid name");
-  }
-
-  // Prefer the original's folder; a duplicate belongs next to its source.
-  std::optional<std::filesystem::path> folder = writable_source_folder();
-  if (!folder) {
-    folder = preferences_.workspace().default_save_folder();
-  }
-  if (!folder) {
-    return SaveResult::error("Add a writable folder to the workspace first.");
-  }
-
-  const auto target = *folder / (sanitized + ".ginpkg");
-  std::error_code ec;
-  if (std::filesystem::exists(target, ec)) {
-    return SaveResult::error("\"" + sanitized + "\" already exists.");
-  }
-
-  ym2612::Patch copy = current_patch_;
-  copy.name = new_name;
-  if (!patches::write_patch(copy, target)) {
-    return SaveResult::error("Failed to write " + target.string());
-  }
-
-  // The duplicate becomes the working patch; the original stays as it was.
-  set_current_patch(copy, target);
-  repository_->refresh();
-  return SaveResult::success(target);
-}
-
 SaveResult
 PatchSession::save_current_patch_as(std::string_view preferred_extension) {
   const std::string sanitized_name = sanitize_filename(
@@ -205,7 +171,7 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
 
   std::string extension(preferred_extension);
   if (extension.empty()) {
-    extension = ".ginpkg";
+    extension = ".gin";
   }
   if (extension.front() != '.') {
     extension = "." + extension;
@@ -215,16 +181,16 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
     auto result = repository_->save_patch(current_patch_, current_patch_.name,
                                           /*overwrite=*/true, extension);
     if (result.status == SavePatchResult::Status::Success) {
-      mark_as_clean();
+      auto loaded = formats::load_patch_from_file(result.path);
+      if (loaded.status == formats::PatchLoadStatus::Success &&
+          loaded.patches.size() == 1) {
+        set_current_patch(loaded.patches.front(), result.path);
+      } else {
+        set_current_patch_path(result.path);
+        mark_as_clean();
+      }
       return SaveResult::success(result.path);
     }
-#if defined(MEGATOY_PLATFORM_WEB)
-    if (platform::web::export_patch(current_patch_, current_patch_.name,
-                                    ".dmp")) {
-      mark_as_clean();
-      return SaveResult::success(std::filesystem::path("download"));
-    }
-#endif
     return SaveResult::error("Saving patches is unsupported on this platform");
   }
 
@@ -234,7 +200,10 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
       writable_source_folder().value_or(preferences_.last_save_directory());
 
   std::vector<platform::file_dialog::FileFilter> filters;
-  filters.push_back({"megatoy patch", {"ginpkg", "gin"}});
+  auto selected_format = find_save_format(extension);
+  const std::string filter_label =
+      selected_format ? selected_format->label : "Megatoy";
+  filters.push_back({filter_label, {extension.substr(1)}});
   filters.push_back({"All Files", {"*"}});
 
   std::filesystem::path selected;
@@ -247,88 +216,27 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
     return SaveResult::error("Failed to save patch");
   }
 
-  if (selected.extension().empty()) {
-    selected.replace_extension(extension);
-  }
+  selected.replace_extension(extension);
   if (!patches::write_patch(current_patch_, selected)) {
     return SaveResult::error("Failed to write " + selected.string());
   }
 
   preferences_.set_last_save_directory(selected.parent_path());
-  set_current_patch_path(selected);
-  mark_as_clean();
+  auto loaded = formats::load_patch_from_file(selected);
+  if (loaded.status == formats::PatchLoadStatus::Success &&
+      loaded.patches.size() == 1) {
+    set_current_patch(loaded.patches.front(), selected);
+  } else {
+    set_current_patch_path(selected);
+    mark_as_clean();
+  }
   repository_->refresh();
   return SaveResult::success(selected);
 }
 
-SaveResult
-PatchSession::export_current_patch_as(const ExportFormatInfo &format) {
-  const auto default_dir = preferences_.last_save_directory();
-  const std::string sanitized_name = sanitize_filename(
-      current_patch_.name.empty() ? "patch" : current_patch_.name);
-
-  const bool is_web = megatoy::platform::is_web();
-  const std::string ext = format.extension.empty() ? "" : format.extension;
-
-  if (is_web) {
-#if defined(MEGATOY_PLATFORM_WEB)
-    const std::string hint = ext.empty() ? ".dmp" : ext;
-    if (platform::web::export_patch(current_patch_, current_patch_.name,
-                                    hint)) {
-      return SaveResult::success(std::filesystem::path("download"));
-    }
-#endif
-    return SaveResult::error("Failed to export patch");
-  }
-
-  std::filesystem::path selected_path;
-  const std::string default_name =
-      sanitized_name + (ext.empty()          ? ""
-                        : ext.front() == '.' ? ext
-                                             : "." + ext);
-  std::vector<platform::file_dialog::FileFilter> filters;
-  std::string trimmed_ext = ext;
-  if (!trimmed_ext.empty() && trimmed_ext.front() == '.') {
-    trimmed_ext = trimmed_ext.substr(1);
-  }
-  if (!trimmed_ext.empty()) {
-    filters.push_back({format.label, {trimmed_ext}});
-  }
-  filters.push_back({"All Files", {"*"}});
-
-  auto result = platform::file_dialog::save_file(default_dir, default_name,
-                                                 filters, selected_path);
-
-  if (result == platform::file_dialog::DialogResult::Ok) {
-    if (selected_path.extension().empty() && !ext.empty()) {
-      selected_path.replace_extension(ext);
-    }
-
-    bool ok = false;
-    if (format.is_text) {
-      ok = formats::PatchRegistry::instance().write_text(
-          selected_path.extension().string(), current_patch_, selected_path);
-    } else {
-      ok = formats::PatchRegistry::instance().write(
-          selected_path.extension().string(), current_patch_, selected_path);
-    }
-
-    if (ok) {
-      preferences_.set_last_save_directory(selected_path.parent_path());
-      return SaveResult::success(selected_path);
-    }
-    return SaveResult::error("Failed to export file: " +
-                             selected_path.string());
-  }
-  if (result == platform::file_dialog::DialogResult::Cancelled) {
-    return SaveResult::cancelled();
-  }
-  return SaveResult::error("Failed to export patch");
-}
-
-std::optional<ExportFormatInfo>
-PatchSession::find_export_format(const std::string &extension) const {
-  auto formats = formats::PatchRegistry::instance().export_formats();
+std::optional<SaveFormatInfo>
+PatchSession::find_save_format(const std::string &extension) const {
+  auto formats = formats::PatchRegistry::instance().save_formats();
   std::string ext_norm = extension;
   if (!ext_norm.empty() && ext_norm.front() != '.') {
     ext_norm = "." + ext_norm;
@@ -341,8 +249,8 @@ PatchSession::find_export_format(const std::string &extension) const {
   return std::nullopt;
 }
 
-std::vector<ExportFormatInfo> PatchSession::export_formats() const {
-  return formats::PatchRegistry::instance().export_formats();
+std::vector<SaveFormatInfo> PatchSession::save_formats() const {
+  return formats::PatchRegistry::instance().save_formats();
 }
 
 bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
@@ -409,6 +317,9 @@ bool PatchSession::current_patch_is_user_patch() const {
   if (current_patch_path_.empty()) {
     return false;
   }
+  if (current_patch_path_.ends_with(".ginpkg")) {
+    return can_save_in_place();
+  }
   return can_save_in_place() && original_patch_.name == current_patch_.name;
 }
 
@@ -417,7 +328,7 @@ const char *PatchSession::save_label_for(bool is_user_patch) const {
     return "Save As...";
   }
   // Saving a .ginpkg adds a version rather than replacing the file.
-  return current_patch_path_.ends_with(".ginpkg") ? "Save version"
+  return current_patch_path_.ends_with(".ginpkg") ? "Save Version"
                                                   : "Overwrite";
 }
 

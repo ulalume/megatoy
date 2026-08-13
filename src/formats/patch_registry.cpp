@@ -3,7 +3,9 @@
 #include "ginpkg.hpp"
 #include "ym2612_format_adapter.hpp"
 #include <algorithm>
+#include <array>
 #include <fstream>
+#include <string_view>
 
 namespace formats {
 
@@ -121,28 +123,44 @@ std::optional<std::filesystem::path> PatchRegistry::save_package(
   return handler->write_packaged(dir, patch, name);
 }
 
-std::vector<ExportFormatInfo> PatchRegistry::export_formats() const {
-  std::vector<ExportFormatInfo> formats;
+std::vector<SaveFormatInfo> PatchRegistry::save_formats() const {
+  std::vector<SaveFormatInfo> formats;
   formats.reserve(handlers_.size());
   for (const auto &[ext, handler] : handlers_) {
     if (handler.write_single) {
-      ExportFormatInfo info;
+      SaveFormatInfo info;
       info.extension = ext;
       info.label = handler.label.empty() ? ext : handler.label;
       info.is_text = false;
       formats.push_back(std::move(info));
     }
     if (handler.write_text) {
-      ExportFormatInfo info;
+      SaveFormatInfo info;
       info.extension = ext;
       info.label = handler.label.empty() ? ext : handler.label;
       info.is_text = true;
       formats.push_back(std::move(info));
     }
   }
+  static constexpr std::array<std::string_view, 7> kSaveOrder = {
+      ".gin", ".dmp", ".fui", ".eif", ".tfi", ".vgi", ".mml"};
+  for (auto &format : formats) {
+    if (format.extension == ".gin") {
+      format.label = "Megatoy";
+    }
+  }
+  const auto rank = [](const std::string &extension) {
+    const auto found = std::find(kSaveOrder.begin(), kSaveOrder.end(),
+                                 extension);
+    return found == kSaveOrder.end()
+               ? kSaveOrder.size()
+               : static_cast<std::size_t>(found - kSaveOrder.begin());
+  };
   std::sort(formats.begin(), formats.end(),
-            [](const ExportFormatInfo &a, const ExportFormatInfo &b) {
-              return a.label < b.label;
+            [rank](const SaveFormatInfo &a, const SaveFormatInfo &b) {
+              const auto a_rank = rank(a.extension);
+              const auto b_rank = rank(b.extension);
+              return a_rank == b_rank ? a.label < b.label : a_rank < b_rank;
             });
   return formats;
 }

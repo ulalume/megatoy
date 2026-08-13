@@ -58,7 +58,11 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
   const char *save_label = save_label_for(patch_session, is_user_patch);
   ImVec2 pos = ImGui::GetCursorPos();
   if (ImGui::Button(save_label)) {
-    trigger_save(patch_session, state);
+    if (is_user_patch) {
+      trigger_save(patch_session, state);
+    } else {
+      request_save_as(state);
+    }
   }
 
   // for hover
@@ -80,7 +84,7 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
         ImGui::SetTooltip("Save version to %s", path.c_str());
       } else {
         ImGui::SetTooltip(
-            "Save to %s/%s.ginpkg",
+            "Save to %s/%s.gin",
             patch_session.repository().primary_writable_label().c_str(),
             patch_session.current_patch().name.c_str());
       }
@@ -92,26 +96,17 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
     ImGui::EndDisabled();
   }
 
-  ImGui::SameLine();
-  if (!name_valid) {
-    ImGui::BeginDisabled(true);
-  }
-  if (ImGui::Button("Duplicate...")) {
-    start_duplicate_dialog(context.session, state);
-  }
-  if (!name_valid) {
-    ImGui::EndDisabled();
-  }
-
-  if (!name_valid) {
-    ImGui::BeginDisabled(true);
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("Export...")) {
-    ImGui::OpenPopup("Export Options");
-  }
-  if (!name_valid) {
-    ImGui::EndDisabled();
+  if (is_user_patch) {
+    ImGui::SameLine();
+    if (!name_valid) {
+      ImGui::BeginDisabled(true);
+    }
+    if (ImGui::Button("Save As...")) {
+      request_save_as(state);
+    }
+    if (!name_valid) {
+      ImGui::EndDisabled();
+    }
   }
 
   ImGui::SameLine();
@@ -121,7 +116,6 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
 
   // Render popups in the same window/ID stack as the actions that open them.
   render_save_export_popups(patch_session, state);
-  render_duplicate_dialog(patch_session, state);
 }
 
 void render_patch_name_field(PatchEditorContext &context, ym2612::Patch &patch,
@@ -152,30 +146,6 @@ void render_patch_metadata(PatchEditorContext &context, ym2612::Patch &patch,
   const bool name_valid = is_patch_name_valid(patch);
 
   render_save_export_buttons(context, name_valid, state);
-
-  std::optional<patches::ExportFormatInfo> chosen_format;
-  if (ImGui::BeginPopup("Export Options")) {
-    auto formats = context.session.export_formats();
-    bool any = false;
-    for (const auto &fmt : formats) {
-      any = true;
-      std::string label = fmt.label.empty() ? fmt.extension : fmt.label;
-      if (!fmt.extension.empty()) {
-        label += " (" + fmt.extension + ")";
-      }
-      if (ImGui::MenuItem(label.c_str())) {
-        chosen_format = fmt;
-      }
-    }
-    if (!any) {
-      ImGui::MenuItem("No export formats available", nullptr, false, false);
-    }
-    ImGui::EndPopup();
-  }
-
-  if (chosen_format) {
-    trigger_export(context.session, state, *chosen_format);
-  }
 
   render_patch_name_field(context, patch, name_valid);
 

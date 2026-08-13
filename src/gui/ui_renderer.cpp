@@ -7,7 +7,6 @@
 #include "gui/components/mml_console.hpp"
 #include "gui/components/patch_drop.hpp"
 #include "gui/components/patch_editor.hpp"
-#include "gui/components/patch_history.hpp"
 #include "gui/components/patch_lab_window.hpp"
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
@@ -111,11 +110,6 @@ drop_actions::Environment make_drop_environment(AppContext &ctx) {
 
 PatchLabState &patch_lab_state() {
   static PatchLabState state;
-  return state;
-}
-
-PatchHistoryState &patch_history_state() {
-  static PatchHistoryState state;
   return state;
 }
 
@@ -228,11 +222,6 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; }};
 }
 
-PatchHistoryContext make_patch_history_context(AppContext &ctx) {
-  auto &ui_state = ctx.app_state().ui_state();
-  return {ctx.services.patch_session, ui_state.prefs};
-}
-
 MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
@@ -316,7 +305,6 @@ struct FrameContexts {
         patch_drop(make_patch_drop_context(ctx)),
         confirmation(make_confirmation_context(ctx)),
         patch_editor(make_patch_editor_context(ctx)),
-        patch_history(make_patch_history_context(ctx)),
         patch_selector(make_patch_selector_context(ctx)),
         preferences(make_preferences_context(ctx)),
         midi_keyboard(make_midi_keyboard_context(ctx)),
@@ -329,7 +317,6 @@ struct FrameContexts {
   PatchDropContext patch_drop;
   ConfirmationDialogContext confirmation;
   PatchEditorContext patch_editor;
-  PatchHistoryContext patch_history;
   PatchSelectorContext patch_selector;
   PreferencesContext preferences;
   MidiKeyboardContext midi_keyboard;
@@ -364,8 +351,6 @@ void render_all(AppContext &ctx) {
   render_confirmation_dialog(contexts.confirmation);
   render_patch_editor(PATCH_EDITOR_TITLE, contexts.patch_editor,
                       ctx.app_state().ui_state().save_export_state);
-  render_patch_history(PATCH_HISTORY_TITLE, contexts.patch_history,
-                       patch_history_state());
   render_patch_selector(PATCH_BROWSER_TITLE, contexts.patch_selector);
   render_preferences_window(PREFERENCES_TITLE, contexts.preferences);
   render_midi_keyboard(SOFT_KEYBOARD_TITLE, contexts.midi_keyboard);

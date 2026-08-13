@@ -50,7 +50,7 @@ bool write_patch(const ym2612::Patch &patch,
   }
 
   auto &registry = formats::PatchRegistry::instance();
-  for (const auto &format : registry.export_formats()) {
+  for (const auto &format : registry.save_formats()) {
     if (format.extension == extension && format.is_text) {
       return registry.write_text(extension, patch, path);
     }

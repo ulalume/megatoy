@@ -13,17 +13,9 @@ const char *save_label_for(const patches::PatchSession &session,
 
 void trigger_save(patches::PatchSession &session, SaveExportState &state,
                   std::string_view extension_override = {});
-
-void trigger_export(patches::PatchSession &session, SaveExportState &state,
-                    const patches::ExportFormatInfo &format);
+void request_save_as(SaveExportState &state);
 
 void render_save_export_popups(patches::PatchSession &session,
                                SaveExportState &state);
-
-// Duplicate helpers
-void start_duplicate_dialog(patches::PatchSession &session,
-                            SaveExportState &state);
-void render_duplicate_dialog(patches::PatchSession &session,
-                             SaveExportState &state);
 
 } // namespace ui

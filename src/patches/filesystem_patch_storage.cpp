@@ -6,6 +6,7 @@
 #include "formats/ym2612_format_adapter.hpp"
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
+#include "patches/patch_write.hpp"
 #include <algorithm>
 #include <cctype>
 #include <unordered_map>
@@ -77,6 +78,24 @@ bool FilesystemPatchStorage::load_patch(const PatchEntry &entry,
   if (entry.is_directory || !owns_relative_path(entry.relative_path)) {
     return false;
   }
+  if (!entry.container_item_id.empty() &&
+      lowercase_extension(entry.full_path) == ".ginpkg") {
+    if (entry.container_item_id == "__current__") {
+      auto patches = formats::ginpkg::read_file(entry.full_path);
+      if (patches.size() == 1) {
+        out_patch = std::move(patches.front());
+        return true;
+      }
+      return false;
+    }
+    auto patch =
+        formats::ginpkg::read_version(entry.full_path, entry.container_item_id);
+    if (!patch) {
+      return false;
+    }
+    out_patch = std::move(*patch);
+    return true;
+  }
   auto result = formats::load_patch_from_file(entry.full_path);
   if (result.status == formats::PatchLoadStatus::Failure) {
     return false;
@@ -113,6 +132,19 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   const bool prefer_ginpkg = pref_ext == ".ginpkg";
   const bool prefer_gin = pref_ext == ".gin";
+
+  if (!pref_ext.empty() && !prefer_ginpkg && !prefer_gin) {
+    if (pref_ext.front() != '.') {
+      pref_ext.insert(pref_ext.begin(), '.');
+    }
+    const auto target = patches_dir / (sanitized + pref_ext);
+    if (!overwrite && vfs_.exists(target)) {
+      return SavePatchResult::duplicate();
+    }
+    return patches::write_patch(patch, target)
+               ? SavePatchResult::success(target)
+               : SavePatchResult::error("Failed to save patch");
+  }
 
   const bool ginpkg_exists = vfs_.exists(ginpkg_path);
   const bool gin_exists = vfs_.exists(gin_path);
@@ -163,12 +195,13 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
     return save_ginpkg();
   }
 
-  // Default to ginpkg, fall back to gin on failure.
-  auto ginpkg_result = save_ginpkg();
-  if (ginpkg_result.status == SavePatchResult::Status::Success) {
-    return ginpkg_result;
+  // GIN is the normal one-patch save format. GINPKG remains available for
+  // explicit versioned packages and as a compatibility fallback.
+  auto gin_result = save_gin();
+  if (gin_result.status == SavePatchResult::Status::Success) {
+    return gin_result;
   }
-  return save_gin();
+  return save_ginpkg();
 }
 
 bool FilesystemPatchStorage::save_patch_metadata(
@@ -322,13 +355,61 @@ void FilesystemPatchStorage::scan_directory(
       std::transform(extension.begin(), extension.end(), extension.begin(),
                      ::tolower);
 
+      if (extension == ".ginpkg") {
+        auto package = formats::ginpkg::load_package(path);
+        auto current = formats::ginpkg::read_file(path);
+        if (package && current.size() == 1) {
+          PatchEntry container;
+          container.name = path.stem().string();
+          container.full_path = path;
+          container.relative_path = info.relative_path;
+          container.is_directory = true;
+          container.format = "ginpkg";
+
+          PatchEntry latest;
+          latest.name = current.front().name.empty()
+                            ? "Latest"
+                            : current.front().name + " (Latest)";
+          latest.full_path = path;
+          latest.relative_path = container.relative_path + "/latest";
+          latest.source_relative_path = container.relative_path;
+          latest.container_item_id = "__current__";
+          latest.format = "ginpkg";
+          latest.is_directory = false;
+          load_metadata_for_entry(latest);
+          container.children.push_back(std::move(latest));
+
+          for (auto it = package->history().rbegin();
+               it != package->history().rend(); ++it) {
+            PatchEntry version;
+            auto snapshot = formats::ginpkg::read_version(path, it->uuid);
+            version.name = it->comment && !it->comment->empty()
+                               ? *it->comment
+                               : it->timestamp;
+            if (snapshot && !snapshot->name.empty()) {
+              version.name += " — " + snapshot->name;
+            }
+            version.full_path = path;
+            version.relative_path =
+                container.relative_path + "/version_" + it->uuid;
+            version.source_relative_path = container.relative_path;
+            version.container_item_id = it->uuid;
+            version.format = "ginpkg";
+            version.is_directory = false;
+            load_metadata_for_entry(version);
+            container.children.push_back(std::move(version));
+          }
+          tree.push_back(std::move(container));
+        }
+        continue;
+      }
+
       // Bank formats (.mml, .dmf, .fur, .opm) hold many instruments, so they
       // are shown as a folder of patches rather than a single entry. Only
       // these are parsed during the scan; single-patch files are left alone
       // so browsing a large library stays cheap.
       const auto format = formats::adapter::format_for_extension(extension);
-      if (format && formats::adapter::is_multi_patch(*format) &&
-          *format != ym2612_format::Format::Ginpkg) {
+      if (format && formats::adapter::is_multi_patch(*format)) {
         std::vector<ym2612::Patch> instruments =
             formats::adapter::read_file(*format, path);
         if (!instruments.empty()) {

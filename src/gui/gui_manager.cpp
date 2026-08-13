@@ -259,8 +259,6 @@ void GuiManager::setup_default_layout(unsigned int dockspace_id) {
       dock_main_id, ImGuiDir_Left, 0.35f, nullptr, &dock_main_id);
 
   ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
-  ImGui::DockBuilderDockWindow(ui::PATCH_HISTORY_TITLE, dock_main_id);
-
   ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
 
   ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);

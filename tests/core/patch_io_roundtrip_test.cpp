@@ -93,9 +93,9 @@ int main() {
   CHECK(ginpkg_loaded.patches[0] == patch);
 
   // Every writable format the registry offers has to survive a save/load
-  // cycle. Driving this from export_formats() means a format added upstream
+  // cycle. Driving this from save_formats() means a format added upstream
   // is covered here the moment it appears.
-  const auto formats = registry.export_formats();
+  const auto formats = registry.save_formats();
   CHECK(!formats.empty());
 
   std::vector<std::string> covered;

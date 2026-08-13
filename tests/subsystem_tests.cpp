@@ -440,6 +440,49 @@ void test_save_and_metadata_roundtrip(TestEnvironment &env) {
   CHECK(reloaded->star_rating == 4);
 }
 
+void test_default_save_format_is_gin(TestEnvironment &env) {
+  const auto saved = env.session.repository().save_patch(
+      env.session.current_patch(), "default format", /*overwrite=*/true, {});
+  CHECK(saved.status == patches::SavePatchResult::Status::Success);
+  CHECK(saved.path.extension() == ".gin");
+}
+
+void test_ginpkg_versions_appear_as_container_items(TestEnvironment &env) {
+  auto patch = env.session.current_patch();
+  patch.name = "package patch";
+  const auto package_path = env.patches_folder / "versions.ginpkg";
+  CHECK(patches::write_patch(patch, package_path));
+  patch.instrument.algorithm = 6;
+  CHECK(patches::write_patch(patch, package_path));
+
+  env.session.repository().refresh();
+  const patches::PatchEntry *container = nullptr;
+  for (const auto &root : env.session.repository().tree()) {
+    auto found = std::find_if(root.children.begin(), root.children.end(),
+                              [&](const patches::PatchEntry &entry) {
+                                return entry.full_path == package_path;
+                              });
+    if (found != root.children.end()) {
+      container = &*found;
+      break;
+    }
+  }
+  CHECK(container != nullptr);
+  CHECK(container->is_directory);
+  CHECK(container->format == "ginpkg");
+  CHECK(container->children.size() == 2);
+  CHECK(container->children.front().container_item_id == "__current__");
+  CHECK(container->children.front().source_relative_path ==
+        container->relative_path);
+
+  ym2612::Patch latest;
+  ym2612::Patch previous;
+  CHECK(env.session.repository().load_patch(container->children[0], latest));
+  CHECK(env.session.repository().load_patch(container->children[1], previous));
+  CHECK(latest.instrument.algorithm == 6);
+  CHECK(previous.instrument.algorithm != latest.instrument.algorithm);
+}
+
 // Save must not overwrite a file it cannot safely rewrite.
 void test_save_in_place_rules(TestEnvironment &env) {
   auto &repository = env.session.repository();
@@ -494,46 +537,6 @@ void test_note_allocation(TestEnvironment &env) {
   }
 }
 
-std::string file_bytes(const std::filesystem::path &path) {
-  std::ifstream file(path, std::ios::binary);
-  return {std::istreambuf_iterator<char>(file),
-          std::istreambuf_iterator<char>()};
-}
-
-// "Duplicate" must create a new file and leave the original alone. It used to
-// route through the ordinary save, which overwrote the original in place --
-// and for formats that store no patch name that was a byte-identical write,
-// so it looked like nothing had happened at all.
-void test_duplicate_creates_new_file(TestEnvironment &env) {
-  env.session.current_patch().name = "dup source";
-  env.session.current_patch().instrument.algorithm = 2;
-  const auto source = env.patches_folder / "dup source.ginpkg";
-  CHECK(patches::write_patch(env.session.current_patch(), source));
-  env.session.set_current_patch(env.session.current_patch(), source);
-  env.session.repository().refresh();
-
-  const std::string original = file_bytes(source);
-
-  auto result = env.session.duplicate_current_patch("dup copy");
-  CHECK(result.is_success());
-  CHECK(result.path == env.patches_folder / "dup copy.ginpkg");
-  CHECK(std::filesystem::exists(result.path));
-
-  // The original file is byte-for-byte untouched...
-  CHECK(file_bytes(source) == original);
-
-  // ...and the working patch is now the duplicate.
-  CHECK(env.session.current_patch().name == "dup copy");
-  CHECK(env.session.repository().to_absolute_path(
-            env.session.current_patch_path()) == result.path);
-
-  // Duplicating onto an existing name refuses instead of overwriting.
-  env.session.set_current_patch(env.session.current_patch(), source);
-  auto conflict = env.session.duplicate_current_patch("dup copy");
-  CHECK(conflict.is_error());
-  CHECK(std::filesystem::exists(result.path));
-}
-
 } // namespace
 
 int main() {
@@ -555,7 +558,8 @@ int main() {
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);
   test_workspace_folder_is_visible(env);
-  test_duplicate_creates_new_file(env);
+  test_default_save_format_is_gin(env);
+  test_ginpkg_versions_appear_as_container_items(env);
   test_save_and_metadata_roundtrip(env);
   test_save_in_place_rules(env);
 

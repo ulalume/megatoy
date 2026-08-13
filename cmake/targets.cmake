@@ -81,7 +81,6 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/operator_editor.cpp
   src/gui/components/patch_drop.cpp
   src/gui/components/patch_editor.cpp
-  src/gui/components/patch_history.cpp
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/patch_selector_shared.cpp
@@ -138,7 +137,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/local_storage.cpp
     src/platform/web/web_folder_import.cpp
     src/platform/web/web_storage_bootstrap.cpp
-    src/platform/web/web_patch_export.cpp
     src/platform/web/web_patch_url.cpp
     src/platform/web/web_midi_backend.cpp
   )

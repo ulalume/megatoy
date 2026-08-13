@@ -1,9 +1,10 @@
 #include "../test_check.hpp"
 #include "formats/patch_registry.hpp"
+#include <array>
 #include <iostream>
 
 int main() {
-  const auto formats = formats::PatchRegistry::instance().export_formats();
+  const auto formats = formats::PatchRegistry::instance().save_formats();
   bool has_dmp = false;
   bool has_mml = false;
   for (const auto &fmt : formats) {
@@ -16,8 +17,16 @@ int main() {
       CHECK(fmt.is_text);
     }
   }
-  CHECK(has_dmp && "DMP export format should be registered");
-  CHECK(has_mml && "MML export format should be registered");
+  CHECK(has_dmp && "DMP save format should be registered");
+  CHECK(has_mml && "MML save format should be registered");
+
+  static constexpr std::array<const char *, 7> expected_order = {
+      ".gin", ".dmp", ".fui", ".eif", ".tfi", ".vgi", ".mml"};
+  CHECK(formats.size() >= expected_order.size());
+  for (std::size_t i = 0; i < expected_order.size(); ++i) {
+    CHECK(formats[i].extension == expected_order[i]);
+  }
+  CHECK(formats.front().label == "Megatoy");
   std::cout << "patch_registry_test passed\n";
   return 0;
 }

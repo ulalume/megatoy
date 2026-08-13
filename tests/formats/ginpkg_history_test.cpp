@@ -1,6 +1,6 @@
 // The version history inside a .ginpkg: saving over a package archives the
 // previous current patch, versions can be read back and deleted. This is the
-// mechanism behind the Patch Versions panel, on desktop and web alike.
+// mechanism behind Save Version and the package entries in the patch tree.
 
 #include "formats/ginpkg.hpp"
 #include "ym2612/patch.hpp"
