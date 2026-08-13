@@ -30,7 +30,6 @@ Changes apply directly to your active patch with full undo support.
 
 - **Load patches** from many formats, via [ym2612_format](https://github.com/ulalume/ym2612_format): DefleMask preset (`.dmp`) and module (`.dmf`), Furnace instrument (`.fui`) and module (`.fur`), [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`), VOPM/MiOPMdrv (`.opm`), TFM Music Maker (`.tfi`), `.rym2612`, VGM Music Maker (`.vgi`), Echo (`.eif`), VGM/VGZ register log (`.vgm`/`.vgz`)
 - **Save patches as** `.gin`, `.dmp`, `.fui`, `.eif`, `.tfi`, `.vgi`, or `.mml`
-- **Browse instrument banks** — multi-instrument files (`.mml`, `.dmf`, `.fur`, `.opm`, `.vgm`, `.vgz`) expand into a folder of patches
 - **Organize patches** with metadata (star ratings and categories) for quick retrieval and filtering
 - **Drag & drop** support for easy file loading
 
