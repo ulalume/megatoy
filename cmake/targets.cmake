@@ -174,8 +174,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(MEGATOY_CORE_RELEASE_FLAGS -O3 -ffast-math -funroll-loops)
   if(MEGATOY_RELEASE_CPU_FLAGS)
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
-  elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
-    list(APPEND MEGATOY_CORE_RELEASE_FLAGS -march=native)
   endif()
   target_compile_options(megatoy_core PRIVATE
       $<$<CXX_COMPILER_ID:GNU,Clang>:${MEGATOY_CORE_RELEASE_FLAGS}>
