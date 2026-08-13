@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/lowpass_filter.hpp"
 #include "ym2612/types.hpp"
 #include "ym2612/ymfm_chip.hpp"
 #include <cstdint>
@@ -49,6 +50,7 @@ private:
   struct Resampler; // owns the vendored libvgm resampler state + scratch
 
   uint32_t sample_rate_ = 0;
+  audio::LowPassFilter lowpass_;
   std::unique_ptr<YmfmChip> chip_;
   std::unique_ptr<Resampler> resampler_;
 };

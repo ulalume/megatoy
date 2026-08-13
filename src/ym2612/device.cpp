@@ -59,6 +59,7 @@ void Device::init(uint32_t sample_rate) {
   chip_ = std::make_unique<YmfmChip>(kClock);
   resampler_ = std::make_unique<Resampler>();
   resampler_->init(*chip_, sample_rate_);
+  lowpass_.init(sample_rate_);
 }
 
 void Device::stop() {
@@ -106,6 +107,7 @@ void Device::render(uint32_t frames, float *out) {
   Resmpl_Execute(&resampler_->state, frames, scratch.data());
 
   for (uint32_t i = 0; i < frames; ++i) {
+    lowpass_.apply(scratch[i].L, scratch[i].R);
     out[i * 2 + 0] = static_cast<float>(scratch[i].L) * kInverseFullScale;
     out[i * 2 + 1] = static_cast<float>(scratch[i].R) * kInverseFullScale;
   }

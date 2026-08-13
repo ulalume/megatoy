@@ -5,6 +5,7 @@
 // still catching a chip that has been wired up wrong.
 
 #include "audio/audio_engine.hpp"
+#include "audio/lowpass_filter.hpp"
 #include "ym2612/channel.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
@@ -87,6 +88,24 @@ void test_sample_rates() {
   CHECK(!device.is_initialized());
 }
 
+void test_ctrmml_lowpass_response() {
+  audio::LowPassFilter filter;
+  filter.init(kSampleRate);
+
+  std::int32_t left = 65536;
+  std::int32_t right = 65536;
+  filter.apply(left, right);
+  const std::int32_t first = left;
+  CHECK(first == right);
+  CHECK(first == 21344);
+
+  left = right = 65536;
+  filter.apply(left, right);
+  CHECK(left > first);
+  CHECK(left < 65536);
+  CHECK(left == right);
+}
+
 void test_key_on_produces_audio(AudioEngine &engine) {
   engine.apply_patch_to_all_channels(make_sustained_patch());
 
@@ -161,6 +180,7 @@ void test_idle_settles_to_digital_silence() {
 
 int main() {
   test_sample_rates();
+  test_ctrmml_lowpass_response();
   test_idle_settles_to_digital_silence();
 
   AudioEngine engine;
