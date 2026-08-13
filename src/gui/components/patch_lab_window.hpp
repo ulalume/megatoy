@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace ui {
 
@@ -20,6 +21,16 @@ struct PatchLabContext {
 };
 
 struct PatchLabState {
+  struct SessionResult {
+    std::uint64_t id = 0;
+    std::string label;
+    ym2612::Patch patch;
+  };
+
+  // Generated patches live only for this app session. New results are
+  // inserted at the front so the most recent experiment is always visible.
+  std::vector<SessionResult> results;
+  std::uint64_t next_result_id = 1;
 
   // Randomize
   int random_seed = -1;
