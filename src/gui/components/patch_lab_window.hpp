@@ -36,8 +36,6 @@ struct PatchLabState {
   // Randomize
   int random_seed = -1;
   int random_template_iterations = 4;
-  std::uint32_t random_last_seed = 0;
-  bool random_has_result = false;
 
   // Shared sources for blend/morph
   const patches::PatchEntry *source_a = nullptr;
@@ -52,9 +50,6 @@ struct PatchLabState {
   std::string morph_error;
 
   // Mutate
-  int mutate_seed = -1;
-  std::uint32_t mutate_last_seed = 0;
-  bool mutate_has_result = false;
   int mutate_amount = 2;
   float mutate_probability = 0.35f;
   bool mutate_allow_algorithm_change = true;

@@ -209,14 +209,9 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
 
     auto result = patch_lab::random_patch(options);
     const auto key = "patch_lab.random: " + std::to_string(result.seed);
-    remember_result(state, "Random", result.patch);
+    remember_result(state, "Random (Seed: " + std::to_string(result.seed) + ")",
+                    result.patch);
     apply_patch_result(context, "Patch Lab Randomize", key, result.patch);
-    state.random_last_seed = result.seed;
-    state.random_has_result = true;
-  }
-
-  if (state.random_has_result) {
-    ImGui::Text("Last seed: %u", state.random_last_seed);
   }
 }
 
@@ -360,26 +355,16 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::Checkbox("Allow algorithm change",
                   &state.mutate_allow_algorithm_change);
 
-  ImGui::SetNextItemWidth(120.0f);
-  ImGui::InputInt("Seed (auto = -1)##mutate", &state.mutate_seed);
-
   if (ImGui::Button("Mutate Current Patch")) {
     patch_lab::MutateOptions options;
-    options.seed = state.mutate_seed;
     options.amount = state.mutate_amount;
     options.probability = state.mutate_probability;
     options.allow_algorithm_variation = state.mutate_allow_algorithm_change;
 
     auto before = context.session.current_patch();
-    auto result = patch_lab::mutate_in_place(before, options);
+    patch_lab::mutate_in_place(before, options);
     remember_result(state, "Mutate", before);
     apply_patch_result(context, "Patch Lab Mutate", before.hash(), before);
-    state.mutate_last_seed = result.seed;
-    state.mutate_has_result = true;
-  }
-
-  if (state.mutate_has_result) {
-    ImGui::Text("Last seed: %u", state.mutate_last_seed);
   }
 }
 
@@ -390,11 +375,9 @@ void render_result_list(PatchLabContext &context, PatchLabState &state) {
     return;
   }
 
-  for (std::size_t index = 0; index < state.results.size(); ++index) {
-    const auto &result = state.results[index];
+  for (const auto &result : state.results) {
     ImGui::PushID(static_cast<int>(result.id));
-    const std::string display_label =
-        (index == 0 ? "Latest" : result.label) + "  " + result.created_at;
+    const std::string display_label = result.label + "  " + result.created_at;
     if (ImGui::Selectable(display_label.c_str())) {
       apply_patch_result(context, "Apply Patch Lab Result",
                          "patch_lab.result:" + std::to_string(result.id),
