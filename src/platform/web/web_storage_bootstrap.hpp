@@ -16,8 +16,9 @@ namespace platform::web {
  * Prepare the browser's persistent workspace on startup.
  *
  * Creates a writable home folder under the IDBFS mount so a fresh visitor can
- * save straight away, and moves any library left over from the old
- * single-blob localStorage store into it.
+ * save straight away, and resumes any migration from the old single-blob
+ * localStorage store. The old blob is removed only after a later startup has
+ * read the migrated files back from IndexedDB and verified their contents.
  *
  * Returns true when the workspace changed and preferences should be saved.
  */

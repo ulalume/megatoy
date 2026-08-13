@@ -2,24 +2,44 @@
 #include "platform/platform_config.hpp"
 
 #if defined(MEGATOY_PLATFORM_WEB)
+#include <cstdlib>
 #include <emscripten.h>
-#include <emscripten/val.h>
 
 namespace {
 
-emscripten::val storage() { return emscripten::val::global("localStorage"); }
+// clang-format off
+EM_JS(char *, read_local_storage_value, (const char *key), {
+  try {
+    if (typeof localStorage == "undefined")
+      return 0;
+    const value = localStorage.getItem(UTF8ToString(key));
+    if (value == null)
+      return 0;
+    const size = lengthBytesUTF8(value) + 1;
+    const result = _malloc(size);
+    if (!result)
+      return 0;
+    stringToUTF8(value, result, size);
+    return result;
+  } catch (e) {
+    console.error("localStorage.getItem failed", e);
+    return 0;
+  }
+});
+// clang-format on
 
 } // namespace
 
 namespace platform::web {
 
 std::optional<std::string> read_local_storage(const std::string &key) {
-  using emscripten::val;
-  val value = storage().call<val>("getItem", key);
-  if (value.isNull() || value.isUndefined()) {
+  char *value = read_local_storage_value(key.c_str());
+  if (value == nullptr) {
     return std::nullopt;
   }
-  return value.as<std::string>();
+  std::string result(value);
+  std::free(value);
+  return result;
 }
 
 bool write_local_storage(const std::string &key, const std::string &value) {
@@ -43,8 +63,45 @@ bool write_local_storage(const std::string &key, const std::string &value) {
   // clang-format on
 }
 
-void remove_local_storage(const std::string &key) {
-  storage().call<void>("removeItem", key);
+bool remove_local_storage(const std::string &key) {
+  // clang-format off
+  return EM_ASM_INT(
+             {
+               try {
+                 const k = UTF8ToString($0);
+                 if (typeof localStorage === "undefined") return 0;
+                 localStorage.removeItem(k);
+                 return 1;
+               } catch (e) {
+                 console.error("localStorage.removeItem failed", e);
+                 return 0;
+               }
+             },
+      key.c_str()) != 0;
+  // clang-format on
+}
+
+bool remove_local_storage_if_equals(const std::string &key,
+                                    const std::string &expected_value) {
+  // Keep compare + remove in one JavaScript call so another old-version tab
+  // cannot replace the library between two separate operations.
+  // clang-format off
+  return EM_ASM_INT(
+             {
+               try {
+                 const k = UTF8ToString($0);
+                 const expected = UTF8ToString($1);
+                 if (typeof localStorage === "undefined") return 0;
+                 if (localStorage.getItem(k) !== expected) return 0;
+                 localStorage.removeItem(k);
+                 return 1;
+               } catch (e) {
+                 console.error("conditional localStorage.removeItem failed", e);
+                 return 0;
+               }
+             },
+      key.c_str(), expected_value.c_str()) != 0;
+  // clang-format on
 }
 
 } // namespace platform::web
@@ -57,9 +114,15 @@ std::optional<std::string> read_local_storage(const std::string &) {
   return std::nullopt;
 }
 
-void write_local_storage(const std::string &, const std::string &) {}
+bool write_local_storage(const std::string &, const std::string &) {
+  return false;
+}
 
-void remove_local_storage(const std::string &) {}
+bool remove_local_storage(const std::string &) { return false; }
+
+bool remove_local_storage_if_equals(const std::string &, const std::string &) {
+  return false;
+}
 
 } // namespace platform::web
 
