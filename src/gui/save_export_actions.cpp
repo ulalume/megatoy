@@ -5,6 +5,8 @@
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
 #include <imgui.h>
+#include <optional>
+#include <string>
 #include <string_view>
 
 namespace ui {
@@ -68,30 +70,22 @@ void render_save_export_popups(patches::PatchSession &session,
     state.save_as_requested = false;
   }
 
-  center_next_window();
-  if (ImGui::BeginPopupModal("Save As...", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::TextUnformatted("Choose a file format:");
-    ImGui::Spacing();
+  std::optional<std::string> selected_extension;
+  if (ImGui::BeginPopup("Save As...")) {
     for (const auto &format : session.save_formats()) {
-      std::string label = format.label.empty() ? format.extension : format.label;
+      std::string label =
+          format.label.empty() ? format.extension : format.label;
       if (!format.extension.empty()) {
         label += " (" + format.extension + ")";
       }
-      if (ImGui::Selectable(label.c_str())) {
-        auto result = session.save_current_patch_as(format.extension);
-        announce_save(session, result);
-        if (!result.is_cancelled()) {
-          ImGui::CloseCurrentPopup();
-        }
+      if (ImGui::MenuItem(label.c_str())) {
+        selected_extension = format.extension;
       }
     }
-    ImGui::Spacing();
-    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-      ImGui::CloseCurrentPopup();
-    }
     ImGui::EndPopup();
+  }
+  if (selected_extension) {
+    announce_save(session, session.save_current_patch_as(*selected_extension));
   }
 
   const auto &patch = session.current_patch();
