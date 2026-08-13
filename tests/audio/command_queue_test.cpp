@@ -122,7 +122,9 @@ void test_midi_submissions_from_another_thread() {
       make_patch().global, make_patch().channel, make_patch().instrument));
   render_block(engine, 64);
 
-  constexpr int kRounds = 200;
+  // Keep the burst below the queue capacity so this test isolates the SPSC
+  // handoff from the explicit overflow recovery below.
+  constexpr int kRounds = 100;
   std::thread producer([&engine]() {
     for (int i = 0; i < kRounds; ++i) {
       const auto note = ym2612::Note::from_midi_note(60);
@@ -144,6 +146,28 @@ void test_midi_submissions_from_another_thread() {
   CHECK(engine.notes().published_notes().empty());
 }
 
+void test_midi_overflow_cannot_leave_a_note_stuck() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+  engine.submit(audio::AudioCommand::apply_patch(
+      make_patch().global, make_patch().channel, make_patch().instrument));
+  render_block(engine, 64);
+
+  // The default MIDI queue holds 255 commands. Do not render while producing
+  // this burst, guaranteeing that a note-off encounters a full queue.
+  std::thread producer([&engine]() {
+    for (int i = 0; i < 200; ++i) {
+      const auto note = ym2612::Note::from_midi_note(60);
+      engine.submit_from_midi(audio::AudioCommand::note_on(note, 100));
+      CHECK(engine.submit_from_midi(audio::AudioCommand::note_off(note)));
+    }
+  });
+  producer.join();
+
+  render_block(engine, 64);
+  CHECK(engine.notes().published_notes().empty());
+}
+
 } // namespace
 
 int main() {
@@ -152,6 +176,7 @@ int main() {
   test_applies_inline_when_stopped();
   test_voice_limit_and_all_notes_off();
   test_midi_submissions_from_another_thread();
+  test_midi_overflow_cannot_leave_a_note_stuck();
 
   std::cout << "All audio command tests passed\n";
   return 0;

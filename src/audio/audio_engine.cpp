@@ -35,6 +35,7 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
   frame_size_ = kDefaultFrameSize;
   mix_buffer_.clear();
   scope_buffer_.clear();
+  midi_release_recovery_pending_.store(false, std::memory_order_relaxed);
   dc_x_[0] = dc_x_[1] = 0.0f;
   dc_y_[0] = dc_y_[1] = 0.0f;
   device_.init(sample_rate_);
@@ -44,6 +45,7 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
 
 void AudioEngine::shutdown() {
   running_ = false;
+  midi_release_recovery_pending_.store(false, std::memory_order_relaxed);
   scope_buffer_.clear();
   mix_buffer_.clear();
   device_.stop();
@@ -118,6 +120,18 @@ bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
   }
 
   const std::lock_guard<std::mutex> guard(midi_push_mutex_);
+  const bool is_release =
+      command.type == audio::AudioCommand::Type::NoteOff ||
+      command.type == audio::AudioCommand::Type::AllNotesOff;
+  if (midi_release_recovery_pending_.load(std::memory_order_acquire)) {
+    if (command.type == audio::AudioCommand::Type::NoteOn) {
+      return false;
+    }
+    if (is_release) {
+      // The pending all-notes-off already subsumes this release.
+      return true;
+    }
+  }
   if (midi_commands_.push(command)) {
     return true;
   }
@@ -134,6 +148,10 @@ bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
     if (midi_commands_.push(command)) {
       return true;
     }
+  }
+  if (is_release) {
+    midi_release_recovery_pending_.store(true, std::memory_order_release);
+    return true;
   }
   return false;
 }
@@ -155,6 +173,10 @@ bool AudioEngine::submit(const audio::AudioCommand &command) {
 void AudioEngine::drain_commands() {
   drain(commands_);
   drain(midi_commands_);
+  if (midi_release_recovery_pending_.exchange(false,
+                                              std::memory_order_acq_rel)) {
+    apply(audio::AudioCommand::all_notes_off());
+  }
 }
 
 void AudioEngine::drain(audio::AudioCommandQueue &queue) {

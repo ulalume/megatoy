@@ -86,6 +86,11 @@ private:
   audio::AudioCommandQueue commands_;
   audio::AudioCommandQueue midi_commands_;
   std::mutex midi_push_mutex_;
+  // Set when an overflowing MIDI queue cannot preserve a release command.
+  // The audio thread responds by releasing every channel; while it is pending,
+  // producers refuse new note-ons. Overload may drop a note but cannot leave
+  // one stuck.
+  std::atomic<bool> midi_release_recovery_pending_{false};
   ChannelAllocator allocator_;
   // The instrument notes are played with, kept here so a note command does
   // not have to carry one and MIDI never reads the UI's patch.
