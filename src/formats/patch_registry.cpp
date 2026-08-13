@@ -146,7 +146,7 @@ std::vector<SaveFormatInfo> PatchRegistry::save_formats() const {
       ".gin", ".dmp", ".fui", ".eif", ".tfi", ".vgi", ".mml"};
   for (auto &format : formats) {
     if (format.extension == ".gin") {
-      format.label = "Megatoy";
+      format.label = "megatoy";
     }
   }
   const auto rank = [](const std::string &extension) {

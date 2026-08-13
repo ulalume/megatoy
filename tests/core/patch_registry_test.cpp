@@ -26,7 +26,7 @@ int main() {
   for (std::size_t i = 0; i < expected_order.size(); ++i) {
     CHECK(formats[i].extension == expected_order[i]);
   }
-  CHECK(formats.front().label == "Megatoy");
+  CHECK(formats.front().label == "megatoy");
   std::cout << "patch_registry_test passed\n";
   return 0;
 }

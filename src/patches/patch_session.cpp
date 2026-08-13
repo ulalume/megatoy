@@ -226,7 +226,7 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
   std::vector<platform::file_dialog::FileFilter> filters;
   auto selected_format = find_save_format(extension);
   const std::string filter_label =
-      selected_format ? selected_format->label : "Megatoy";
+      selected_format ? selected_format->label : "megatoy";
   filters.push_back({filter_label, {extension.substr(1)}});
   filters.push_back({"All Files", {"*"}});
 
