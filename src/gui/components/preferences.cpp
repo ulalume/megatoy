@@ -331,8 +331,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     if (context.allow_workspace_ui) {
       ImGui::SeparatorText("Patch Folders");
       ImGui::TextWrapped(
-          "megatoy reads patches from the folders you add here. Nothing is "
-          "copied or moved -- your files stay where they are.");
+          "megatoy reads patches from the folders you add here.");
       ImGui::Spacing();
 
       const auto &folders = context.preferences.workspace().folders();

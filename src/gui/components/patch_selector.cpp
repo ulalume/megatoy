@@ -21,15 +21,14 @@ void render_empty_workspace_prompt(PatchSelectorContext &context) {
         "Import a local folder of patches -- "
         "megatoy copies it into storage that survives a reload.");
   } else {
-    ImGui::TextWrapped(
-        "No patch folders yet. Add a folder of patches to get started.");
+    ImGui::TextWrapped("No patch folders yet.");
   }
 }
 
 void render_add_folder_action(PatchSelectorContext &context) {
   const char *label = PreferenceManager::folder_add_is_import()
-                          ? ICON_FA_FOLDER_TREE " Import Folder..."
-                          : ICON_FA_FOLDER_TREE " Add Folder...";
+                          ? ICON_FA_FOLDER " Import Folder..."
+                          : ICON_FA_FOLDER " Add Folder...";
   if (ImGui::Button(label)) {
     context.add_folder();
   }
