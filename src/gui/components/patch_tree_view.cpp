@@ -51,7 +51,9 @@ bool render_subtree(const std::vector<patches::PatchEntry> &tree,
       }
       const bool open = ImGui::TreeNodeEx(display_name.c_str(),
                                           ImGuiTreeNodeFlags_SpanFullWidth);
-      entry_context_menu(context, item);
+      entry_context_menu(context, item,
+                         depth == 0 &&
+                             item.relative_path != kBuiltinPresetRoot);
       if (open) {
         render_subtree(item.children, context, query_lower, min_star_rating,
                        depth + 1);
@@ -81,21 +83,22 @@ bool render_subtree(const std::vector<patches::PatchEntry> &tree,
     // context menu and tooltip attach to whichever was drawn last, so both
     // are registered after each selectable.
     const bool name_clicked = ImGui::Selectable(item.name.c_str(), false);
+    if (is_current) {
+      ImGui::PopStyleColor();
+    }
     entry_context_menu(context, item);
     show_patch_tooltip(item);
 
     ImGui::SameLine();
-    ImGui::PushStyleColor(
-        ImGuiCol_Text,
-        color_with_alpha_vec4(ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f));
+    const ImVec4 format_color =
+        is_current ? styles::color(styles::MegatoyCol::TextHighlight)
+                   : ImGui::GetStyleColorVec4(ImGuiCol_Text);
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          color_with_alpha_vec4(format_color, 0.5f));
     const bool format_clicked = ImGui::Selectable(item.format.c_str(), false);
     ImGui::PopStyleColor();
     entry_context_menu(context, item);
     show_patch_tooltip(item);
-
-    if (is_current) {
-      ImGui::PopStyleColor();
-    }
 
     if ((name_clicked || format_clicked) && context.safe_load_patch) {
       context.safe_load_patch(item);

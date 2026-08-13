@@ -24,7 +24,9 @@ void render_empty_workspace_prompt(PatchSelectorContext &context) {
     ImGui::TextWrapped(
         "No patch folders yet. Add a folder of patches to get started.");
   }
-  ImGui::Spacing();
+}
+
+void render_add_folder_action(PatchSelectorContext &context) {
   const char *label = PreferenceManager::folder_add_is_import()
                           ? ICON_FA_FOLDER_TREE " Import Folder..."
                           : ICON_FA_FOLDER_TREE " Add Folder...";
@@ -74,6 +76,9 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   if (context.workspace_is_empty && context.add_folder) {
     render_empty_workspace_prompt(context);
   }
+  if (context.add_folder) {
+    render_add_folder_action(context);
+  }
 
   if (ImGui::BeginTabBar("##PatchViewMode")) {
     if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Tree view")) {
@@ -86,6 +91,12 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
       ImGui::EndTabItem();
     }
     ImGui::EndTabBar();
+  }
+
+  if (context.pending_remove_folder && context.remove_folder) {
+    const auto folder = *context.pending_remove_folder;
+    context.pending_remove_folder.reset();
+    context.remove_folder(folder);
   }
 
   ImGui::End();

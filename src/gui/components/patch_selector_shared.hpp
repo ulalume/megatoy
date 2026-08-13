@@ -29,7 +29,8 @@ void show_patch_tooltip(const patches::PatchEntry &entry);
 
 /// Right-click menu for the last drawn item.
 void entry_context_menu(PatchSelectorContext &context,
-                        const patches::PatchEntry &entry);
+                        const patches::PatchEntry &entry,
+                        bool allow_remove_folder = false);
 
 /// The search box, star filter and "Clear filters" row above either view.
 void render_filter_bar(PatchSelectorContext &context);

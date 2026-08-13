@@ -9,7 +9,7 @@
 namespace ui {
 
 inline constexpr std::string_view kBuiltinPresetRoot{"presets"};
-inline constexpr std::string_view kBuiltinPresetDisplayName{"Default Presets"};
+inline constexpr std::string_view kBuiltinPresetDisplayName{"Built-in Presets"};
 
 inline void center_next_window() {
   ImVec2 center = ImGui::GetMainViewport()->GetCenter();

@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <functional>
 #include <imgui.h>
+#include <optional>
 
 namespace ui {
 
@@ -26,6 +27,8 @@ struct PatchSelectorContext {
   /// one instead of showing an empty tree.
   bool workspace_is_empty = false;
   std::function<void()> add_folder;
+  std::function<void(const std::filesystem::path &)> remove_folder;
+  std::optional<std::filesystem::path> pending_remove_folder;
 
   TableSortColumn get_sort_column() const {
     return static_cast<TableSortColumn>(prefs.patch_sort_column);

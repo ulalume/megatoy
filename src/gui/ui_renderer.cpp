@@ -242,7 +242,12 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
         request_save_as(ctx.app_state().ui_state().save_export_state);
       },
       ctx.services.preference_manager.workspace().empty(),
-      [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; }};
+      [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; },
+      [&ctx](const std::filesystem::path &path) {
+        if (ctx.services.preference_manager.remove_workspace_folder(path)) {
+          ctx.services.patch_session.sync_workspace();
+        }
+      }};
 }
 
 MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {

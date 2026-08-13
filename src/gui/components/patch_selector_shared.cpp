@@ -87,14 +87,15 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
 }
 
 void entry_context_menu(PatchSelectorContext &context,
-                        const patches::PatchEntry &entry) {
+                        const patches::PatchEntry &entry,
+                        bool allow_remove_folder) {
   if (!ImGui::BeginPopupContextItem(nullptr)) {
     return;
   }
 
-  const bool is_current = !entry.is_directory &&
-                          entry.relative_path ==
-                              context.session.current_patch_selection_path();
+  const bool is_current =
+      !entry.is_directory &&
+      entry.relative_path == context.session.current_patch_selection_path();
 
   if (!entry.is_directory && !is_current && context.safe_load_patch) {
     if (ImGui::MenuItem("Open")) {
@@ -134,6 +135,13 @@ void entry_context_menu(PatchSelectorContext &context,
     if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
       context.reveal_in_file_manager(
           context.repository.to_absolute_path(entry.relative_path));
+    }
+    ImGui::Separator();
+  }
+
+  if (allow_remove_folder && context.remove_folder) {
+    if (ImGui::MenuItem("Remove Folder")) {
+      context.pending_remove_folder = entry.full_path;
     }
     ImGui::Separator();
   }
