@@ -42,6 +42,9 @@ public:
   /// True if a sample reached full scale within the last `window` frames.
   bool clipped_within(std::uint64_t window) const;
 
+  /// True while recent output is strong enough to visibly move the waveform.
+  bool signal_within(std::uint64_t window) const;
+
 private:
   // Heap-allocated, not std::array: at kCapacity this pair is 64 KB, and a
   // ScopeBuffer lives inside AudioEngine -> AudioManager -> AppServices,
@@ -54,6 +57,8 @@ private:
   std::atomic<std::uint64_t> write_position_;
   std::atomic<std::uint64_t> last_clip_position_;
   std::atomic<bool> has_clipped_;
+  std::atomic<std::uint64_t> last_signal_position_;
+  std::atomic<bool> has_signal_;
 };
 
 } // namespace audio

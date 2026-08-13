@@ -194,6 +194,29 @@ void test_scope_buffer_reports_clipping() {
   CHECK(!buffer.clipped_within(1024));
 }
 
+void test_scope_buffer_reports_visible_signal() {
+  audio::ScopeBuffer buffer;
+  const std::vector<float> silence(128 * 2, 0.0f);
+  buffer.write(silence.data(), 128);
+  CHECK(!buffer.signal_within(128));
+
+  const std::vector<float> below_noise_floor(8 * 2, 0.00005f);
+  buffer.write(below_noise_floor.data(), 8);
+  CHECK(!buffer.signal_within(128));
+
+  const std::vector<float> signal(8 * 2, 0.01f);
+  buffer.write(signal.data(), 8);
+  CHECK(buffer.signal_within(128));
+
+  buffer.write(silence.data(), 128);
+  CHECK(buffer.signal_within(128));
+  buffer.write(silence.data(), 128);
+  CHECK(!buffer.signal_within(128));
+
+  buffer.clear();
+  CHECK(!buffer.signal_within(128));
+}
+
 } // namespace
 
 int main() {
@@ -205,6 +228,7 @@ int main() {
   test_trigger_handles_short_and_silent_input();
   test_scope_buffer_keeps_newest_frames();
   test_scope_buffer_reports_clipping();
+  test_scope_buffer_reports_visible_signal();
 
   std::cout << "All analyzer tests passed\n";
   return 0;
