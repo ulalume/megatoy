@@ -6,8 +6,10 @@
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstring>
+#include <ctime>
 #include <imgui.h>
 #include <utility>
 #include <vector>
@@ -173,10 +175,21 @@ void apply_patch_result(PatchLabContext &context,
 
 void remember_result(PatchLabState &state, std::string label,
                      const ym2612::Patch &patch) {
-  state.results.insert(state.results.begin(),
-                       {.id = state.next_result_id++,
-                        .label = std::move(label),
-                        .patch = patch});
+  const auto now = std::chrono::system_clock::now();
+  const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+  std::tm local_time{};
+#if defined(_WIN32)
+  localtime_s(&local_time, &now_time);
+#else
+  localtime_r(&now_time, &local_time);
+#endif
+  char time_text[9]{};
+  std::strftime(time_text, sizeof(time_text), "%H:%M:%S", &local_time);
+
+  state.results.insert(state.results.begin(), {.id = state.next_result_id++,
+                                               .label = std::move(label),
+                                               .created_at = time_text,
+                                               .patch = patch});
 }
 
 void render_random_section(PatchLabContext &context, PatchLabState &state) {
@@ -371,15 +384,18 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
 }
 
 void render_result_list(PatchLabContext &context, PatchLabState &state) {
-  ImGui::SeparatorText("Session Results");
+  ImGui::SeparatorText("Results");
   if (state.results.empty()) {
     ImGui::TextDisabled("Generated patches appear here.");
     return;
   }
 
-  for (const auto &result : state.results) {
+  for (std::size_t index = 0; index < state.results.size(); ++index) {
+    const auto &result = state.results[index];
     ImGui::PushID(static_cast<int>(result.id));
-    if (ImGui::Selectable(result.label.c_str())) {
+    const std::string display_label =
+        (index == 0 ? "Latest" : result.label) + "  " + result.created_at;
+    if (ImGui::Selectable(display_label.c_str())) {
       apply_patch_result(context, "Apply Patch Lab Result",
                          "patch_lab.result:" + std::to_string(result.id),
                          result.patch);

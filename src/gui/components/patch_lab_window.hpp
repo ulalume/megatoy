@@ -24,6 +24,7 @@ struct PatchLabState {
   struct SessionResult {
     std::uint64_t id = 0;
     std::string label;
+    std::string created_at;
     ym2612::Patch patch;
   };
 
