@@ -222,8 +222,8 @@ void render_patch_table(PatchSelectorContext &context) {
 
   sort_patches(patches, context);
 
-  const std::string &current_relative_path =
-      context.session.current_patch_path();
+  const std::string &current_selection_path =
+      context.session.current_patch_selection_path();
   bool refresh_required = false;
 
   // The column widths below are proportional weights, which ImGui only
@@ -249,17 +249,13 @@ void render_patch_table(PatchSelectorContext &context) {
       ImGui::TableNextRow();
 
       ImGui::TableSetColumnIndex(0);
-      const std::string &selection_path = entry->source_relative_path.empty()
-                                              ? entry->relative_path
-                                              : entry->source_relative_path;
-      const bool is_current = !current_relative_path.empty() &&
-                              current_relative_path == selection_path;
+      const bool is_current = !current_selection_path.empty() &&
+                              current_selection_path == entry->relative_path;
       if (is_current) {
         ImGui::PushStyleColor(ImGuiCol_Text,
                               styles::color(styles::MegatoyCol::TextHighlight));
       }
-      const bool name_selected =
-          ImGui::Selectable(entry->name.c_str(), is_current);
+      const bool name_selected = ImGui::Selectable(entry->name.c_str(), false);
       if (is_current) {
         ImGui::PopStyleColor();
       }

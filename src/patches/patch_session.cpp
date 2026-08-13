@@ -41,14 +41,38 @@ const std::string &PatchSession::current_patch_path() const {
 void PatchSession::set_current_patch_path(const std::filesystem::path &path) {
   if (path.empty()) {
     current_patch_path_.clear();
+    current_patch_selection_path_.clear();
     return;
   }
   if (!path.is_absolute()) {
     current_patch_path_ = path.generic_string();
+    current_patch_selection_path_ = current_patch_path_;
+    if (path.extension() == ".ginpkg") {
+      current_patch_selection_path_ += "/latest";
+    }
     return;
   }
   const auto relative = repository_->to_relative_path(path);
   current_patch_path_ = relative.generic_string();
+  current_patch_selection_path_ = current_patch_path_;
+  if (path.extension() == ".ginpkg") {
+    current_patch_selection_path_ += "/latest";
+  }
+}
+
+const std::string &PatchSession::current_patch_selection_path() const {
+  return current_patch_selection_path_;
+}
+
+void PatchSession::set_current_patch_selection_path(
+    const std::filesystem::path &path) {
+  if (path.empty()) {
+    current_patch_selection_path_.clear();
+    return;
+  }
+  current_patch_selection_path_ =
+      (path.is_absolute() ? repository_->to_relative_path(path) : path)
+          .generic_string();
 }
 
 PatchRepository &PatchSession::repository() { return *repository_; }
@@ -290,6 +314,7 @@ PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {
   snapshot.original_patch = original_patch_;
   snapshot.patch = current_patch_;
   snapshot.path = current_patch_path_;
+  snapshot.selection_path = current_patch_selection_path_;
   return snapshot;
 }
 
@@ -301,6 +326,7 @@ void PatchSession::restore_snapshot(const PatchSnapshot &snapshot) {
   } else {
     set_current_patch_path(snapshot.path);
   }
+  set_current_patch_selection_path(snapshot.selection_path);
   apply_patch_to_audio();
 }
 

@@ -61,9 +61,12 @@ public:
   bool is_modified() const;
   void mark_as_clean();
 
-  // Path management
+  // The source path is the file Save targets. The selection path identifies
+  // one visible repository entry, which can be a version inside that file.
   const std::string &current_patch_path() const;
   void set_current_patch_path(const std::filesystem::path &path);
+  const std::string &current_patch_selection_path() const;
+  void set_current_patch_selection_path(const std::filesystem::path &path);
 
   // Repository access
   PatchRepository &repository();
@@ -111,8 +114,10 @@ public:
     ym2612::Patch original_patch;
     ym2612::Patch patch;
     std::string path;
+    std::string selection_path;
     bool operator==(const PatchSnapshot &other) const {
-      return patch == other.patch && path == other.path;
+      return patch == other.patch && path == other.path &&
+             selection_path == other.selection_path;
     }
   };
 
@@ -138,6 +143,7 @@ private:
   std::unique_ptr<PatchRepository> repository_;
   ym2612::Patch current_patch_;
   std::string current_patch_path_;
+  std::string current_patch_selection_path_;
   ym2612::Patch original_patch_; // For tracking modifications
 };
 

@@ -92,12 +92,9 @@ void entry_context_menu(PatchSelectorContext &context,
     return;
   }
 
-  const std::string &selection_path = entry.source_relative_path.empty()
-                                          ? entry.relative_path
-                                          : entry.source_relative_path;
   const bool is_current = !entry.is_directory &&
-                          selection_path ==
-                              context.session.current_patch_path();
+                          entry.relative_path ==
+                              context.session.current_patch_selection_path();
 
   if (!entry.is_directory && !is_current && context.safe_load_patch) {
     if (ImGui::MenuItem("Open")) {

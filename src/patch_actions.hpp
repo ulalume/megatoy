@@ -45,6 +45,7 @@ inline bool load(AppContext &context, const patches::PatchEntry &patch_info) {
   patch_session.set_current_patch_path(
       patch_info.source_relative_path.empty() ? patch_info.relative_path
                                               : patch_info.source_relative_path);
+  patch_session.set_current_patch_selection_path(patch_info.relative_path);
   patch_session.apply_patch_to_audio();
 
   const auto after = patch_session.capture_snapshot();

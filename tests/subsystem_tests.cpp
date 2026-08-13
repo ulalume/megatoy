@@ -481,6 +481,21 @@ void test_ginpkg_versions_appear_as_container_items(TestEnvironment &env) {
   CHECK(env.session.repository().load_patch(container->children[1], previous));
   CHECK(latest.instrument.algorithm == 6);
   CHECK(previous.instrument.algorithm != latest.instrument.algorithm);
+
+  // A package version is selected by its unique tree entry, while Save still
+  // targets the shared parent package. Undo/redo must preserve both identities.
+  const auto &version = container->children[1];
+  env.session.set_current_patch_path(version.source_relative_path);
+  CHECK(env.session.current_patch_selection_path() ==
+        version.source_relative_path + "/latest");
+  env.session.set_current_patch_selection_path(version.relative_path);
+  CHECK(env.session.current_patch_path() == version.source_relative_path);
+  CHECK(env.session.current_patch_selection_path() == version.relative_path);
+  const auto snapshot = env.session.capture_snapshot();
+  env.session.set_current_patch_path({});
+  env.session.restore_snapshot(snapshot);
+  CHECK(env.session.current_patch_path() == version.source_relative_path);
+  CHECK(env.session.current_patch_selection_path() == version.relative_path);
 }
 
 // Save must not overwrite a file it cannot safely rewrite.
