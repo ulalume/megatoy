@@ -147,6 +147,9 @@ add_test(NAME status_test COMMAND status_test)
 add_executable(frame_scheduler_test tests/platform/frame_scheduler_test.cpp)
 target_include_directories(frame_scheduler_test PRIVATE src)
 add_test(NAME frame_scheduler_test COMMAND frame_scheduler_test)
+add_executable(version_test tests/update/version_test.cpp src/update/version.cpp)
+target_include_directories(version_test PRIVATE src)
+add_test(NAME version_test COMMAND version_test)
 add_executable(workspace_test tests/workspace/workspace_test.cpp)
 target_include_directories(workspace_test PRIVATE src)
 target_link_libraries(workspace_test PRIVATE megatoy_core)
@@ -158,6 +161,7 @@ add_custom_target(check
           subsystem_tests ym2612_render_test analyzer_test command_queue_test
           ginpkg_history_test patch_write_test status_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
+          version_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

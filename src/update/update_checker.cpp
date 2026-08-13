@@ -1,6 +1,7 @@
 #include "update_checker.hpp"
 #include "platform/platform_config.hpp"
 #include "project_info.hpp"
+#include "version.hpp"
 #include <sstream>
 
 namespace update {
@@ -58,13 +59,6 @@ size_t write_to_string(void *contents, size_t size, size_t nmemb,
   return size * nmemb;
 }
 
-std::string normalize_tag(std::string_view tag) {
-  if (!tag.empty() && (tag.front() == 'v' || tag.front() == 'V')) {
-    tag.remove_prefix(1);
-  }
-  return std::string(tag);
-}
-
 void ensure_curl_initialized() {
   static std::once_flag init_flag;
   std::call_once(init_flag, []() { curl_global_init(CURL_GLOBAL_DEFAULT); });
@@ -118,9 +112,13 @@ UpdateCheckResult check_for_updates(std::string_view current_version_tag) {
       return result;
     }
 
-    auto normalized_latest = normalize_tag(result.latest_version);
-    auto normalized_current = normalize_tag(current_version_tag);
-    result.update_available = normalized_latest != normalized_current;
+    const auto update_available =
+        is_version_newer(result.latest_version, current_version_tag);
+    if (!update_available.has_value()) {
+      result.error_message = "Unable to compare release version tags.";
+      return result;
+    }
+    result.update_available = *update_available;
     result.success = true;
   } catch (const std::exception &ex) {
     result.error_message = ex.what();

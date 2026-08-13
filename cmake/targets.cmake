@@ -121,6 +121,7 @@ set(MEGATOY_CORE_SOURCES
   src/system/path_service.cpp
   src/update/update_checker.cpp
   src/update/release_provider.cpp
+  src/update/version.cpp
   src/ym2612/channel.cpp
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
