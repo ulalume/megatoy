@@ -296,6 +296,38 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
 
+    ImGui::SeparatorText("Theme");
+
+    const auto &themes = ui::styles::available_themes();
+    int current_theme_index = 0;
+    auto current_theme = prefs.theme();
+    for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
+      if (themes[i].id == current_theme) {
+        current_theme_index = i;
+        break;
+      }
+    }
+
+    const char *theme_preview =
+        themes.empty() ? "" : themes[current_theme_index].display_name;
+    if (ImGui::BeginCombo("##UI Theme", theme_preview)) {
+      for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
+        const bool is_selected = (i == current_theme_index);
+        if (ImGui::Selectable(themes[i].display_name, is_selected)) {
+          current_theme_index = i;
+          auto selected_id = themes[i].id;
+          prefs.set_theme(selected_id);
+          if (context.apply_theme) {
+            context.apply_theme(selected_id);
+          }
+        }
+        if (is_selected) {
+          ImGui::SetItemDefaultFocus();
+        }
+      }
+      ImGui::EndCombo();
+    }
+
     if (context.allow_workspace_ui) {
       ImGui::SeparatorText("Patch Folders");
       ImGui::TextWrapped(
@@ -384,38 +416,6 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
           context.sync_workspace();
         }
       }
-    }
-
-    ImGui::SeparatorText("Theme");
-
-    const auto &themes = ui::styles::available_themes();
-    int current_theme_index = 0;
-    auto current_theme = prefs.theme();
-    for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
-      if (themes[i].id == current_theme) {
-        current_theme_index = i;
-        break;
-      }
-    }
-
-    const char *theme_preview =
-        themes.empty() ? "" : themes[current_theme_index].display_name;
-    if (ImGui::BeginCombo("##UI Theme", theme_preview)) {
-      for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
-        const bool is_selected = (i == current_theme_index);
-        if (ImGui::Selectable(themes[i].display_name, is_selected)) {
-          current_theme_index = i;
-          auto selected_id = themes[i].id;
-          prefs.set_theme(selected_id);
-          if (context.apply_theme) {
-            context.apply_theme(selected_id);
-          }
-        }
-        if (is_selected) {
-          ImGui::SetItemDefaultFocus();
-        }
-      }
-      ImGui::EndCombo();
     }
 
     ImGui::SeparatorText("MIDI Input");
