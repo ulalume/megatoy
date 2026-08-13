@@ -29,7 +29,7 @@ Changes apply directly to your active patch with full undo support.
 ### Patch Management
 
 - **Load patches** from many formats, via [ym2612_format](https://github.com/ulalume/ym2612_format): DefleMask preset (`.dmp`) and module (`.dmf`), Furnace instrument (`.fui`) and module (`.fur`), [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`), VOPM/MiOPMdrv (`.opm`), TFM Music Maker (`.tfi`), `.rym2612`, VGM Music Maker (`.vgi`), Echo (`.eif`), VGM/VGZ register log (`.vgm`/`.vgz`)
-- **Export patches** to `.dmp`, `.fui`, `.mml`, `.tfi`, `.gin`, `.vgi`, `.eif`
+- **Save patches as** `.gin`, `.dmp`, `.fui`, `.eif`, `.tfi`, `.vgi`, or `.mml`
 - **Browse instrument banks** — multi-instrument files (`.mml`, `.dmf`, `.fur`, `.opm`, `.vgm`, `.vgz`) expand into a folder of patches
 - **Organize patches** with metadata (star ratings and categories) for quick retrieval and filtering
 - **Drag & drop** support for easy file loading
@@ -59,7 +59,7 @@ megatoy works like an editor, not a library manager: you add folders of patches 
 - **Drag & drop** a patch file onto the window to load it without adding a folder.
 - Star ratings and categories are stored in a `.megatoy/patches.json` sidecar **inside each folder**, so they travel with it when you move, sync, or share the folder.
 
-Saving writes back to the file you opened when that is safe. Read-only formats (`.dmf`, `.fur`, `.opm`, `.rym2612`, `.vgm`, `.vgz`), instrument banks, and the built-in presets open a Save As dialog instead, so a stray save cannot destroy a bank or a preset.
+Saving writes back to the file you opened when that is safe. Read-only formats (`.dmf`, `.fur`, `.opm`, `.rym2612`, `.vgm`, `.vgz`), instrument banks, and the built-in presets use Save As instead, so a stray save cannot destroy a bank or a preset.
 
 Built-in patches:
 
@@ -86,6 +86,18 @@ cmake --build build --config Debug --parallel
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --config Release --parallel
 ```
+
+CMake stores the source directory as an absolute path. If the repository has
+been moved since a build directory was configured, refresh that build tree
+before building it again:
+
+```bash
+cmake --fresh -S . -B build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release --config Release --parallel
+```
+
+Alternatively, choose a new build directory name and run the normal two
+commands against that directory.
 
 If you already cloned without `--recursive`, run:
 
