@@ -8,10 +8,10 @@
 #include <vector>
 
 struct UIPreferences {
-  bool show_patch_editor = true;
+  bool show_patch_editor = false;
   bool show_audio_controls = true;
   bool show_midi_keyboard = true;
-  bool show_patch_selector = true;
+  bool show_patch_selector = false;
   bool show_mml_console = true;
   bool show_preferences = false;
   bool show_waveform = true;
