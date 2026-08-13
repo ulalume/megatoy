@@ -66,7 +66,24 @@ bool run_frame(RuntimeContext &runtime) {
     }
   }
 
+#if defined(MEGATOY_PLATFORM_WEB)
   services.gui_manager.poll_events();
+#else
+  constexpr std::uint64_t kSignalTailFrames = AppServices::SampleRate / 10;
+  const bool waveform_is_live =
+      app_state.ui_state().prefs.show_waveform &&
+      services.audio_manager.scope_buffer().signal_within(kSignalTailFrames);
+  const auto before_wait = platform::FrameScheduler::Clock::now();
+  const auto wait = runtime.frame_scheduler.wait_before_frame(
+      before_wait, services.gui_manager.is_minimized(), waveform_is_live);
+  const bool received_event =
+      services.gui_manager.poll_events(static_cast<int>(wait.count()));
+  const auto frame_started = platform::FrameScheduler::Clock::now();
+  if (received_event) {
+    runtime.frame_scheduler.note_interaction(frame_started);
+  }
+  runtime.frame_scheduler.note_frame_started(frame_started);
+#endif
 
   runtime.midi->poll();
   runtime.midi->dispatch(*runtime.app_context);

@@ -300,34 +300,50 @@ void GuiManager::end_frame() {
   }
 }
 
-void GuiManager::poll_events() {
+bool GuiManager::is_minimized() const {
+  return window_ != nullptr &&
+         (SDL_GetWindowFlags(window_) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
+void GuiManager::process_event(const SDL_Event &event) {
+  ImGui_ImplSDL3_ProcessEvent(&event);
+
+  switch (event.type) {
+  case SDL_EVENT_QUIT:
+    should_close_ = true;
+    break;
+  case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+    if (event.window.windowID == window_id_) {
+      should_close_ = true;
+    }
+    break;
+  case SDL_EVENT_DROP_FILE:
+    if (event.drop.windowID == window_id_ && event.drop.data != nullptr) {
+      std::string dropped_path(event.drop.data);
+      dispatch_drop_event(dropped_path.c_str());
+    }
+    break;
+  default:
+    break;
+  }
+}
+
+bool GuiManager::poll_events(int timeout_ms) {
   if (!initialized_) {
-    return;
+    return false;
   }
 
   SDL_Event event;
-  while (SDL_PollEvent(&event)) {
-    ImGui_ImplSDL3_ProcessEvent(&event);
-
-    switch (event.type) {
-    case SDL_EVENT_QUIT:
-      should_close_ = true;
-      break;
-    case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-      if (event.window.windowID == window_id_) {
-        should_close_ = true;
-      }
-      break;
-    case SDL_EVENT_DROP_FILE:
-      if (event.drop.windowID == window_id_ && event.drop.data != nullptr) {
-        std::string dropped_path(event.drop.data);
-        dispatch_drop_event(dropped_path.c_str());
-      }
-      break;
-    default:
-      break;
-    }
+  bool received_event = false;
+  if (timeout_ms > 0 && SDL_WaitEventTimeout(&event, timeout_ms)) {
+    process_event(event);
+    received_event = true;
   }
+  while (SDL_PollEvent(&event)) {
+    process_event(event);
+    received_event = true;
+  }
+  return received_event;
 }
 
 void GuiManager::sync_imgui_ini() {

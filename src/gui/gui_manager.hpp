@@ -63,9 +63,13 @@ public:
   void end_frame();
 
   /**
-   * Poll events
+   * Wait up to `timeout_ms` for an event, then drain the SDL queue.
+   * Returns immediately when input arrives so an idle frame cap adds no
+   * interaction latency.
    */
-  void poll_events();
+  bool poll_events(int timeout_ms = 0);
+
+  bool is_minimized() const;
 
   /**
    * Get SDL window pointer
@@ -142,6 +146,7 @@ private:
   void set_imgui_ini_file(const std::string &path);
   void apply_imgui_ini_binding();
   void dispatch_drop_event(const char *path);
+  void process_event(const SDL_Event &event);
   void setup_default_layout(unsigned int dockspace_id);
 
   // Drop callback state
