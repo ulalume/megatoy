@@ -145,6 +145,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 else()
   list(APPEND MEGATOY_CORE_SOURCES
     src/midi/rtmidi_backend.cpp
+    src/patches/legacy_metadata_migration.cpp
     src/platform/native/native_file_system.cpp
     src/platform/native/desktop_platform_services.cpp
   )
@@ -200,6 +201,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     CURL::libcurl
     nfd
     rtmidi
+    SQLiteCpp
   )
   if(WIN32)
     target_link_libraries(megatoy_core PUBLIC shell32)

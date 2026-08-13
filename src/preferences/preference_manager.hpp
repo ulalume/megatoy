@@ -88,7 +88,10 @@ private:
   megatoy::workspace::Workspace workspace_;
   std::filesystem::path last_save_directory_;
   bool show_builtin_presets_ = true;
+  bool legacy_metadata_migration_complete_ = false;
   std::unique_ptr<PreferenceStorage> storage_;
 
   std::filesystem::path get_preferences_file_path() const;
+  bool migrate_legacy_metadata(
+      const std::filesystem::path &preferred_workspace = {});
 };

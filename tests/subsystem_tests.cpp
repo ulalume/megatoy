@@ -1,7 +1,8 @@
 #include "audio/audio_manager.hpp"
-#include "patches/patch_write.hpp"
 #include "formats/patch_registry.hpp"
+#include "patches/folder_metadata.hpp"
 #include "patches/patch_session.hpp"
+#include "patches/patch_write.hpp"
 #include "platform/native/native_file_system.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
@@ -9,13 +10,341 @@
 
 #include "test_check.hpp"
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <nlohmann/json.hpp>
+#include <SQLiteCpp/Database.h>
+#include <optional>
 #include <string>
 
 namespace {
+
+class ScopedTestHome {
+public:
+  explicit ScopedTestHome(const std::filesystem::path &home)
+#if defined(_WIN32)
+      : variable_("USERPROFILE")
+#else
+      : variable_("HOME")
+#endif
+  {
+    if (const char *previous = std::getenv(variable_.c_str())) {
+      previous_ = previous;
+    }
+#if defined(_WIN32)
+    CHECK(_putenv_s(variable_.c_str(), home.string().c_str()) == 0);
+#else
+    CHECK(setenv(variable_.c_str(), home.string().c_str(), 1) == 0);
+#endif
+  }
+
+  ~ScopedTestHome() {
+#if defined(_WIN32)
+    _putenv_s(variable_.c_str(), previous_.value_or("").c_str());
+#else
+    if (previous_) {
+      setenv(variable_.c_str(), previous_->c_str(), 1);
+    } else {
+      unsetenv(variable_.c_str());
+    }
+#endif
+  }
+
+private:
+  std::string variable_;
+  std::optional<std::string> previous_;
+};
+
+void test_fresh_and_legacy_default_workspace_migration(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+
+  // A genuinely fresh installation has neither old preferences nor the old
+  // auto-created patch tree, so it starts with no selected folder.
+  const auto fresh_config = root / "fresh-config";
+  {
+    megatoy::system::PathService paths(fs, fresh_config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().empty());
+  }
+  {
+    nlohmann::json fresh_preferences;
+    std::ifstream input(fresh_config / "preferences.json");
+    input >> fresh_preferences;
+    CHECK(fresh_preferences.at("legacy_workspace_migration").get<int>() == 1);
+    CHECK(fresh_preferences.at("legacy_metadata_migration").get<int>() == 1);
+    CHECK(fresh_preferences.at("workspace_folders").empty());
+  }
+
+  // Old versions created this tree even when the user never changed a setting
+  // (and therefore never wrote preferences.json).
+  const auto legacy_patches =
+      root / "home" / "Documents" / "megatoy" / "patches";
+  std::filesystem::create_directories(legacy_patches / "user");
+  const auto legacy_config = root / "launch-marker-config";
+  {
+    megatoy::system::PathService paths(fs, legacy_config);
+    PreferenceManager preferences(paths);
+    const auto &folders = preferences.workspace().folders();
+    CHECK(folders.size() == 1);
+    CHECK(folders[0].path == std::filesystem::weakly_canonical(legacy_patches));
+  }
+
+  // The adopted folder survives an ordinary restart as current-schema state.
+  {
+    megatoy::system::PathService paths(fs, legacy_config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().folders().size() == 1);
+    CHECK(preferences.remove_workspace_folder(legacy_patches));
+    CHECK(preferences.workspace().empty());
+  }
+
+  // Once removed, workspace_folders: [] is ordinary current-schema state and
+  // the still-existing old directory must never be special-cased again.
+  {
+    megatoy::system::PathService paths(fs, legacy_config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().empty());
+  }
+
+  nlohmann::json rewritten;
+  {
+    std::ifstream input(legacy_config / "preferences.json");
+    input >> rewritten;
+  }
+  CHECK(rewritten.at("workspace_folders").empty());
+
+  // The first workspace release could already have erased data_directory and
+  // saved an empty list. Without our marker this still needs the one-time
+  // compatibility adoption.
+  const auto incompatible_config = root / "incompatible-config";
+  std::filesystem::create_directories(incompatible_config);
+  {
+    std::ofstream output(incompatible_config / "preferences.json");
+    output << nlohmann::json{{"workspace_folders", nlohmann::json::array()}}
+                  .dump(2);
+  }
+  {
+    megatoy::system::PathService paths(fs, incompatible_config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().folders().size() == 1);
+    CHECK(preferences.workspace().folders()[0].path ==
+          std::filesystem::weakly_canonical(legacy_patches));
+  }
+  {
+    std::ifstream input(incompatible_config / "preferences.json");
+    input >> rewritten;
+  }
+  CHECK(rewritten.at("legacy_workspace_migration").get<int>() == 1);
+  CHECK(rewritten.at("workspace_folders").size() == 1);
+}
+
+void test_legacy_data_directory_migration() {
+  const auto root = std::filesystem::temp_directory_path() /
+                    "megatoy_legacy_preferences_test";
+  std::filesystem::remove_all(root);
+  const auto config = root / "config";
+  const auto legacy_root = root / "legacy-data";
+  const auto patches_root = legacy_root / "patches";
+  std::filesystem::create_directories(config);
+  std::filesystem::create_directories(patches_root / "user");
+
+  {
+    std::ofstream output(config / "preferences.json");
+    output << nlohmann::json{{"data_directory", legacy_root.string()}}.dump(2);
+  }
+
+  NativeFileSystem fs;
+  megatoy::system::PathService paths(fs, config);
+  {
+    PreferenceManager preferences(paths);
+    const auto &folders = preferences.workspace().folders();
+    CHECK(folders.size() == 1);
+    CHECK(folders[0].path == std::filesystem::weakly_canonical(patches_root));
+    CHECK(preferences.last_save_directory() ==
+          std::filesystem::weakly_canonical(patches_root));
+  }
+
+  nlohmann::json rewritten;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> rewritten;
+  }
+  CHECK(!rewritten.contains("data_directory"));
+  CHECK(rewritten.at("legacy_workspace_migration").get<int>() == 1);
+  CHECK(rewritten.at("workspace_folders").size() == 1);
+  CHECK(rewritten.at("workspace_folders")[0].get<std::string>() ==
+        std::filesystem::weakly_canonical(patches_root).string());
+
+  // An explicit current-schema empty list always wins, even if a stale old
+  // key somehow remains in the file, once our migration marker is present.
+  rewritten["workspace_folders"] = nlohmann::json::array();
+  rewritten["data_directory"] = legacy_root.string();
+  {
+    std::ofstream output(config / "preferences.json");
+    output << rewritten.dump(2);
+  }
+  {
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().empty());
+  }
+
+  std::filesystem::remove_all(root);
+}
+
+void create_legacy_metadata_database(const std::filesystem::path &path) {
+  SQLite::Database database(path.string(),
+                            SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+  database.exec(R"(
+    CREATE TABLE patch_metadata (
+      path TEXT PRIMARY KEY,
+      hash TEXT NOT NULL,
+      star_rating INTEGER DEFAULT 0,
+      category TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  )");
+  database.exec(R"(
+    CREATE TABLE patch_tags (
+      path TEXT NOT NULL,
+      tag TEXT NOT NULL,
+      PRIMARY KEY (path, tag)
+    )
+  )");
+  database.exec(R"(
+    INSERT INTO patch_metadata
+      (path, hash, star_rating, category, notes, created_at, updated_at)
+    VALUES
+      ('user/bass.gin', 'legacy-bass-hash', 5, 'legacy bass', 'keep me',
+       '2025-01-02 03:04:05', '2025-02-03 04:05:06'),
+      ('user/lead.gin', 'legacy-lead-hash', 4, 'legacy lead', '',
+       '2025-03-04 05:06:07', '2025-04-05 06:07:08'),
+      ('presets/init.dmp', 'builtin-hash', 5, 'builtin', '',
+       '2025-01-01 00:00:00', '2025-01-01 00:00:00')
+  )");
+  database.exec(
+      "INSERT INTO patch_tags (path, tag) VALUES "
+      "('user/bass.gin', 'fm'), ('user/lead.gin', 'bright')");
+}
+
+void test_legacy_metadata_migration(const std::filesystem::path &root) {
+  const auto test_root = root / "metadata-migration";
+  const auto config = test_root / "config";
+  const auto legacy_data = test_root / "legacy-data";
+  const auto patches = legacy_data / "patches";
+  std::filesystem::create_directories(config);
+  std::filesystem::create_directories(patches / "user");
+  std::ofstream(patches / "user" / "bass.gin") << "test";
+  std::ofstream(patches / "user" / "lead.gin") << "test";
+  create_legacy_metadata_database(config / "patch_metadata.db");
+
+  // A sidecar written by a newer release is authoritative. The legacy import
+  // may fill missing paths, but must not resurrect an older star/category.
+  patches::FolderMetadataStore existing(patches / ".megatoy" / "patches.json");
+  CHECK(existing.load());
+  patches::PatchMetadata current;
+  current.path = "user/bass.gin";
+  current.star_rating = 1;
+  current.category = "current bass";
+  CHECK(existing.put(current));
+
+  {
+    std::ofstream output(config / "preferences.json");
+    output << nlohmann::json{{"data_directory", legacy_data.string()}}.dump(2);
+  }
+
+  NativeFileSystem fs;
+  megatoy::system::PathService paths(fs, config);
+  {
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().contains(patches));
+  }
+
+  patches::FolderMetadataStore migrated(patches / ".megatoy" / "patches.json");
+  CHECK(migrated.load());
+  const auto bass = migrated.get("user/bass.gin");
+  CHECK(bass.has_value());
+  CHECK(bass->star_rating == 1);
+  CHECK(bass->category == "current bass");
+  const auto lead = migrated.get("user/lead.gin");
+  CHECK(lead.has_value());
+  CHECK(lead->star_rating == 4);
+  CHECK(lead->category == "legacy lead");
+  CHECK(lead->hash == "legacy-lead-hash");
+  CHECK(lead->tags == std::vector<std::string>{"bright"});
+  CHECK(lead->created_at == "2025-03-04 05:06:07");
+  CHECK(!migrated.get("presets/init.dmp").has_value());
+  CHECK(std::filesystem::exists(config / "patch_metadata.db"));
+
+  nlohmann::json preferences_json;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> preferences_json;
+  }
+  CHECK(preferences_json.at("legacy_metadata_migration").get<int>() == 1);
+
+  // Clearing a star after migration must not be undone on later launches.
+  auto cleared = *lead;
+  cleared.star_rating = 0;
+  cleared.category = "current lead";
+  CHECK(migrated.put(cleared));
+  {
+    PreferenceManager preferences(paths);
+  }
+  patches::FolderMetadataStore restarted(patches / ".megatoy" / "patches.json");
+  CHECK(restarted.load());
+  CHECK(restarted.get("user/lead.gin")->star_rating == 0);
+  CHECK(restarted.get("user/lead.gin")->category == "current lead");
+}
+
+void test_legacy_metadata_waits_for_custom_folder(
+    const std::filesystem::path &root) {
+  const auto test_root = root / "metadata-late-folder";
+  const auto config = test_root / "config";
+  const auto patches = test_root / "custom-patches";
+  std::filesystem::create_directories(config);
+  std::filesystem::create_directories(patches / "user");
+  std::ofstream(patches / "user" / "bass.gin") << "test";
+  create_legacy_metadata_database(config / "patch_metadata.db");
+  {
+    std::ofstream output(config / "preferences.json");
+    output << nlohmann::json{{"legacy_workspace_migration", 1},
+                             {"legacy_metadata_migration", 0},
+                             {"workspace_folders", nlohmann::json::array()}}
+                  .dump(2);
+  }
+
+  NativeFileSystem fs;
+  megatoy::system::PathService paths(fs, config);
+  {
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().empty());
+
+    nlohmann::json pending;
+    std::ifstream input(config / "preferences.json");
+    input >> pending;
+    CHECK(pending.at("legacy_metadata_migration").get<int>() == 0);
+
+    CHECK(preferences.add_workspace_folder(patches));
+  }
+
+  patches::FolderMetadataStore migrated(patches / ".megatoy" / "patches.json");
+  CHECK(migrated.load());
+  const auto bass = migrated.get("user/bass.gin");
+  CHECK(bass.has_value());
+  CHECK(bass->star_rating == 5);
+  nlohmann::json completed;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> completed;
+  }
+  CHECK(completed.at("legacy_metadata_migration").get<int>() == 1);
+}
 
 // Everything lives under a temporary root, including the configuration, so a
 // test run can never touch the developer's real preferences or patches.
@@ -75,15 +404,16 @@ void test_save_and_metadata_roundtrip(TestEnvironment &env) {
   env.session.current_patch().instrument.algorithm = 5;
 
   auto &repository = env.session.repository();
-  const auto saved = repository.save_patch(env.session.current_patch(),
-                                           "workspace test",
-                                           /*overwrite=*/true, ".ginpkg");
+  const auto saved =
+      repository.save_patch(env.session.current_patch(), "workspace test",
+                            /*overwrite=*/true, ".ginpkg");
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
   CHECK(saved.path.parent_path() == env.patches_folder);
   CHECK(std::filesystem::exists(saved.path));
 
   repository.refresh();
-  const auto relative = repository.to_relative_path(saved.path).generic_string();
+  const auto relative =
+      repository.to_relative_path(saved.path).generic_string();
 
   patches::PatchMetadata metadata;
   metadata.star_rating = 4;
@@ -113,9 +443,8 @@ void test_save_and_metadata_roundtrip(TestEnvironment &env) {
 // Save must not overwrite a file it cannot safely rewrite.
 void test_save_in_place_rules(TestEnvironment &env) {
   auto &repository = env.session.repository();
-  const auto saved = repository.save_patch(env.session.current_patch(),
-                                           "in place", /*overwrite=*/true,
-                                           ".gin");
+  const auto saved = repository.save_patch(
+      env.session.current_patch(), "in place", /*overwrite=*/true, ".gin");
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
   repository.refresh();
 
@@ -208,6 +537,20 @@ void test_duplicate_creates_new_file(TestEnvironment &env) {
 } // namespace
 
 int main() {
+  const auto migration_root = std::filesystem::temp_directory_path() /
+                              "megatoy_workspace_migration_tests";
+  std::filesystem::remove_all(migration_root);
+  std::filesystem::create_directories(migration_root / "home");
+  ScopedTestHome test_home(migration_root / "home");
+
+  test_fresh_and_legacy_default_workspace_migration(migration_root);
+  test_legacy_data_directory_migration();
+  test_legacy_metadata_migration(migration_root);
+  test_legacy_metadata_waits_for_custom_folder(migration_root);
+
+  // Keep the general subsystem fixture independent of the launch marker.
+  std::filesystem::remove_all(migration_root / "home" / "Documents" /
+                              "megatoy");
   TestEnvironment env;
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);
@@ -217,5 +560,6 @@ int main() {
   test_save_in_place_rules(env);
 
   std::cout << "All subsystem tests passed\n";
+  std::filesystem::remove_all(migration_root);
   return 0;
 }

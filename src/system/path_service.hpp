@@ -17,6 +17,8 @@ struct DirectoryPaths {
   std::filesystem::path builtin_presets_root;
   std::filesystem::path preferences_file;
   std::filesystem::path imgui_ini_file;
+  /// SQLite metadata database written by pre-workspace desktop releases.
+  std::filesystem::path legacy_patch_metadata_db;
 };
 
 class PathService {
@@ -44,6 +46,13 @@ public:
 
   /// Where a save or export dialog starts when nothing better is known.
   static std::filesystem::path default_documents_directory();
+
+  /**
+   * Patch folder created automatically by pre-workspace desktop releases.
+   * Its existence is the only launch marker for users who never changed a
+   * setting (and therefore never got an old preferences.json).
+   */
+  static std::filesystem::path legacy_default_patches_directory();
 
   /**
    * Root of the browser's persistent storage (an IDBFS mount backed by

@@ -80,6 +80,18 @@ struct PreferenceData {
   std::filesystem::path last_save_directory;
   bool show_builtin_presets = true;
 
+  // Runtime-only flag set while adopting a pre-workspace patch folder.
+  bool migrated_legacy_workspace = false;
+  // Persisted schema marker. Older and temporarily incompatible releases did
+  // not write it, even if they had already written workspace_folders: [].
+  bool legacy_workspace_migration_complete = false;
+
+  // The SQLite-to-sidecar migration has its own marker because workspace
+  // releases existed that discarded data_directory without importing stars.
+  bool legacy_metadata_migration_complete = false;
+  // Runtime-only exact destination recovered from an old data_directory.
+  std::filesystem::path legacy_metadata_workspace;
+
   ui::styles::ThemeId theme = ui::styles::ThemeId::MegatoyDark;
   UIPreferences ui_preferences;
 };

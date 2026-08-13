@@ -10,11 +10,33 @@
 #include <sstream>
 #include <system_error>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 namespace patches {
 
 namespace {
 
 constexpr int kSchemaVersion = 1;
+
+bool replace_file(const std::filesystem::path &source,
+                  const std::filesystem::path &destination,
+                  std::error_code &error) {
+#if defined(_WIN32)
+  if (::MoveFileExW(source.c_str(), destination.c_str(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    error.clear();
+    return true;
+  }
+  error = std::error_code(static_cast<int>(::GetLastError()),
+                          std::system_category());
+  return false;
+#else
+  std::filesystem::rename(source, destination, error);
+  return !error;
+#endif
+}
 
 std::string iso8601_utc_now() {
   const auto now = std::chrono::system_clock::now();
@@ -144,8 +166,7 @@ bool FolderMetadataStore::save() const {
     }
   }
 
-  std::filesystem::rename(temporary, sidecar_path_, ec);
-  if (ec) {
+  if (!replace_file(temporary, sidecar_path_, ec)) {
     std::filesystem::remove(temporary);
     std::cerr << "Failed to replace " << sidecar_path_ << ": " << ec.message()
               << "\n";
@@ -179,6 +200,31 @@ bool FolderMetadataStore::put(PatchMetadata metadata) {
 
   entries_[metadata.path] = std::move(metadata);
   return save();
+}
+
+bool FolderMetadataStore::merge_missing(
+    const std::vector<PatchMetadata> &metadata, std::size_t &inserted) {
+  inserted = 0;
+  for (const auto &entry : metadata) {
+    if (entry.path.empty()) {
+      continue;
+    }
+    if (entries_.emplace(entry.path, entry).second) {
+      ++inserted;
+    }
+  }
+  if (inserted == 0) {
+    return true;
+  }
+  if (save()) {
+    return true;
+  }
+
+  // Leave this object consistent with the on-disk sidecar after a failed
+  // write. The migration will retry on the next launch.
+  load();
+  inserted = 0;
+  return false;
 }
 
 bool FolderMetadataStore::remove(const std::string &relative_path) {

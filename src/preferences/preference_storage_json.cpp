@@ -53,11 +53,14 @@ public:
         (*stream) >> j;
       }
 
-      // "data_directory" was the single managed patch tree megatoy used
-      // before workspaces. It is deliberately not read: the concept is gone,
-      // and silently adopting the old path would recreate it.
-      if (j.contains("workspace_folders") &&
-          j["workspace_folders"].is_array()) {
+      data.legacy_workspace_migration_complete =
+          j.value("legacy_workspace_migration", 0) >= 1;
+      data.legacy_metadata_migration_complete =
+          j.value("legacy_metadata_migration", 0) >= 1;
+
+      const bool has_workspace_folders =
+          j.contains("workspace_folders") && j["workspace_folders"].is_array();
+      if (has_workspace_folders) {
         data.workspace_folders.clear();
         for (const auto &entry : j["workspace_folders"]) {
           if (entry.is_string()) {
@@ -65,6 +68,36 @@ public:
           }
         }
       }
+
+#if !defined(MEGATOY_PLATFORM_WEB)
+      // Before workspaces, data_directory/patches was the repository root and
+      // data_directory/patches/user was its save directory. Adopt that tree as
+      // one workspace on first run; files stay exactly where they are.
+      if (!data.legacy_workspace_migration_complete &&
+          data.workspace_folders.empty() && j.contains("data_directory") &&
+          j["data_directory"].is_string()) {
+        const std::filesystem::path legacy_root =
+            j["data_directory"].get<std::string>();
+        if (!legacy_root.empty()) {
+          const auto patches_root = legacy_root / "patches";
+          data.workspace_folders = {patches_root};
+          data.legacy_metadata_workspace = patches_root;
+          data.migrated_legacy_workspace = true;
+        }
+      }
+
+      // Keep the exact old root available to the independent metadata
+      // migration even when the workspace list was already populated.
+      if (!data.legacy_metadata_migration_complete &&
+          data.legacy_metadata_workspace.empty() &&
+          j.contains("data_directory") && j["data_directory"].is_string()) {
+        const std::filesystem::path legacy_root =
+            j["data_directory"].get<std::string>();
+        if (!legacy_root.empty()) {
+          data.legacy_metadata_workspace = legacy_root / "patches";
+        }
+      }
+#endif
 
       if (j.contains("last_save_directory")) {
         data.last_save_directory = j["last_save_directory"].get<std::string>();
@@ -187,6 +220,9 @@ public:
   bool save(const PreferenceData &data) override {
     try {
       nlohmann::json j;
+      j["legacy_workspace_migration"] = 1;
+      j["legacy_metadata_migration"] =
+          data.legacy_metadata_migration_complete ? 1 : 0;
       nlohmann::json folders = nlohmann::json::array();
       for (const auto &folder : data.workspace_folders) {
         folders.push_back(folder.string());

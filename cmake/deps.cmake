@@ -73,6 +73,21 @@ if(NOT EMSCRIPTEN)
   set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
   set(RTMIDI_TARGETNAME_UNINSTALL rtmidi_uninstall CACHE STRING "" FORCE)
   FetchContent_MakeAvailable(rtmidi)
+
+  # SQLiteCpp is kept native-only for the one-time import of metadata written
+  # by pre-workspace releases. The browser never created that database.
+  FetchContent_Declare(
+    SQLiteCpp
+    GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp.git
+    GIT_TAG        3.3.1
+  )
+  set(SQLITECPP_INTERNAL_SQLITE ON CACHE BOOL "" FORCE)
+  set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
+  set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
+  set(SQLITECPP_RUN_DOXYGEN OFF CACHE BOOL "" FORCE)
+  set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(SQLiteCpp)
 endif()
 
 # stb single-header image loader
@@ -120,7 +135,7 @@ FetchContent_MakeAvailable(IconFontCppHeaders)
 FetchContent_Declare(
   ym2612_format
   GIT_REPOSITORY https://github.com/ulalume/ym2612_format
-  GIT_TAG        v0.2.1
+  GIT_TAG        v0.2.2
 )
 set(YM2612_FORMAT_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(YM2612_FORMAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)

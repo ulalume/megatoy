@@ -137,6 +137,16 @@ fs::path PathService::default_documents_directory() {
 #endif
 }
 
+fs::path PathService::legacy_default_patches_directory() {
+#if defined(MEGATOY_PLATFORM_WEB)
+  return {};
+#else
+  // Before workspaces the default data root was ~/Documents/megatoy, and
+  // every desktop launch created its patches directory.
+  return home_path() / "Documents" / "megatoy" / "patches";
+#endif
+}
+
 fs::path PathService::preferences_file_path() {
   return config_path("preferences.json");
 }
@@ -152,9 +162,11 @@ PathService::PathService(::platform::VirtualFileSystem &vfs,
   if (config_root.empty()) {
     paths_.preferences_file = preferences_file_path();
     paths_.imgui_ini_file = imgui_ini_file_path();
+    paths_.legacy_patch_metadata_db = config_path("patch_metadata.db");
   } else {
     paths_.preferences_file = config_root / "preferences.json";
     paths_.imgui_ini_file = config_root / "imgui.ini";
+    paths_.legacy_patch_metadata_db = config_root / "patch_metadata.db";
   }
 }
 

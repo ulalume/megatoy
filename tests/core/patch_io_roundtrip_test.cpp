@@ -6,6 +6,7 @@
 #include "ym2612/patch.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -130,9 +131,28 @@ int main() {
   }
 
   // Guard against the registry quietly losing a format.
-  for (const char *required : {".dmp", ".fui", ".mml", ".gin", ".vgi", ".eif"}) {
+  for (const char *required :
+       {".dmp", ".fui", ".mml", ".gin", ".vgi", ".eif"}) {
     CHECK(std::find(covered.begin(), covered.end(), required) != covered.end());
   }
+
+  // A file explicitly named .dmp keeps the legacy best-effort behaviour even
+  // when its tail is truncated. The format registry supplies that explicit
+  // format choice; hint-less sniffing in ym2612_format remains strict.
+  auto dmp = formats::adapter::serialize(ym2612_format::Format::Dmp, patch);
+  CHECK(dmp.has_value());
+  dmp->resize(40);
+  const auto truncated_dmp_path = tmp / "truncated.dmp";
+  {
+    std::ofstream output(truncated_dmp_path, std::ios::binary);
+    output.write(reinterpret_cast<const char *>(dmp->data()),
+                 static_cast<std::streamsize>(dmp->size()));
+  }
+  const auto truncated = formats::load_patch_from_file(truncated_dmp_path);
+  CHECK(truncated.status == formats::PatchLoadStatus::Success);
+  CHECK(truncated.patches.size() == 1);
+  CHECK(truncated.patches[0].instrument.algorithm ==
+        patch.instrument.algorithm);
 
   // Formats gained by moving to ym2612_format must be readable.
   const auto readable = formats::adapter::readable_extensions();
