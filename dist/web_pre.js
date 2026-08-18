@@ -25,8 +25,9 @@ Module["preRun"].push(function () {
   }
 
   try {
-    // autoPersist writes changes back to IndexedDB as they happen, so nothing
-    // in the C++ code has to know about syncing.
+    // autoPersist is the baseline for incidental writes. User-visible save,
+    // import, and delete paths also request an explicit debounced flush so a
+    // reload immediately after the operation cannot outrun persistence.
     FS.mount(IDBFS, { autoPersist: true }, root);
   } catch (e) {
     console.error(

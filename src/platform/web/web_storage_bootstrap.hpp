@@ -28,6 +28,9 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
 /// Name of the folder created for patches the user saves in the browser.
 inline constexpr const char *kDefaultFolderName = "My Patches";
 
+/// Folder that must remain available as the browser's default save target.
+std::filesystem::path default_workspace_folder();
+
 } // namespace platform::web
 
 #endif

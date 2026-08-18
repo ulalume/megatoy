@@ -5,6 +5,7 @@
 #include "patches/filesystem_patch_storage.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_storage_persistence.hpp"
 #endif
 #include "ym2612/patch.hpp"
 #include <algorithm>
@@ -183,6 +184,9 @@ PatchRepository::save_patch(const ym2612::Patch &patch, const std::string &name,
     if (result.status != SavePatchResult::Status::Unsupported) {
       if (result.status == SavePatchResult::Status::Success) {
         refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+        platform::web::request_storage_persist();
+#endif
       }
       return result;
     }

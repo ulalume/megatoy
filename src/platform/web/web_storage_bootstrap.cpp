@@ -6,6 +6,8 @@
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/filename_utils.hpp"
 #include "platform/web/local_storage.hpp"
+#include "platform/web/web_storage_persistence.hpp"
+#include "system/path_service.hpp"
 #include "workspace/workspace.hpp"
 #include "ym2612/patch.hpp"
 
@@ -398,6 +400,10 @@ std::size_t migrate_legacy_library(const std::filesystem::path &destination) {
 
 } // namespace
 
+std::filesystem::path default_workspace_folder() {
+  return megatoy::system::PathService::web_storage_root() / kDefaultFolderName;
+}
+
 bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
                          const std::filesystem::path &storage_root) {
   if (storage_root.empty()) {
@@ -448,6 +454,9 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
     }
   }
 
+  if (changed || migrated > 0 || !existed) {
+    request_storage_persist();
+  }
   return changed || migrated > 0;
 }
 
