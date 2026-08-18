@@ -359,9 +359,13 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
         }
         ImGui::EndDisabled();
 
-        ImGui::SameLine();
-        if (ImGui::Button("Remove")) {
-          folder_to_remove = folder.path;
+        if (!context.preferences.workspace_folder_is_protected(folder.path)) {
+          ImGui::SameLine();
+          const char *remove_label =
+              megatoy::platform::is_web() ? "Delete" : "Remove";
+          if (ImGui::Button(remove_label)) {
+            folder_to_remove = folder.path;
+          }
         }
 
         ImGui::SameLine();
@@ -404,9 +408,8 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
       }
 
       if (folder_to_remove) {
-        context.preferences.remove_workspace_folder(*folder_to_remove);
-        if (context.sync_workspace) {
-          context.sync_workspace();
+        if (context.remove_workspace_folder) {
+          context.remove_workspace_folder(*folder_to_remove);
         }
       } else if (reorder) {
         context.preferences.reorder_workspace_folder(reorder->first,

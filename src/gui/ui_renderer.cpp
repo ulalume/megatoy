@@ -1,4 +1,5 @@
 #include "ui_renderer.hpp"
+#include "core/status.hpp"
 #include "drop_actions.hpp"
 #include "gui/components/confirmation_dialog.hpp"
 #include "gui/components/file_manager.hpp"
@@ -19,8 +20,10 @@
 #include "patch_actions.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
-#include "core/status.hpp"
+#include "platform/web/web_storage_persistence.hpp"
 #include "platform/web/web_workspace_download.hpp"
+#include "system/path_service.hpp"
+#include "workspace/path_policy.hpp"
 #endif
 #include <cassert>
 #include <filesystem>
@@ -122,6 +125,95 @@ MidiKeyboardState &midi_keyboard_state() {
   return state;
 }
 
+void request_workspace_folder_removal(AppContext &ctx,
+                                      const std::filesystem::path &path) {
+  auto &preferences = ctx.services.preference_manager;
+  if (preferences.workspace_folder_is_protected(path)) {
+    megatoy::status::error("\"My Patches\" cannot be removed.");
+    return;
+  }
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  std::string name = path.filename().string();
+  if (name.empty()) {
+    name = path.string();
+  }
+  ctx.ui_state().danger_confirmation_state.request(
+      "Delete Folder?",
+      "Delete \"" + name +
+          "\"?\n\nThis permanently deletes the folder and all of its patches "
+          "from browser storage. This cannot be undone.",
+      "Delete", [&ctx, path, name]() {
+        // remove_all is only safe on directories this app manages: a folder
+        // still registered in the workspace and sitting directly inside the
+        // browser storage root. Anything else means stale UI state.
+        if (!ctx.services.preference_manager.workspace().contains(path) ||
+            !megatoy::workspace::paths_equal(
+                path.parent_path(),
+                megatoy::system::PathService::web_storage_root())) {
+          megatoy::status::error("Could not delete \"" + name +
+                                 "\": not a workspace folder.");
+          return;
+        }
+        std::error_code error;
+        std::filesystem::remove_all(path, error);
+        if (error) {
+          megatoy::status::error("Could not delete \"" + name +
+                                 "\": " + error.message());
+          return;
+        }
+        if (!ctx.services.preference_manager.remove_workspace_folder(path)) {
+          platform::web::request_storage_persist();
+          megatoy::status::error("Could not remove \"" + name +
+                                 "\" from the workspace.");
+          return;
+        }
+        ctx.services.patch_session.sync_workspace();
+        platform::web::request_storage_persist();
+        megatoy::status::success("Deleted \"" + name + "\".");
+      });
+#else
+  if (preferences.remove_workspace_folder(path)) {
+    ctx.services.patch_session.sync_workspace();
+  }
+#endif
+}
+
+bool selection_belongs_to_entry(const std::string &selection,
+                                const patches::PatchEntry &entry) {
+  if (selection == entry.relative_path) {
+    return true;
+  }
+  const std::string prefix = entry.relative_path + "/";
+  return selection.rfind(prefix, 0) == 0;
+}
+
+void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
+  if (!ctx.services.patch_session.repository().can_delete_patch(entry)) {
+    return;
+  }
+
+  const std::string location =
+      megatoy::platform::is_web() ? "from browser storage" : "from disk";
+  ctx.ui_state().danger_confirmation_state.request(
+      "Delete Patch?",
+      "Delete \"" + entry.name + "\"?\n\nThis permanently deletes it " +
+          location + ". This cannot be undone.",
+      "Delete", [&ctx, entry]() {
+        auto &session = ctx.services.patch_session;
+        const bool clear_selection = selection_belongs_to_entry(
+            session.current_patch_selection_path(), entry);
+        if (!session.repository().delete_patch(entry)) {
+          megatoy::status::error("Could not delete \"" + entry.name + "\".");
+          return;
+        }
+        if (clear_selection) {
+          session.set_current_patch_path({});
+        }
+        megatoy::status::success("Deleted \"" + entry.name + "\".");
+      });
+}
+
 MainMenuContext make_main_menu_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
@@ -132,6 +224,9 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
           ui_state.prefs,
           ui_state.open_add_folder_dialog,
           [&ctx]() { ctx.services.patch_session.sync_workspace(); },
+          [&ctx](const std::filesystem::path &path) {
+            request_workspace_folder_removal(ctx, path);
+          },
           ctx.services.patch_session,
           ui_state.save_export_state,
           [history_actions]() { history_actions.undo(); },
@@ -168,7 +263,9 @@ ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
   auto patch_actions_facade = PatchActions{ctx};
-  return {ui_state.confirmation_state, ui_state.drop_state,
+  return {ui_state.confirmation_state,
+          ui_state.danger_confirmation_state,
+          ui_state.drop_state,
           [patch_actions_facade](const patches::PatchEntry &entry) {
             patch_actions_facade.load(entry);
           },
@@ -244,9 +341,14 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       ctx.services.preference_manager.workspace().empty(),
       [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; },
       [&ctx](const std::filesystem::path &path) {
-        if (ctx.services.preference_manager.remove_workspace_folder(path)) {
-          ctx.services.patch_session.sync_workspace();
-        }
+        return ctx.services.preference_manager.workspace_folder_is_protected(
+            path);
+      },
+      [&ctx](const std::filesystem::path &path) {
+        request_workspace_folder_removal(ctx, path);
+      },
+      [&ctx](const patches::PatchEntry &entry) {
+        request_patch_deletion(ctx, entry);
       }};
 }
 
@@ -291,11 +393,13 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
         }
       },
       [&ctx]() { ctx.services.patch_session.sync_workspace(); },
+      [&ctx](const std::filesystem::path &path) {
+        request_workspace_folder_removal(ctx, path);
+      },
       [&ctx](ui::styles::ThemeId theme_id) {
         ctx.services.gui_manager.set_theme(theme_id);
       },
-      // Adding folders needs a native picker, so the list is desktop-only.
-      megatoy::platform::is_desktop(),
+      true,
   };
 }
 

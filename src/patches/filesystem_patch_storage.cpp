@@ -9,6 +9,7 @@
 #include "patches/patch_write.hpp"
 #include <algorithm>
 #include <cctype>
+#include <system_error>
 #include <unordered_map>
 
 namespace {
@@ -204,6 +205,33 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
   return save_ginpkg();
 }
 
+bool FilesystemPatchStorage::can_delete_patch(const PatchEntry &entry) const {
+  if (!writable_ || !owns_relative_path(entry.relative_path) ||
+      !entry.source_relative_path.empty() || !entry.container_item_id.empty() ||
+      entry.full_path.empty() || vfs_.is_directory(entry.full_path)) {
+    return false;
+  }
+
+  const auto mapped = to_absolute_path(entry.relative_path);
+  return mapped &&
+         mapped->lexically_normal() == entry.full_path.lexically_normal();
+}
+
+bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
+  if (!can_delete_patch(entry)) {
+    return false;
+  }
+
+  std::error_code ec;
+  if (!std::filesystem::remove(entry.full_path, ec) || ec) {
+    return false;
+  }
+  if (metadata_) {
+    metadata_->remove(metadata_key(entry.relative_path));
+  }
+  return true;
+}
+
 bool FilesystemPatchStorage::save_patch_metadata(
     const std::string &relative_path, const ym2612::Patch &patch,
     const PatchMetadata &metadata) {
@@ -383,9 +411,8 @@ void FilesystemPatchStorage::scan_directory(
                it != package->history().rend(); ++it) {
             PatchEntry version;
             auto snapshot = formats::ginpkg::read_version(path, it->uuid);
-            version.name = it->comment && !it->comment->empty()
-                               ? *it->comment
-                               : it->timestamp;
+            version.name = it->comment && !it->comment->empty() ? *it->comment
+                                                                : it->timestamp;
             if (snapshot && !snapshot->name.empty()) {
               version.name += " — " + snapshot->name;
             }
@@ -435,6 +462,7 @@ void FilesystemPatchStorage::scan_directory(
             std::replace(identifier.begin(), identifier.end(), '\\', '_');
             child.relative_path = container.relative_path + "/" +
                                   std::to_string(idx) + "_" + identifier;
+            child.source_relative_path = container.relative_path;
             child.format = format_name;
             child.is_directory = false;
             child.children.clear();

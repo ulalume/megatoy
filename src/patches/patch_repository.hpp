@@ -87,6 +87,9 @@ public:
                                 const std::string &name, bool overwrite,
                                 std::string_view preferred_extension);
 
+  bool can_delete_patch(const PatchEntry &entry) const;
+  bool delete_patch(const PatchEntry &entry);
+
   // Batch operations
   std::vector<PatchEntry> get_patches_by_metadata_filter(
       const std::function<bool(const PatchMetadata &)> &filter) const;

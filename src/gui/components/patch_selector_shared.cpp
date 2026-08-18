@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "file_manager.hpp"
+#include "platform/platform_config.hpp"
 
 #include <IconsFontAwesome7.h>
 #include <cctype>
@@ -139,8 +140,19 @@ void entry_context_menu(PatchSelectorContext &context,
     ImGui::Separator();
   }
 
-  if (allow_remove_folder && context.remove_folder) {
-    if (ImGui::MenuItem("Remove Folder")) {
+  if (context.delete_patch && context.repository.can_delete_patch(entry)) {
+    if (ImGui::MenuItem("Delete...")) {
+      context.delete_patch(entry);
+    }
+    ImGui::Separator();
+  }
+
+  const bool protected_folder = context.folder_is_protected &&
+                                context.folder_is_protected(entry.full_path);
+  if (allow_remove_folder && context.remove_folder && !protected_folder) {
+    const char *label =
+        megatoy::platform::is_web() ? "Delete Folder..." : "Remove Folder";
+    if (ImGui::MenuItem(label)) {
       context.pending_remove_folder = entry.full_path;
     }
     ImGui::Separator();
