@@ -1,10 +1,14 @@
 #include "patch_editor.hpp"
 #include "common.hpp"
+#include "core/status.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "operator_editor.hpp"
 #include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_workspace_download.hpp"
+#endif
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -108,6 +112,17 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
       ImGui::EndDisabled();
     }
   }
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  ImGui::SameLine();
+  if (ImGui::Button("Download")) {
+    if (platform::web::download_patch(patch_session.current_patch())) {
+      megatoy::status::success("Download started.");
+    } else {
+      megatoy::status::error("Failed to prepare download.");
+    }
+  }
+#endif
 
   ImGui::SameLine();
   auto relative_path = patch_session.repository().to_relative_path(

@@ -3,9 +3,11 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 
 #include "patches/filename_utils.hpp"
+#include "patches/patch_write.hpp"
 #include "platform/virtual_file_system.hpp"
 #include "platform/web/web_download.hpp"
 #include <algorithm>
+#include <fstream>
 #include <iterator>
 #include <miniz.h>
 #include <string>
@@ -33,14 +35,15 @@ bool add_directory(mz_zip_archive &archive, const VirtualFileSystem &vfs,
     return false;
   }
   auto entries = vfs.read_directory(directory);
-  std::sort(entries.begin(), entries.end(), [](const auto &lhs, const auto &rhs) {
-    return lhs.path.filename().generic_string() <
-           rhs.path.filename().generic_string();
-  });
+  std::sort(entries.begin(), entries.end(),
+            [](const auto &lhs, const auto &rhs) {
+              return lhs.path.filename().generic_string() <
+                     rhs.path.filename().generic_string();
+            });
 
   for (const auto &entry : entries) {
-    const std::string name = archive_prefix + "/" +
-                             entry.path.filename().generic_string();
+    const std::string name =
+        archive_prefix + "/" + entry.path.filename().generic_string();
     if (entry.is_directory) {
       if (!add_directory(archive, vfs, entry.path, name)) {
         return false;
@@ -113,6 +116,39 @@ bool download_workspace_path(const VirtualFileSystem &vfs,
   std::vector<uint8_t> bytes(first, first + size);
   mz_free(data);
   download_binary(root_name + ".zip", bytes, "application/zip");
+  return true;
+}
+
+bool download_patch(const ym2612::Patch &patch) {
+  std::string stem = patches::sanitize_filename(
+      patch.name.empty() ? std::string("patch") : patch.name);
+  if (stem.empty()) {
+    stem = "patch";
+  }
+
+  const auto temporary =
+      std::filesystem::temp_directory_path() / "megatoy-patch-download.gin";
+  std::error_code cleanup_error;
+  if (!patches::write_patch(patch, temporary)) {
+    std::filesystem::remove(temporary, cleanup_error);
+    return false;
+  }
+
+  std::ifstream stream(temporary, std::ios::binary);
+  if (!stream) {
+    std::filesystem::remove(temporary, cleanup_error);
+    return false;
+  }
+  std::vector<uint8_t> bytes;
+  bytes.assign(std::istreambuf_iterator<char>(stream),
+               std::istreambuf_iterator<char>());
+  stream.close();
+  std::filesystem::remove(temporary, cleanup_error);
+  if (bytes.empty()) {
+    return false;
+  }
+
+  download_binary(stem + ".gin", bytes, "application/octet-stream");
   return true;
 }
 
