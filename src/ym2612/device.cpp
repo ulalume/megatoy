@@ -1,6 +1,7 @@
 #include "ym2612/device.hpp"
 #include "ym2612/channel.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <vector>
 
@@ -96,20 +97,36 @@ void Device::render(uint32_t frames, float *out) {
     return;
   }
 
+  // The vendored libvgm resampler holds only one second of source samples
+  // and its header carries an unresolved TODO about larger blocks; feeding a
+  // bigger request in one Resmpl_Execute call overwrites the buffer end
+  // (heap corruption -- aborts under glibc/MSVC, silent on macOS). Chunking
+  // here keeps requests far below that limit for any sane rate ratio. The
+  // low-pass filter is sequential per sample, so chunking is transparent.
+  constexpr uint32_t kMaxChunkFrames = 4096;
+
   auto &scratch = resampler_->scratch;
-  if (scratch.size() < frames) {
-    scratch.resize(frames);
+  if (scratch.size() < kMaxChunkFrames) {
+    scratch.resize(kMaxChunkFrames);
   }
-  // Resmpl_Execute accumulates into the buffer, so it must start silent.
-  std::memset(scratch.data(), 0,
-              static_cast<size_t>(frames) * sizeof(WAVE_32BS));
 
-  Resmpl_Execute(&resampler_->state, frames, scratch.data());
+  uint32_t done = 0;
+  while (done < frames) {
+    const uint32_t chunk = std::min(frames - done, kMaxChunkFrames);
+    // Resmpl_Execute accumulates into the buffer, so it must start silent.
+    std::memset(scratch.data(), 0,
+                static_cast<size_t>(chunk) * sizeof(WAVE_32BS));
 
-  for (uint32_t i = 0; i < frames; ++i) {
-    lowpass_.apply(scratch[i].L, scratch[i].R);
-    out[i * 2 + 0] = static_cast<float>(scratch[i].L) * kInverseFullScale;
-    out[i * 2 + 1] = static_cast<float>(scratch[i].R) * kInverseFullScale;
+    Resmpl_Execute(&resampler_->state, chunk, scratch.data());
+
+    for (uint32_t i = 0; i < chunk; ++i) {
+      lowpass_.apply(scratch[i].L, scratch[i].R);
+      out[(done + i) * 2 + 0] =
+          static_cast<float>(scratch[i].L) * kInverseFullScale;
+      out[(done + i) * 2 + 1] =
+          static_cast<float>(scratch[i].R) * kInverseFullScale;
+    }
+    done += chunk;
   }
 }
 
