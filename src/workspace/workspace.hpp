@@ -78,7 +78,6 @@ public:
   std::uint64_t revision() const { return revision_; }
 
 private:
-  static std::filesystem::path normalize(const std::filesystem::path &path);
   static bool probe_writable(const std::filesystem::path &path);
 
   std::vector<Folder> folders_;

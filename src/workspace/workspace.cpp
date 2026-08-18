@@ -1,5 +1,7 @@
 #include "workspace/workspace.hpp"
 
+#include "workspace/path_policy.hpp"
+
 #include <algorithm>
 #include <system_error>
 
@@ -14,15 +16,6 @@ constexpr const char *kSidecarFile = "patches.json";
 
 fs::path Folder::metadata_path() const {
   return path / kSidecarDirectory / kSidecarFile;
-}
-
-fs::path Workspace::normalize(const fs::path &path) {
-  std::error_code ec;
-  auto resolved = fs::weakly_canonical(path, ec);
-  if (ec) {
-    return path.lexically_normal();
-  }
-  return resolved;
 }
 
 bool Workspace::probe_writable(const fs::path &path) {
@@ -50,7 +43,7 @@ Folder make_folder(const fs::path &resolved) {
 } // namespace
 
 bool Workspace::add(const fs::path &path) {
-  const auto resolved = normalize(path);
+  const auto resolved = normalize_path(path);
 
   std::error_code ec;
   if (!fs::is_directory(resolved, ec) || ec) {
@@ -70,7 +63,7 @@ bool Workspace::add(const fs::path &path) {
 }
 
 bool Workspace::remove(const fs::path &path) {
-  const auto resolved = normalize(path);
+  const auto resolved = normalize_path(path);
   const auto it =
       std::find_if(folders_.begin(), folders_.end(), [&](const Folder &folder) {
         return folder.path == resolved;
@@ -96,14 +89,14 @@ bool Workspace::reorder(std::size_t from, std::size_t to) {
 }
 
 bool Workspace::contains(const fs::path &path) const {
-  const auto resolved = normalize(path);
+  const auto resolved = normalize_path(path);
   return std::any_of(
       folders_.begin(), folders_.end(),
       [&](const Folder &folder) { return folder.path == resolved; });
 }
 
 const Folder *Workspace::owner_of(const fs::path &path) const {
-  const auto resolved = normalize(path);
+  const auto resolved = normalize_path(path);
   const Folder *best = nullptr;
   std::size_t best_length = 0;
 
@@ -134,7 +127,7 @@ std::optional<fs::path> Workspace::default_save_folder() const {
 void Workspace::set_paths(const std::vector<fs::path> &paths) {
   folders_.clear();
   for (const auto &path : paths) {
-    const auto resolved = normalize(path);
+    const auto resolved = normalize_path(path);
     if (contains(resolved)) {
       continue;
     }

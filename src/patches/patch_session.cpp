@@ -219,7 +219,7 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
       }
       return SaveResult::success(result.path);
     }
-    return SaveResult::error("Saving patches is unsupported on this platform");
+    return SaveResult::error("No writable patch folder is available.");
   }
 
   // Start in the folder the patch came from when that folder is writable,

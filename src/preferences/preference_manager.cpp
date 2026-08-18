@@ -4,6 +4,7 @@
 
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
+#include "workspace/path_policy.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_folder_import.hpp"
 #include "platform/web/web_storage_bootstrap.hpp"
@@ -47,11 +48,26 @@ bool PreferenceManager::add_workspace_folder(
 
 bool PreferenceManager::remove_workspace_folder(
     const std::filesystem::path &path) {
+  if (workspace_folder_is_protected(path)) {
+    megatoy::status::error("\"My Patches\" cannot be removed.");
+    return false;
+  }
   if (!workspace_.remove(path)) {
     return false;
   }
   save_preferences();
   return true;
+}
+
+bool PreferenceManager::workspace_folder_is_protected(
+    const std::filesystem::path &path) const {
+#if defined(MEGATOY_PLATFORM_WEB)
+  return megatoy::workspace::paths_equal(
+      path, platform::web::default_workspace_folder());
+#else
+  (void)path;
+  return false;
+#endif
 }
 
 bool PreferenceManager::reorder_workspace_folder(std::size_t from,
@@ -246,8 +262,7 @@ PreferenceData PreferenceManager::to_data() const {
   data.workspace_folders = workspace_.paths();
   data.last_save_directory = last_save_directory_;
   data.show_builtin_presets = show_builtin_presets_;
-  data.legacy_metadata_migration_complete =
-      legacy_metadata_migration_complete_;
+  data.legacy_metadata_migration_complete = legacy_metadata_migration_complete_;
   data.theme = theme_;
   data.ui_preferences = ui_preferences_;
   return data;
@@ -257,8 +272,7 @@ void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
   workspace_.set_paths(data.workspace_folders);
   last_save_directory_ = data.last_save_directory;
   show_builtin_presets_ = data.show_builtin_presets;
-  legacy_metadata_migration_complete_ =
-      data.legacy_metadata_migration_complete;
+  legacy_metadata_migration_complete_ = data.legacy_metadata_migration_complete;
   theme_ = data.theme;
   ui_preferences_ = data.ui_preferences;
 }

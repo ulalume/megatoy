@@ -107,6 +107,7 @@ set(MEGATOY_CORE_SOURCES
   src/midi/midi_input_manager.cpp
 
   src/patches/patch_session.cpp
+  src/workspace/path_policy.cpp
   src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
