@@ -17,9 +17,8 @@ using namespace selector_detail;
 
 void render_empty_workspace_prompt(PatchSelectorContext &context) {
   if (PreferenceManager::folder_add_is_import()) {
-    ImGui::TextWrapped(
-        "Import a local folder of patches -- "
-        "megatoy copies it into storage that survives a reload.");
+    ImGui::TextWrapped("Import a local folder of patches -- "
+                       "megatoy copies it into browser storage.");
   } else {
     ImGui::TextWrapped("No patch folders yet.");
   }
