@@ -112,9 +112,6 @@ void render_save_export_buttons(PatchEditorContext &context,
 void render_patch_metadata(PatchEditorContext &context,
                            PatchEditorState &state) {
   render_save_export_buttons(context, state);
-  ImGui::Text("Filename: %s",
-              patch_identity(context.session.current_patch_path()).c_str());
-
   ImGui::Spacing();
 }
 
