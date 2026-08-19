@@ -59,6 +59,8 @@ public:
   virtual bool can_delete_patch(const PatchEntry &) const { return false; }
   virtual bool delete_patch(const PatchEntry &) { return false; }
 
+  virtual bool can_edit_metadata(const PatchEntry &) const { return false; }
+
   // Optional metadata operations. Default is unsupported (for storages without
   // metadata persistence).
   virtual bool save_patch_metadata(const std::string &, const ym2612::Patch &,

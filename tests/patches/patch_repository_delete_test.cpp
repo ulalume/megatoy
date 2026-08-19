@@ -51,6 +51,7 @@ void test_writable_storage_deletes_patch(const fs::path &root) {
   const auto *found = find_entry(repository.tree(), saved.path);
   CHECK(found != nullptr);
   const auto entry = *found;
+  CHECK(repository.can_edit_metadata(entry));
   CHECK(repository.can_delete_patch(entry));
   CHECK(repository.delete_patch(entry));
   CHECK(!fs::exists(saved.path));
@@ -78,6 +79,7 @@ void test_read_only_storage_refuses_delete(const fs::path &root) {
   const auto *found = find_entry(repository.tree(), path);
   CHECK(found != nullptr);
   const auto entry = *found;
+  CHECK(!repository.can_edit_metadata(entry));
   CHECK(!repository.can_delete_patch(entry));
   CHECK(!repository.delete_patch(entry));
   CHECK(fs::exists(path));

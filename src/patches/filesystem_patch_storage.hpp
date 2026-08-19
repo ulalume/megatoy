@@ -38,6 +38,7 @@ public:
                              std::string_view preferred_extension) override;
   bool can_delete_patch(const PatchEntry &entry) const override;
   bool delete_patch(const PatchEntry &entry) override;
+  bool can_edit_metadata(const PatchEntry &entry) const override;
   bool is_writable() const override { return writable_; }
   std::string_view label() const override { return label_; }
   bool save_patch_metadata(const std::string &relative_path,

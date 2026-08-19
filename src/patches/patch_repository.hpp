@@ -89,6 +89,7 @@ public:
 
   bool can_delete_patch(const PatchEntry &entry) const;
   bool delete_patch(const PatchEntry &entry);
+  bool can_edit_metadata(const PatchEntry &entry) const;
 
   // Batch operations
   std::vector<PatchEntry> get_patches_by_metadata_filter(

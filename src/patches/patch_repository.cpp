@@ -242,6 +242,12 @@ bool PatchRepository::delete_patch(const PatchEntry &entry) {
   return false;
 }
 
+bool PatchRepository::can_edit_metadata(const PatchEntry &entry) const {
+  return std::any_of(
+      storages_.begin(), storages_.end(),
+      [&](const auto &storage) { return storage->can_edit_metadata(entry); });
+}
+
 std::filesystem::path
 PatchRepository::to_relative_path(const std::filesystem::path &path) const {
   for (const auto &storage : storages_) {

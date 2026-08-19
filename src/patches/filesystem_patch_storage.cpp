@@ -232,6 +232,10 @@ bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
   return true;
 }
 
+bool FilesystemPatchStorage::can_edit_metadata(const PatchEntry &entry) const {
+  return metadata_ && owns_relative_path(entry.relative_path);
+}
+
 bool FilesystemPatchStorage::save_patch_metadata(
     const std::string &relative_path, const ym2612::Patch &patch,
     const PatchMetadata &metadata) {

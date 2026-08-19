@@ -265,11 +265,15 @@ void render_patch_table(PatchSelectorContext &context) {
       }
       entry_context_menu(context, *entry);
 
+      const bool can_edit_metadata =
+          context.repository.can_edit_metadata(*entry);
+      ImGui::BeginDisabled(!can_edit_metadata);
       ImGui::TableSetColumnIndex(1);
       refresh_required |= render_star_cell(context, *entry, edits);
 
       ImGui::TableSetColumnIndex(2);
       refresh_required |= render_category_cell(context, *entry, edits);
+      ImGui::EndDisabled();
 
       ImGui::TableSetColumnIndex(3);
       if (is_current) {
