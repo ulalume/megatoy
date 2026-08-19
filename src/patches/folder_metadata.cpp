@@ -1,6 +1,7 @@
 #include "patches/folder_metadata.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <fstream>
@@ -122,6 +123,31 @@ bool FolderMetadataStore::load() {
     }
     for (const auto &[path, value] : j["patches"].items()) {
       entries_.emplace(path, metadata_from_json(path, value));
+    }
+
+    std::vector<PatchMetadata> normalized;
+    for (const auto &[path, metadata] : entries_) {
+      std::string lower_path = path;
+      std::transform(
+          lower_path.begin(), lower_path.end(), lower_path.begin(),
+          [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+      if (!lower_path.ends_with(".ginpkg")) {
+        continue;
+      }
+
+      const std::string latest_path = path + "/latest";
+      if (!entries_.contains(latest_path)) {
+        auto latest = metadata;
+        latest.path = latest_path;
+        normalized.push_back(std::move(latest));
+      }
+    }
+    for (auto &metadata : normalized) {
+      const std::string path = metadata.path;
+      entries_.emplace(path, std::move(metadata));
+    }
+    if (!normalized.empty() && !save()) {
+      return false;
     }
   } catch (const std::exception &e) {
     std::cerr << "Failed to read patch metadata at " << sidecar_path_ << ": "
