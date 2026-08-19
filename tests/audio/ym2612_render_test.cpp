@@ -239,7 +239,7 @@ void test_apply_patch_updates_instrument_for_future_notes() {
 void test_apply_patch_preserves_sustaining_note_velocity() {
   AudioEngine engine;
   CHECK(engine.initialize(kSampleRate));
-  engine.set_note_options(true, true);
+  engine.set_note_options(true, 100, true);
 
   auto patch = make_all_carrier_patch(20);
   submit_patch(engine, patch);

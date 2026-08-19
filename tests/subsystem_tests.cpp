@@ -190,6 +190,36 @@ void test_failed_preferences_load_does_not_complete_workspace_migration(
   CHECK(repaired.at("legacy_workspace_migration").get<int>() == 1);
 }
 
+void test_velocity_sensitivity_preference_round_trip(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "velocity-preference-config";
+  std::filesystem::remove_all(config);
+  std::filesystem::create_directories(config);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    auto ui = preferences.ui_preferences();
+    CHECK(ui.velocity_sensitivity_depth == 100);
+    ui.velocity_sensitivity_depth = 37;
+    preferences.set_ui_preferences(ui);
+  }
+
+  nlohmann::json stored;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> stored;
+  }
+  CHECK(stored.at("ui").at("velocity_sensitivity_depth").get<int>() == 37);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().velocity_sensitivity_depth == 37);
+  }
+}
+
 void test_legacy_data_directory_migration() {
   const auto root = std::filesystem::temp_directory_path() /
                     "megatoy_legacy_preferences_test";
@@ -520,6 +550,31 @@ void test_session_applies_direct_patch_mutation(TestEnvironment &env) {
   CHECK(!session.apply_patch_to_audio_if_changed());
 }
 
+void test_performance_commands_do_not_dirty_session(TestEnvironment &env) {
+  auto transport = std::make_unique<TestAudioTransport>();
+  auto *test_transport = transport.get();
+  AudioManager audio(std::move(transport));
+  patches::PatchSession session(env.directories, env.preferences, audio);
+  CHECK(audio.initialize(44100));
+
+  session.current_patch() = make_session_audio_patch(20);
+  session.mark_as_clean();
+  session.apply_patch_to_audio();
+  test_transport->render_ac_peak(64);
+  CHECK(!session.is_modified());
+  CHECK(!session.apply_patch_to_audio_if_changed());
+  const auto patch_before = session.current_patch();
+
+  CHECK(audio.submit(audio::AudioCommand::pitch_bend(12288)));
+  CHECK(audio.submit(audio::AudioCommand::mod_wheel(127)));
+  CHECK(audio.submit(audio::AudioCommand::mod_wheel(0)));
+  test_transport->render_ac_peak(64);
+
+  CHECK(session.current_patch() == patch_before);
+  CHECK(!session.is_modified());
+  CHECK(!session.apply_patch_to_audio_if_changed());
+}
+
 void test_workspace_folder_is_visible(TestEnvironment &env) {
   const auto &folders = env.preferences.workspace().folders();
   CHECK(folders.size() == 1);
@@ -789,6 +844,7 @@ int main() {
   test_fresh_and_legacy_default_workspace_migration(migration_root);
   test_failed_preferences_load_does_not_complete_workspace_migration(
       migration_root);
+  test_velocity_sensitivity_preference_round_trip(migration_root);
   test_legacy_data_directory_migration();
   test_legacy_metadata_migration(migration_root);
   test_legacy_metadata_waits_for_custom_folder(migration_root);
@@ -800,6 +856,7 @@ int main() {
   test_session_path_survives_workspace_relabel(migration_root);
   TestEnvironment env;
   test_session_applies_direct_patch_mutation(env);
+  test_performance_commands_do_not_dirty_session(env);
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);
   test_workspace_folder_is_visible(env);
