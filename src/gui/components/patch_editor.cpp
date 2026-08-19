@@ -244,6 +244,10 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
 
   auto title_with_id = patch_editor_window_title(
       title, context.session.current_patch_path(), is_modified);
+  // Match the waveform panel: no tab bar while this window is docked alone.
+  ImGuiWindowClass window_class;
+  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
+  ImGui::SetNextWindowClass(&window_class);
   if (ImGui::Begin(title_with_id.c_str(), &context.prefs.show_patch_editor)) {
     render_patch_metadata(context, state);
 

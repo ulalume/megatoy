@@ -62,6 +62,10 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
 
+  // Match the waveform panel: no tab bar while this window is docked alone.
+  ImGuiWindowClass window_class;
+  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
+  ImGui::SetNextWindowClass(&window_class);
   if (!ImGui::Begin(title, &prefs.show_patch_selector)) {
     ImGui::End();
     return;
