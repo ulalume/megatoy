@@ -408,6 +408,42 @@ void test_normal_workspace_folder_removal(const std::filesystem::path &root) {
   CHECK(preferences.workspace().empty());
 }
 
+void test_session_path_survives_workspace_relabel(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "path-relabel-config";
+  const auto first_input = root / "path-relabel-first" / "patches";
+  const auto second_input = root / "path-relabel-second" / "patches";
+  std::filesystem::create_directories(first_input);
+  std::filesystem::create_directories(second_input);
+  const auto first = std::filesystem::weakly_canonical(first_input);
+  const auto second = std::filesystem::weakly_canonical(second_input);
+
+  megatoy::system::PathService paths(fs, config);
+  PreferenceManager preferences(paths);
+  CHECK(preferences.add_workspace_folder(first));
+  CHECK(preferences.add_workspace_folder(second));
+  AudioManager audio;
+  patches::PatchSession session(paths, preferences, audio);
+  session.sync_workspace();
+
+  ym2612::Patch patch;
+  patch.name = "same name";
+  const auto saved = session.repository().save_patch_in(
+      second, patch, patch.name, /*overwrite=*/true, ".gin");
+  CHECK(saved.status == patches::SavePatchResult::Status::Success);
+  session.set_current_patch_path(saved.path);
+  const auto before = session.current_patch_path();
+  CHECK(session.repository().to_absolute_path(before) == saved.path);
+
+  CHECK(preferences.remove_workspace_folder(first));
+  session.sync_workspace();
+  CHECK(session.current_patch_path() != before);
+  CHECK(!session.current_patch_path().empty());
+  CHECK(session.repository().to_absolute_path(session.current_patch_path()) ==
+        saved.path);
+}
+
 // Saving must land in the workspace folder, and its metadata must end up in
 // the folder's own sidecar rather than anywhere global.
 void test_save_and_metadata_roundtrip(TestEnvironment &env) {
@@ -585,6 +621,7 @@ int main() {
   std::filesystem::remove_all(migration_root / "home" / "Documents" /
                               "megatoy");
   test_normal_workspace_folder_removal(migration_root);
+  test_session_path_survives_workspace_relabel(migration_root);
   TestEnvironment env;
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);

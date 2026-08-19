@@ -129,8 +129,30 @@ void PatchSession::initialize_patch_defaults() {
 }
 
 void PatchSession::sync_workspace() {
+  std::optional<std::filesystem::path> absolute_patch_path;
+  if (!current_patch_path_.empty()) {
+    auto resolved = repository_->to_absolute_path(current_patch_path_);
+    if (resolved.is_absolute()) {
+      absolute_patch_path = std::move(resolved);
+    }
+  }
+
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
   repository_->sync_workspace();
+
+  if (current_patch_path_.empty()) {
+    return;
+  }
+  if (!absolute_patch_path) {
+    set_current_patch_path({});
+    return;
+  }
+  const auto relative = repository_->to_relative_path(*absolute_patch_path);
+  if (relative.is_absolute()) {
+    set_current_patch_path({});
+    return;
+  }
+  set_current_patch_path(relative);
 }
 
 void PatchSession::set_current_patch(const ym2612::Patch &patch,
