@@ -82,6 +82,10 @@ if(WIN32)
   add_compile_definitions(_USE_MATH_DEFINES)
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  add_compile_options("-fwasm-exceptions" "-sWASM_LEGACY_EXCEPTIONS=0")
+endif()
+
 include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 

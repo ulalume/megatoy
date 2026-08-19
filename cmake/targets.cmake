@@ -306,6 +306,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     "-sMIN_WEBGL_VERSION=2"
     "-sWASM=1"
     "-sINITIAL_MEMORY=134217728"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sMAXIMUM_MEMORY=1073741824"
+    "-fwasm-exceptions"
+    "-sWASM_LEGACY_EXCEPTIONS=0"
     # IDBFS backs /megatoy with IndexedDB so the patch library survives a
     # reload; dist/web_pre.js mounts it before main() runs.
     "-lidbfs.js"
