@@ -19,6 +19,7 @@
 #include "platform/native/desktop_platform_services.hpp"
 #endif
 #include "runtime_context.hpp"
+#include <algorithm>
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
@@ -93,6 +94,10 @@ bool run_frame(RuntimeContext &runtime) {
   ui::render_all(*runtime.app_context);
   const auto &saved_prefs = services.preference_manager.ui_preferences();
   const auto &current_prefs = app_state.ui_state().prefs;
+  if (current_prefs.ym2612_chip_type != saved_prefs.ym2612_chip_type) {
+    services.audio_manager.set_chip_type(static_cast<ym2612::ChipType>(
+        std::clamp(current_prefs.ym2612_chip_type, 0, 1)));
+  }
   if (current_prefs.use_velocity != saved_prefs.use_velocity ||
       current_prefs.velocity_sensitivity_depth !=
           saved_prefs.velocity_sensitivity_depth ||

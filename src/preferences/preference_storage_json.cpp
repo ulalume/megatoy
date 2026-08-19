@@ -145,6 +145,10 @@ public:
         if (ui.contains("show_patch_lab")) {
           data.ui_preferences.show_patch_lab = ui["show_patch_lab"].get<bool>();
         }
+        if (ui.contains("ym2612_chip_type")) {
+          data.ui_preferences.ym2612_chip_type =
+              std::clamp(ui["ym2612_chip_type"].get<int>(), 0, 1);
+        }
         if (ui.contains("use_velocity")) {
           data.ui_preferences.use_velocity = ui["use_velocity"].get<bool>();
         }
@@ -244,6 +248,7 @@ public:
       ui["show_preferences"] = data.ui_preferences.show_preferences;
       ui["show_patch_lab"] = data.ui_preferences.show_patch_lab;
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
+      ui["ym2612_chip_type"] = data.ui_preferences.ym2612_chip_type;
       ui["use_velocity"] = data.ui_preferences.use_velocity;
       ui["use_pitch_bend"] = data.ui_preferences.use_pitch_bend;
       ui["use_mod_wheel"] = data.ui_preferences.use_mod_wheel;
