@@ -79,6 +79,10 @@ bool PreferenceManager::reorder_workspace_folder(std::size_t from,
   return true;
 }
 
+bool PreferenceManager::refresh_workspace_availability() {
+  return workspace_.refresh();
+}
+
 bool PreferenceManager::folder_add_is_import() {
 #if defined(MEGATOY_PLATFORM_WEB)
   return true;

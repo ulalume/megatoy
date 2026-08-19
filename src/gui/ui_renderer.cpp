@@ -26,6 +26,7 @@
 #include "workspace/path_policy.hpp"
 #endif
 #include <cassert>
+#include <chrono>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -463,6 +464,15 @@ void render_all(AppContext &ctx) {
   static FrameContexts contexts(ctx);
   // The cache is only valid for the AppContext it captured.
   assert(contexts.owner == &ctx);
+
+  static auto next_workspace_refresh = std::chrono::steady_clock::time_point{};
+  const auto now = std::chrono::steady_clock::now();
+  if (now >= next_workspace_refresh) {
+    next_workspace_refresh = now + std::chrono::seconds(2);
+    if (ctx.services.preference_manager.refresh_workspace_availability()) {
+      ctx.services.patch_session.sync_workspace();
+    }
+  }
 
   // Per-frame values; everything else in the contexts is stable references.
   contexts.patch_selector.workspace_is_empty =

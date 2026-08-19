@@ -72,7 +72,8 @@ public:
   std::vector<std::filesystem::path> paths() const;
 
   /// Re-check which folders still exist and are writable.
-  void refresh();
+  /// Returns true when any availability state changed.
+  bool refresh();
 
   /// Bumped whenever the folder set changes, so observers can rebuild.
   std::uint64_t revision() const { return revision_; }
