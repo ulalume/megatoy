@@ -34,6 +34,10 @@ public:
 
   uint32_t sample_rate() const { return sample_rate_; }
   uint32_t native_sample_rate() const;
+  ChipType chip_type() const { return chip_type_; }
+
+  /// Select a pre-created chip; register state must be re-established.
+  void set_chip_type(ChipType type);
 
   Channel channel(ChannelIndex idx);
 
@@ -50,6 +54,7 @@ private:
   struct Resampler; // owns the vendored libvgm resampler state + scratch
 
   uint32_t sample_rate_ = 0;
+  ChipType chip_type_ = ChipType::Ym2612;
   audio::LowPassFilter lowpass_;
   std::unique_ptr<YmfmChip> chip_;
   std::unique_ptr<Resampler> resampler_;
