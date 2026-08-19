@@ -50,7 +50,6 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
     return;
   }
   if (result.is_success()) {
-    session.repository().refresh();
     session.set_current_patch_path(
         session.repository().to_relative_path(result.path));
   }

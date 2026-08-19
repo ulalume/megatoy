@@ -27,6 +27,8 @@ public:
   virtual bool
   last_write_time(const std::filesystem::path &path,
                   std::filesystem::file_time_type &result) const = 0;
+  virtual bool file_size(const std::filesystem::path &path,
+                         std::uintmax_t &result) const = 0;
   virtual std::unique_ptr<std::istream>
   open_read(const std::filesystem::path &path) const = 0;
   virtual std::unique_ptr<std::ostream>

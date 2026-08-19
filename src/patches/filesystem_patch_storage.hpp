@@ -1,12 +1,15 @@
 #pragma once
 
-#include "patch_storage.hpp"
+#include "patch_repository.hpp"
 #include "patches/folder_metadata.hpp"
 #include "platform/virtual_file_system.hpp"
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace patches {
 
@@ -56,14 +59,27 @@ public:
   to_absolute_path(const std::filesystem::path &path) const override;
 
   const std::filesystem::path &root() const { return root_; }
+  std::size_t container_parse_count_for_testing() const {
+    return container_parse_count_;
+  }
 
 private:
+  struct ParseCacheEntry {
+    std::uintmax_t file_size = 0;
+    std::filesystem::file_time_type modified;
+    PatchEntry subtree;
+  };
+
   platform::VirtualFileSystem &vfs_;
   std::filesystem::path root_;
   std::string root_label_;
   bool writable_;
   std::string label_;
   std::unique_ptr<FolderMetadataStore> metadata_;
+  mutable std::unordered_map<std::filesystem::path, ParseCacheEntry>
+      parse_cache_;
+  mutable std::unordered_set<std::filesystem::path> seen_container_paths_;
+  mutable std::size_t container_parse_count_ = 0;
 
   void scan_directory(const std::filesystem::path &dir_path,
                       std::vector<PatchEntry> &tree,
@@ -71,6 +87,7 @@ private:
   static std::string detect_format(const std::filesystem::path &file_path);
   static bool is_supported_file(const std::filesystem::path &file_path);
   void load_metadata_for_entry(PatchEntry &entry) const;
+  void load_metadata_for_subtree(PatchEntry &entry) const;
 
   /// Strip the root label so metadata keys stay relative to the folder.
   std::string metadata_key(const std::string &relative_path) const;

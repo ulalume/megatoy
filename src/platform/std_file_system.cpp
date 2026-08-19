@@ -52,6 +52,13 @@ bool StdFileSystem::last_write_time(
   return !ec;
 }
 
+bool StdFileSystem::file_size(const std::filesystem::path &path,
+                              std::uintmax_t &result) const {
+  std::error_code ec;
+  result = std::filesystem::file_size(path, ec);
+  return !ec;
+}
+
 std::unique_ptr<std::istream>
 StdFileSystem::open_read(const std::filesystem::path &path) const {
   auto stream = std::make_unique<std::ifstream>(path, std::ios::binary);

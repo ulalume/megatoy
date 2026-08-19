@@ -367,14 +367,13 @@ save_patch(const std::filesystem::path &patches_dir, const ym2612::Patch &patch,
 std::vector<ym2612::Patch>
 read_file(const std::filesystem::path &package_path) {
   try {
-    GinPackage package;
-    if (!package.Load(package_path)) {
+    auto package = load_package(package_path);
+    if (!package) {
       return {};
     }
-
-    nlohmann::json j = nlohmann::json::parse(package.current_data());
-    ym2612::Patch patch = j.get<ym2612::Patch>();
-    return {patch};
+    auto patch = read_current(*package);
+    return patch ? std::vector<ym2612::Patch>{std::move(*patch)}
+                 : std::vector<ym2612::Patch>{};
   } catch (const std::exception &e) {
     std::cerr << "Failed to load ginpkg '" << package_path << "': " << e.what()
               << std::endl;
@@ -390,6 +389,33 @@ std::optional<GinPackage> load_package(const std::filesystem::path &path) {
   return package;
 }
 
+std::optional<ym2612::Patch> read_current(const GinPackage &package) {
+  try {
+    auto json = nlohmann::json::parse(package.current_data());
+    return json.get<ym2612::Patch>();
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to load current ginpkg patch: " << e.what()
+              << std::endl;
+    return std::nullopt;
+  }
+}
+
+std::optional<ym2612::Patch> read_version(const GinPackage &package,
+                                          const std::string &uuid) {
+  try {
+    auto snapshot = package.snapshot(uuid);
+    if (!snapshot) {
+      return std::nullopt;
+    }
+    auto json = nlohmann::json::parse(*snapshot);
+    return json.get<ym2612::Patch>();
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to load ginpkg version '" << uuid << "': " << e.what()
+              << std::endl;
+    return std::nullopt;
+  }
+}
+
 std::optional<ym2612::Patch> read_version(const std::filesystem::path &path,
                                           const std::string &uuid) {
   try {
@@ -397,13 +423,7 @@ std::optional<ym2612::Patch> read_version(const std::filesystem::path &path,
     if (!package) {
       return std::nullopt;
     }
-    auto snapshot = package->snapshot(uuid);
-    if (!snapshot) {
-      return std::nullopt;
-    }
-    auto json = nlohmann::json::parse(*snapshot);
-    ym2612::Patch patch = json.get<ym2612::Patch>();
-    return patch;
+    return read_version(*package, uuid);
   } catch (const std::exception &e) {
     std::cerr << "Failed to load ginpkg version '" << uuid << "' from " << path
               << ": " << e.what() << std::endl;

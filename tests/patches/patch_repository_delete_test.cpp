@@ -1,4 +1,6 @@
 #include "../test_check.hpp"
+#include "formats/ginpkg.hpp"
+#include "patches/filesystem_patch_storage.hpp"
 #include "patches/folder_metadata.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_write.hpp"
