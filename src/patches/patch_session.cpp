@@ -194,6 +194,17 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
 
 SaveResult
 PatchSession::save_current_patch_as(std::string_view preferred_extension) {
+  return save_current_patch_as_impl(preferred_extension, /*overwrite=*/false);
+}
+
+SaveResult PatchSession::save_current_patch_as_forced(
+    std::string_view preferred_extension) {
+  return save_current_patch_as_impl(preferred_extension, /*overwrite=*/true);
+}
+
+SaveResult
+PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
+                                         bool overwrite) {
   const std::string sanitized_name = sanitize_filename(
       current_patch_.name.empty() ? "patch" : current_patch_.name);
 
@@ -207,7 +218,7 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
 
   if (megatoy::platform::is_web()) {
     auto result = repository_->save_patch(current_patch_, current_patch_.name,
-                                          /*overwrite=*/true, extension);
+                                          overwrite, extension);
     if (result.status == SavePatchResult::Status::Success) {
       auto loaded = formats::load_patch_from_file(result.path);
       if (loaded.status == formats::PatchLoadStatus::Success &&
@@ -218,6 +229,9 @@ PatchSession::save_current_patch_as(std::string_view preferred_extension) {
         mark_as_clean();
       }
       return SaveResult::success(result.path);
+    }
+    if (result.status == SavePatchResult::Status::Duplicate) {
+      return SaveResult::duplicated();
     }
     return SaveResult::error("No writable patch folder is available.");
   }

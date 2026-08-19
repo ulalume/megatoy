@@ -85,7 +85,13 @@ void render_save_export_popups(patches::PatchSession &session,
     ImGui::EndPopup();
   }
   if (selected_extension) {
-    announce_save(session, session.save_current_patch_as(*selected_extension));
+    auto result = session.save_current_patch_as(*selected_extension);
+    if (result.is_duplicated()) {
+      state.pending_save_as_extension = *selected_extension;
+      state.overwrite_confirmation_pending = true;
+    } else {
+      announce_save(session, result);
+    }
   }
 
   const auto &patch = session.current_patch();
@@ -102,23 +108,32 @@ void render_save_export_popups(patches::PatchSession &session,
     ImGui::Text("Do you want to overwrite it?");
     ImGui::Spacing();
 
-    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+    const bool cancel_button = ImGui::Button("Cancel", ImVec2(120, 0));
+    if (cancel_button) {
+      state.pending_save_as_extension.reset();
       ImGui::CloseCurrentPopup();
     }
 
     ImGui::SameLine();
     const bool overwrite_button = ImGui::Button("Overwrite", ImVec2(120, 0));
+    if (overwrite_button) {
+      ImGui::CloseCurrentPopup();
+    }
 
     ImGui::EndPopup();
 
     if (overwrite_button) {
-      auto result = session.save_current_patch();
+      const auto pending_extension = state.pending_save_as_extension;
+      state.pending_save_as_extension.reset();
+      auto result =
+          pending_extension
+              ? session.save_current_patch_as_forced(*pending_extension)
+              : session.save_current_patch();
       if (result.is_success()) {
         session.set_current_patch_path(
             session.repository().to_relative_path(result.path));
       }
       announce_save(session, result);
-      ImGui::CloseCurrentPopup();
     }
   }
 }

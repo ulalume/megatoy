@@ -85,6 +85,99 @@ void test_read_only_storage_refuses_delete(const fs::path &root) {
   CHECK(fs::exists(path));
 }
 
+void test_duplicate_save_requires_overwrite(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto writable = root / "duplicate";
+  fs::create_directories(writable);
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(writable));
+  patches::PatchRepository repository(file_system, workspace);
+
+  ym2612::Patch original;
+  original.name = "collision";
+  original.instrument.algorithm = 1;
+  const auto saved = repository.save_patch(original, original.name,
+                                           /*overwrite=*/true, ".gin");
+  CHECK(saved.status == patches::SavePatchResult::Status::Success);
+
+  ym2612::Patch replacement = original;
+  replacement.instrument.algorithm = 6;
+  const auto duplicate = repository.save_patch(replacement, replacement.name,
+                                               /*overwrite=*/false, ".gin");
+  CHECK(duplicate.status == patches::SavePatchResult::Status::Duplicate);
+
+  const auto overwritten = repository.save_patch(replacement, replacement.name,
+                                                 /*overwrite=*/true, ".gin");
+  CHECK(overwritten.status == patches::SavePatchResult::Status::Success);
+  ym2612::Patch loaded;
+  const auto *entry = find_entry(repository.tree(), overwritten.path);
+  CHECK(entry != nullptr);
+  CHECK(repository.load_patch(*entry, loaded));
+  CHECK(loaded.instrument.algorithm == 6);
+}
+
+void test_container_parse_cache_invalidates_on_change(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto writable_input = root / "cache";
+  fs::create_directories(writable_input);
+  const auto writable = fs::weakly_canonical(writable_input);
+
+  ym2612::Patch patch;
+  patch.name = "first";
+  auto package_path = formats::ginpkg::save_patch(writable, patch, "versions");
+  CHECK(package_path.has_value());
+  patch.name = "second";
+  CHECK(formats::ginpkg::save_patch(writable, patch, "versions").has_value());
+  patch.name = "third";
+  CHECK(formats::ginpkg::save_patch(writable, patch, "versions").has_value());
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(writable));
+  patches::PatchRepository repository(file_system, workspace);
+  const auto *container = find_entry(repository.tree(), *package_path);
+  CHECK(container != nullptr);
+  CHECK(container->children.size() == 3);
+  CHECK(container->children.front().name == "third (Latest)");
+
+  const auto latest_path = container->children.front().relative_path;
+  patches::PatchMetadata metadata;
+  metadata.star_rating = 4;
+  CHECK(repository.update_patch_metadata(latest_path, metadata));
+
+  repository.refresh();
+  container = find_entry(repository.tree(), *package_path);
+  CHECK(container != nullptr);
+  CHECK(container->children.size() == 3);
+  CHECK(container->children.front().metadata.has_value());
+  CHECK(container->children.front().metadata->star_rating == 4);
+
+  patches::FilesystemPatchStorage storage(file_system, writable, "cache",
+                                          /*writable=*/true,
+                                          /*enable_metadata=*/false);
+  std::vector<patches::PatchEntry> tree;
+  storage.append_entries(tree);
+  CHECK(storage.container_parse_count_for_testing() == 1);
+  tree.clear();
+  storage.append_entries(tree);
+  CHECK(storage.container_parse_count_for_testing() == 1);
+
+  patch.name = "fourth";
+  CHECK(formats::ginpkg::save_patch(writable, patch, "versions").has_value());
+  repository.refresh();
+  container = find_entry(repository.tree(), *package_path);
+  CHECK(container != nullptr);
+  CHECK(container->children.size() == 4);
+  CHECK(container->children.front().name == "fourth (Latest)");
+
+  tree.clear();
+  storage.append_entries(tree);
+  CHECK(storage.container_parse_count_for_testing() == 2);
+  container = find_entry(tree, *package_path);
+  CHECK(container != nullptr);
+  CHECK(container->children.size() == 4);
+}
+
 } // namespace
 
 int main() {
@@ -95,6 +188,8 @@ int main() {
 
   test_writable_storage_deletes_patch(root);
   test_read_only_storage_refuses_delete(root);
+  test_duplicate_save_requires_overwrite(root);
+  test_container_parse_cache_invalidates_on_change(root);
 
   fs::remove_all(root);
   std::cout << "All patch repository delete tests passed\n";

@@ -96,6 +96,8 @@ public:
    */
   SaveResult save_current_patch(std::string_view preferred_extension = {});
   SaveResult save_current_patch_as(std::string_view preferred_extension = {});
+  SaveResult
+  save_current_patch_as_forced(std::string_view preferred_extension = {});
   std::optional<SaveFormatInfo>
   find_save_format(const std::string &extension) const;
   std::vector<SaveFormatInfo> save_formats() const;
@@ -135,6 +137,8 @@ public:
   const char *save_label_for(bool is_user_patch) const;
 
 private:
+  SaveResult save_current_patch_as_impl(std::string_view preferred_extension,
+                                        bool overwrite);
   std::optional<std::filesystem::path> writable_source_folder() const;
 
   megatoy::system::PathService &directories_;
