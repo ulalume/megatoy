@@ -223,14 +223,19 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
     for (ym2612::ChannelIndex index : ym2612::all_channel_indices) {
       auto channel = device_.channel(index);
       channel.write_settings(command.channel);
-      channel.write_instrument(command.instrument);
+      const auto velocity = allocator_.active_velocity(index);
+      channel.write_instrument(
+          velocity ? command.instrument.clone_with_velocity(*velocity)
+                   : command.instrument);
     }
     break;
   }
 
   case Type::NoteOn: {
     const bool steal = steal_oldest_.load(std::memory_order_relaxed);
-    auto claim = allocator_.note_on(command.note, steal);
+    const uint8_t velocity =
+        use_velocity_.load(std::memory_order_relaxed) ? command.velocity : 127;
+    auto claim = allocator_.note_on(command.note, velocity, steal);
     if (!claim) {
       break;
     }
@@ -240,8 +245,6 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
 
     auto channel = device_.channel(claim->channel);
     channel.write_frequency(command.note);
-    const uint8_t velocity =
-        use_velocity_.load(std::memory_order_relaxed) ? command.velocity : 127;
     const auto instrument = current_instrument_.clone_with_velocity(velocity);
     channel.write_instrument(instrument);
     channel.write_key_on(

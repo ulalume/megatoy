@@ -34,7 +34,8 @@ public:
 
   bool is_note_active(const ym2612::Note &note) const;
   std::optional<ChannelClaim> note_on(const ym2612::Note &note,
-                                      bool allow_voice_steal);
+                                      uint8_t velocity, bool allow_voice_steal);
+  std::optional<uint8_t> active_velocity(ym2612::ChannelIndex channel) const;
   bool note_off(const ym2612::Note &note, ym2612::Device &device);
   void release_all(ym2612::Device &device);
 
@@ -51,6 +52,7 @@ private:
 
   std::array<bool, 6> channel_key_on_;
   std::array<std::optional<ym2612::Note>, 6> channel_to_note_;
+  std::array<uint8_t, 6> channel_velocity_{};
   std::array<uint64_t, 6> channel_order_{};
   uint64_t allocation_counter_ = 0;
   std::map<ym2612::Note, ym2612::ChannelIndex> note_to_channel_;

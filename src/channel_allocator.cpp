@@ -8,10 +8,9 @@ ChannelAllocator::ChannelAllocator() : channel_key_on_{} { publish(); }
 void ChannelAllocator::publish() {
   for (std::size_t index = 0; index < published_.size(); ++index) {
     const auto &note = channel_to_note_[index];
-    const uint16_t value =
-        (note && channel_key_on_[index])
-            ? static_cast<uint16_t>(note->midi_note() + 1)
-            : 0;
+    const uint16_t value = (note && channel_key_on_[index])
+                               ? static_cast<uint16_t>(note->midi_note() + 1)
+                               : 0;
     published_[index].store(value, std::memory_order_release);
   }
 }
@@ -21,8 +20,8 @@ std::vector<ym2612::Note> ChannelAllocator::published_notes() const {
   for (const auto &slot : published_) {
     const uint16_t value = slot.load(std::memory_order_acquire);
     if (value != 0) {
-      notes.push_back(ym2612::Note::from_midi_note(
-          static_cast<uint8_t>(value - 1)));
+      notes.push_back(
+          ym2612::Note::from_midi_note(static_cast<uint8_t>(value - 1)));
     }
   }
   return notes;
@@ -51,7 +50,8 @@ bool ChannelAllocator::is_note_active(const ym2612::Note &note) const {
 }
 
 std::optional<ChannelAllocator::ChannelClaim>
-ChannelAllocator::note_on(const ym2612::Note &note, bool allow_voice_steal) {
+ChannelAllocator::note_on(const ym2612::Note &note, uint8_t velocity,
+                          bool allow_voice_steal) {
   if (is_note_active(note))
     return std::nullopt;
 
@@ -85,11 +85,21 @@ ChannelAllocator::note_on(const ym2612::Note &note, bool allow_voice_steal) {
   auto channel = ym2612::all_channel_indices[selected_index];
   channel_key_on_[selected_index] = true;
   channel_to_note_[selected_index] = note;
+  channel_velocity_[selected_index] = velocity;
   note_to_channel_[note] = channel;
   channel_order_[selected_index] = ++allocation_counter_;
 
   publish();
   return ChannelClaim{channel, replaced_note};
+}
+
+std::optional<uint8_t>
+ChannelAllocator::active_velocity(ym2612::ChannelIndex channel) const {
+  const auto index = static_cast<uint8_t>(channel);
+  if (!channel_key_on_[index]) {
+    return std::nullopt;
+  }
+  return channel_velocity_[index];
 }
 
 bool ChannelAllocator::note_off(const ym2612::Note &note,
@@ -105,6 +115,7 @@ bool ChannelAllocator::note_off(const ym2612::Note &note,
   auto channel_idx = static_cast<uint8_t>(channel);
   channel_key_on_[channel_idx] = false;
   channel_to_note_[channel_idx].reset();
+  channel_velocity_[channel_idx] = 0;
   note_to_channel_.erase(it);
 
   publish();
@@ -117,6 +128,7 @@ void ChannelAllocator::release_all(ym2612::Device &device) {
     auto channel_idx = static_cast<uint8_t>(channel);
     channel_key_on_[channel_idx] = false;
     channel_to_note_[channel_idx].reset();
+    channel_velocity_[channel_idx] = 0;
     channel_order_[channel_idx] = 0;
   }
   note_to_channel_.clear();
