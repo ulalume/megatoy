@@ -103,6 +103,7 @@ void PatchRepository::refresh() {
   }
 
   cache_initialized_ = true;
+  ++revision_;
 }
 
 const std::vector<PatchEntry> &PatchRepository::tree() const {

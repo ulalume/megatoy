@@ -180,6 +180,27 @@ void test_container_parse_cache_invalidates_on_change(const fs::path &root) {
   CHECK(container->children.size() == 4);
 }
 
+void test_repository_revision_tracks_refresh(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto writable = root / "revision";
+  fs::create_directories(writable);
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(writable));
+  patches::PatchRepository repository(file_system, workspace);
+  const auto initial = repository.revision();
+
+  CHECK(!repository.sync_workspace());
+  CHECK(repository.revision() == initial);
+  (void)repository.tree();
+  CHECK(repository.revision() == initial);
+
+  repository.refresh();
+  CHECK(repository.revision() > initial);
+  const auto after_refresh = repository.revision();
+  CHECK(repository.revision() == after_refresh);
+}
+
 } // namespace
 
 int main() {
@@ -192,6 +213,7 @@ int main() {
   test_read_only_storage_refuses_delete(root);
   test_duplicate_save_requires_overwrite(root);
   test_container_parse_cache_invalidates_on_change(root);
+  test_repository_revision_tracks_refresh(root);
 
   fs::remove_all(root);
   std::cout << "All patch repository delete tests passed\n";

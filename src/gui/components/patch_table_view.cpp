@@ -127,6 +127,37 @@ struct PendingEdits {
   }
 };
 
+struct PatchTableCache {
+  const patches::PatchRepository *repository = nullptr;
+  std::uint64_t repository_revision = 0;
+  std::string search_query;
+  int star_filter = 0;
+  TableSortColumn sort_column = TableSortColumn::Name;
+  SortOrder sort_order = SortOrder::Ascending;
+  std::vector<const patches::PatchEntry *> rows;
+
+  const std::vector<const patches::PatchEntry *> &
+  get(PatchSelectorContext &context) {
+    const auto revision = context.repository.revision();
+    const auto column = context.get_sort_column();
+    const auto order = context.get_sort_order();
+    if (repository != &context.repository || repository_revision != revision ||
+        search_query != context.prefs.metadata_search_query ||
+        star_filter != context.prefs.metadata_star_filter ||
+        sort_column != column || sort_order != order) {
+      repository = &context.repository;
+      repository_revision = revision;
+      search_query = context.prefs.metadata_search_query;
+      star_filter = context.prefs.metadata_star_filter;
+      sort_column = column;
+      sort_order = order;
+      rows = filtered_patches(context);
+      sort_patches(rows, context);
+    }
+    return rows;
+  }
+};
+
 patches::PatchMetadata prepare_metadata(PatchSelectorContext &context,
                                         const patches::PatchEntry &entry) {
   patches::PatchMetadata metadata =
@@ -216,12 +247,10 @@ bool render_category_cell(PatchSelectorContext &context,
 } // namespace
 
 void render_patch_table(PatchSelectorContext &context) {
-  auto patches = filtered_patches(context);
-
+  static PatchTableCache cache;
   static PendingEdits edits;
+  const auto &patches = cache.get(context);
   edits.drop_stale(patches);
-
-  sort_patches(patches, context);
 
   const std::string &current_selection_path =
       context.session.current_patch_selection_path();

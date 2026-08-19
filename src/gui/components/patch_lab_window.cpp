@@ -411,16 +411,17 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     if (ImGui::BeginTabBar("##Patch Lab Operators",
                            ImGuiTabBarFlags_SaveSettings)) {
       auto &repository = context.session.repository();
-      auto entries = build_entry_list(repository);
       if (ImGui::BeginTabItem(ICON_FA_DICE " Random")) {
         render_random_section(context, state);
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem(ICON_FA_SHUFFLE " Mix")) {
+        const auto entries = build_entry_list(repository);
         render_merge_section(context, state, entries);
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem(ICON_FA_FLASK_VIAL " Morph")) {
+        const auto entries = build_entry_list(repository);
         render_morph_section(context, state, entries);
         ImGui::EndTabItem();
       }
