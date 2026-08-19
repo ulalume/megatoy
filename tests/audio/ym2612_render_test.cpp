@@ -169,9 +169,9 @@ void test_idle_settles_to_digital_silence() {
 
   engine.render(kSampleRate / 2 * static_cast<uint32_t>(sizeof(int16_t)),
                 pcm.data());
-  int16_t peak = 0;
+  int peak = 0;
   for (size_t i = 0; i < static_cast<size_t>(kSampleRate) / 2; ++i) {
-    peak = std::max<int16_t>(peak, static_cast<int16_t>(std::abs(pcm[i])));
+    peak = std::max(peak, std::abs(static_cast<int>(pcm[i])));
   }
   CHECK(peak <= 1);
 }
