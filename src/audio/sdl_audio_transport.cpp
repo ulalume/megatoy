@@ -39,6 +39,16 @@ bool SdlAudioTransport::start(std::uint32_t sample_rate,
     owns_audio_subsystem_ = true;
   }
 
+  // Without this hint SDL picks 1024-frame periods, and its macOS backend
+  // queues three of them pre-filled with silence -- a permanent ~46 ms of
+  // pipeline ahead of every rendered note. 384 keeps the period above the
+  // 15 ms threshold where that backend doubles the buffer count (256 would
+  // land in the six-buffer regime and be WORSE), cutting mean note latency
+  // from ~58 ms to ~30 ms at 44.1 kHz. Plain SetHint keeps NORMAL priority,
+  // so the SDL_AUDIO_DEVICE_SAMPLE_FRAMES environment variable still
+  // overrides it for tuning.
+  SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "384");
+
   SDL_AudioSpec desired{};
   desired.freq = static_cast<int>(effective_sample_rate);
   desired.channels = 2;
