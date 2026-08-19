@@ -14,11 +14,12 @@ Module["preRun"] = Module["preRun"] || [];
 Module["preRun"].push(function () {
   var root = "/megatoy";
 
-  try {
-    FS.mkdir(root);
-  } catch (e) {
-    // Already present when the runtime is re-initialized; not a problem.
-    if (!e || e.errno !== ERRNO_CODES.EEXIST) {
+  // ERRNO_CODES is not exported in optimized builds, so avoid a symbolic
+  // EEXIST check by testing the path before mkdir.
+  if (!FS.analyzePath(root).exists) {
+    try {
+      FS.mkdir(root);
+    } catch (e) {
       console.error("megatoy: could not create " + root, e);
       return;
     }
@@ -30,6 +31,7 @@ Module["preRun"].push(function () {
     // reload immediately after the operation cannot outrun persistence.
     FS.mount(IDBFS, { autoPersist: true }, root);
   } catch (e) {
+    Module.__megatoyStorageLoadFailed = true;
     console.error(
       "megatoy: persistent storage unavailable, this session will not be saved",
       e
@@ -40,7 +42,13 @@ Module["preRun"].push(function () {
   addRunDependency("megatoy-idbfs");
   FS.syncfs(true, function (err) {
     if (err) {
+      Module.__megatoyStorageLoadFailed = true;
       console.error("megatoy: could not load persistent storage", err);
+      try {
+        FS.unmount(root);
+      } catch (e) {
+        console.error("megatoy: could not detach persistent storage", e);
+      }
     }
     removeRunDependency("megatoy-idbfs");
   });

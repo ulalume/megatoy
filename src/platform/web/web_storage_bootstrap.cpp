@@ -406,6 +406,23 @@ std::filesystem::path default_workspace_folder() {
 
 bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
                          const std::filesystem::path &storage_root) {
+  if (storage_load_failed()) {
+    megatoy::status::error(
+        "Could not read browser storage -- running without saving. Your "
+        "stored patches are untouched; reload to retry.");
+    if (storage_root.empty()) {
+      return false;
+    }
+
+    std::error_code ec;
+    const auto home = storage_root / kDefaultFolderName;
+    std::filesystem::create_directories(home, ec);
+    if (ec) {
+      return false;
+    }
+    return workspace.contains(home) ? false : workspace.add(home);
+  }
+
   if (storage_root.empty()) {
     return false;
   }

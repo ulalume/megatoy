@@ -6,6 +6,9 @@
 
 namespace platform::web {
 
+/// True when browser storage could not be populated at startup.
+bool storage_load_failed();
+
 /// Flush browser filesystem mutations to IndexedDB after a short debounce.
 void request_storage_persist();
 
