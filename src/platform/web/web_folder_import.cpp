@@ -10,6 +10,8 @@
 
 namespace platform::web {
 
+EM_JS_DEPS(megatoy_folder_import, "$stringToNewUTF8");
+
 namespace {
 
 // The JS side owns the callback pointer until it fires exactly once.
@@ -271,8 +273,14 @@ EM_JS(void, megatoy_install_drop_import_js, (const char *destination), {
           report(false, entry.name, unique, written, "" + e);
           continue;
         }
-        await new Promise(function(res) { FS.syncfs(false, res); });
-        report(true, entry.name, unique, written, "");
+        var syncError = await new Promise(function(res) {
+          FS.syncfs(false, function(err) { res(err); });
+        });
+        if (syncError) {
+          report(false, entry.name, unique, written, "" + syncError);
+        } else {
+          report(true, entry.name, unique, written, "");
+        }
       }
     })();
   }, true);

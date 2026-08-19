@@ -18,6 +18,7 @@
 #include "history/snapshot_entry.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
+#include "patches/filename_utils.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_storage_persistence.hpp"
@@ -26,6 +27,7 @@
 #include "workspace/path_policy.hpp"
 #endif
 #include <cassert>
+#include <chrono>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -61,7 +63,6 @@ struct PatchHistoryActions {
               [](AppContext &context,
                  const patches::PatchSession::PatchSnapshot &snapshot) {
                 context.services.patch_session.restore_snapshot(snapshot);
-                context.services.patch_session.apply_patch_to_audio();
               });
         });
   }
@@ -214,6 +215,44 @@ void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
       });
 }
 
+void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
+  auto &session = ctx.services.patch_session;
+  if (!session.repository().can_delete_patch(entry)) {
+    return;
+  }
+
+  ctx.ui_state().text_prompt_state.request(
+      "Rename Patch", "Filename", entry.full_path.stem().string(), "Rename",
+      [&ctx, entry](const std::string &new_stem) {
+        if (!ctx.services.patch_session.rename_patch(entry, new_stem)) {
+          megatoy::status::error("Could not rename \"" + entry.name + "\".");
+          return;
+        }
+        megatoy::status::success("Renamed to \"" + new_stem + "\".");
+      },
+      [entry](const std::string &new_stem) {
+        if (new_stem.empty()) {
+          return std::string("Filename cannot be empty.");
+        }
+        if (patches::sanitize_filename(new_stem) != new_stem) {
+          return std::string("Filename contains invalid characters.");
+        }
+
+        const auto target = entry.full_path.parent_path() /
+                            (new_stem + entry.full_path.extension().string());
+        std::error_code error;
+        if (!std::filesystem::exists(target, error)) {
+          return error ? std::string("Could not check the target filename.")
+                       : std::string{};
+        }
+        if (std::filesystem::equivalent(entry.full_path, target, error) &&
+            !error) {
+          return std::string{};
+        }
+        return std::string("A file with that name already exists.");
+      });
+}
+
 MainMenuContext make_main_menu_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
@@ -242,7 +281,8 @@ void render_save_export_popup_host(AppContext &ctx) {
   ImGui::SetNextWindowSize(ImVec2(0, 0));
   if (ImGui::Begin("##save_export_popup_host", nullptr, flags)) {
     render_save_export_popups(ctx.services.patch_session,
-                              ctx.app_state().ui_state().save_export_state);
+                              ctx.app_state().ui_state().save_export_state,
+                              ctx.app_state().ui_state().text_prompt_state);
   }
   ImGui::End();
 }
@@ -265,6 +305,7 @@ ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
   auto patch_actions_facade = PatchActions{ctx};
   return {ui_state.confirmation_state,
           ui_state.danger_confirmation_state,
+          ui_state.text_prompt_state,
           ui_state.drop_state,
           [patch_actions_facade](const patches::PatchEntry &entry) {
             patch_actions_facade.load(entry);
@@ -283,7 +324,10 @@ PatchEditorContext make_patch_editor_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
   auto patch_history = PatchHistoryActions{ctx};
-  return {ctx.services.patch_session, ui_state.prefs, ui_state.envelope_states,
+  return {ctx.services.patch_session,
+          ui_state.prefs,
+          ui_state.envelope_states,
+          ui_state.text_prompt_state,
           [patch_history](const std::string &label,
                           const std::string &merge_key, const ym2612::Patch &) {
             patch_history.begin_snapshot(label, merge_key);
@@ -346,6 +390,9 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       },
       [&ctx](const std::filesystem::path &path) {
         request_workspace_folder_removal(ctx, path);
+      },
+      [&ctx](const patches::PatchEntry &entry) {
+        request_patch_rename(ctx, entry);
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_deletion(ctx, entry);
@@ -463,6 +510,15 @@ void render_all(AppContext &ctx) {
   static FrameContexts contexts(ctx);
   // The cache is only valid for the AppContext it captured.
   assert(contexts.owner == &ctx);
+
+  static auto next_workspace_refresh = std::chrono::steady_clock::time_point{};
+  const auto now = std::chrono::steady_clock::now();
+  if (now >= next_workspace_refresh) {
+    next_workspace_refresh = now + std::chrono::seconds(2);
+    if (ctx.services.preference_manager.refresh_workspace_availability()) {
+      ctx.services.patch_session.sync_workspace();
+    }
+  }
 
   // Per-frame values; everything else in the contexts is stable references.
   contexts.patch_selector.workspace_is_empty =

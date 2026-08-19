@@ -7,6 +7,10 @@
 namespace platform::web {
 
 // clang-format off
+EM_JS(bool, megatoy_storage_load_failed_js, (), {
+  return Module.__megatoyStorageLoadFailed === true;
+});
+
 EM_JS(void, megatoy_request_storage_persist_js, (), {
   if (Module.__megatoyStoragePersistTimer) {
     clearTimeout(Module.__megatoyStoragePersistTimer);
@@ -22,7 +26,13 @@ EM_JS(void, megatoy_request_storage_persist_js, (), {
 });
 // clang-format on
 
-void request_storage_persist() { megatoy_request_storage_persist_js(); }
+bool storage_load_failed() { return megatoy_storage_load_failed_js(); }
+
+void request_storage_persist() {
+  if (!storage_load_failed()) {
+    megatoy_request_storage_persist_js();
+  }
+}
 
 } // namespace platform::web
 

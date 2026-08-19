@@ -426,6 +426,11 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     if (!ui_prefs.use_velocity) {
       ImGui::TextWrapped("Notes play at full velocity.");
     }
+    ImGui::SliderInt("Velocity sensitivity",
+                     &ui_prefs.velocity_sensitivity_depth, 0, 100, "%d%%");
+
+    ImGui::Checkbox("Use pitch bend", &ui_prefs.use_pitch_bend);
+    ImGui::Checkbox("Use mod wheel (vibrato)", &ui_prefs.use_mod_wheel);
 
     ImGui::Checkbox("Steal oldest note when all 6 channels are busy",
                     &ui_prefs.steal_oldest_note_when_full);

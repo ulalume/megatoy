@@ -57,6 +57,7 @@ public:
 
   void refresh();
   const std::vector<PatchEntry> &tree() const;
+  std::uint64_t revision() const { return revision_; }
 
   bool load_patch(const PatchEntry &entry, ym2612::Patch &patch) const;
   bool has_directory_changed() const;
@@ -89,6 +90,8 @@ public:
 
   bool can_delete_patch(const PatchEntry &entry) const;
   bool delete_patch(const PatchEntry &entry);
+  bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
+  bool can_edit_metadata(const PatchEntry &entry) const;
 
   // Batch operations
   std::vector<PatchEntry> get_patches_by_metadata_filter(
@@ -118,6 +121,7 @@ private:
   bool show_builtin_presets_ = true;
   std::uint64_t synced_revision_ = 0;
   bool storages_built_ = false;
+  std::uint64_t revision_ = 0;
 
   std::vector<std::unique_ptr<PatchStorage>> storages_;
 };

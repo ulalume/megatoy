@@ -25,12 +25,12 @@ void Channel::write_instrument(const ChannelInstrument &instrument) {
   }
 }
 
-void Channel::write_frequency(const Note &note) {
-  const auto &[octave, key] = note;
-  const auto fnote = fnote_from_key(key);
+void Channel::write_frequency(const Note &note, float bend_semitones) {
+  const auto frequency = frequency_with_bend(note, bend_semitones);
   const auto &[value, port] = channel_index_to_value(index);
-  device.write(0xA4 + value, (octave << 3) | ((fnote >> 8) & 0x07), port);
-  device.write(0xA0 + value, fnote & 0xFF, port);
+  device.write(0xA4 + value,
+               (frequency.block << 3) | ((frequency.fnum >> 8) & 0x07), port);
+  device.write(0xA0 + value, frequency.fnum & 0xFF, port);
 }
 
 void Channel::write_key_on(bool op1 = true, bool op2 = true, bool op3 = true,

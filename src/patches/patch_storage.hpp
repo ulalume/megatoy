@@ -58,6 +58,11 @@ public:
   // File deletion is opt-in so read-only and non-filesystem storages refuse it.
   virtual bool can_delete_patch(const PatchEntry &) const { return false; }
   virtual bool delete_patch(const PatchEntry &) { return false; }
+  virtual bool rename_patch(const PatchEntry &, const std::string &) {
+    return false;
+  }
+
+  virtual bool can_edit_metadata(const PatchEntry &) const { return false; }
 
   // Optional metadata operations. Default is unsupported (for storages without
   // metadata persistence).

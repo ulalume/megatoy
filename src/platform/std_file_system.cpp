@@ -12,7 +12,18 @@ bool StdFileSystem::exists(const std::filesystem::path &path) const {
 
 bool StdFileSystem::is_directory(const std::filesystem::path &path) const {
   std::error_code ec;
-  return std::filesystem::is_directory(path, ec);
+  return is_directory(path, ec);
+}
+
+bool StdFileSystem::is_directory(const std::filesystem::path &path,
+                                 std::error_code &error) const {
+  const auto status = std::filesystem::status(path, error);
+  if (error == std::errc::no_such_file_or_directory ||
+      error == std::errc::not_a_directory) {
+    error.clear();
+    return false;
+  }
+  return !error && std::filesystem::is_directory(status);
 }
 
 bool StdFileSystem::create_directories(const std::filesystem::path &path) {
@@ -49,6 +60,13 @@ bool StdFileSystem::last_write_time(
     std::filesystem::file_time_type &result) const {
   std::error_code ec;
   result = std::filesystem::last_write_time(path, ec);
+  return !ec;
+}
+
+bool StdFileSystem::file_size(const std::filesystem::path &path,
+                              std::uintmax_t &result) const {
+  std::error_code ec;
+  result = std::filesystem::file_size(path, ec);
   return !ec;
 }
 

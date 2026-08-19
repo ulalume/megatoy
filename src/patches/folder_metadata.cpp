@@ -1,6 +1,7 @@
 #include "patches/folder_metadata.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <fstream>
@@ -57,7 +58,7 @@ PatchMetadata metadata_from_json(const std::string &path,
   PatchMetadata metadata;
   metadata.path = path;
   metadata.hash = j.value("hash", std::string{});
-  metadata.star_rating = j.value("star_rating", 0);
+  metadata.star_rating = std::clamp(j.value("star_rating", 0), 0, 5);
   metadata.category = j.value("category", std::string{});
   metadata.notes = j.value("notes", std::string{});
   metadata.created_at = j.value("created_at", std::string{});
@@ -117,11 +118,39 @@ bool FolderMetadataStore::load() {
   try {
     nlohmann::json j;
     file >> j;
+    // The normalization below may rewrite the sidecar; Windows refuses to
+    // replace a file that still has an open handle.
+    file.close();
     if (!j.contains("patches") || !j["patches"].is_object()) {
       return true;
     }
     for (const auto &[path, value] : j["patches"].items()) {
       entries_.emplace(path, metadata_from_json(path, value));
+    }
+
+    std::vector<PatchMetadata> normalized;
+    for (const auto &[path, metadata] : entries_) {
+      std::string lower_path = path;
+      std::transform(
+          lower_path.begin(), lower_path.end(), lower_path.begin(),
+          [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+      if (!lower_path.ends_with(".ginpkg")) {
+        continue;
+      }
+
+      const std::string latest_path = path + "/latest";
+      if (!entries_.contains(latest_path)) {
+        auto latest = metadata;
+        latest.path = latest_path;
+        normalized.push_back(std::move(latest));
+      }
+    }
+    for (auto &metadata : normalized) {
+      const std::string path = metadata.path;
+      entries_.emplace(path, std::move(metadata));
+    }
+    if (!normalized.empty() && !save()) {
+      return false;
     }
   } catch (const std::exception &e) {
     std::cerr << "Failed to read patch metadata at " << sidecar_path_ << ": "
@@ -232,6 +261,44 @@ bool FolderMetadataStore::remove(const std::string &relative_path) {
     return false;
   }
   return save();
+}
+
+bool FolderMetadataStore::rename_key_prefix(
+    const std::string &old_relative_path,
+    const std::string &new_relative_path) {
+  if (old_relative_path.empty() || new_relative_path.empty()) {
+    return false;
+  }
+  if (old_relative_path == new_relative_path) {
+    return true;
+  }
+
+  const std::string old_prefix = old_relative_path + "/";
+  std::vector<std::pair<std::string, PatchMetadata>> moved;
+  for (const auto &[key, metadata] : entries_) {
+    if (key == old_relative_path || key.rfind(old_prefix, 0) == 0) {
+      const std::string suffix = key.substr(old_relative_path.size());
+      auto renamed = metadata;
+      renamed.path = new_relative_path + suffix;
+      moved.emplace_back(key, std::move(renamed));
+    }
+  }
+  if (moved.empty()) {
+    return true;
+  }
+
+  const auto previous = entries_;
+  for (const auto &[old_key, metadata] : moved) {
+    entries_.erase(old_key);
+  }
+  for (auto &[old_key, metadata] : moved) {
+    entries_.insert_or_assign(metadata.path, std::move(metadata));
+  }
+  if (save()) {
+    return true;
+  }
+  entries_ = previous;
+  return false;
 }
 
 bool FolderMetadataStore::retain_only(

@@ -1,4 +1,5 @@
 #include "audio/audio_manager.hpp"
+#include "audio/audio_transport.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/folder_metadata.hpp"
 #include "patches/patch_session.hpp"
@@ -11,14 +12,18 @@
 #include "test_check.hpp"
 #include <SQLiteCpp/Database.h>
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -140,6 +145,79 @@ void test_fresh_and_legacy_default_workspace_migration(
   }
   CHECK(rewritten.at("legacy_workspace_migration").get<int>() == 1);
   CHECK(rewritten.at("workspace_folders").size() == 1);
+}
+
+void test_failed_preferences_load_does_not_complete_workspace_migration(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "corrupt-preferences-config";
+  std::filesystem::create_directories(config);
+  {
+    std::ofstream output(config / "preferences.json");
+    output << R"({"workspace_folders":[)";
+  }
+
+  // A later preference change may repair a file that failed to load. That
+  // save must preserve the pending marker so the next launch still probes the
+  // pre-workspace default folder.
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().empty());
+    CHECK(preferences.save_preferences());
+  }
+
+  nlohmann::json repaired;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> repaired;
+  }
+  CHECK(repaired.at("legacy_workspace_migration").get<int>() == 0);
+
+  const auto legacy_patches =
+      root / "home" / "Documents" / "megatoy" / "patches";
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().folders().size() == 1);
+    CHECK(preferences.workspace().folders()[0].path ==
+          std::filesystem::weakly_canonical(legacy_patches));
+  }
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> repaired;
+  }
+  CHECK(repaired.at("legacy_workspace_migration").get<int>() == 1);
+}
+
+void test_velocity_sensitivity_preference_round_trip(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "velocity-preference-config";
+  std::filesystem::remove_all(config);
+  std::filesystem::create_directories(config);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    auto ui = preferences.ui_preferences();
+    CHECK(ui.velocity_sensitivity_depth == 100);
+    ui.velocity_sensitivity_depth = 37;
+    preferences.set_ui_preferences(ui);
+  }
+
+  nlohmann::json stored;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> stored;
+  }
+  CHECK(stored.at("ui").at("velocity_sensitivity_depth").get<int>() == 37);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().velocity_sensitivity_depth == 37);
+  }
 }
 
 void test_legacy_data_directory_migration() {
@@ -379,6 +457,124 @@ struct TestEnvironment {
   ~TestEnvironment() { std::filesystem::remove_all(root); }
 };
 
+const patches::PatchEntry *
+find_patch_entry(const std::vector<patches::PatchEntry> &entries,
+                 const std::filesystem::path &path) {
+  for (const auto &entry : entries) {
+    if (entry.full_path == path) {
+      return &entry;
+    }
+    if (const auto *found = find_patch_entry(entry.children, path)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
+class TestAudioTransport final : public AudioTransport {
+public:
+  bool start(std::uint32_t, RenderCallback callback) override {
+    callback_ = std::move(callback);
+    active_ = true;
+    return true;
+  }
+
+  void stop() override {
+    active_ = false;
+    callback_ = {};
+  }
+
+  bool is_active() const override { return active_; }
+
+  float render_ac_peak(uint32_t frames) {
+    CHECK(callback_);
+    std::vector<int16_t> pcm(static_cast<size_t>(frames) * 2, 0);
+    const uint32_t bytes = frames * 2 * static_cast<uint32_t>(sizeof(int16_t));
+    CHECK(callback_(bytes, pcm.data()) == bytes);
+
+    double sum = 0.0;
+    for (int16_t sample : pcm) {
+      sum += sample;
+    }
+    const double mean = sum / static_cast<double>(pcm.size());
+
+    double peak = 0.0;
+    for (int16_t sample : pcm) {
+      peak = std::max(peak, std::abs(static_cast<double>(sample) - mean));
+    }
+    return static_cast<float>(peak / 32768.0);
+  }
+
+private:
+  RenderCallback callback_;
+  bool active_ = false;
+};
+
+ym2612::Patch make_session_audio_patch(uint8_t total_level) {
+  ym2612::Patch patch;
+  patch.name = "session audio";
+  patch.instrument.algorithm = 7;
+  for (auto &settings : patch.instrument.operators) {
+    settings.attack_rate = 31;
+    settings.release_rate = 15;
+    settings.total_level = total_level;
+    settings.multiple = 1;
+  }
+  return patch;
+}
+
+void test_session_applies_direct_patch_mutation(TestEnvironment &env) {
+  auto transport = std::make_unique<TestAudioTransport>();
+  auto *test_transport = transport.get();
+  AudioManager audio(std::move(transport));
+  patches::PatchSession session(env.directories, env.preferences, audio);
+  CHECK(audio.initialize(44100));
+
+  session.current_patch() = make_session_audio_patch(20);
+  CHECK(session.apply_patch_to_audio_if_changed());
+  CHECK(!session.apply_patch_to_audio_if_changed());
+
+  PreferenceManager::UIPreferences prefs{};
+  prefs.use_velocity = true;
+  prefs.steal_oldest_note_when_full = true;
+  CHECK(session.note_on(ym2612::Note::from_midi_note(60), 127, prefs));
+  const float before = test_transport->render_ac_peak(4410);
+
+  session.current_patch().instrument.operators[0].total_level = 110;
+  CHECK(session.apply_patch_to_audio_if_changed());
+  const float after = test_transport->render_ac_peak(4410);
+  CHECK(after < before * 0.9f);
+  CHECK(!session.apply_patch_to_audio_if_changed());
+
+  session.current_patch().name = "name only";
+  CHECK(!session.apply_patch_to_audio_if_changed());
+}
+
+void test_performance_commands_do_not_dirty_session(TestEnvironment &env) {
+  auto transport = std::make_unique<TestAudioTransport>();
+  auto *test_transport = transport.get();
+  AudioManager audio(std::move(transport));
+  patches::PatchSession session(env.directories, env.preferences, audio);
+  CHECK(audio.initialize(44100));
+
+  session.current_patch() = make_session_audio_patch(20);
+  session.mark_as_clean();
+  session.apply_patch_to_audio();
+  test_transport->render_ac_peak(64);
+  CHECK(!session.is_modified());
+  CHECK(!session.apply_patch_to_audio_if_changed());
+  const auto patch_before = session.current_patch();
+
+  CHECK(audio.submit(audio::AudioCommand::pitch_bend(12288)));
+  CHECK(audio.submit(audio::AudioCommand::mod_wheel(127)));
+  CHECK(audio.submit(audio::AudioCommand::mod_wheel(0)));
+  test_transport->render_ac_peak(64);
+
+  CHECK(session.current_patch() == patch_before);
+  CHECK(!session.is_modified());
+  CHECK(!session.apply_patch_to_audio_if_changed());
+}
+
 void test_workspace_folder_is_visible(TestEnvironment &env) {
   const auto &folders = env.preferences.workspace().folders();
   CHECK(folders.size() == 1);
@@ -406,6 +602,42 @@ void test_normal_workspace_folder_removal(const std::filesystem::path &root) {
   CHECK(preferences.add_workspace_folder(folder));
   CHECK(preferences.remove_workspace_folder(folder / "."));
   CHECK(preferences.workspace().empty());
+}
+
+void test_session_path_survives_workspace_relabel(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "path-relabel-config";
+  const auto first_input = root / "path-relabel-first" / "patches";
+  const auto second_input = root / "path-relabel-second" / "patches";
+  std::filesystem::create_directories(first_input);
+  std::filesystem::create_directories(second_input);
+  const auto first = std::filesystem::weakly_canonical(first_input);
+  const auto second = std::filesystem::weakly_canonical(second_input);
+
+  megatoy::system::PathService paths(fs, config);
+  PreferenceManager preferences(paths);
+  CHECK(preferences.add_workspace_folder(first));
+  CHECK(preferences.add_workspace_folder(second));
+  AudioManager audio;
+  patches::PatchSession session(paths, preferences, audio);
+  session.sync_workspace();
+
+  ym2612::Patch patch;
+  patch.name = "same name";
+  const auto saved = session.repository().save_patch_in(
+      second, patch, patch.name, /*overwrite=*/true, ".gin");
+  CHECK(saved.status == patches::SavePatchResult::Status::Success);
+  session.set_current_patch_path(saved.path);
+  const auto before = session.current_patch_path();
+  CHECK(session.repository().to_absolute_path(before) == saved.path);
+
+  CHECK(preferences.remove_workspace_folder(first));
+  session.sync_workspace();
+  CHECK(session.current_patch_path() != before);
+  CHECK(!session.current_patch_path().empty());
+  CHECK(session.repository().to_absolute_path(session.current_patch_path()) ==
+        saved.path);
 }
 
 // Saving must land in the workspace folder, and its metadata must end up in
@@ -535,6 +767,39 @@ void test_save_in_place_rules(TestEnvironment &env) {
   CHECK(!env.session.can_save_in_place());
 }
 
+void test_current_patch_rename_preserves_clean_identity(TestEnvironment &env) {
+  auto patch = env.session.current_patch();
+  patch.name = "embedded old name";
+  const auto source_path = env.patches_folder / "session-old.gin";
+  CHECK(patches::write_patch(patch, source_path));
+  env.session.repository().refresh();
+
+  const auto *found =
+      find_patch_entry(env.session.repository().tree(), source_path);
+  CHECK(found != nullptr);
+  const auto entry = *found;
+  ym2612::Patch loaded;
+  CHECK(env.session.repository().load_patch(entry, loaded));
+  env.session.set_current_patch(loaded, entry.relative_path);
+  CHECK(env.session.current_patch().name == "session-old");
+  CHECK(env.session.current_patch_is_user_patch());
+  CHECK(!env.session.is_modified());
+
+  env.session.current_patch().name = "format metadata changed";
+  CHECK(env.session.is_modified());
+  CHECK(env.session.current_patch_is_user_patch());
+  env.session.mark_as_clean();
+
+  CHECK(env.session.rename_patch(entry, "session-new"));
+  CHECK(!std::filesystem::exists(source_path));
+  CHECK(std::filesystem::exists(env.patches_folder / "session-new.gin"));
+  CHECK(std::filesystem::path(env.session.current_patch_path()).stem() ==
+        "session-new");
+  CHECK(env.session.current_patch().name == "session-new");
+  CHECK(env.session.capture_snapshot().original_patch.name == "session-new");
+  CHECK(!env.session.is_modified());
+}
+
 void test_patch_snapshot_roundtrip(TestEnvironment &env) {
   auto before = env.session.capture_snapshot();
   env.session.current_patch().name = "modified";
@@ -567,8 +832,8 @@ void test_note_allocation(TestEnvironment &env) {
 
 int main() {
   const UIPreferences default_ui_preferences;
-  CHECK(!default_ui_preferences.show_patch_editor);
-  CHECK(!default_ui_preferences.show_patch_selector);
+  CHECK(default_ui_preferences.show_patch_editor);
+  CHECK(default_ui_preferences.show_patch_selector);
 
   const auto migration_root = std::filesystem::temp_directory_path() /
                               "megatoy_workspace_migration_tests";
@@ -577,6 +842,9 @@ int main() {
   ScopedTestHome test_home(migration_root / "home");
 
   test_fresh_and_legacy_default_workspace_migration(migration_root);
+  test_failed_preferences_load_does_not_complete_workspace_migration(
+      migration_root);
+  test_velocity_sensitivity_preference_round_trip(migration_root);
   test_legacy_data_directory_migration();
   test_legacy_metadata_migration(migration_root);
   test_legacy_metadata_waits_for_custom_folder(migration_root);
@@ -585,7 +853,10 @@ int main() {
   std::filesystem::remove_all(migration_root / "home" / "Documents" /
                               "megatoy");
   test_normal_workspace_folder_removal(migration_root);
+  test_session_path_survives_workspace_relabel(migration_root);
   TestEnvironment env;
+  test_session_applies_direct_patch_mutation(env);
+  test_performance_commands_do_not_dirty_session(env);
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);
   test_workspace_folder_is_visible(env);
@@ -593,6 +864,7 @@ int main() {
   test_ginpkg_versions_appear_as_container_items(env);
   test_save_and_metadata_roundtrip(env);
   test_save_in_place_rules(env);
+  test_current_patch_rename_preserves_clean_identity(env);
 
   std::cout << "All subsystem tests passed\n";
   std::filesystem::remove_all(migration_root);

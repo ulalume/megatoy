@@ -81,6 +81,32 @@ void test_missing_folder_is_kept(const fs::path &root) {
   CHECK(reloaded.folders().size() == 2);
 }
 
+void test_refresh_recovers_folder_availability(const fs::path &root) {
+  const auto removable = root / "refresh-removable";
+  fs::create_directories(removable);
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(removable));
+  CHECK(workspace.folders()[0].available);
+  const auto after_add = workspace.revision();
+
+  fs::remove_all(removable);
+  CHECK(workspace.refresh());
+  CHECK(!workspace.folders()[0].available);
+  CHECK(!workspace.folders()[0].writable);
+  CHECK(workspace.revision() > after_add);
+
+  const auto after_removal = workspace.revision();
+  CHECK(!workspace.refresh());
+  CHECK(workspace.revision() == after_removal);
+
+  fs::create_directories(removable);
+  CHECK(workspace.refresh());
+  CHECK(workspace.folders()[0].available);
+  CHECK(workspace.folders()[0].writable);
+  CHECK(workspace.revision() > after_removal);
+}
+
 void test_owner_lookup(const fs::path &root) {
   megatoy::workspace::Workspace workspace;
   CHECK(workspace.add(root / "alpha"));
@@ -157,6 +183,7 @@ int main() {
   test_add_remove_and_dedupe(root);
   test_order_and_default_save_folder(root);
   test_missing_folder_is_kept(root);
+  test_refresh_recovers_folder_availability(root);
   test_owner_lookup(root);
   test_revision_tracks_changes(root);
   test_path_comparison_policy(root);

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "app_context.hpp"
-#include "core/status.hpp"
 #include "app_services.hpp"
 #include "app_state.hpp"
+#include "core/status.hpp"
 #include "history/history_manager.hpp"
 #include "history/snapshot_entry.hpp"
 #include "patches/patch_session.hpp"
@@ -41,12 +41,11 @@ inline bool load(AppContext &context, const patches::PatchEntry &patch_info) {
     return false;
   }
 
-  patch_session.current_patch() = loaded_patch;
-  patch_session.set_current_patch_path(
-      patch_info.source_relative_path.empty() ? patch_info.relative_path
-                                              : patch_info.source_relative_path);
+  patch_session.set_current_patch(loaded_patch,
+                                  patch_info.source_relative_path.empty()
+                                      ? patch_info.relative_path
+                                      : patch_info.source_relative_path);
   patch_session.set_current_patch_selection_path(patch_info.relative_path);
-  patch_session.apply_patch_to_audio();
 
   const auto after = patch_session.capture_snapshot();
   detail::record_change(context, "Load: " + patch_info.name, before, after);

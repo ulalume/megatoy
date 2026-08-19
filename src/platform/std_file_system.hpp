@@ -12,11 +12,15 @@ public:
 
   bool exists(const std::filesystem::path &path) const override;
   bool is_directory(const std::filesystem::path &path) const override;
+  bool is_directory(const std::filesystem::path &path,
+                    std::error_code &error) const override;
   bool create_directories(const std::filesystem::path &path) override;
   std::vector<DirectoryEntry>
   read_directory(const std::filesystem::path &path) const override;
   bool last_write_time(const std::filesystem::path &path,
                        std::filesystem::file_time_type &result) const override;
+  bool file_size(const std::filesystem::path &path,
+                 std::uintmax_t &result) const override;
   std::unique_ptr<std::istream>
   open_read(const std::filesystem::path &path) const override;
   std::unique_ptr<std::ostream> open_write(const std::filesystem::path &path,

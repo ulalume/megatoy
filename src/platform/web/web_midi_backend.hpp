@@ -28,8 +28,7 @@ public:
   void request_access() override;
 
   /// Called from JS the moment a MIDI message arrives.
-  void deliver(unsigned char status, unsigned char note,
-               unsigned char velocity);
+  void deliver(unsigned char status, unsigned char data1, unsigned char data2);
 
 private:
   void setup_js_state() const;

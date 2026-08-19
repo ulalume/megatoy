@@ -47,8 +47,8 @@ void render_tree_tab(PatchSelectorContext &context) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                          "No results for current filters");
     }
-    ImGui::EndChild();
   }
+  ImGui::EndChild();
 }
 
 } // namespace
@@ -62,6 +62,10 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
 
+  // Match the waveform panel: no tab bar while this window is docked alone.
+  ImGuiWindowClass window_class;
+  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
+  ImGui::SetNextWindowClass(&window_class);
   if (!ImGui::Begin(title, &prefs.show_patch_selector)) {
     ImGui::End();
     return;
@@ -95,6 +99,16 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     const auto folder = *context.pending_remove_folder;
     context.pending_remove_folder.reset();
     context.remove_folder(folder);
+  }
+
+  if (context.pending_menu_action) {
+    const auto action = *context.pending_menu_action;
+    context.pending_menu_action.reset();
+    if (action == PendingMenuAction::Refresh) {
+      context.repository.refresh();
+    } else if (context.save_current_patch) {
+      context.save_current_patch();
+    }
   }
 
   ImGui::End();

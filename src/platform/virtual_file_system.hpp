@@ -5,6 +5,7 @@
 #include <istream>
 #include <memory>
 #include <ostream>
+#include <system_error>
 #include <vector>
 
 namespace platform {
@@ -21,12 +22,16 @@ public:
 
   virtual bool exists(const std::filesystem::path &path) const = 0;
   virtual bool is_directory(const std::filesystem::path &path) const = 0;
+  virtual bool is_directory(const std::filesystem::path &path,
+                            std::error_code &error) const = 0;
   virtual bool create_directories(const std::filesystem::path &path) = 0;
   virtual std::vector<DirectoryEntry>
   read_directory(const std::filesystem::path &path) const = 0;
   virtual bool
   last_write_time(const std::filesystem::path &path,
                   std::filesystem::file_time_type &result) const = 0;
+  virtual bool file_size(const std::filesystem::path &path,
+                         std::uintmax_t &result) const = 0;
   virtual std::unique_ptr<std::istream>
   open_read(const std::filesystem::path &path) const = 0;
   virtual std::unique_ptr<std::ostream>

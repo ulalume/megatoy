@@ -5,6 +5,7 @@
 #include "platform/platform_config.hpp"
 
 #include <IconsFontAwesome7.h>
+#include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <imgui.h>
@@ -110,7 +111,7 @@ void entry_context_menu(PatchSelectorContext &context,
       const bool disabled = !context.session.is_modified();
       ImGui::BeginDisabled(disabled);
       if (ImGui::MenuItem(context.session.save_label_for(true))) {
-        context.save_current_patch();
+        context.pending_menu_action = PendingMenuAction::SaveCurrent;
       }
       ImGui::EndDisabled();
     }
@@ -140,8 +141,11 @@ void entry_context_menu(PatchSelectorContext &context,
     ImGui::Separator();
   }
 
-  if (context.delete_patch && context.repository.can_delete_patch(entry)) {
-    if (ImGui::MenuItem("Delete...")) {
+  if (context.repository.can_delete_patch(entry)) {
+    if (context.rename_patch && ImGui::MenuItem("Rename...")) {
+      context.rename_patch(entry);
+    }
+    if (context.delete_patch && ImGui::MenuItem("Delete...")) {
       context.delete_patch(entry);
     }
     ImGui::Separator();
@@ -159,7 +163,7 @@ void entry_context_menu(PatchSelectorContext &context,
   }
 
   if (ImGui::MenuItem("Refresh repository")) {
-    context.repository.refresh();
+    context.pending_menu_action = PendingMenuAction::Refresh;
   }
 
   ImGui::EndPopup();
@@ -182,10 +186,12 @@ void render_filter_bar(PatchSelectorContext &context) {
 
   ImGui::SameLine();
   ImGui::SetNextItemWidth(60);
+  prefs.metadata_star_filter = std::clamp(prefs.metadata_star_filter, 0, 5);
   ImGui::SliderInt("##Stars", &prefs.metadata_star_filter, 0, 5,
                    prefs.metadata_star_filter == 0
                        ? "Stars"
-                       : kStarLabels[prefs.metadata_star_filter].data());
+                       : kStarLabels[prefs.metadata_star_filter].data(),
+                   ImGuiSliderFlags_AlwaysClamp);
 
   ImGui::SameLine();
   const bool is_filtered =

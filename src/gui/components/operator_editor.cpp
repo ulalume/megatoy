@@ -149,12 +149,10 @@ void render_envelope(PatchEditorContext &context, ym2612::OperatorSettings &op,
 }
 
 // Helper function to render operator settings
-bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
+void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             ym2612::OperatorSettings &op, int op_index,
                             UIState::EnvelopeState &envelope_state,
                             bool space_for_feedback) {
-  bool setting_changed = false;
-
   const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
 
   ym2612::OperatorIndex op_enum = ym2612::all_operator_indices[op_index];
@@ -179,7 +177,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   bool operator_enable = op.enable;
   if (ImGui::Checkbox("##Operator Enable", &operator_enable)) {
     op.enable = operator_enable;
-    setting_changed = true;
   }
   track_patch_history(context, op_label + " Enable", key_prefix + ".op_enable");
 
@@ -200,7 +197,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     track_patch_history(context, "Operator 1 Feedback", "instrument.feedback");
     if (feedback_changed) {
       patch.instrument.feedback = static_cast<uint8_t>(feedback);
-      setting_changed = true;
     }
   } else if (space_for_feedback) {
     ImVec2 pos = ImGui::GetCursorPos();
@@ -211,7 +207,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   bool amplitude_mod = op.amplitude_modulation_enable;
   if (ImGui::Checkbox("Amplitude Modulation Enable", &amplitude_mod)) {
     op.amplitude_modulation_enable = amplitude_mod;
-    setting_changed = true;
   }
   track_patch_history(context, op_label + " Amplitude Modulation",
                       key_prefix + ".am_enable");
@@ -243,7 +238,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   bool ssg_enable = op.ssg_enable;
   if (ImGui::Checkbox("SSG EG Enable", &ssg_enable)) {
     op.ssg_enable = ssg_enable;
-    setting_changed = true;
   }
   track_patch_history(context, op_label + " SSG EG Enable",
                       key_prefix + ".ssg_enable");
@@ -257,7 +251,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                       key_prefix + ".ssg_type");
   if (ssg_type_changed) {
     op.ssg_type_envelope_control = static_cast<uint8_t>(ssg_type);
-    setting_changed = true;
   }
   if (!ssg_enable) {
     ImGui::EndDisabled();
@@ -277,7 +270,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                       key_prefix + ".key_scale");
   if (key_scale_changed) {
     op.key_scale = static_cast<uint8_t>(key_scale);
-    setting_changed = true;
   }
 
   // Multiple (0-15)
@@ -291,7 +283,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                       key_prefix + ".multiple");
   if (multiple_changed) {
     op.multiple = static_cast<uint8_t>(multiple);
-    setting_changed = true;
   }
 
   // Detune (0-7)
@@ -305,7 +296,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   if (detune_changed) {
     op.detune =
         static_cast<uint8_t>(formats::adapter::detune_from_linear(detune));
-    setting_changed = true;
   }
 
   if (column_layout) {
@@ -318,7 +308,6 @@ bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   ImGui::PopID();
-  return setting_changed;
 }
 
 } // namespace ui

@@ -32,6 +32,7 @@ public:
   bool remove_workspace_folder(const std::filesystem::path &path);
   bool workspace_folder_is_protected(const std::filesystem::path &path) const;
   bool reorder_workspace_folder(std::size_t from, std::size_t to);
+  bool refresh_workspace_availability();
 
   /**
    * Bring a folder of patches into the workspace.
@@ -89,6 +90,7 @@ private:
   megatoy::workspace::Workspace workspace_;
   std::filesystem::path last_save_directory_;
   bool show_builtin_presets_ = true;
+  bool legacy_workspace_migration_complete_ = false;
   bool legacy_metadata_migration_complete_ = false;
   std::unique_ptr<PreferenceStorage> storage_;
 

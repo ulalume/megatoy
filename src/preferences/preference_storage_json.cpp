@@ -148,9 +148,15 @@ public:
         if (ui.contains("use_velocity")) {
           data.ui_preferences.use_velocity = ui["use_velocity"].get<bool>();
         }
-        if (ui.contains("patch_search_query")) {
-          data.ui_preferences.patch_search_query =
-              ui["patch_search_query"].get<std::string>();
+        if (ui.contains("use_pitch_bend")) {
+          data.ui_preferences.use_pitch_bend = ui["use_pitch_bend"].get<bool>();
+        }
+        if (ui.contains("use_mod_wheel")) {
+          data.ui_preferences.use_mod_wheel = ui["use_mod_wheel"].get<bool>();
+        }
+        if (ui.contains("velocity_sensitivity_depth")) {
+          data.ui_preferences.velocity_sensitivity_depth =
+              std::clamp(ui["velocity_sensitivity_depth"].get<int>(), 0, 100);
         }
         if (ui.contains("patch_sort_column")) {
           data.ui_preferences.patch_sort_column =
@@ -216,7 +222,8 @@ public:
   bool save(const PreferenceData &data) override {
     try {
       nlohmann::json j;
-      j["legacy_workspace_migration"] = 1;
+      j["legacy_workspace_migration"] =
+          data.legacy_workspace_migration_complete ? 1 : 0;
       j["legacy_metadata_migration"] =
           data.legacy_metadata_migration_complete ? 1 : 0;
       nlohmann::json folders = nlohmann::json::array();
@@ -238,9 +245,12 @@ public:
       ui["show_patch_lab"] = data.ui_preferences.show_patch_lab;
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
       ui["use_velocity"] = data.ui_preferences.use_velocity;
+      ui["use_pitch_bend"] = data.ui_preferences.use_pitch_bend;
+      ui["use_mod_wheel"] = data.ui_preferences.use_mod_wheel;
+      ui["velocity_sensitivity_depth"] =
+          data.ui_preferences.velocity_sensitivity_depth;
       ui["steal_oldest_note_when_full"] =
           data.ui_preferences.steal_oldest_note_when_full;
-      ui["patch_search_query"] = data.ui_preferences.patch_search_query;
       ui["patch_sort_column"] = data.ui_preferences.patch_sort_column;
       ui["patch_sort_order"] = data.ui_preferences.patch_sort_order;
       ui["midi_keyboard_scale"] = data.ui_preferences.midi_keyboard_scale;

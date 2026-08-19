@@ -165,7 +165,8 @@ void apply_patch_result(PatchLabContext &context,
   }
 
   session.current_patch() = new_patch;
-  session.current_patch().name = before.name;
+  session.current_patch().name.clear();
+  session.set_current_patch_path({});
   session.apply_patch_to_audio();
 
   if (context.commit_history) {
@@ -411,16 +412,17 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     if (ImGui::BeginTabBar("##Patch Lab Operators",
                            ImGuiTabBarFlags_SaveSettings)) {
       auto &repository = context.session.repository();
-      auto entries = build_entry_list(repository);
       if (ImGui::BeginTabItem(ICON_FA_DICE " Random")) {
         render_random_section(context, state);
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem(ICON_FA_SHUFFLE " Mix")) {
+        const auto entries = build_entry_list(repository);
         render_merge_section(context, state, entries);
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem(ICON_FA_FLASK_VIAL " Morph")) {
+        const auto entries = build_entry_list(repository);
         render_morph_section(context, state, entries);
         ImGui::EndTabItem();
       }
@@ -430,13 +432,13 @@ void render_patch_lab(const char *title, PatchLabContext &context,
       }
       ImGui::EndTabBar();
     }
-    ImGui::EndChild();
   }
+  ImGui::EndChild();
   ImGui::SameLine();
   if (ImGui::BeginChild("##PatchLabResults", ImVec2(0, 0), true)) {
     render_result_list(context, state);
-    ImGui::EndChild();
   }
+  ImGui::EndChild();
 
   ImGui::End();
 }

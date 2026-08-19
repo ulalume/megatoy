@@ -149,7 +149,7 @@ std::vector<fs::path> Workspace::paths() const {
   return result;
 }
 
-void Workspace::refresh() {
+bool Workspace::refresh() {
   bool changed = false;
   for (auto &folder : folders_) {
     std::error_code ec;
@@ -164,6 +164,7 @@ void Workspace::refresh() {
   if (changed) {
     ++revision_;
   }
+  return changed;
 }
 
 } // namespace megatoy::workspace

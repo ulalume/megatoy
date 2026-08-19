@@ -71,8 +71,8 @@ Recommended external collections:
 ## Build Instructions
 
 ```bash
-# Clone repository (--recursive fetches the built-in preset patches)
-git clone --recursive https://github.com/ulalume/megatoy.git
+# Clone repository (the built-in preset patches are included)
+git clone https://github.com/ulalume/megatoy.git
 cd megatoy
 
 # Debug build
@@ -95,12 +95,6 @@ cmake --build build-release --config Release --parallel
 
 Alternatively, choose a new build directory name and run the normal two
 commands against that directory.
-
-If you already cloned without `--recursive`, run:
-
-```bash
-git submodule update --init
-```
 
 For distribution-specific notes on dependencies and audio drivers, see the Linux guide at [docs/BUILD_LINUX.md](docs/BUILD_LINUX.md).
 

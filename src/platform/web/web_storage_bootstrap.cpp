@@ -79,16 +79,11 @@ parse_legacy_library(const std::string &source) {
     }
 
     entry.patch = item.at("patch").get<ym2612::Patch>();
-    if (entry.patch.name.empty()) {
-      // GIN parsing falls back to the file stem for an empty patch name. Give
-      // both sides the same explicit name so semantic verification converges.
-      entry.patch.name = name;
-    }
-
     entry.filename_stem = patches::sanitize_filename(name);
     if (entry.filename_stem.empty()) {
       entry.filename_stem = "patch";
     }
+    entry.patch.name = entry.filename_stem;
     patches.push_back(std::move(entry));
   }
   return patches;
@@ -406,6 +401,23 @@ std::filesystem::path default_workspace_folder() {
 
 bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
                          const std::filesystem::path &storage_root) {
+  if (storage_load_failed()) {
+    megatoy::status::error(
+        "Could not read browser storage -- running without saving. Your "
+        "stored patches are untouched; reload to retry.");
+    if (storage_root.empty()) {
+      return false;
+    }
+
+    std::error_code ec;
+    const auto home = storage_root / kDefaultFolderName;
+    std::filesystem::create_directories(home, ec);
+    if (ec) {
+      return false;
+    }
+    return workspace.contains(home) ? false : workspace.add(home);
+  }
+
   if (storage_root.empty()) {
     return false;
   }
@@ -441,17 +453,19 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
   // Folders imported in an earlier session are still on disk but only
   // referenced from preferences. If preferences were cleared, re-adopt them so
   // the library is not silently invisible.
-  for (const auto &entry :
-       std::filesystem::directory_iterator(storage_root, ec)) {
-    if (ec) {
-      break;
-    }
-    if (!entry.is_directory() || workspace.contains(entry.path())) {
+  std::filesystem::directory_iterator entry(storage_root, ec);
+  const std::filesystem::directory_iterator end;
+  while (!ec && entry != end) {
+    std::error_code type_error;
+    const bool is_directory = entry->is_directory(type_error);
+    if (type_error || !is_directory || workspace.contains(entry->path())) {
+      entry.increment(ec);
       continue;
     }
-    if (workspace.add(entry.path())) {
+    if (workspace.add(entry->path())) {
       changed = true;
     }
+    entry.increment(ec);
   }
 
   if (changed || migrated > 0 || !existed) {

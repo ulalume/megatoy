@@ -14,6 +14,8 @@ enum class TableSortColumn { Name, Category, StarRating, Format, Path };
 
 enum class SortOrder { Ascending, Descending };
 
+enum class PendingMenuAction { Refresh, SaveCurrent };
+
 struct PatchSelectorContext {
   patches::PatchRepository &repository;
   patches::PatchSession &session;
@@ -29,8 +31,10 @@ struct PatchSelectorContext {
   std::function<void()> add_folder;
   std::function<bool(const std::filesystem::path &)> folder_is_protected;
   std::function<void(const std::filesystem::path &)> remove_folder;
+  std::function<void(const patches::PatchEntry &)> rename_patch;
   std::function<void(const patches::PatchEntry &)> delete_patch;
   std::optional<std::filesystem::path> pending_remove_folder;
+  std::optional<PendingMenuAction> pending_menu_action;
 
   TableSortColumn get_sort_column() const {
     return static_cast<TableSortColumn>(prefs.patch_sort_column);

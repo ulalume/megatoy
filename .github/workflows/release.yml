@@ -79,6 +79,8 @@ jobs:
         run: cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" ${{ matrix.cmake_flags }}
       - name: Build
         run: cmake --build "$BUILD_DIR" --config $BUILD_TYPE --parallel
+      - name: Test
+        run: ctest --test-dir "$BUILD_DIR" --output-on-failure
       - name: Install
         run: cmake --install "$BUILD_DIR" --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
       - name: Package Artifact
@@ -137,6 +139,8 @@ jobs:
         run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
       - name: Build
         run: cmake --build build-release --config $BUILD_TYPE --parallel
+      - name: Test
+        run: ctest --test-dir build-release --output-on-failure
       - name: Install
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
       - name: Package Artifact
@@ -179,6 +183,8 @@ jobs:
         run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
       - name: Build
         run: cmake --build build-release --config $BUILD_TYPE --parallel
+      - name: Test
+        run: ctest --test-dir build-release --output-on-failure
       - name: Install
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
       - name: Package Artifact
@@ -235,6 +241,9 @@ jobs:
       - name: Build
         shell: bash
         run: cmake --build build-release --config $BUILD_TYPE --parallel
+      - name: Test
+        shell: bash
+        run: ctest --test-dir build-release --build-config $BUILD_TYPE --output-on-failure
       - name: Install
         shell: bash
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"

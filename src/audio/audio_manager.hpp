@@ -2,7 +2,9 @@
 
 #include "audio/audio_engine.hpp"
 #include "audio/audio_transport.hpp"
+#include "audio/performance.hpp"
 #include "ym2612/patch.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 
@@ -59,8 +61,26 @@ public:
     return engine_.submit_from_midi(command);
   }
 
-  void set_note_options(bool use_velocity, bool steal_oldest) {
-    engine_.set_note_options(use_velocity, steal_oldest);
+  void set_note_options(bool use_velocity, int velocity_sensitivity_depth,
+                        bool steal_oldest) {
+    engine_.set_note_options(
+        use_velocity,
+        static_cast<uint8_t>(std::clamp(velocity_sensitivity_depth, 0, 100)),
+        steal_oldest);
+  }
+
+  void set_performance_options(bool pitch_bend, bool mod_wheel) {
+    engine_.set_performance_options(pitch_bend, mod_wheel);
+    // Disabling must not freeze a held bend or a raised wheel: push the
+    // neutral value through the normal command path so the audio thread
+    // rewrites the affected channels.
+    if (!pitch_bend) {
+      engine_.submit(audio::AudioCommand::pitch_bend(
+          audio::performance::kPitchBendCenter));
+    }
+    if (!mod_wheel) {
+      engine_.submit(audio::AudioCommand::mod_wheel(0));
+    }
   }
 
   /// Note state, safe to read from the UI thread.

@@ -2,6 +2,12 @@
 #include <algorithm>
 #include <iostream>
 
+namespace {
+constexpr std::size_t kReservedPeriods = 4;
+constexpr std::size_t kEngineChannels = 2;
+constexpr std::size_t kEngineFrameSize = kEngineChannels * sizeof(std::int16_t);
+} // namespace
+
 WebAudioTransport::WebAudioTransport()
     : audio_stream_(nullptr), owns_audio_subsystem_(false), callback_(),
       temp_buffer_(), initialized_(false), frame_size_(0), sample_rate_(0) {}
@@ -59,6 +65,16 @@ bool WebAudioTransport::start(std::uint32_t sample_rate,
 
   frame_size_ = SDL_AUDIO_FRAMESIZE(desired);
   sample_rate_ = sample_rate != 0 ? sample_rate : desired.freq;
+  SDL_AudioSpec device_format{};
+  int sample_frames = 0;
+  if (SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(audio_stream_),
+                               &device_format, &sample_frames) &&
+      sample_frames > 0) {
+    const std::size_t reserved_frames =
+        static_cast<std::size_t>(sample_frames) * kReservedPeriods;
+    temp_buffer_.reserve(reserved_frames * frame_size_);
+    int_buffer_.reserve(reserved_frames * kEngineChannels);
+  }
 
   if (!SDL_SetAudioStreamGetCallback(audio_stream_, stream_callback, this)) {
     std::cerr << "Failed to set audio stream callback: " << SDL_GetError()
@@ -128,40 +144,38 @@ void WebAudioTransport::handle_stream_callback(SDL_AudioStream *stream,
     return;
   }
 
-  const std::size_t samples_requested =
-      static_cast<std::size_t>(required) / sizeof(int16_t);
+  const std::size_t frames_requested =
+      static_cast<std::size_t>(required) / frame_size_;
+  if (frames_requested == 0) {
+    return;
+  }
+  const std::size_t samples_requested = frames_requested * kEngineChannels;
   if (int_buffer_.size() < samples_requested) {
     int_buffer_.resize(samples_requested);
   }
 
-  std::uint32_t produced =
-      callback_(static_cast<std::uint32_t>(samples_requested * sizeof(int16_t)),
+  const std::uint32_t produced =
+      callback_(static_cast<std::uint32_t>(frames_requested * kEngineFrameSize),
                 static_cast<void *>(int_buffer_.data()));
   if (produced == 0) {
     return;
   }
 
-  const std::size_t produced_samples =
-      static_cast<std::size_t>(produced) / sizeof(int16_t);
-  if (produced_samples < 2) {
+  const std::size_t frames = std::min(
+      static_cast<std::size_t>(produced) / kEngineFrameSize, frames_requested);
+  if (frames == 0) {
     return;
   }
 
-  const std::size_t frames = produced_samples / 2;
-  temp_buffer_.resize(frames * sizeof(float) * 2);
+  const std::size_t produced_samples = frames * kEngineChannels;
+  temp_buffer_.resize(produced_samples * sizeof(float));
   float *out = reinterpret_cast<float *>(temp_buffer_.data());
   const int16_t *in = int_buffer_.data();
 
-#if defined(__EMSCRIPTEN__) && defined(__wasm_simd128__)
   for (std::size_t i = 0; i < produced_samples; ++i) {
     out[i] = static_cast<float>(in[i]) / 32768.0f;
   }
-#else
-  for (std::size_t i = 0; i < produced_samples; ++i) {
-    out[i] = static_cast<float>(in[i]) / 32768.0f;
-  }
-#endif
 
   SDL_PutAudioStreamData(stream, temp_buffer_.data(),
-                         static_cast<int>(frames * sizeof(float) * 2));
+                         static_cast<int>(produced_samples * sizeof(float)));
 }

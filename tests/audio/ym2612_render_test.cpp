@@ -53,6 +53,27 @@ ym2612::Patch make_percussive_patch() {
   return patch;
 }
 
+ym2612::Patch make_all_carrier_patch(uint8_t total_level) {
+  ym2612::Patch patch;
+  patch.name = "all carriers";
+  patch.instrument.algorithm = 7;
+  for (auto &settings : patch.instrument.operators) {
+    settings.attack_rate = 31;
+    settings.decay_rate = 0;
+    settings.sustain_rate = 0;
+    settings.sustain_level = 0;
+    settings.release_rate = 15;
+    settings.total_level = total_level;
+    settings.multiple = 1;
+  }
+  return patch;
+}
+
+void submit_patch(AudioEngine &engine, const ym2612::Patch &patch) {
+  CHECK(engine.submit(audio::AudioCommand::apply_patch(
+      patch.global, patch.channel, patch.instrument)));
+}
+
 // Peak deviation from the signal's own mean.
 //
 // The YM2612's DAC is discontinuous around zero (the "ladder effect"), which
@@ -169,11 +190,70 @@ void test_idle_settles_to_digital_silence() {
 
   engine.render(kSampleRate / 2 * static_cast<uint32_t>(sizeof(int16_t)),
                 pcm.data());
-  int16_t peak = 0;
+  int peak = 0;
   for (size_t i = 0; i < static_cast<size_t>(kSampleRate) / 2; ++i) {
-    peak = std::max<int16_t>(peak, static_cast<int16_t>(std::abs(pcm[i])));
+    peak = std::max(peak, std::abs(static_cast<int>(pcm[i])));
   }
   CHECK(peak <= 1);
+}
+
+void test_apply_patch_reaches_sustaining_note() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+
+  const auto note = ym2612::Note::from_midi_note(60);
+  const auto loud_patch = make_all_carrier_patch(20);
+  submit_patch(engine, loud_patch);
+  CHECK(engine.submit(audio::AudioCommand::note_on(note, 127)));
+  const float loud = render_ac_peak(engine, kSampleRate / 10);
+
+  const auto quiet_patch = make_all_carrier_patch(110);
+  submit_patch(engine, quiet_patch);
+  render_ac_peak(engine, kSampleRate / 20);
+  const float quiet = render_ac_peak(engine, kSampleRate / 10);
+
+  CHECK(loud > 0.01f);
+  CHECK(quiet < loud * 0.25f);
+}
+
+void test_apply_patch_updates_instrument_for_future_notes() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+
+  const auto first_note = ym2612::Note::from_midi_note(60);
+  submit_patch(engine, make_all_carrier_patch(20));
+  CHECK(engine.submit(audio::AudioCommand::note_on(first_note, 127)));
+  const float first_peak = render_ac_peak(engine, kSampleRate / 10);
+  CHECK(engine.submit(audio::AudioCommand::note_off(first_note)));
+  render_ac_peak(engine, kSampleRate / 10);
+
+  const auto second_note = ym2612::Note::from_midi_note(64);
+  submit_patch(engine, make_all_carrier_patch(100));
+  CHECK(engine.submit(audio::AudioCommand::note_on(second_note, 127)));
+  const float second_peak = render_ac_peak(engine, kSampleRate / 10);
+
+  CHECK(first_peak > 0.01f);
+  CHECK(second_peak < first_peak * 0.35f);
+}
+
+void test_apply_patch_preserves_sustaining_note_velocity() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+  engine.set_note_options(true, 100, true);
+
+  auto patch = make_all_carrier_patch(20);
+  submit_patch(engine, patch);
+  CHECK(engine.submit(
+      audio::AudioCommand::note_on(ym2612::Note::from_midi_note(60), 40)));
+  const float before = render_ac_peak(engine, kSampleRate / 10);
+
+  patch.global.lfo_enable = true;
+  submit_patch(engine, patch);
+  const float after = render_ac_peak(engine, kSampleRate / 10);
+
+  CHECK(before > 0.001f);
+  CHECK(after < before * 1.5f);
+  CHECK(after > before * 0.5f);
 }
 
 } // namespace
@@ -182,6 +262,9 @@ int main() {
   test_sample_rates();
   test_ctrmml_lowpass_response();
   test_idle_settles_to_digital_silence();
+  test_apply_patch_reaches_sustaining_note();
+  test_apply_patch_updates_instrument_for_future_notes();
+  test_apply_patch_preserves_sustaining_note_velocity();
 
   AudioEngine engine;
   CHECK(engine.initialize(kSampleRate));

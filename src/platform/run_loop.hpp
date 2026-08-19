@@ -31,7 +31,13 @@ inline void run_main_loop(RuntimeContext &runtime, RunFrameFunc frame_func) {
       emscripten_cancel_main_loop();
     }
   };
-  emscripten_set_main_loop_arg(trampoline, &callback_data, 0, true);
+  // simulate_infinite_loop leaves main() by throwing a JS "unwind"
+  // exception. With wasm exceptions enabled that unwind runs C++
+  // destructors on its way out, destroying the app the moment the loop is
+  // registered. Register the loop and return normally instead; the caller
+  // keeps the app alive in static storage and the runtime stays resident
+  // (EXIT_RUNTIME=0).
+  emscripten_set_main_loop_arg(trampoline, &callback_data, 0, false);
 #else
   while (frame_func(runtime)) {
   }

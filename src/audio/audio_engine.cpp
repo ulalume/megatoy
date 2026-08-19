@@ -4,6 +4,7 @@
 #include <cstring>
 #include <thread>
 
+#include "audio/performance.hpp"
 #include "ym2612/channel.hpp"
 #include "ym2612/note.hpp"
 
@@ -18,6 +19,7 @@ constexpr float kDcBlockerPole = 0.9995f;
 // How long a note-off will wait for queue space before being abandoned.
 constexpr int kFullQueueRetries = 1000;
 constexpr uint32_t kDefaultFrameSize = sizeof(int16_t) * 2; // stereo s16
+constexpr size_t kReservedMixFrames = 8192;
 
 int16_t to_pcm16(float sample) {
   const float clamped = std::clamp(sample, -1.0f, 1.0f);
@@ -34,10 +36,13 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
   sample_rate_ = sample_rate != 0 ? sample_rate : kFallbackSampleRate;
   frame_size_ = kDefaultFrameSize;
   mix_buffer_.clear();
+  mix_buffer_.reserve(kReservedMixFrames * 2);
   scope_buffer_.clear();
   midi_release_recovery_pending_.store(false, std::memory_order_relaxed);
   dc_x_[0] = dc_x_[1] = 0.0f;
   dc_y_[0] = dc_y_[1] = 0.0f;
+  bend_semitones_ = 0.0f;
+  mod_wheel_ = 0;
   device_.init(sample_rate_);
   running_ = device_.is_initialized();
   return running_;
@@ -108,18 +113,68 @@ void AudioEngine::remove_dc(float *interleaved, uint32_t frames) {
   }
 }
 
-void AudioEngine::set_note_options(bool use_velocity, bool steal_oldest) {
+void AudioEngine::set_note_options(bool use_velocity,
+                                   uint8_t velocity_sensitivity_depth,
+                                   bool steal_oldest) {
   use_velocity_.store(use_velocity, std::memory_order_relaxed);
+  velocity_sensitivity_depth_.store(
+      std::min<uint8_t>(velocity_sensitivity_depth, 100),
+      std::memory_order_relaxed);
   steal_oldest_.store(steal_oldest, std::memory_order_relaxed);
 }
 
+void AudioEngine::set_performance_options(bool pitch_bend, bool mod_wheel) {
+  pitch_bend_enabled_.store(pitch_bend, std::memory_order_relaxed);
+  mod_wheel_enabled_.store(mod_wheel, std::memory_order_relaxed);
+}
+
 bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
-  if (!running_) {
-    apply(command);
-    return true;
+  if (!running_.load(std::memory_order_acquire)) {
+    // This runs on the MIDI driver's thread. With no audio thread draining
+    // the queue, applying here would race the UI thread's own inline apply
+    // (see submit); the note cannot sound anyway, so drop it.
+    return false;
   }
 
+  const bool is_release =
+      command.type == audio::AudioCommand::Type::NoteOff ||
+      command.type == audio::AudioCommand::Type::AllNotesOff;
+  bool queue_full = false;
+  if (try_push_midi_command(command, queue_full)) {
+    return true;
+  }
+  if (!queue_full) {
+    return false;
+  }
+
+  // The queue is full, which needs a burst far beyond what a MIDI cable can
+  // physically carry. Even so the two failures are not equivalent: losing a
+  // note-on drops a note, while losing a note-off leaves one sounding
+  // forever. So a release waits for room; a note-on gives up.
+  if (!is_release) {
+    return false;
+  }
+  for (int attempt = 0; attempt < kFullQueueRetries; ++attempt) {
+    std::this_thread::yield();
+    if (try_push_midi_command(command, queue_full)) {
+      return true;
+    }
+    if (!queue_full) {
+      return false;
+    }
+  }
+  if (is_release) {
+    const std::lock_guard<std::mutex> guard(midi_push_mutex_);
+    midi_release_recovery_pending_.store(true, std::memory_order_release);
+    return true;
+  }
+  return false;
+}
+
+bool AudioEngine::try_push_midi_command(const audio::AudioCommand &command,
+                                        bool &queue_full) {
   const std::lock_guard<std::mutex> guard(midi_push_mutex_);
+  queue_full = false;
   const bool is_release =
       command.type == audio::AudioCommand::Type::NoteOff ||
       command.type == audio::AudioCommand::Type::AllNotesOff;
@@ -135,35 +190,20 @@ bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
   if (midi_commands_.push(command)) {
     return true;
   }
-
-  // The queue is full, which needs a burst far beyond what a MIDI cable can
-  // physically carry. Even so the two failures are not equivalent: losing a
-  // note-on drops a note, while losing a note-off leaves one sounding
-  // forever. So a release waits for room; a note-on gives up.
-  if (command.type == audio::AudioCommand::Type::NoteOn) {
-    return false;
-  }
-  for (int attempt = 0; attempt < kFullQueueRetries; ++attempt) {
-    std::this_thread::yield();
-    if (midi_commands_.push(command)) {
-      return true;
-    }
-  }
-  if (is_release) {
-    midi_release_recovery_pending_.store(true, std::memory_order_release);
-    return true;
-  }
+  queue_full = true;
   return false;
 }
 
 bool AudioEngine::submit(const audio::AudioCommand &command) {
-  if (!running_) {
+  if (!running_.load(std::memory_order_acquire)) {
     // Nothing is rendering, so no other thread can be touching the chip:
     // apply directly. This keeps note state consistent when the device failed
     // to open, and lets tests drive a session without a sound card.
     //
     // The transport is always stopped before running_ is cleared (see
-    // AudioManager::shutdown), so a callback can never be in flight here.
+    // AudioManager::shutdown), so a callback can never be in flight here --
+    // and submit_from_midi drops commands while not running, so the MIDI
+    // driver thread cannot be applying either.
     apply(command);
     return true;
   }
@@ -191,19 +231,32 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
 
   switch (command.type) {
   case Type::ApplyPatch: {
+    current_global_ = command.global;
+    current_channel_ = command.channel;
     current_instrument_ = command.instrument;
-    device_.write_settings(command.global);
+    const auto effective_global = audio::performance::compose_global_settings(
+        current_global_, mod_wheel_);
+    const auto effective_channel = audio::performance::compose_channel_settings(
+        current_channel_, current_global_.lfo_enable, mod_wheel_);
+    device_.write_settings(effective_global);
+    const auto depth =
+        velocity_sensitivity_depth_.load(std::memory_order_relaxed);
     for (ym2612::ChannelIndex index : ym2612::all_channel_indices) {
       auto channel = device_.channel(index);
-      channel.write_settings(command.channel);
-      channel.write_instrument(command.instrument);
+      channel.write_settings(effective_channel);
+      const auto velocity = allocator_.active_velocity(index);
+      channel.write_instrument(
+          velocity ? command.instrument.clone_with_velocity(*velocity, depth)
+                   : command.instrument);
     }
     break;
   }
 
   case Type::NoteOn: {
     const bool steal = steal_oldest_.load(std::memory_order_relaxed);
-    auto claim = allocator_.note_on(command.note, steal);
+    const uint8_t velocity = audio::performance::effective_velocity(
+        use_velocity_.load(std::memory_order_relaxed), command.velocity);
+    auto claim = allocator_.note_on(command.note, velocity, steal);
     if (!claim) {
       break;
     }
@@ -212,10 +265,13 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
     }
 
     auto channel = device_.channel(claim->channel);
-    channel.write_frequency(command.note);
-    const uint8_t velocity =
-        use_velocity_.load(std::memory_order_relaxed) ? command.velocity : 127;
-    const auto instrument = current_instrument_.clone_with_velocity(velocity);
+    channel.write_frequency(command.note, bend_semitones_);
+    channel.write_settings(audio::performance::compose_channel_settings(
+        current_channel_, current_global_.lfo_enable, mod_wheel_));
+    const auto depth =
+        velocity_sensitivity_depth_.load(std::memory_order_relaxed);
+    const auto instrument =
+        current_instrument_.clone_with_velocity(velocity, depth);
     channel.write_instrument(instrument);
     channel.write_key_on(
         instrument.operators[static_cast<uint8_t>(ym2612::OperatorIndex::Op1)]
@@ -236,14 +292,46 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
   case Type::AllNotesOff:
     allocator_.release_all(device_);
     break;
+
+  case Type::PitchBend:
+    bend_semitones_ =
+        pitch_bend_enabled_.load(std::memory_order_relaxed)
+            ? audio::performance::pitch_bend_semitones(command.pitch_bend_value)
+            : 0.0f;
+    for (ym2612::ChannelIndex index : ym2612::all_channel_indices) {
+      if (const auto note = allocator_.active_note(index)) {
+        device_.channel(index).write_frequency(*note, bend_semitones_);
+      }
+    }
+    break;
+
+  case Type::ModWheel: {
+    mod_wheel_ = mod_wheel_enabled_.load(std::memory_order_relaxed)
+                     ? std::min<uint8_t>(command.mod_wheel_value, 127)
+                     : 0;
+    device_.write_settings(audio::performance::compose_global_settings(
+        current_global_, mod_wheel_));
+    const auto channel_settings = audio::performance::compose_channel_settings(
+        current_channel_, current_global_.lfo_enable, mod_wheel_);
+    for (ym2612::ChannelIndex index : ym2612::all_channel_indices) {
+      device_.channel(index).write_settings(channel_settings);
+    }
+    break;
+  }
   }
 }
 
 void AudioEngine::apply_patch_to_all_channels(const ym2612::Patch &patch) {
-  device_.write_settings(patch.global);
+  current_global_ = patch.global;
+  current_channel_ = patch.channel;
+  current_instrument_ = patch.instrument;
+  device_.write_settings(
+      audio::performance::compose_global_settings(current_global_, mod_wheel_));
+  const auto channel_settings = audio::performance::compose_channel_settings(
+      current_channel_, current_global_.lfo_enable, mod_wheel_);
   for (ym2612::ChannelIndex channel_index : ym2612::all_channel_indices) {
     auto channel = device_.channel(channel_index);
-    channel.write_settings(patch.channel);
+    channel.write_settings(channel_settings);
     channel.write_instrument(patch.instrument);
   }
 }

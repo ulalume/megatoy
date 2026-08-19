@@ -13,33 +13,45 @@ platform::web::WebMidiBackend *g_active_backend = nullptr;
 
 extern "C" {
 
-EMSCRIPTEN_KEEPALIVE void megatoy_web_midi_message(int status, int note,
-                                                   int velocity) {
+EMSCRIPTEN_KEEPALIVE void megatoy_web_midi_message(int status, int data1,
+                                                   int data2) {
   if (g_active_backend == nullptr) {
     return;
   }
   g_active_backend->deliver(static_cast<unsigned char>(status),
-                            static_cast<unsigned char>(note),
-                            static_cast<unsigned char>(velocity));
+                            static_cast<unsigned char>(data1),
+                            static_cast<unsigned char>(data2));
 }
 
 } // extern "C"
 
 namespace platform::web {
 
-void WebMidiBackend::deliver(unsigned char status, unsigned char note,
-                             unsigned char velocity) {
+void WebMidiBackend::deliver(unsigned char status, unsigned char data1,
+                             unsigned char data2) {
   const unsigned char type = status & 0xF0;
   MidiMessage message;
-  message.note = ym2612::Note::from_midi_note(note);
-  message.velocity = velocity;
   message.port_name = "MIDI";
 
-  if (type == 0x90 && velocity > 0) {
+  if (type == 0x90 && data2 > 0) {
     message.type = MidiMessage::Type::NoteOn;
+    message.note = ym2612::Note::from_midi_note(data1 & 0x7f);
+    message.velocity = data2 & 0x7f;
     emit(message);
-  } else if (type == 0x80 || (type == 0x90 && velocity == 0)) {
+  } else if (type == 0x80 || (type == 0x90 && data2 == 0)) {
     message.type = MidiMessage::Type::NoteOff;
+    message.note = ym2612::Note::from_midi_note(data1 & 0x7f);
+    message.velocity = data2 & 0x7f;
+    emit(message);
+  } else if (type == 0xe0) {
+    message.type = MidiMessage::Type::PitchBend;
+    message.pitch_bend = static_cast<uint16_t>(
+        (data1 & 0x7f) | (static_cast<uint16_t>(data2 & 0x7f) << 7));
+    emit(message);
+  } else if (type == 0xb0) {
+    message.type = MidiMessage::Type::ControlChange;
+    message.controller = data1 & 0x7f;
+    message.controller_value = data2 & 0x7f;
     emit(message);
   }
 }
@@ -76,6 +88,10 @@ void request_access_js() {
         // there is nothing to race with.
         var d = event.data || [];
         if (d.length < 2 || !Module['_megatoy_web_midi_message']) {
+          return;
+        }
+        var type = d[0] & 0xf0;
+        if (type !== 0x80 && type !== 0x90 && type !== 0xb0 && type !== 0xe0) {
           return;
         }
         Module['_megatoy_web_midi_message'](d[0], d[1], d.length > 2 ? d[2] : 0);

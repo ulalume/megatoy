@@ -11,6 +11,7 @@ namespace ui {
 struct ConfirmationDialogContext {
   UIState::ConfirmationState &state;
   UIState::DangerConfirmationState &danger_state;
+  UIState::TextPromptState &text_prompt_state;
   UIState::DropState &drop_state;
   std::function<void(const patches::PatchEntry &)> load_patch_entry;
   std::function<void(const ym2612::Patch &, const std::filesystem::path &)>

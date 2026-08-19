@@ -1,5 +1,6 @@
 #include "platform/web/web_patch_url.hpp"
 
+#include "core/utf8_utils.hpp"
 #include "formats/ym2612_format_adapter.hpp"
 #include "platform/platform_config.hpp"
 #include "ym2612/types.hpp"
@@ -396,14 +397,16 @@ std::string strip_query_prefix(std::string_view query) {
 }
 
 std::vector<uint8_t> pack_patch_binary(const ym2612::Patch &patch) {
-  BitWriter writer;
-  size_t name_limit = (1u << kNameLengthBits) - 1;
-  size_t name_len = std::min<size_t>(patch.name.size(), name_limit);
+  const size_t name_limit = (1u << kNameLengthBits) - 1;
+  const std::string name = megatoy::utf8::truncate(
+      patch.name.empty() ? std::string("patch") : patch.name, name_limit);
+  const size_t name_len = name.size();
 
+  BitWriter writer;
   writer.write_bits(kBinaryVersion, kBinaryVersionBits);
   writer.write_bits(static_cast<uint32_t>(name_len), kNameLengthBits);
   for (size_t i = 0; i < name_len; ++i) {
-    writer.write_bits(static_cast<uint8_t>(patch.name[i]), 8);
+    writer.write_bits(static_cast<uint8_t>(name[i]), 8);
   }
 
   writer.write_bits(patch.global.dac_enable ? 1 : 0, 1);
@@ -474,6 +477,7 @@ unpack_patch_binary(const std::vector<uint8_t> &data,
     }
     patch.name.push_back(static_cast<char>(ch));
   }
+  patch.name = megatoy::utf8::trim_incomplete_suffix(patch.name);
 
   uint32_t value = 0;
   if (!reader.read_bits(1, value)) {

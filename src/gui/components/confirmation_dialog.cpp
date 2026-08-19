@@ -1,5 +1,7 @@
 #include "confirmation_dialog.hpp"
 #include "common.hpp"
+#include "gui/styles/megatoy_style.hpp"
+#include <cstring>
 #include <imgui.h>
 
 namespace ui {
@@ -100,6 +102,63 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     danger.clear();
     if (on_confirm) {
       on_confirm();
+    }
+  }
+
+  auto &prompt = context.text_prompt_state;
+  if (prompt.requested && !prompt.title.empty()) {
+    ImGui::OpenPopup(prompt.title.c_str());
+    prompt.requested = false;
+  }
+
+  bool cancel_prompt = false;
+  bool confirm_prompt = false;
+  center_next_window();
+  if (!prompt.title.empty() &&
+      ImGui::BeginPopupModal(prompt.title.c_str(), nullptr,
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+    force_center_window();
+
+    char input[512];
+    std::strncpy(input, prompt.buffer.c_str(), sizeof(input) - 1);
+    input[sizeof(input) - 1] = '\0';
+    ImGui::SetNextItemWidth(320.0f);
+    if (ImGui::InputText(prompt.label.c_str(), input, sizeof(input))) {
+      prompt.buffer = input;
+    }
+
+    const std::string validation_error =
+        prompt.validator ? prompt.validator(prompt.buffer) : std::string{};
+    if (!validation_error.empty()) {
+      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusWarning), "%s",
+                         validation_error.c_str());
+    }
+    ImGui::Spacing();
+
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+      cancel_prompt = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!validation_error.empty());
+    if (ImGui::Button(prompt.confirm_label.c_str(), ImVec2(120, 0))) {
+      confirm_prompt = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndDisabled();
+    ImGui::EndPopup();
+  }
+
+  if (cancel_prompt) {
+    prompt.clear();
+  } else if (confirm_prompt) {
+    const std::string value = prompt.buffer;
+    auto on_confirm = std::move(prompt.on_confirm);
+    prompt.clear();
+    if (on_confirm) {
+      on_confirm(value);
     }
   }
 }

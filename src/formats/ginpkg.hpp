@@ -54,6 +54,9 @@ save_patch(const std::filesystem::path &patches_dir, const ym2612::Patch &patch,
 std::vector<ym2612::Patch> read_file(const std::filesystem::path &package_path);
 
 std::optional<GinPackage> load_package(const std::filesystem::path &path);
+std::optional<ym2612::Patch> read_current(const GinPackage &package);
+std::optional<ym2612::Patch> read_version(const GinPackage &package,
+                                          const std::string &uuid);
 std::optional<ym2612::Patch> read_version(const std::filesystem::path &path,
                                           const std::string &uuid);
 bool delete_version(const std::filesystem::path &path, const std::string &uuid);

@@ -8,15 +8,18 @@
 #include <vector>
 
 struct UIPreferences {
-  bool show_patch_editor = false;
+  bool show_patch_editor = true;
   bool show_audio_controls = true;
   bool show_midi_keyboard = true;
-  bool show_patch_selector = false;
+  bool show_patch_selector = true;
   bool show_mml_console = true;
   bool show_preferences = false;
   bool show_waveform = true;
   bool show_patch_lab = true;
   bool use_velocity = true;
+  int velocity_sensitivity_depth = 100;
+  bool use_pitch_bend = true;
+  bool use_mod_wheel = false;
   bool steal_oldest_note_when_full = true;
   std::string patch_search_query;
 
@@ -40,6 +43,8 @@ struct UIPreferences {
   int custom_typing_octave_up_key = static_cast<int>(ImGuiKey_Period);
 
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
+    // Search and star filters are session-scoped. Excluding them prevents
+    // typing in the patch browser from dirtying the persistent store.
     return lhs.show_patch_editor == rhs.show_patch_editor &&
            lhs.show_audio_controls == rhs.show_audio_controls &&
            lhs.show_midi_keyboard == rhs.show_midi_keyboard &&
@@ -49,12 +54,12 @@ struct UIPreferences {
            lhs.show_waveform == rhs.show_waveform &&
            lhs.show_patch_lab == rhs.show_patch_lab &&
            lhs.use_velocity == rhs.use_velocity &&
+           lhs.velocity_sensitivity_depth == rhs.velocity_sensitivity_depth &&
            lhs.steal_oldest_note_when_full == rhs.steal_oldest_note_when_full &&
-           lhs.patch_search_query == rhs.patch_search_query &&
+           lhs.use_pitch_bend == rhs.use_pitch_bend &&
+           lhs.use_mod_wheel == rhs.use_mod_wheel &&
            lhs.patch_sort_column == rhs.patch_sort_column &&
            lhs.patch_sort_order == rhs.patch_sort_order &&
-           lhs.metadata_search_query == rhs.metadata_search_query &&
-           lhs.metadata_star_filter == rhs.metadata_star_filter &&
            lhs.midi_keyboard_scale == rhs.midi_keyboard_scale &&
            lhs.midi_keyboard_key == rhs.midi_keyboard_key &&
            lhs.midi_keyboard_typing_octave == rhs.midi_keyboard_typing_octave &&

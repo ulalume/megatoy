@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.7.0" CACHE STRING "megatoy application version")
+set(MEGATOY_VERSION "0.7.1" CACHE STRING "megatoy application version")
 project(megatoy VERSION ${MEGATOY_VERSION})
 
 # Objective-C sources are used for macOS integrations
@@ -82,6 +82,10 @@ if(WIN32)
   add_compile_definitions(_USE_MATH_DEFINES)
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  add_compile_options("-fwasm-exceptions" "-sWASM_LEGACY_EXCEPTIONS=0")
+endif()
+
 include(cmake/deps.cmake)
 include(cmake/embed_assets.cmake)
 
@@ -127,6 +131,10 @@ add_executable(command_queue_test tests/audio/command_queue_test.cpp)
 target_include_directories(command_queue_test PRIVATE src)
 target_link_libraries(command_queue_test PRIVATE megatoy_core)
 add_test(NAME command_queue_test COMMAND command_queue_test)
+add_executable(performance_test tests/audio/performance_test.cpp)
+target_include_directories(performance_test PRIVATE src)
+target_link_libraries(performance_test PRIVATE megatoy_core)
+add_test(NAME performance_test COMMAND performance_test)
 add_executable(ginpkg_history_test tests/formats/ginpkg_history_test.cpp)
 target_include_directories(ginpkg_history_test PRIVATE src)
 target_link_libraries(ginpkg_history_test PRIVATE megatoy_core)
@@ -139,11 +147,28 @@ add_executable(patch_write_test tests/patches/patch_write_test.cpp)
 target_include_directories(patch_write_test PRIVATE src)
 target_link_libraries(patch_write_test PRIVATE megatoy_core)
 add_test(NAME patch_write_test COMMAND patch_write_test)
+add_executable(filename_utils_test tests/patches/filename_utils_test.cpp)
+target_include_directories(filename_utils_test PRIVATE src)
+target_link_libraries(filename_utils_test PRIVATE megatoy_core)
+add_test(NAME filename_utils_test COMMAND filename_utils_test)
+add_executable(utf8_utils_test tests/core/utf8_utils_test.cpp)
+target_include_directories(utf8_utils_test PRIVATE src)
+target_link_libraries(utf8_utils_test PRIVATE megatoy_core)
+add_test(NAME utf8_utils_test COMMAND utf8_utils_test)
 add_executable(patch_repository_delete_test
   tests/patches/patch_repository_delete_test.cpp)
 target_include_directories(patch_repository_delete_test PRIVATE src)
 target_link_libraries(patch_repository_delete_test PRIVATE megatoy_core)
 add_test(NAME patch_repository_delete_test COMMAND patch_repository_delete_test)
+add_executable(patch_repository_rename_test
+  tests/patches/patch_repository_rename_test.cpp)
+target_include_directories(patch_repository_rename_test PRIVATE src)
+target_link_libraries(patch_repository_rename_test PRIVATE megatoy_core)
+add_test(NAME patch_repository_rename_test COMMAND patch_repository_rename_test)
+add_executable(folder_metadata_test tests/patches/folder_metadata_test.cpp)
+target_include_directories(folder_metadata_test PRIVATE src)
+target_link_libraries(folder_metadata_test PRIVATE megatoy_core)
+add_test(NAME folder_metadata_test COMMAND folder_metadata_test)
 add_executable(status_test tests/core/status_test.cpp src/core/status.cpp)
 target_include_directories(status_test PRIVATE src)
 add_test(NAME status_test COMMAND status_test)
@@ -162,8 +187,11 @@ add_test(NAME workspace_test COMMAND workspace_test)
 add_custom_target(check
   DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test
           subsystem_tests ym2612_render_test analyzer_test command_queue_test
+          performance_test
           ginpkg_history_test patch_write_test status_test
-          patch_repository_delete_test
+          filename_utils_test utf8_utils_test
+          patch_repository_delete_test patch_repository_rename_test
+          folder_metadata_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           version_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

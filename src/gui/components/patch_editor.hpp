@@ -15,6 +15,7 @@ struct PatchEditorContext {
   patches::PatchSession &session;
   PreferenceManager::UIPreferences &prefs;
   UIState::EnvelopeState (&envelope_states)[4];
+  UIState::TextPromptState &text_prompt_state;
   std::function<void(const std::string &label, const std::string &merge_key,
                      const ym2612::Patch &before)>
       begin_history;
