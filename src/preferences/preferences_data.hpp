@@ -40,6 +40,8 @@ struct UIPreferences {
   int custom_typing_octave_up_key = static_cast<int>(ImGuiKey_Period);
 
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
+    // Search and star filters are session-scoped. Excluding them prevents
+    // typing in the patch browser from dirtying the persistent store.
     return lhs.show_patch_editor == rhs.show_patch_editor &&
            lhs.show_audio_controls == rhs.show_audio_controls &&
            lhs.show_midi_keyboard == rhs.show_midi_keyboard &&
@@ -50,11 +52,8 @@ struct UIPreferences {
            lhs.show_patch_lab == rhs.show_patch_lab &&
            lhs.use_velocity == rhs.use_velocity &&
            lhs.steal_oldest_note_when_full == rhs.steal_oldest_note_when_full &&
-           lhs.patch_search_query == rhs.patch_search_query &&
            lhs.patch_sort_column == rhs.patch_sort_column &&
            lhs.patch_sort_order == rhs.patch_sort_order &&
-           lhs.metadata_search_query == rhs.metadata_search_query &&
-           lhs.metadata_star_filter == rhs.metadata_star_filter &&
            lhs.midi_keyboard_scale == rhs.midi_keyboard_scale &&
            lhs.midi_keyboard_key == rhs.midi_keyboard_key &&
            lhs.midi_keyboard_typing_octave == rhs.midi_keyboard_typing_octave &&

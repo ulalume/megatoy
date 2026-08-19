@@ -148,10 +148,6 @@ public:
         if (ui.contains("use_velocity")) {
           data.ui_preferences.use_velocity = ui["use_velocity"].get<bool>();
         }
-        if (ui.contains("patch_search_query")) {
-          data.ui_preferences.patch_search_query =
-              ui["patch_search_query"].get<std::string>();
-        }
         if (ui.contains("patch_sort_column")) {
           data.ui_preferences.patch_sort_column =
               ui["patch_sort_column"].get<int>();
@@ -241,7 +237,6 @@ public:
       ui["use_velocity"] = data.ui_preferences.use_velocity;
       ui["steal_oldest_note_when_full"] =
           data.ui_preferences.steal_oldest_note_when_full;
-      ui["patch_search_query"] = data.ui_preferences.patch_search_query;
       ui["patch_sort_column"] = data.ui_preferences.patch_sort_column;
       ui["patch_sort_order"] = data.ui_preferences.patch_sort_order;
       ui["midi_keyboard_scale"] = data.ui_preferences.midi_keyboard_scale;
