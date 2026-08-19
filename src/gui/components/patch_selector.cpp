@@ -97,6 +97,16 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     context.remove_folder(folder);
   }
 
+  if (context.pending_menu_action) {
+    const auto action = *context.pending_menu_action;
+    context.pending_menu_action.reset();
+    if (action == PendingMenuAction::Refresh) {
+      context.repository.refresh();
+    } else if (context.save_current_patch) {
+      context.save_current_patch();
+    }
+  }
+
   ImGui::End();
 }
 

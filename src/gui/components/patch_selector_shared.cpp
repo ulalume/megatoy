@@ -111,7 +111,7 @@ void entry_context_menu(PatchSelectorContext &context,
       const bool disabled = !context.session.is_modified();
       ImGui::BeginDisabled(disabled);
       if (ImGui::MenuItem(context.session.save_label_for(true))) {
-        context.save_current_patch();
+        context.pending_menu_action = PendingMenuAction::SaveCurrent;
       }
       ImGui::EndDisabled();
     }
@@ -160,7 +160,7 @@ void entry_context_menu(PatchSelectorContext &context,
   }
 
   if (ImGui::MenuItem("Refresh repository")) {
-    context.repository.refresh();
+    context.pending_menu_action = PendingMenuAction::Refresh;
   }
 
   ImGui::EndPopup();
