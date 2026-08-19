@@ -356,7 +356,10 @@ void GuiManager::apply_theme() {
   preferences_.set_theme(theme_);
 }
 
-void GuiManager::reset_layout() { first_frame_ = true; }
+void GuiManager::reset_layout() {
+  first_frame_ = true;
+  web_layout_loaded_ = false;
+}
 
 void GuiManager::set_fullscreen(bool enable) {
   if (!initialized_ || window_ == nullptr) {

@@ -10,20 +10,21 @@
 #include <fstream>
 #include <iterator>
 #include <miniz.h>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace platform::web {
 namespace {
 
-std::vector<uint8_t> read_bytes(const VirtualFileSystem &vfs,
-                                const std::filesystem::path &path) {
+std::optional<std::vector<uint8_t>>
+read_bytes(const VirtualFileSystem &vfs, const std::filesystem::path &path) {
   auto stream = vfs.open_read(path);
   if (!stream) {
-    return {};
+    return std::nullopt;
   }
-  return {std::istreambuf_iterator<char>(*stream),
-          std::istreambuf_iterator<char>()};
+  return std::vector<uint8_t>{std::istreambuf_iterator<char>(*stream),
+                              std::istreambuf_iterator<char>()};
 }
 
 bool add_directory(mz_zip_archive &archive, const VirtualFileSystem &vfs,
@@ -54,14 +55,11 @@ bool add_directory(mz_zip_archive &archive, const VirtualFileSystem &vfs,
       continue;
     }
     auto bytes = read_bytes(vfs, entry.path);
-    if (bytes.empty() && vfs.exists(entry.path)) {
-      auto stream = vfs.open_read(entry.path);
-      if (!stream) {
-        return false;
-      }
+    if (!bytes) {
+      continue;
     }
-    if (!mz_zip_writer_add_mem(&archive, name.c_str(), bytes.data(),
-                               bytes.size(), MZ_BEST_SPEED)) {
+    if (!mz_zip_writer_add_mem(&archive, name.c_str(), bytes->data(),
+                               bytes->size(), MZ_BEST_SPEED)) {
       return false;
     }
   }
@@ -78,13 +76,10 @@ bool download_workspace_path(const VirtualFileSystem &vfs,
 
   if (!vfs.is_directory(path)) {
     auto bytes = read_bytes(vfs, path);
-    if (bytes.empty()) {
-      auto stream = vfs.open_read(path);
-      if (!stream) {
-        return false;
-      }
+    if (!bytes) {
+      return false;
     }
-    download_binary(path.filename().generic_string(), bytes,
+    download_binary(path.filename().generic_string(), *bytes,
                     "application/octet-stream");
     return true;
   }

@@ -67,9 +67,9 @@ void save_web_imgui_ini_if_needed(bool &web_ini_loaded) {
     const bool first_save = last_save_time == 0.0;
     const bool throttle_ok = first_save || (now - last_save_time) > 1.0;
     if (current != last_saved && throttle_ok) {
-      const bool ok = platform::web::write_local_storage(kLayoutKey, current);
-      (void)ok;
-      last_saved = current;
+      if (platform::web::write_local_storage(kLayoutKey, current)) {
+        last_saved = current;
+      }
       last_save_time = now;
     }
   }

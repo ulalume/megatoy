@@ -458,17 +458,19 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
   // Folders imported in an earlier session are still on disk but only
   // referenced from preferences. If preferences were cleared, re-adopt them so
   // the library is not silently invisible.
-  for (const auto &entry :
-       std::filesystem::directory_iterator(storage_root, ec)) {
-    if (ec) {
-      break;
-    }
-    if (!entry.is_directory() || workspace.contains(entry.path())) {
+  std::filesystem::directory_iterator entry(storage_root, ec);
+  const std::filesystem::directory_iterator end;
+  while (!ec && entry != end) {
+    std::error_code type_error;
+    const bool is_directory = entry->is_directory(type_error);
+    if (type_error || !is_directory || workspace.contains(entry->path())) {
+      entry.increment(ec);
       continue;
     }
-    if (workspace.add(entry.path())) {
+    if (workspace.add(entry->path())) {
       changed = true;
     }
+    entry.increment(ec);
   }
 
   if (changed || migrated > 0 || !existed) {
