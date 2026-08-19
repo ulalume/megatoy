@@ -114,9 +114,11 @@ void AudioEngine::set_note_options(bool use_velocity, bool steal_oldest) {
 }
 
 bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
-  if (!running_) {
-    apply(command);
-    return true;
+  if (!running_.load(std::memory_order_acquire)) {
+    // This runs on the MIDI driver's thread. With no audio thread draining
+    // the queue, applying here would race the UI thread's own inline apply
+    // (see submit); the note cannot sound anyway, so drop it.
+    return false;
   }
 
   const std::lock_guard<std::mutex> guard(midi_push_mutex_);
@@ -157,13 +159,15 @@ bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
 }
 
 bool AudioEngine::submit(const audio::AudioCommand &command) {
-  if (!running_) {
+  if (!running_.load(std::memory_order_acquire)) {
     // Nothing is rendering, so no other thread can be touching the chip:
     // apply directly. This keeps note state consistent when the device failed
     // to open, and lets tests drive a session without a sound card.
     //
     // The transport is always stopped before running_ is cleared (see
-    // AudioManager::shutdown), so a callback can never be in flight here.
+    // AudioManager::shutdown), so a callback can never be in flight here --
+    // and submit_from_midi drops commands while not running, so the MIDI
+    // driver thread cannot be applying either.
     apply(command);
     return true;
   }

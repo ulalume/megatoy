@@ -97,5 +97,6 @@ private:
   ym2612::ChannelInstrument current_instrument_{};
   std::atomic<bool> use_velocity_{true};
   std::atomic<bool> steal_oldest_{true};
-  bool running_;
+  // Read by the UI, audio, and MIDI driver threads.
+  std::atomic<bool> running_;
 };

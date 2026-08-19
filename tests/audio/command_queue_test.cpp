@@ -94,6 +94,22 @@ void test_applies_inline_when_stopped() {
   CHECK(engine.notes().published_contains(note));
 }
 
+// With no audio thread draining, a MIDI submission must be dropped, not
+// applied inline: that apply ran on the driver thread and raced the UI
+// thread's own inline path above.
+void test_midi_submissions_dropped_while_stopped() {
+  AudioEngine engine;
+  const auto note = ym2612::Note::from_midi_note(64);
+  CHECK(!engine.is_running());
+  CHECK(!engine.submit_from_midi(audio::AudioCommand::note_on(note, 100)));
+  CHECK(!engine.notes().published_contains(note));
+
+  CHECK(engine.initialize(kSampleRate));
+  engine.shutdown();
+  CHECK(!engine.is_running());
+  CHECK(!engine.submit_from_midi(audio::AudioCommand::note_off(note)));
+}
+
 void test_voice_limit_and_all_notes_off() {
   AudioEngine engine;
   CHECK(engine.initialize(kSampleRate));
@@ -174,6 +190,7 @@ int main() {
   test_queue_basics();
   test_commands_apply_on_render();
   test_applies_inline_when_stopped();
+  test_midi_submissions_dropped_while_stopped();
   test_voice_limit_and_all_notes_off();
   test_midi_submissions_from_another_thread();
   test_midi_overflow_cannot_leave_a_note_stuck();
