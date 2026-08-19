@@ -36,6 +36,8 @@ public:
   SavePatchResult save_patch(const ym2612::Patch &patch,
                              const std::string &name, bool overwrite,
                              std::string_view preferred_extension) override;
+  bool can_delete_patch(const PatchEntry &entry) const override;
+  bool delete_patch(const PatchEntry &entry) override;
   bool is_writable() const override { return writable_; }
   std::string_view label() const override { return label_; }
   bool save_patch_metadata(const std::string &relative_path,

@@ -1,5 +1,6 @@
 #include "../test_check.hpp"
 #include "patches/folder_metadata.hpp"
+#include "workspace/path_policy.hpp"
 #include "workspace/workspace.hpp"
 
 #include <filesystem>
@@ -109,6 +110,13 @@ void test_revision_tracks_changes(const fs::path &root) {
   CHECK(workspace.revision() == after_add);
 }
 
+void test_path_comparison_policy(const fs::path &root) {
+  const auto alpha = root / "alpha";
+  CHECK(megatoy::workspace::paths_equal(alpha, alpha.string() + "/"));
+  CHECK(megatoy::workspace::paths_equal(alpha, alpha / "nested" / ".."));
+  CHECK(!megatoy::workspace::paths_equal(alpha, root / "beta"));
+}
+
 void test_metadata_sidecar(const fs::path &root) {
   const auto sidecar = root / "alpha" / ".megatoy" / "patches.json";
 
@@ -151,6 +159,7 @@ int main() {
   test_missing_folder_is_kept(root);
   test_owner_lookup(root);
   test_revision_tracks_changes(root);
+  test_path_comparison_policy(root);
   test_metadata_sidecar(root);
 
   fs::remove_all(root);

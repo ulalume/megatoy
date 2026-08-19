@@ -6,7 +6,9 @@
 #include "preferences/preference_manager.hpp"
 #include "ym2612/patch.hpp"
 #include <filesystem>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct UIState {
@@ -76,6 +78,32 @@ struct UIState {
     }
 
   } confirmation_state;
+
+  struct DangerConfirmationState {
+    bool requested = false;
+    std::string title;
+    std::string message;
+    std::string confirm_label;
+    std::function<void()> on_confirm;
+
+    void request(std::string dialog_title, std::string dialog_message,
+                 std::string button_label,
+                 std::function<void()> confirm_action) {
+      requested = true;
+      title = std::move(dialog_title);
+      message = std::move(dialog_message);
+      confirm_label = std::move(button_label);
+      on_confirm = std::move(confirm_action);
+    }
+
+    void clear() {
+      requested = false;
+      title.clear();
+      message.clear();
+      confirm_label.clear();
+      on_confirm = {};
+    }
+  } danger_confirmation_state;
   ui::SaveExportState save_export_state;
 };
 

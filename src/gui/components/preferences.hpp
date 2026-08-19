@@ -24,6 +24,7 @@ struct PreferencesContext {
   std::function<void()> request_web_midi;
   /// Called after the workspace folder list changes.
   std::function<void()> sync_workspace;
+  std::function<void(const std::filesystem::path &)> remove_workspace_folder;
   std::function<void(ui::styles::ThemeId theme_id)> apply_theme;
   bool allow_workspace_ui = true;
 };

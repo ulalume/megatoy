@@ -9,6 +9,7 @@
 #include "ym2612/note.hpp"
 
 #include "test_check.hpp"
+#include <SQLiteCpp/Database.h>
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -16,7 +17,6 @@
 #include <iostream>
 #include <iterator>
 #include <nlohmann/json.hpp>
-#include <SQLiteCpp/Database.h>
 #include <optional>
 #include <string>
 
@@ -227,9 +227,8 @@ void create_legacy_metadata_database(const std::filesystem::path &path) {
       ('presets/init.dmp', 'builtin-hash', 5, 'builtin', '',
        '2025-01-01 00:00:00', '2025-01-01 00:00:00')
   )");
-  database.exec(
-      "INSERT INTO patch_tags (path, tag) VALUES "
-      "('user/bass.gin', 'fm'), ('user/lead.gin', 'bright')");
+  database.exec("INSERT INTO patch_tags (path, tag) VALUES "
+                "('user/bass.gin', 'fm'), ('user/lead.gin', 'bright')");
 }
 
 void test_legacy_metadata_migration(const std::filesystem::path &root) {
@@ -395,6 +394,18 @@ void test_workspace_folder_is_visible(TestEnvironment &env) {
         return e.is_directory && e.full_path == env.patches_folder;
       });
   CHECK(found);
+}
+
+void test_normal_workspace_folder_removal(const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "normal-removal-config";
+  const auto folder = root / "normal-removal-folder";
+  std::filesystem::create_directories(folder);
+  megatoy::system::PathService paths(fs, config);
+  PreferenceManager preferences(paths);
+  CHECK(preferences.add_workspace_folder(folder));
+  CHECK(preferences.remove_workspace_folder(folder / "."));
+  CHECK(preferences.workspace().empty());
 }
 
 // Saving must land in the workspace folder, and its metadata must end up in
@@ -573,6 +584,7 @@ int main() {
   // Keep the general subsystem fixture independent of the launch marker.
   std::filesystem::remove_all(migration_root / "home" / "Documents" /
                               "megatoy");
+  test_normal_workspace_folder_removal(migration_root);
   TestEnvironment env;
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);

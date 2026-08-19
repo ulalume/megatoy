@@ -1,5 +1,6 @@
 #include "main_menu.hpp"
 #include "platform/platform_config.hpp"
+#include <algorithm>
 #include <filesystem>
 #include <optional>
 
@@ -56,8 +57,7 @@ void render_main_menu(MainMenuContext &context) {
         ImGui::BeginDisabled(true);
       const char *save_as_shortcut =
           mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
-      if (is_user_patch &&
-          ImGui::MenuItem("Save As...", save_as_shortcut)) {
+      if (is_user_patch && ImGui::MenuItem("Save As...", save_as_shortcut)) {
         request_save_as(context.save_state);
       }
       if (!name_valid)
@@ -75,19 +75,27 @@ void render_main_menu(MainMenuContext &context) {
         }
 
         const auto &folders = context.preferences.workspace().folders();
-        if (ImGui::BeginMenu("Remove Folder", !folders.empty())) {
+        const bool has_removable_folder = std::any_of(
+            folders.begin(), folders.end(), [&](const auto &folder) {
+              return !context.preferences.workspace_folder_is_protected(
+                  folder.path);
+            });
+        const char *remove_label =
+            megatoy::platform::is_web() ? "Delete Folder" : "Remove Folder";
+        if (ImGui::BeginMenu(remove_label, has_removable_folder)) {
           std::optional<std::filesystem::path> to_remove;
           for (const auto &folder : folders) {
+            if (context.preferences.workspace_folder_is_protected(
+                    folder.path)) {
+              continue;
+            }
             if (ImGui::MenuItem(folder.path.string().c_str())) {
               to_remove = folder.path;
             }
           }
           ImGui::EndMenu();
-          if (to_remove) {
-            context.preferences.remove_workspace_folder(*to_remove);
-            if (context.sync_workspace) {
-              context.sync_workspace();
-            }
+          if (to_remove && context.remove_workspace_folder) {
+            context.remove_workspace_folder(*to_remove);
           }
         }
       }

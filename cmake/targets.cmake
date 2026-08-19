@@ -107,6 +107,7 @@ set(MEGATOY_CORE_SOURCES
   src/midi/midi_input_manager.cpp
 
   src/patches/patch_session.cpp
+  src/workspace/path_policy.cpp
   src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
   src/patches/patch_repository.cpp
@@ -138,6 +139,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/local_storage.cpp
     src/platform/web/web_folder_import.cpp
     src/platform/web/web_storage_bootstrap.cpp
+    src/platform/web/web_storage_persistence.cpp
     src/platform/web/web_workspace_download.cpp
     src/platform/web/web_patch_url.cpp
     src/platform/web/web_midi_backend.cpp

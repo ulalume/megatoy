@@ -55,6 +55,10 @@ public:
     return SavePatchResult::unsupported();
   }
 
+  // File deletion is opt-in so read-only and non-filesystem storages refuse it.
+  virtual bool can_delete_patch(const PatchEntry &) const { return false; }
+  virtual bool delete_patch(const PatchEntry &) { return false; }
+
   // Optional metadata operations. Default is unsupported (for storages without
   // metadata persistence).
   virtual bool save_patch_metadata(const std::string &, const ym2612::Patch &,

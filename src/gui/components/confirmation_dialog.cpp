@@ -62,6 +62,46 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
   if (confirmation_state.show_unsaved_changes_dialog) {
     ImGui::OpenPopup("Unsaved Changes");
   }
+
+  auto &danger = context.danger_state;
+  if (danger.requested && !danger.title.empty()) {
+    ImGui::OpenPopup(danger.title.c_str());
+    danger.requested = false;
+  }
+
+  bool cancel_danger = false;
+  bool confirm_danger = false;
+  center_next_window();
+  if (!danger.title.empty() &&
+      ImGui::BeginPopupModal(danger.title.c_str(), nullptr,
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+    force_center_window();
+    ImGui::TextWrapped("%s", danger.message.c_str());
+    ImGui::Spacing();
+
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+      cancel_danger = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(danger.confirm_label.c_str(), ImVec2(120, 0))) {
+      confirm_danger = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  }
+
+  if (cancel_danger) {
+    danger.clear();
+  } else if (confirm_danger) {
+    auto on_confirm = std::move(danger.on_confirm);
+    danger.clear();
+    if (on_confirm) {
+      on_confirm();
+    }
+  }
 }
 
 } // namespace ui

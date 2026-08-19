@@ -5,6 +5,7 @@
 #include "patches/filesystem_patch_storage.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_storage_persistence.hpp"
 #endif
 #include "ym2612/patch.hpp"
 #include <algorithm>
@@ -183,6 +184,9 @@ PatchRepository::save_patch(const ym2612::Patch &patch, const std::string &name,
     if (result.status != SavePatchResult::Status::Unsupported) {
       if (result.status == SavePatchResult::Status::Success) {
         refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+        platform::web::request_storage_persist();
+#endif
       }
       return result;
     }
@@ -205,10 +209,37 @@ PatchRepository::save_patch_in(const std::filesystem::path &folder,
                                                  preferred_extension);
     if (result.status == SavePatchResult::Status::Success) {
       refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+      platform::web::request_storage_persist();
+#endif
     }
     return result;
   }
   return SavePatchResult::unsupported();
+}
+
+bool PatchRepository::can_delete_patch(const PatchEntry &entry) const {
+  return std::any_of(
+      storages_.begin(), storages_.end(),
+      [&](const auto &storage) { return storage->can_delete_patch(entry); });
+}
+
+bool PatchRepository::delete_patch(const PatchEntry &entry) {
+  for (const auto &storage : storages_) {
+    if (!storage->can_delete_patch(entry)) {
+      continue;
+    }
+    if (!storage->delete_patch(entry)) {
+      return false;
+    }
+    refresh();
+    cleanup_orphaned_metadata();
+#if defined(MEGATOY_PLATFORM_WEB)
+    platform::web::request_storage_persist();
+#endif
+    return true;
+  }
+  return false;
 }
 
 std::filesystem::path

@@ -2,6 +2,7 @@
 
 #if defined(MEGATOY_PLATFORM_WEB)
 
+#include "platform/web/web_storage_persistence.hpp"
 #include <emscripten.h>
 #include <memory>
 #include <string>
@@ -40,6 +41,9 @@ EMSCRIPTEN_KEEPALIVE void megatoy_folder_import_done(void *handle, int ok,
       path != nullptr ? std::filesystem::path(path) : std::filesystem::path();
   result.file_count = file_count > 0 ? static_cast<std::size_t>(file_count) : 0;
   result.error = error != nullptr ? error : "";
+  if (result.ok) {
+    request_storage_persist();
+  }
   pending->on_complete(std::move(result));
 }
 
@@ -60,6 +64,9 @@ megatoy_folder_dropped(int ok, const char *folder_name, const char *path,
       path != nullptr ? std::filesystem::path(path) : std::filesystem::path();
   result.file_count = file_count > 0 ? static_cast<std::size_t>(file_count) : 0;
   result.error = error != nullptr ? error : "";
+  if (result.ok) {
+    request_storage_persist();
+  }
   g_drop_handler(std::move(result));
 }
 

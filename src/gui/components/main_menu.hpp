@@ -16,6 +16,7 @@ struct MainMenuContext {
   PreferenceManager::UIPreferences &ui_prefs;
   bool &open_add_folder_dialog;
   std::function<void()> sync_workspace;
+  std::function<void(const std::filesystem::path &)> remove_workspace_folder;
   patches::PatchSession &patch_session;
   SaveExportState &save_state;
   std::function<void()> undo;
