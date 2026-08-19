@@ -130,39 +130,14 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
   ImGui::Text("%s", display_preset_path(relative_path).c_str());
 
   // Render popups in the same window/ID stack as the actions that open them.
-  render_save_export_popups(patch_session, state);
+  render_save_export_popups(patch_session, state, context.text_prompt_state);
 }
 
-void render_patch_name_field(PatchEditorContext &context, ym2612::Patch &patch,
-                             bool name_valid) {
-  ImGui::PushItemWidth(200);
-  char name_buffer[64];
-  std::strncpy(name_buffer, patch.name.c_str(), sizeof(name_buffer) - 1);
-  name_buffer[sizeof(name_buffer) - 1] = '\0';
-
-  if (ImGui::InputText("Name", name_buffer, sizeof(name_buffer),
-                       ImGuiInputTextFlags_CallbackCharFilter,
-                       filename_input_callback)) {
-    patch.name = std::string(name_buffer);
-  }
-
-  track_patch_history(context, "Patch Name", "meta.name");
-
-  if (!name_valid && !patch.name.empty()) {
-    ImGui::SameLine();
-    ImGui::TextColored(styles::color(styles::MegatoyCol::StatusWarning),
-                       "Invalid filename");
-  }
-  ImGui::PopItemWidth();
-}
-
-void render_patch_metadata(PatchEditorContext &context, ym2612::Patch &patch,
+void render_patch_metadata(PatchEditorContext &context,
                            PatchEditorState &state) {
-  const bool name_valid = is_patch_name_valid(patch);
-
-  render_save_export_buttons(context, name_valid, state);
-
-  render_patch_name_field(context, patch, name_valid);
+  render_save_export_buttons(context, state);
+  ImGui::Text("Filename: %s",
+              patch_identity(context.session.current_patch_path()).c_str());
 
   ImGui::Spacing();
 }

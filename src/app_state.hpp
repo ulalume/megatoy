@@ -104,6 +104,40 @@ struct UIState {
       on_confirm = {};
     }
   } danger_confirmation_state;
+
+  struct TextPromptState {
+    bool requested = false;
+    std::string title;
+    std::string label;
+    std::string buffer;
+    std::string confirm_label;
+    std::function<void(const std::string &)> on_confirm;
+    std::function<std::string(const std::string &)> validator;
+
+    void
+    request(std::string dialog_title, std::string input_label,
+            std::string initial_value, std::string button_label,
+            std::function<void(const std::string &)> confirm_action,
+            std::function<std::string(const std::string &)> validate = {}) {
+      requested = true;
+      title = std::move(dialog_title);
+      label = std::move(input_label);
+      buffer = std::move(initial_value);
+      confirm_label = std::move(button_label);
+      on_confirm = std::move(confirm_action);
+      validator = std::move(validate);
+    }
+
+    void clear() {
+      requested = false;
+      title.clear();
+      label.clear();
+      buffer.clear();
+      confirm_label.clear();
+      on_confirm = {};
+      validator = {};
+    }
+  } text_prompt_state;
   ui::SaveExportState save_export_state;
 };
 

@@ -233,20 +233,27 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
 }
 
 SaveResult
-PatchSession::save_current_patch_as(std::string_view preferred_extension) {
-  return save_current_patch_as_impl(preferred_extension, /*overwrite=*/false);
+PatchSession::save_current_patch_as(std::string_view preferred_extension,
+                                    std::string_view filename_stem) {
+  return save_current_patch_as_impl(preferred_extension, filename_stem,
+                                    /*overwrite=*/false);
 }
 
-SaveResult PatchSession::save_current_patch_as_forced(
-    std::string_view preferred_extension) {
-  return save_current_patch_as_impl(preferred_extension, /*overwrite=*/true);
+SaveResult
+PatchSession::save_current_patch_as_forced(std::string_view preferred_extension,
+                                           std::string_view filename_stem) {
+  return save_current_patch_as_impl(preferred_extension, filename_stem,
+                                    /*overwrite=*/true);
 }
 
 SaveResult
 PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
+                                         std::string_view filename_stem,
                                          bool overwrite) {
-  const std::string sanitized_name = sanitize_filename(
-      current_patch_.name.empty() ? "patch" : current_patch_.name);
+  std::string suggested_name =
+      filename_stem.empty() ? current_patch_.name : std::string(filename_stem);
+  const std::string sanitized_name =
+      sanitize_filename(suggested_name.empty() ? "patch" : suggested_name);
 
   std::string extension(preferred_extension);
   if (extension.empty()) {
@@ -257,7 +264,9 @@ PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
   }
 
   if (megatoy::platform::is_web()) {
-    auto result = repository_->save_patch(current_patch_, current_patch_.name,
+    auto patch_to_write = current_patch_;
+    patch_to_write.name = sanitized_name;
+    auto result = repository_->save_patch(patch_to_write, sanitized_name,
                                           overwrite, extension);
     if (result.status == SavePatchResult::Status::Success) {
       auto loaded = formats::load_patch_from_file(result.path);
@@ -265,6 +274,7 @@ PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
           loaded.patches.size() == 1) {
         set_current_patch(loaded.patches.front(), result.path);
       } else {
+        current_patch_.name = sanitized_name;
         set_current_patch_path(result.path);
         mark_as_clean();
       }
@@ -299,7 +309,9 @@ PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
   }
 
   selected = append_extension_if_missing(std::move(selected), extension);
-  if (!patches::write_patch(current_patch_, selected)) {
+  auto patch_to_write = current_patch_;
+  patch_to_write.name = selected.stem().string();
+  if (!patches::write_patch(patch_to_write, selected)) {
     return SaveResult::error("Failed to write " + selected.string());
   }
 
@@ -309,6 +321,7 @@ PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
       loaded.patches.size() == 1) {
     set_current_patch(loaded.patches.front(), selected);
   } else {
+    current_patch_.name = selected.stem().string();
     set_current_patch_path(selected);
     mark_as_clean();
   }

@@ -4,17 +4,14 @@
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
+#include "platform/platform_config.hpp"
+#include <filesystem>
 #include <imgui.h>
 #include <optional>
 #include <string>
 #include <string_view>
 
 namespace ui {
-
-bool is_patch_name_valid(const ym2612::Patch &patch) {
-  return !patch.name.empty() &&
-         patches::sanitize_filename(patch.name) == patch.name;
-}
 
 const char *save_label_for(const patches::PatchSession &session,
                            bool is_user_patch) {
@@ -40,6 +37,25 @@ void announce_save(patches::PatchSession &session,
   }
 }
 
+std::string save_as_stem_suggestion(const patches::PatchSession &session) {
+  if (!session.current_patch_path().empty()) {
+    const auto extension = std::filesystem::path(session.current_patch_path())
+                               .extension()
+                               .string();
+    const bool imported_container_child =
+        extension != ".ginpkg" &&
+        session.current_patch_selection_path() != session.current_patch_path();
+    if (!imported_container_child) {
+      return std::filesystem::path(session.current_patch_path())
+          .stem()
+          .string();
+    }
+  }
+  const auto &imported_name = session.current_patch().name;
+  const auto sanitized = patches::sanitize_filename(imported_name);
+  return sanitized.empty() ? "patch" : sanitized;
+}
+
 } // namespace
 
 void trigger_save(patches::PatchSession &session, SaveExportState &state,
@@ -59,7 +75,8 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
 void request_save_as(SaveExportState &state) { state.save_as_requested = true; }
 
 void render_save_export_popups(patches::PatchSession &session,
-                               SaveExportState &state) {
+                               SaveExportState &state,
+                               UIState::TextPromptState &text_prompt_state) {
   if (state.overwrite_confirmation_pending) {
     ImGui::OpenPopup("Overwrite Confirmation");
     state.overwrite_confirmation_pending = false;
@@ -84,6 +101,30 @@ void render_save_export_popups(patches::PatchSession &session,
     ImGui::EndPopup();
   }
   if (selected_extension) {
+#if defined(MEGATOY_PLATFORM_WEB)
+    const std::string extension = *selected_extension;
+    text_prompt_state.request(
+        "Save Patch As", "Filename", save_as_stem_suggestion(session), "Save",
+        [&session, &state, extension](const std::string &stem) {
+          auto result = session.save_current_patch_as(extension, stem);
+          if (result.is_duplicated()) {
+            state.pending_save_as_extension = extension;
+            state.pending_save_as_stem = stem;
+            state.overwrite_confirmation_pending = true;
+          } else {
+            announce_save(session, result);
+          }
+        },
+        [](const std::string &stem) {
+          if (stem.empty()) {
+            return std::string("Filename cannot be empty.");
+          }
+          if (patches::sanitize_filename(stem) != stem) {
+            return std::string("Filename contains invalid characters.");
+          }
+          return std::string{};
+        });
+#else
     auto result = session.save_current_patch_as(*selected_extension);
     if (result.is_duplicated()) {
       state.pending_save_as_extension = *selected_extension;
@@ -91,9 +132,8 @@ void render_save_export_popups(patches::PatchSession &session,
     } else {
       announce_save(session, result);
     }
+#endif
   }
-
-  const auto &patch = session.current_patch();
 
   center_next_window();
   if (ImGui::BeginPopupModal("Overwrite Confirmation", nullptr,
@@ -102,7 +142,12 @@ void render_save_export_popups(patches::PatchSession &session,
                                  ImGuiWindowFlags_AlwaysAutoResize)) {
     force_center_window();
     ImGui::Text("A patch with this name already exists:");
-    ImGui::Text("\"%s\"", patch.name.c_str());
+    const std::string overwrite_stem =
+        state.pending_save_as_stem.value_or(save_as_stem_suggestion(session));
+    const std::string overwrite_extension =
+        state.pending_save_as_extension.value_or("");
+    ImGui::Text("\"%s%s\"", overwrite_stem.c_str(),
+                overwrite_extension.c_str());
     ImGui::Spacing();
     ImGui::Text("Do you want to overwrite it?");
     ImGui::Spacing();
@@ -110,6 +155,7 @@ void render_save_export_popups(patches::PatchSession &session,
     const bool cancel_button = ImGui::Button("Cancel", ImVec2(120, 0));
     if (cancel_button) {
       state.pending_save_as_extension.reset();
+      state.pending_save_as_stem.reset();
       ImGui::CloseCurrentPopup();
     }
 
@@ -123,11 +169,13 @@ void render_save_export_popups(patches::PatchSession &session,
 
     if (overwrite_button) {
       const auto pending_extension = state.pending_save_as_extension;
+      const auto pending_stem = state.pending_save_as_stem;
       state.pending_save_as_extension.reset();
-      auto result =
-          pending_extension
-              ? session.save_current_patch_as_forced(*pending_extension)
-              : session.save_current_patch();
+      state.pending_save_as_stem.reset();
+      auto result = pending_extension
+                        ? session.save_current_patch_as_forced(
+                              *pending_extension, pending_stem.value_or(""))
+                        : session.save_current_patch();
       if (result.is_success()) {
         session.set_current_patch_path(
             session.repository().to_relative_path(result.path));

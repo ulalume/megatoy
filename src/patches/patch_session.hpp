@@ -96,9 +96,12 @@ public:
    * dialog instead, so nothing is destroyed by a stray Ctrl+S.
    */
   SaveResult save_current_patch(std::string_view preferred_extension = {});
-  SaveResult save_current_patch_as(std::string_view preferred_extension = {});
+  SaveResult save_current_patch_as(std::string_view preferred_extension = {},
+                                   std::string_view filename_stem = {});
   SaveResult
-  save_current_patch_as_forced(std::string_view preferred_extension = {});
+  save_current_patch_as_forced(std::string_view preferred_extension = {},
+                               std::string_view filename_stem = {});
+  bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
   std::optional<SaveFormatInfo>
   find_save_format(const std::string &extension) const;
   std::vector<SaveFormatInfo> save_formats() const;
@@ -139,7 +142,9 @@ public:
 
 private:
   SaveResult save_current_patch_as_impl(std::string_view preferred_extension,
+                                        std::string_view filename_stem,
                                         bool overwrite);
+  void set_file_identity(const std::filesystem::path &path);
   std::optional<std::filesystem::path> writable_source_folder() const;
 
   megatoy::system::PathService &directories_;
