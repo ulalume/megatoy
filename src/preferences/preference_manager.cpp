@@ -191,10 +191,17 @@ bool PreferenceManager::load_preferences() {
     if (data.workspace_folders.empty()) {
       const auto legacy =
           megatoy::system::PathService::legacy_default_patches_directory();
-      if (paths_.file_system().is_directory(legacy)) {
+      std::error_code error;
+      if (paths_.file_system().is_directory(legacy, error)) {
         data.workspace_folders = {legacy};
+      } else if (error) {
+        std::cerr << "Legacy workspace migration will be retried: "
+                  << error.message() << "\n";
+        apply_loaded_data(data);
+        return true;
       }
     }
+    data.legacy_workspace_migration_complete = true;
     data.migrated_legacy_workspace = true;
   }
 #endif
@@ -262,6 +269,8 @@ PreferenceData PreferenceManager::to_data() const {
   data.workspace_folders = workspace_.paths();
   data.last_save_directory = last_save_directory_;
   data.show_builtin_presets = show_builtin_presets_;
+  data.legacy_workspace_migration_complete =
+      legacy_workspace_migration_complete_;
   data.legacy_metadata_migration_complete = legacy_metadata_migration_complete_;
   data.theme = theme_;
   data.ui_preferences = ui_preferences_;
@@ -272,6 +281,8 @@ void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
   workspace_.set_paths(data.workspace_folders);
   last_save_directory_ = data.last_save_directory;
   show_builtin_presets_ = data.show_builtin_presets;
+  legacy_workspace_migration_complete_ =
+      data.legacy_workspace_migration_complete;
   legacy_metadata_migration_complete_ = data.legacy_metadata_migration_complete;
   theme_ = data.theme;
   ui_preferences_ = data.ui_preferences;

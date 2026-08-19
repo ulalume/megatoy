@@ -5,6 +5,7 @@
 #include <istream>
 #include <memory>
 #include <ostream>
+#include <system_error>
 #include <vector>
 
 namespace platform {
@@ -21,6 +22,8 @@ public:
 
   virtual bool exists(const std::filesystem::path &path) const = 0;
   virtual bool is_directory(const std::filesystem::path &path) const = 0;
+  virtual bool is_directory(const std::filesystem::path &path,
+                            std::error_code &error) const = 0;
   virtual bool create_directories(const std::filesystem::path &path) = 0;
   virtual std::vector<DirectoryEntry>
   read_directory(const std::filesystem::path &path) const = 0;

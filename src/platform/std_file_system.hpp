@@ -12,6 +12,8 @@ public:
 
   bool exists(const std::filesystem::path &path) const override;
   bool is_directory(const std::filesystem::path &path) const override;
+  bool is_directory(const std::filesystem::path &path,
+                    std::error_code &error) const override;
   bool create_directories(const std::filesystem::path &path) override;
   std::vector<DirectoryEntry>
   read_directory(const std::filesystem::path &path) const override;

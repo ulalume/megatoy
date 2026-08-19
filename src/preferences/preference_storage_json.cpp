@@ -216,7 +216,8 @@ public:
   bool save(const PreferenceData &data) override {
     try {
       nlohmann::json j;
-      j["legacy_workspace_migration"] = 1;
+      j["legacy_workspace_migration"] =
+          data.legacy_workspace_migration_complete ? 1 : 0;
       j["legacy_metadata_migration"] =
           data.legacy_metadata_migration_complete ? 1 : 0;
       nlohmann::json folders = nlohmann::json::array();

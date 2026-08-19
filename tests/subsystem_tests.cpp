@@ -142,6 +142,49 @@ void test_fresh_and_legacy_default_workspace_migration(
   CHECK(rewritten.at("workspace_folders").size() == 1);
 }
 
+void test_failed_preferences_load_does_not_complete_workspace_migration(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "corrupt-preferences-config";
+  std::filesystem::create_directories(config);
+  {
+    std::ofstream output(config / "preferences.json");
+    output << R"({"workspace_folders":[)";
+  }
+
+  // A later preference change may repair a file that failed to load. That
+  // save must preserve the pending marker so the next launch still probes the
+  // pre-workspace default folder.
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().empty());
+    CHECK(preferences.save_preferences());
+  }
+
+  nlohmann::json repaired;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> repaired;
+  }
+  CHECK(repaired.at("legacy_workspace_migration").get<int>() == 0);
+
+  const auto legacy_patches =
+      root / "home" / "Documents" / "megatoy" / "patches";
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.workspace().folders().size() == 1);
+    CHECK(preferences.workspace().folders()[0].path ==
+          std::filesystem::weakly_canonical(legacy_patches));
+  }
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> repaired;
+  }
+  CHECK(repaired.at("legacy_workspace_migration").get<int>() == 1);
+}
+
 void test_legacy_data_directory_migration() {
   const auto root = std::filesystem::temp_directory_path() /
                     "megatoy_legacy_preferences_test";
@@ -613,6 +656,8 @@ int main() {
   ScopedTestHome test_home(migration_root / "home");
 
   test_fresh_and_legacy_default_workspace_migration(migration_root);
+  test_failed_preferences_load_does_not_complete_workspace_migration(
+      migration_root);
   test_legacy_data_directory_migration();
   test_legacy_metadata_migration(migration_root);
   test_legacy_metadata_waits_for_custom_folder(migration_root);
