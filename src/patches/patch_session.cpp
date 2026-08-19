@@ -280,7 +280,7 @@ PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
     return SaveResult::error("Failed to save patch");
   }
 
-  selected.replace_extension(extension);
+  selected = append_extension_if_missing(std::move(selected), extension);
   if (!patches::write_patch(current_patch_, selected)) {
     return SaveResult::error("Failed to write " + selected.string());
   }

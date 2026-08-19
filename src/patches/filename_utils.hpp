@@ -1,6 +1,8 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
+#include <string_view>
 
 namespace patches {
 
@@ -40,5 +42,8 @@ inline std::string sanitize_filename(const std::string &input) {
   }
   return result;
 }
+
+std::filesystem::path append_extension_if_missing(std::filesystem::path path,
+                                                  std::string_view extension);
 
 } // namespace patches
