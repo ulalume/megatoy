@@ -167,13 +167,11 @@ void render_patch_metadata(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::Spacing();
 }
 
-void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
-                        bool &settings_changed) {
+void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Low Frequency Oscillator");
   bool lfo_enable = patch.global.lfo_enable;
   if (ImGui::Checkbox("LFO Enable", &lfo_enable)) {
     patch.global.lfo_enable = lfo_enable;
-    settings_changed = true;
   }
   track_patch_history(context, "LFO Enable", "global.lfo_enable");
 
@@ -188,7 +186,6 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
   track_patch_history(context, "LFO Frequency", "global.lfo_frequency");
   if (lfo_freq_changed) {
     patch.global.lfo_frequency = static_cast<uint8_t>(lfo_freq);
-    settings_changed = true;
   }
 
   ImGui::Spacing();
@@ -200,7 +197,6 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
                       "channel.am_sensitivity");
   if (ams_changed) {
     patch.channel.amplitude_modulation_sensitivity = static_cast<uint8_t>(ams);
-    settings_changed = true;
   }
 
   int fms = patch.channel.frequency_modulation_sensitivity;
@@ -210,7 +206,6 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
                       "channel.fm_sensitivity");
   if (fms_changed) {
     patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(fms);
-    settings_changed = true;
   }
   if (!lfo_enable)
     ImGui::EndDisabled();
@@ -219,13 +214,11 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::Spacing();
 }
 
-void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
-                            bool &settings_changed) {
+void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Channel");
   bool left_speaker = patch.channel.left_speaker;
   if (ImGui::Checkbox("Left Speaker", &left_speaker)) {
     patch.channel.left_speaker = left_speaker;
-    settings_changed = true;
   }
   track_patch_history(context, "Left Speaker", "channel.left_speaker");
 
@@ -234,7 +227,6 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
   bool right_speaker = patch.channel.right_speaker;
   if (ImGui::Checkbox("Right Speaker", &right_speaker)) {
     patch.channel.right_speaker = right_speaker;
-    settings_changed = true;
   }
   track_patch_history(context, "Right Speaker", "channel.right_speaker");
 
@@ -250,15 +242,14 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
   track_patch_history(context, "Algorithm", "instrument.algorithm");
   if (algorithm_changed) {
     patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
-    settings_changed = true;
   }
   ImGui::PopItemWidth();
 
   ImGui::Spacing();
 }
 
-void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
-                             bool &settings_changed) {
+void render_operator_section(PatchEditorContext &context,
+                             ym2612::Patch &patch) {
 
   const auto avail_width = ImGui::GetContentRegionAvail().x;
   bool space_for_feedbacks[4] = {false};
@@ -278,9 +269,9 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
   for (auto i = 0; i < 4; i++) {
     auto op_index = static_cast<int>(ym2612::all_operator_indices[i]);
 
-    settings_changed |= render_operator_editor(
-        context, patch, patch.instrument.operators[op_index], i,
-        context.envelope_states[i], space_for_feedbacks[i]);
+    render_operator_editor(context, patch, patch.instrument.operators[op_index],
+                           i, context.envelope_states[i],
+                           space_for_feedbacks[i]);
 
     ImGui::Spacing();
     ImGui::NextColumn();
@@ -305,29 +296,21 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
 
   auto title_with_id =
       std::string(title) + (is_modified ? " *###" : "###") + std::string(title);
-  if (!ImGui::Begin(title_with_id.c_str(), &context.prefs.show_patch_editor)) {
-    ImGui::End();
-    return;
-  }
+  if (ImGui::Begin(title_with_id.c_str(), &context.prefs.show_patch_editor)) {
+    render_patch_metadata(context, patch, state);
 
-  bool settings_changed = false;
-
-  render_patch_metadata(context, patch, state);
-
-  const auto available_width = ImGui::GetContentRegionAvail().x;
-  ImGui::Columns(available_width > 800 ? 2 : 1, "##lfo_channel_columns", false);
-  render_lfo_section(context, patch, settings_changed);
-  ImGui::NextColumn();
-  render_channel_section(context, patch, settings_changed);
-  ImGui::Columns(1);
-  render_operator_section(context, patch, settings_changed);
-
-  // Apply settings if changed
-  if (settings_changed) {
-    context.session.apply_patch_to_audio();
+    const auto available_width = ImGui::GetContentRegionAvail().x;
+    ImGui::Columns(available_width > 800 ? 2 : 1, "##lfo_channel_columns",
+                   false);
+    render_lfo_section(context, patch);
+    ImGui::NextColumn();
+    render_channel_section(context, patch);
+    ImGui::Columns(1);
+    render_operator_section(context, patch);
   }
 
   ImGui::End();
+  context.session.apply_patch_to_audio_if_changed();
 }
 
 } // namespace ui

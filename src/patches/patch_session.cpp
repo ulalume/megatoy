@@ -169,9 +169,27 @@ void PatchSession::set_current_patch(const ym2612::Patch &patch,
 void PatchSession::apply_patch_to_audio() {
   // Patch edits take the same route as notes so that a slider drag cannot
   // rewrite registers underneath the renderer.
-  audio_.submit(audio::AudioCommand::apply_patch(current_patch_.global,
-                                                 current_patch_.channel,
-                                                 current_patch_.instrument));
+  if (audio_.submit(audio::AudioCommand::apply_patch(
+          current_patch_.global, current_patch_.channel,
+          current_patch_.instrument))) {
+    last_applied_ = current_patch_;
+    has_applied_patch_ = true;
+  }
+}
+
+bool PatchSession::apply_patch_to_audio_if_changed() {
+  const bool audio_settings_changed =
+      !has_applied_patch_ || current_patch_.global != last_applied_.global ||
+      current_patch_.channel != last_applied_.channel ||
+      current_patch_.instrument != last_applied_.instrument;
+  if (!audio_settings_changed) {
+    return false;
+  }
+
+  apply_patch_to_audio();
+  return has_applied_patch_ && current_patch_.global == last_applied_.global &&
+         current_patch_.channel == last_applied_.channel &&
+         current_patch_.instrument == last_applied_.instrument;
 }
 
 std::optional<std::filesystem::path>

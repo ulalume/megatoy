@@ -62,7 +62,6 @@ struct PatchHistoryActions {
               [](AppContext &context,
                  const patches::PatchSession::PatchSnapshot &snapshot) {
                 context.services.patch_session.restore_snapshot(snapshot);
-                context.services.patch_session.apply_patch_to_audio();
               });
         });
   }

@@ -83,6 +83,7 @@ public:
 
   // Audio integration
   void apply_patch_to_audio();
+  bool apply_patch_to_audio_if_changed();
 
   // File operations
   /**
@@ -146,6 +147,8 @@ private:
   AudioManager &audio_;
   std::unique_ptr<PatchRepository> repository_;
   ym2612::Patch current_patch_;
+  ym2612::Patch last_applied_;
+  bool has_applied_patch_ = false;
   std::string current_patch_path_;
   std::string current_patch_selection_path_;
   ym2612::Patch original_patch_; // For tracking modifications

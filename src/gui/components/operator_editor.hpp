@@ -15,7 +15,7 @@ const ImVec2 image_size(hslider_width, vslider_height);
 // Helper function to render operator settings
 struct PatchEditorContext;
 
-bool render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
+void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             ym2612::OperatorSettings &op, int op_index,
                             UIState::EnvelopeState &envelope_state,
                             bool space_for_feedback);
