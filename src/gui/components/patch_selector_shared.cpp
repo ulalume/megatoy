@@ -5,6 +5,7 @@
 #include "platform/platform_config.hpp"
 
 #include <IconsFontAwesome7.h>
+#include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <imgui.h>
@@ -182,10 +183,12 @@ void render_filter_bar(PatchSelectorContext &context) {
 
   ImGui::SameLine();
   ImGui::SetNextItemWidth(60);
+  prefs.metadata_star_filter = std::clamp(prefs.metadata_star_filter, 0, 5);
   ImGui::SliderInt("##Stars", &prefs.metadata_star_filter, 0, 5,
                    prefs.metadata_star_filter == 0
                        ? "Stars"
-                       : kStarLabels[prefs.metadata_star_filter].data());
+                       : kStarLabels[prefs.metadata_star_filter].data(),
+                   ImGuiSliderFlags_AlwaysClamp);
 
   ImGui::SameLine();
   const bool is_filtered =

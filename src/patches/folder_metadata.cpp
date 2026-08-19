@@ -57,7 +57,7 @@ PatchMetadata metadata_from_json(const std::string &path,
   PatchMetadata metadata;
   metadata.path = path;
   metadata.hash = j.value("hash", std::string{});
-  metadata.star_rating = j.value("star_rating", 0);
+  metadata.star_rating = std::clamp(j.value("star_rating", 0), 0, 5);
   metadata.category = j.value("category", std::string{});
   metadata.notes = j.value("notes", std::string{});
   metadata.created_at = j.value("created_at", std::string{});

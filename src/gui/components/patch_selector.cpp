@@ -47,8 +47,8 @@ void render_tree_tab(PatchSelectorContext &context) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                          "No results for current filters");
     }
-    ImGui::EndChild();
   }
+  ImGui::EndChild();
 }
 
 } // namespace

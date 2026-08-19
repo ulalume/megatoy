@@ -430,13 +430,13 @@ void render_patch_lab(const char *title, PatchLabContext &context,
       }
       ImGui::EndTabBar();
     }
-    ImGui::EndChild();
   }
+  ImGui::EndChild();
   ImGui::SameLine();
   if (ImGui::BeginChild("##PatchLabResults", ImVec2(0, 0), true)) {
     render_result_list(context, state);
-    ImGui::EndChild();
   }
+  ImGui::EndChild();
 
   ImGui::End();
 }
