@@ -90,6 +90,7 @@ public:
 
   bool can_delete_patch(const PatchEntry &entry) const;
   bool delete_patch(const PatchEntry &entry);
+  bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
   bool can_edit_metadata(const PatchEntry &entry) const;
 
   // Batch operations

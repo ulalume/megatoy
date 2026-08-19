@@ -18,6 +18,7 @@
 #include "history/snapshot_entry.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
+#include "patches/filename_utils.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_storage_persistence.hpp"
@@ -389,6 +390,9 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       },
       [&ctx](const std::filesystem::path &path) {
         request_workspace_folder_removal(ctx, path);
+      },
+      [&ctx](const patches::PatchEntry &entry) {
+        request_patch_rename(ctx, entry);
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_deletion(ctx, entry);

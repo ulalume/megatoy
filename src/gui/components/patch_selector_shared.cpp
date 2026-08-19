@@ -141,8 +141,11 @@ void entry_context_menu(PatchSelectorContext &context,
     ImGui::Separator();
   }
 
-  if (context.delete_patch && context.repository.can_delete_patch(entry)) {
-    if (ImGui::MenuItem("Delete...")) {
+  if (context.repository.can_delete_patch(entry)) {
+    if (context.rename_patch && ImGui::MenuItem("Rename...")) {
+      context.rename_patch(entry);
+    }
+    if (context.delete_patch && ImGui::MenuItem("Delete...")) {
       context.delete_patch(entry);
     }
     ImGui::Separator();

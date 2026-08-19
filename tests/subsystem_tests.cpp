@@ -427,6 +427,20 @@ struct TestEnvironment {
   ~TestEnvironment() { std::filesystem::remove_all(root); }
 };
 
+const patches::PatchEntry *
+find_patch_entry(const std::vector<patches::PatchEntry> &entries,
+                 const std::filesystem::path &path) {
+  for (const auto &entry : entries) {
+    if (entry.full_path == path) {
+      return &entry;
+    }
+    if (const auto *found = find_patch_entry(entry.children, path)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
 class TestAudioTransport final : public AudioTransport {
 public:
   bool start(std::uint32_t, RenderCallback callback) override {
@@ -698,6 +712,39 @@ void test_save_in_place_rules(TestEnvironment &env) {
   CHECK(!env.session.can_save_in_place());
 }
 
+void test_current_patch_rename_preserves_clean_identity(TestEnvironment &env) {
+  auto patch = env.session.current_patch();
+  patch.name = "embedded old name";
+  const auto source_path = env.patches_folder / "session-old.gin";
+  CHECK(patches::write_patch(patch, source_path));
+  env.session.repository().refresh();
+
+  const auto *found =
+      find_patch_entry(env.session.repository().tree(), source_path);
+  CHECK(found != nullptr);
+  const auto entry = *found;
+  ym2612::Patch loaded;
+  CHECK(env.session.repository().load_patch(entry, loaded));
+  env.session.set_current_patch(loaded, entry.relative_path);
+  CHECK(env.session.current_patch().name == "session-old");
+  CHECK(env.session.current_patch_is_user_patch());
+  CHECK(!env.session.is_modified());
+
+  env.session.current_patch().name = "format metadata changed";
+  CHECK(env.session.is_modified());
+  CHECK(env.session.current_patch_is_user_patch());
+  env.session.mark_as_clean();
+
+  CHECK(env.session.rename_patch(entry, "session-new"));
+  CHECK(!std::filesystem::exists(source_path));
+  CHECK(std::filesystem::exists(env.patches_folder / "session-new.gin"));
+  CHECK(std::filesystem::path(env.session.current_patch_path()).stem() ==
+        "session-new");
+  CHECK(env.session.current_patch().name == "session-new");
+  CHECK(env.session.capture_snapshot().original_patch.name == "session-new");
+  CHECK(!env.session.is_modified());
+}
+
 void test_patch_snapshot_roundtrip(TestEnvironment &env) {
   auto before = env.session.capture_snapshot();
   env.session.current_patch().name = "modified";
@@ -760,6 +807,7 @@ int main() {
   test_ginpkg_versions_appear_as_container_items(env);
   test_save_and_metadata_roundtrip(env);
   test_save_in_place_rules(env);
+  test_current_patch_rename_preserves_clean_identity(env);
 
   std::cout << "All subsystem tests passed\n";
   std::filesystem::remove_all(migration_root);

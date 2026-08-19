@@ -263,6 +263,44 @@ bool FolderMetadataStore::remove(const std::string &relative_path) {
   return save();
 }
 
+bool FolderMetadataStore::rename_key_prefix(
+    const std::string &old_relative_path,
+    const std::string &new_relative_path) {
+  if (old_relative_path.empty() || new_relative_path.empty()) {
+    return false;
+  }
+  if (old_relative_path == new_relative_path) {
+    return true;
+  }
+
+  const std::string old_prefix = old_relative_path + "/";
+  std::vector<std::pair<std::string, PatchMetadata>> moved;
+  for (const auto &[key, metadata] : entries_) {
+    if (key == old_relative_path || key.rfind(old_prefix, 0) == 0) {
+      const std::string suffix = key.substr(old_relative_path.size());
+      auto renamed = metadata;
+      renamed.path = new_relative_path + suffix;
+      moved.emplace_back(key, std::move(renamed));
+    }
+  }
+  if (moved.empty()) {
+    return true;
+  }
+
+  const auto previous = entries_;
+  for (const auto &[old_key, metadata] : moved) {
+    entries_.erase(old_key);
+  }
+  for (auto &[old_key, metadata] : moved) {
+    entries_.insert_or_assign(metadata.path, std::move(metadata));
+  }
+  if (save()) {
+    return true;
+  }
+  entries_ = previous;
+  return false;
+}
+
 bool FolderMetadataStore::retain_only(
     const std::vector<std::string> &existing_paths) {
   std::vector<std::string> sorted = existing_paths;

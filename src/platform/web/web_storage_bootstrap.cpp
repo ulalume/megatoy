@@ -79,16 +79,11 @@ parse_legacy_library(const std::string &source) {
     }
 
     entry.patch = item.at("patch").get<ym2612::Patch>();
-    if (entry.patch.name.empty()) {
-      // GIN parsing falls back to the file stem for an empty patch name. Give
-      // both sides the same explicit name so semantic verification converges.
-      entry.patch.name = name;
-    }
-
     entry.filename_stem = patches::sanitize_filename(name);
     if (entry.filename_stem.empty()) {
       entry.filename_stem = "patch";
     }
+    entry.patch.name = entry.filename_stem;
     patches.push_back(std::move(entry));
   }
   return patches;

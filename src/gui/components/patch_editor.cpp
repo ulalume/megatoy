@@ -3,14 +3,12 @@
 #include "core/status.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
-#include "gui/styles/megatoy_style.hpp"
+#include "gui/window_title.hpp"
 #include "operator_editor.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_workspace_download.hpp"
 #endif
-#include <cctype>
-#include <cstring>
 #include <filesystem>
 #include <imgui.h>
 #include <optional>
@@ -33,27 +31,16 @@ void track_patch_history(PatchEditorContext &context, const std::string &label,
   }
 }
 
-// ImGui callback to block invalid characters
-static int filename_input_callback(ImGuiInputTextCallbackData *data) {
-  if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter) {
-    if (!patches::is_valid_filename_char(data->EventChar)) {
-      return 1; // Reject the character
-    }
-  }
-  return 0;
-}
-
 namespace {
 
-void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
+void render_save_export_buttons(PatchEditorContext &context,
                                 PatchEditorState &state) {
   auto &patch_session = context.session;
 
   auto is_user_patch = patch_session.current_patch_is_user_patch();
   auto is_patch_modified = patch_session.is_modified();
 
-  auto save_button_is_disabled =
-      !name_valid || (is_user_patch && !is_patch_modified);
+  auto save_button_is_disabled = is_user_patch && !is_patch_modified;
 
   if (save_button_is_disabled) {
     ImGui::BeginDisabled(true);
@@ -80,17 +67,12 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
     ImGui::BeginDisabled(true);
   }
   if (ImGui::IsItemHovered()) {
-    if (!name_valid) {
-      ImGui::SetTooltip("Enter a valid patch name to save");
-    } else if (!is_user_patch) {
+    if (!is_user_patch) {
       const auto &path = patch_session.current_patch_path();
       if (path.ends_with(".ginpkg")) {
         ImGui::SetTooltip("Save version to %s", path.c_str());
       } else {
-        ImGui::SetTooltip(
-            "Save to %s/%s.gin",
-            patch_session.repository().primary_writable_label().c_str(),
-            patch_session.current_patch().name.c_str());
+        ImGui::SetTooltip("Choose a filename and format");
       }
     } else if (!is_patch_modified) {
       ImGui::SetTooltip("Patch is not modified");
@@ -102,14 +84,8 @@ void render_save_export_buttons(PatchEditorContext &context, bool name_valid,
 
   if (is_user_patch) {
     ImGui::SameLine();
-    if (!name_valid) {
-      ImGui::BeginDisabled(true);
-    }
     if (ImGui::Button("Save As...")) {
       request_save_as(state);
-    }
-    if (!name_valid) {
-      ImGui::EndDisabled();
     }
   }
 
@@ -269,10 +245,10 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
   ImGui::SetNextWindowPos(ImVec2(400, 50), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
-  auto title_with_id =
-      std::string(title) + (is_modified ? " *###" : "###") + std::string(title);
+  auto title_with_id = patch_editor_window_title(
+      title, context.session.current_patch_path(), is_modified);
   if (ImGui::Begin(title_with_id.c_str(), &context.prefs.show_patch_editor)) {
-    render_patch_metadata(context, patch, state);
+    render_patch_metadata(context, state);
 
     const auto available_width = ImGui::GetContentRegionAvail().x;
     ImGui::Columns(available_width > 800 ? 2 : 1, "##lfo_channel_columns",

@@ -32,11 +32,9 @@ void render_main_menu(MainMenuContext &context) {
       ImGui::EndMenu();
     }
     auto &session = context.patch_session;
-    const bool name_valid = is_patch_name_valid(session.current_patch());
     const bool is_patch_modified = session.is_modified();
     const bool is_user_patch = session.current_patch_is_user_patch();
-    const bool save_disabled =
-        !name_valid || (is_user_patch && !is_patch_modified);
+    const bool save_disabled = is_user_patch && !is_patch_modified;
     if (ImGui::BeginMenu("File")) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
       const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
@@ -53,15 +51,11 @@ void render_main_menu(MainMenuContext &context) {
       if (save_disabled)
         ImGui::EndDisabled();
 
-      if (!name_valid)
-        ImGui::BeginDisabled(true);
       const char *save_as_shortcut =
           mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
       if (is_user_patch && ImGui::MenuItem("Save As...", save_as_shortcut)) {
         request_save_as(context.save_state);
       }
-      if (!name_valid)
-        ImGui::EndDisabled();
 
       {
         ImGui::Separator();
@@ -124,11 +118,9 @@ void render_main_menu(MainMenuContext &context) {
         }
       }
     }
-    if (name_valid) {
-      const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && io.KeyShift;
-      if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
-        request_save_as(context.save_state);
-      }
+    const bool save_as_modifier = (io.KeyCtrl || io.KeySuper) && io.KeyShift;
+    if (save_as_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+      request_save_as(context.save_state);
     }
 
     if (ImGui::BeginMenu("Edit")) {

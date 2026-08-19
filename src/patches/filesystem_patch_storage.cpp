@@ -131,6 +131,8 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
 
   const auto patches_dir = root_;
   const auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
+  auto patch_to_write = patch;
+  patch_to_write.name = sanitized;
 
   const auto ginpkg_path =
       formats::ginpkg::build_package_path(patches_dir, sanitized);
@@ -151,7 +153,7 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
     if (!overwrite && vfs_.exists(target)) {
       return SavePatchResult::duplicate();
     }
-    return patches::write_patch(patch, target)
+    return patches::write_patch(patch_to_write, target)
                ? SavePatchResult::success(target)
                : SavePatchResult::error("Failed to save patch");
   }
@@ -164,7 +166,7 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
       return SavePatchResult::duplicate();
     }
     if (auto path = formats::PatchRegistry::instance().save_package(
-            ".ginpkg", patches_dir, sanitized, patch)) {
+            ".ginpkg", patches_dir, sanitized, patch_to_write)) {
       return SavePatchResult::success(*path);
     }
     return SavePatchResult::error("Failed to save patch");
@@ -175,7 +177,7 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
       return SavePatchResult::duplicate();
     }
     if (auto path = formats::PatchRegistry::instance().save_package(
-            ".gin", patches_dir, sanitized, patch)) {
+            ".gin", patches_dir, sanitized, patch_to_write)) {
       return SavePatchResult::success(*path);
     }
     return SavePatchResult::error("Failed to save patch");
@@ -237,6 +239,47 @@ bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
   }
   if (metadata_) {
     metadata_->remove(metadata_key(entry.relative_path));
+  }
+  return true;
+}
+
+bool FilesystemPatchStorage::rename_patch(const PatchEntry &entry,
+                                          const std::string &new_stem) {
+  if (!can_delete_patch(entry) || new_stem.empty() ||
+      sanitize_filename(new_stem) != new_stem) {
+    return false;
+  }
+
+  const auto target = entry.full_path.parent_path() /
+                      (new_stem + entry.full_path.extension().string());
+  if (target == entry.full_path) {
+    return true;
+  }
+
+  std::error_code ec;
+  if (std::filesystem::exists(target, ec)) {
+    if (ec || !std::filesystem::equivalent(entry.full_path, target, ec) || ec) {
+      return false;
+    }
+  } else if (ec) {
+    return false;
+  }
+
+  std::filesystem::rename(entry.full_path, target, ec);
+  if (ec) {
+    return false;
+  }
+
+  if (metadata_) {
+    const auto relative = std::filesystem::path(entry.relative_path);
+    const auto renamed_relative = relative.parent_path() / target.filename();
+    if (!metadata_->rename_key_prefix(
+            metadata_key(entry.relative_path),
+            metadata_key(renamed_relative.generic_string()))) {
+      std::error_code rollback_error;
+      std::filesystem::rename(target, entry.full_path, rollback_error);
+      return false;
+    }
   }
   return true;
 }
@@ -530,7 +573,7 @@ void FilesystemPatchStorage::scan_directory(
 
       info.is_directory = false;
       info.format = detect_format(path);
-      info.name = formats::get_patch_name_from_file(path, info.format);
+      info.name = path.stem().string();
 
       load_metadata_for_entry(info);
       tree.push_back(std::move(info));

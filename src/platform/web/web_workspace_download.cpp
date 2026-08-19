@@ -124,7 +124,9 @@ bool download_patch(const ym2612::Patch &patch) {
   const auto temporary =
       std::filesystem::temp_directory_path() / "megatoy-patch-download.gin";
   std::error_code cleanup_error;
-  if (!patches::write_patch(patch, temporary)) {
+  auto patch_to_write = patch;
+  patch_to_write.name = stem;
+  if (!patches::write_patch(patch_to_write, temporary)) {
     std::filesystem::remove(temporary, cleanup_error);
     return false;
   }

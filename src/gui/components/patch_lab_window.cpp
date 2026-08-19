@@ -165,7 +165,8 @@ void apply_patch_result(PatchLabContext &context,
   }
 
   session.current_patch() = new_patch;
-  session.current_patch().name = before.name;
+  session.current_patch().name.clear();
+  session.set_current_patch_path({});
   session.apply_patch_to_audio();
 
   if (context.commit_history) {

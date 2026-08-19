@@ -4,6 +4,7 @@
 #include "audio/audio_manager.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include "patches/patch_write.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
@@ -95,11 +96,12 @@ void PatchSession::initialize_patch_defaults() {
     if (load_result.status == formats::PatchLoadStatus::Success) {
       set_current_patch_path(init_patch_path);
       current_patch_ = std::move(load_result.patches[0]);
+      set_file_identity(init_patch_path);
       mark_as_clean();
       return;
     }
   }
-  current_patch_.name = "init";
+  current_patch_.name.clear();
   current_patch_.global = {
       .dac_enable = false,
       .lfo_enable = false,
@@ -159,6 +161,13 @@ void PatchSession::set_current_patch(const ym2612::Patch &patch,
                                      const std::filesystem::path &source_path) {
   current_patch_ = patch;
   set_current_patch_path(source_path);
+  if (!source_path.empty()) {
+    const auto format = formats::adapter::format_for_extension(
+        lowercase_extension(source_path));
+    if (!format || !formats::adapter::is_multi_patch(*format)) {
+      set_file_identity(source_path);
+    }
+  }
   mark_as_clean(); // New patch loaded, not modified yet
   apply_patch_to_audio();
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -217,7 +226,10 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
   if (const auto folder = writable_source_folder()) {
     const auto absolute = repository_->to_absolute_path(current_patch_path_);
     if (patches::can_overwrite_in_place(absolute)) {
-      if (patches::write_patch(current_patch_, absolute)) {
+      auto patch_to_write = current_patch_;
+      patch_to_write.name = absolute.stem().string();
+      if (patches::write_patch(patch_to_write, absolute)) {
+        current_patch_.name = patch_to_write.name;
         mark_as_clean();
         repository_->refresh();
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -414,10 +426,39 @@ bool PatchSession::current_patch_is_user_patch() const {
   if (current_patch_path_.empty()) {
     return false;
   }
-  if (current_patch_path_.ends_with(".ginpkg")) {
-    return can_save_in_place();
+  return can_save_in_place();
+}
+
+void PatchSession::set_file_identity(const std::filesystem::path &path) {
+  const auto stem = path.stem().string();
+  current_patch_.name = stem;
+  original_patch_.name = stem;
+}
+
+bool PatchSession::rename_patch(const PatchEntry &entry,
+                                const std::string &new_stem) {
+  const std::string old_relative = entry.relative_path;
+  const std::string old_selection = current_patch_selection_path_;
+  const bool is_current = old_selection == old_relative ||
+                          old_selection.rfind(old_relative + "/", 0) == 0;
+  const std::string selection_suffix =
+      is_current ? old_selection.substr(old_relative.size()) : std::string{};
+  const auto target = entry.full_path.parent_path() /
+                      (new_stem + entry.full_path.extension().string());
+
+  if (!repository_->rename_patch(entry, new_stem)) {
+    return false;
   }
-  return can_save_in_place() && original_patch_.name == current_patch_.name;
+  if (is_current) {
+    const auto relative = repository_->to_relative_path(target);
+    set_current_patch_path(relative);
+    if (!selection_suffix.empty()) {
+      set_current_patch_selection_path(relative.generic_string() +
+                                       selection_suffix);
+    }
+    set_file_identity(target);
+  }
+  return true;
 }
 
 const char *PatchSession::save_label_for(bool is_user_patch) const {

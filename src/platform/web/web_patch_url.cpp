@@ -398,7 +398,8 @@ std::string strip_query_prefix(std::string_view query) {
 
 std::vector<uint8_t> pack_patch_binary(const ym2612::Patch &patch) {
   const size_t name_limit = (1u << kNameLengthBits) - 1;
-  const std::string name = megatoy::utf8::truncate(patch.name, name_limit);
+  const std::string name = megatoy::utf8::truncate(
+      patch.name.empty() ? std::string("patch") : patch.name, name_limit);
   const size_t name_len = name.size();
 
   BitWriter writer;

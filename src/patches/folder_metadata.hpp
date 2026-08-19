@@ -53,6 +53,11 @@ public:
 
   bool remove(const std::string &relative_path);
 
+  /// Move one key and all descendant keys to a new path prefix, then persist
+  /// the complete migration in one sidecar write.
+  bool rename_key_prefix(const std::string &old_relative_path,
+                         const std::string &new_relative_path);
+
   /// Drop entries whose patch file is no longer in `existing_paths`.
   bool retain_only(const std::vector<std::string> &existing_paths);
 

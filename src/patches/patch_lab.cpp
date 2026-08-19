@@ -278,7 +278,7 @@ void mutate_operator(ym2612::OperatorSettings &op, std::mt19937 &rng,
 ym2612::Patch make_template_patch(const CategoryDefinition &definition,
                                   std::mt19937 &rng) {
   ym2612::Patch patch;
-  patch.name = std::string(definition.display_name);
+  patch.name.clear();
   patch.global = {
       .dac_enable = false,
       .lfo_enable = definition.enable_lfo,
@@ -424,8 +424,7 @@ OperationResult merge(const ym2612::Patch &a, const ym2612::Patch &b,
   auto rng = make_rng(options.seed, result.seed);
 
   ym2612::Patch patch = a;
-  patch.name =
-      a.name.empty() || b.name.empty() ? "Blend" : a.name + " + " + b.name;
+  patch.name.clear();
 
   patch.global.dac_enable =
       random_bool(rng) ? a.global.dac_enable : b.global.dac_enable;
@@ -519,8 +518,7 @@ OperationResult morph(const ym2612::Patch &a, const ym2612::Patch &b,
   const float mix = std::clamp(options.mix, 0.0f, 1.0f);
 
   ym2612::Patch patch = a;
-  patch.name =
-      a.name.empty() || b.name.empty() ? "Morph" : a.name + " <> " + b.name;
+  patch.name.clear();
 
   patch.global.dac_enable =
       mix < 0.5f ? a.global.dac_enable : b.global.dac_enable;
