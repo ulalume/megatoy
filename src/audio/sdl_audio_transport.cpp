@@ -6,6 +6,7 @@
 namespace {
 constexpr std::uint32_t kFallbackSampleRate = 44100;
 constexpr std::uint32_t kFallbackFrameSize = sizeof(std::int16_t) * 2;
+constexpr std::size_t kReservedPeriods = 4;
 } // namespace
 
 SdlAudioTransport::SdlAudioTransport()
@@ -64,6 +65,14 @@ bool SdlAudioTransport::start(std::uint32_t sample_rate,
   frame_size_ = SDL_AUDIO_FRAMESIZE(desired);
   if (frame_size_ == 0) {
     frame_size_ = kFallbackFrameSize;
+  }
+  SDL_AudioSpec device_format{};
+  int sample_frames = 0;
+  if (SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(audio_stream_),
+                               &device_format, &sample_frames) &&
+      sample_frames > 0) {
+    stream_buffer_.reserve(static_cast<std::size_t>(sample_frames) *
+                           kReservedPeriods * frame_size_);
   }
 
   // SDL's device thread pulls data through this callback as the device

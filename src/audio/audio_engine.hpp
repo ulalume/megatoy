@@ -76,6 +76,8 @@ private:
   void drain(audio::AudioCommandQueue &queue);
   void apply(const audio::AudioCommand &command);
   void remove_dc(float *interleaved, uint32_t frames);
+  bool try_push_midi_command(const audio::AudioCommand &command,
+                             bool &queue_full);
 
   std::vector<float> mix_buffer_; // interleaved stereo, [-1, 1]
   // DC blocker state, one x/y pair per channel.

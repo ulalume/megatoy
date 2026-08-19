@@ -1,7 +1,7 @@
 #include "app_services.hpp"
 
-#include "core/status.hpp"
 #include "app_state.hpp"
+#include "core/status.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_patch_url.hpp"
@@ -33,6 +33,9 @@ void AppServices::initialize_app(AppState &state) {
   }
 
   state.ui_state().prefs = preference_manager.ui_preferences();
+  audio_manager.set_note_options(
+      state.ui_state().prefs.use_velocity,
+      state.ui_state().prefs.steal_oldest_note_when_full);
 
   const auto &prefs = state.ui_state().prefs;
   auto &input = state.input_state();

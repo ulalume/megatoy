@@ -2,9 +2,9 @@
 
 #include "app_context.hpp"
 #include "app_services.hpp"
+#include "app_state.hpp"
 #include "audio/audio_command.hpp"
 #include "core/status.hpp"
-#include "app_state.hpp"
 #include "drop_actions.hpp"
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
@@ -91,6 +91,14 @@ bool run_frame(RuntimeContext &runtime) {
   services.gui_manager.begin_frame();
   services.history.handle_shortcuts(*runtime.app_context);
   ui::render_all(*runtime.app_context);
+  const auto &saved_prefs = services.preference_manager.ui_preferences();
+  const auto &current_prefs = app_state.ui_state().prefs;
+  if (current_prefs.use_velocity != saved_prefs.use_velocity ||
+      current_prefs.steal_oldest_note_when_full !=
+          saved_prefs.steal_oldest_note_when_full) {
+    services.audio_manager.set_note_options(
+        current_prefs.use_velocity, current_prefs.steal_oldest_note_when_full);
+  }
   services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);
   services.gui_manager.end_frame();
   return true;
@@ -125,9 +133,9 @@ int main(int argc, char *argv[]) {
         }
         if (services.preference_manager.add_workspace_folder(result.path)) {
           services.patch_session.sync_workspace();
-          megatoy::status::success(
-              "Added \"" + result.folder_name + "\" (" +
-              std::to_string(result.file_count) + " files)");
+          megatoy::status::success("Added \"" + result.folder_name + "\" (" +
+                                   std::to_string(result.file_count) +
+                                   " files)");
         } else {
           megatoy::status::warning("\"" + result.folder_name +
                                    "\" is already in the workspace.");

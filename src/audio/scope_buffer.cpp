@@ -100,6 +100,9 @@ bool ScopeBuffer::clipped_within(std::uint64_t window) const {
   const std::uint64_t now = write_position_.load(std::memory_order_acquire);
   const std::uint64_t last =
       last_clip_position_.load(std::memory_order_relaxed);
+  if (last >= now) {
+    return true;
+  }
   return now - last <= window;
 }
 

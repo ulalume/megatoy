@@ -18,6 +18,7 @@ constexpr float kDcBlockerPole = 0.9995f;
 // How long a note-off will wait for queue space before being abandoned.
 constexpr int kFullQueueRetries = 1000;
 constexpr uint32_t kDefaultFrameSize = sizeof(int16_t) * 2; // stereo s16
+constexpr size_t kReservedMixFrames = 8192;
 
 int16_t to_pcm16(float sample) {
   const float clamped = std::clamp(sample, -1.0f, 1.0f);
@@ -34,6 +35,7 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
   sample_rate_ = sample_rate != 0 ? sample_rate : kFallbackSampleRate;
   frame_size_ = kDefaultFrameSize;
   mix_buffer_.clear();
+  mix_buffer_.reserve(kReservedMixFrames * 2);
   scope_buffer_.clear();
   midi_release_recovery_pending_.store(false, std::memory_order_relaxed);
   dc_x_[0] = dc_x_[1] = 0.0f;
@@ -121,7 +123,45 @@ bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
     return false;
   }
 
+  const bool is_release =
+      command.type == audio::AudioCommand::Type::NoteOff ||
+      command.type == audio::AudioCommand::Type::AllNotesOff;
+  bool queue_full = false;
+  if (try_push_midi_command(command, queue_full)) {
+    return true;
+  }
+  if (!queue_full) {
+    return false;
+  }
+
+  // The queue is full, which needs a burst far beyond what a MIDI cable can
+  // physically carry. Even so the two failures are not equivalent: losing a
+  // note-on drops a note, while losing a note-off leaves one sounding
+  // forever. So a release waits for room; a note-on gives up.
+  if (command.type == audio::AudioCommand::Type::NoteOn) {
+    return false;
+  }
+  for (int attempt = 0; attempt < kFullQueueRetries; ++attempt) {
+    std::this_thread::yield();
+    if (try_push_midi_command(command, queue_full)) {
+      return true;
+    }
+    if (!queue_full) {
+      return false;
+    }
+  }
+  if (is_release) {
+    const std::lock_guard<std::mutex> guard(midi_push_mutex_);
+    midi_release_recovery_pending_.store(true, std::memory_order_release);
+    return true;
+  }
+  return false;
+}
+
+bool AudioEngine::try_push_midi_command(const audio::AudioCommand &command,
+                                        bool &queue_full) {
   const std::lock_guard<std::mutex> guard(midi_push_mutex_);
+  queue_full = false;
   const bool is_release =
       command.type == audio::AudioCommand::Type::NoteOff ||
       command.type == audio::AudioCommand::Type::AllNotesOff;
@@ -137,24 +177,7 @@ bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
   if (midi_commands_.push(command)) {
     return true;
   }
-
-  // The queue is full, which needs a burst far beyond what a MIDI cable can
-  // physically carry. Even so the two failures are not equivalent: losing a
-  // note-on drops a note, while losing a note-off leaves one sounding
-  // forever. So a release waits for room; a note-on gives up.
-  if (command.type == audio::AudioCommand::Type::NoteOn) {
-    return false;
-  }
-  for (int attempt = 0; attempt < kFullQueueRetries; ++attempt) {
-    std::this_thread::yield();
-    if (midi_commands_.push(command)) {
-      return true;
-    }
-  }
-  if (is_release) {
-    midi_release_recovery_pending_.store(true, std::memory_order_release);
-    return true;
-  }
+  queue_full = true;
   return false;
 }
 
