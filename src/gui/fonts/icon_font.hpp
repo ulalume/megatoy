@@ -25,7 +25,10 @@ inline void init_icon_font() {
   const auto &res = embedded_assets::resource_registry.at(
       "fonts/Font Awesome 7 Free-Solid-900.otf");
 
-  io.Fonts->AddFontFromMemoryTTF((void *)res.data, (int)res.size, 10.0f,
+  // Size 0 inherits the destination font's reference size. The default font
+  // uses an implicit reference size since ImGui 1.92, and AddFont asserts if a
+  // merged font then names an explicit one.
+  io.Fonts->AddFontFromMemoryTTF((void *)res.data, (int)res.size, 0.0f,
                                  &config, icon_ranges);
 }
 } // namespace ui
