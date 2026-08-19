@@ -1,4 +1,5 @@
 #include "audio/audio_manager.hpp"
+#include "audio/audio_transport.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/folder_metadata.hpp"
 #include "patches/patch_session.hpp"
@@ -11,14 +12,18 @@
 #include "test_check.hpp"
 #include <SQLiteCpp/Database.h>
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -422,6 +427,85 @@ struct TestEnvironment {
   ~TestEnvironment() { std::filesystem::remove_all(root); }
 };
 
+class TestAudioTransport final : public AudioTransport {
+public:
+  bool start(std::uint32_t, RenderCallback callback) override {
+    callback_ = std::move(callback);
+    active_ = true;
+    return true;
+  }
+
+  void stop() override {
+    active_ = false;
+    callback_ = {};
+  }
+
+  bool is_active() const override { return active_; }
+
+  float render_ac_peak(uint32_t frames) {
+    CHECK(callback_);
+    std::vector<int16_t> pcm(static_cast<size_t>(frames) * 2, 0);
+    const uint32_t bytes = frames * 2 * static_cast<uint32_t>(sizeof(int16_t));
+    CHECK(callback_(bytes, pcm.data()) == bytes);
+
+    double sum = 0.0;
+    for (int16_t sample : pcm) {
+      sum += sample;
+    }
+    const double mean = sum / static_cast<double>(pcm.size());
+
+    double peak = 0.0;
+    for (int16_t sample : pcm) {
+      peak = std::max(peak, std::abs(static_cast<double>(sample) - mean));
+    }
+    return static_cast<float>(peak / 32768.0);
+  }
+
+private:
+  RenderCallback callback_;
+  bool active_ = false;
+};
+
+ym2612::Patch make_session_audio_patch(uint8_t total_level) {
+  ym2612::Patch patch;
+  patch.name = "session audio";
+  patch.instrument.algorithm = 7;
+  for (auto &settings : patch.instrument.operators) {
+    settings.attack_rate = 31;
+    settings.release_rate = 15;
+    settings.total_level = total_level;
+    settings.multiple = 1;
+  }
+  return patch;
+}
+
+void test_session_applies_direct_patch_mutation(TestEnvironment &env) {
+  auto transport = std::make_unique<TestAudioTransport>();
+  auto *test_transport = transport.get();
+  AudioManager audio(std::move(transport));
+  patches::PatchSession session(env.directories, env.preferences, audio);
+  CHECK(audio.initialize(44100));
+
+  session.current_patch() = make_session_audio_patch(20);
+  CHECK(session.apply_patch_to_audio_if_changed());
+  CHECK(!session.apply_patch_to_audio_if_changed());
+
+  PreferenceManager::UIPreferences prefs{};
+  prefs.use_velocity = true;
+  prefs.steal_oldest_note_when_full = true;
+  CHECK(session.note_on(ym2612::Note::from_midi_note(60), 127, prefs));
+  const float before = test_transport->render_ac_peak(4410);
+
+  session.current_patch().instrument.operators[0].total_level = 110;
+  CHECK(session.apply_patch_to_audio_if_changed());
+  const float after = test_transport->render_ac_peak(4410);
+  CHECK(after < before * 0.9f);
+  CHECK(!session.apply_patch_to_audio_if_changed());
+
+  session.current_patch().name = "name only";
+  CHECK(!session.apply_patch_to_audio_if_changed());
+}
+
 void test_workspace_folder_is_visible(TestEnvironment &env) {
   const auto &folders = env.preferences.workspace().folders();
   CHECK(folders.size() == 1);
@@ -668,6 +752,7 @@ int main() {
   test_normal_workspace_folder_removal(migration_root);
   test_session_path_survives_workspace_relabel(migration_root);
   TestEnvironment env;
+  test_session_applies_direct_patch_mutation(env);
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);
   test_workspace_folder_is_visible(env);
