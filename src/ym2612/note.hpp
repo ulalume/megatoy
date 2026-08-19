@@ -1,12 +1,23 @@
 #pragma once
 
 #include "core/types.hpp"
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <sstream>
 
 namespace ym2612 {
 struct Note;
 std::ostream &operator<<(std::ostream &os, const Note &note);
+
+struct NoteFrequency {
+  uint16_t fnum;
+  uint8_t block;
+};
+
+inline constexpr uint16_t kCanonicalFnumMin = 322;
+inline constexpr uint16_t kCanonicalFnumEnd = kCanonicalFnumMin * 2;
+inline constexpr uint16_t kHardwareFnumMax = 0x7ff;
 
 inline uint16_t fnote_from_key(Key key) {
   switch (key) {
@@ -68,6 +79,32 @@ struct Note {
   }
   int frequency() const { return fnote_from_key(key) * (1 << octave); }
 };
+
+// Bend is evaluated only on note-on and controller changes, not per sample.
+// std::exp2 plus nearest-integer F-num rounding stays within 3.1 cents across
+// the supported +/-2-semitone bend range. The canonical octave window keeps
+// equivalent frequencies near the note table's precision; at blocks 0 and 7
+// the full hardware F-num range preserves bends that cannot be renormalized.
+inline NoteFrequency frequency_with_bend(const Note &note,
+                                         float bend_semitones) {
+  int block = std::clamp<int>(note.octave, 0, 7);
+  double fnum = static_cast<double>(fnote_from_key(note.key)) *
+                std::exp2(static_cast<double>(bend_semitones) / 12.0);
+
+  while (fnum >= kCanonicalFnumEnd && block < 7) {
+    fnum *= 0.5;
+    ++block;
+  }
+  while (fnum < kCanonicalFnumMin && block > 0) {
+    fnum *= 2.0;
+    --block;
+  }
+
+  const auto rounded = static_cast<int>(std::lround(fnum));
+  return {static_cast<uint16_t>(
+              std::clamp(rounded, 0, static_cast<int>(kHardwareFnumMax))),
+          static_cast<uint8_t>(block)};
+}
 inline std::ostream &operator<<(std::ostream &os, const Note &note) {
   return os << note.key << static_cast<int>(note.octave);
 }

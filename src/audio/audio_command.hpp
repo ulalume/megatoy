@@ -28,11 +28,17 @@ struct AudioCommand {
     NoteOff,
     AllNotesOff,
     ApplyPatch,
+    PitchBend,
+    ModWheel,
   };
 
   Type type = Type::AllNotesOff;
   ym2612::Note note{};
   uint8_t velocity = 0;
+  // Performance commands only. Pitch bend is raw MIDI 14-bit (8192 center),
+  // while mod wheel is the MIDI CC1 value (0..127).
+  uint16_t pitch_bend_value = 8192;
+  uint8_t mod_wheel_value = 0;
 
   // ApplyPatch only. The patch *name* is deliberately absent: it never
   // reaches a register, and keeping the command trivially copyable keeps the
@@ -70,6 +76,20 @@ struct AudioCommand {
     command.global = global;
     command.channel = channel;
     command.instrument = instrument;
+    return command;
+  }
+
+  static AudioCommand pitch_bend(uint16_t value) {
+    AudioCommand command;
+    command.type = Type::PitchBend;
+    command.pitch_bend_value = value;
+    return command;
+  }
+
+  static AudioCommand mod_wheel(uint8_t value) {
+    AudioCommand command;
+    command.type = Type::ModWheel;
+    command.mod_wheel_value = value;
     return command;
   }
 };

@@ -219,20 +219,36 @@ void RtMidiBackend::handle_message(double, std::vector<unsigned char> *message,
 
   const std::uint8_t status = (*message)[0];
   const std::uint8_t status_type = status & 0xF0;
-  const std::uint8_t midi_note_value = (*message)[1];
-  const std::uint8_t velocity = (message->size() >= 3) ? (*message)[2] : 0;
-
-  const auto note = ym2612::Note::from_midi_note(midi_note_value);
+  const std::uint8_t data1 = (*message)[1] & 0x7f;
+  const std::uint8_t data2 =
+      (message->size() >= 3) ? ((*message)[2] & 0x7f) : 0;
 
   const bool is_note_off =
-      status_type == 0x80 || (status_type == 0x90 && velocity == 0);
-  const bool is_note_on = status_type == 0x90 && velocity > 0;
+      status_type == 0x80 || (status_type == 0x90 && data2 == 0);
+  const bool is_note_on = status_type == 0x90 && data2 > 0;
+
+  MidiMessage event;
+  event.port_name = connection->port_name;
 
   if (is_note_on) {
-    connection->backend->emit(
-        {MidiMessage::Type::NoteOn, note, velocity, connection->port_name});
+    event.type = MidiMessage::Type::NoteOn;
+    event.note = ym2612::Note::from_midi_note(data1);
+    event.velocity = data2;
+    connection->backend->emit(event);
   } else if (is_note_off) {
-    connection->backend->emit(
-        {MidiMessage::Type::NoteOff, note, velocity, connection->port_name});
+    event.type = MidiMessage::Type::NoteOff;
+    event.note = ym2612::Note::from_midi_note(data1);
+    event.velocity = data2;
+    connection->backend->emit(event);
+  } else if (status_type == 0xe0 && message->size() >= 3) {
+    event.type = MidiMessage::Type::PitchBend;
+    event.pitch_bend =
+        static_cast<uint16_t>(data1 | (static_cast<uint16_t>(data2) << 7));
+    connection->backend->emit(event);
+  } else if (status_type == 0xb0 && message->size() >= 3) {
+    event.type = MidiMessage::Type::ControlChange;
+    event.controller = data1;
+    event.controller_value = data2;
+    connection->backend->emit(event);
   }
 }

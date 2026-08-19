@@ -102,6 +102,15 @@ ChannelAllocator::active_velocity(ym2612::ChannelIndex channel) const {
   return channel_velocity_[index];
 }
 
+std::optional<ym2612::Note>
+ChannelAllocator::active_note(ym2612::ChannelIndex channel) const {
+  const auto index = static_cast<uint8_t>(channel);
+  if (!channel_key_on_[index]) {
+    return std::nullopt;
+  }
+  return channel_to_note_[index];
+}
+
 bool ChannelAllocator::note_off(const ym2612::Note &note,
                                 ym2612::Device &device) {
   auto it = note_to_channel_.find(note);

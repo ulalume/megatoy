@@ -10,11 +10,16 @@ struct MidiMessage {
   enum class Type {
     NoteOn,
     NoteOff,
-  } type;
+    PitchBend,
+    ControlChange,
+  } type = Type::NoteOff;
 
-  ym2612::Note note;
+  ym2612::Note note{};
   std::uint8_t velocity = 0;
   std::string port_name;
+  std::uint16_t pitch_bend = 8192;
+  std::uint8_t controller = 0;
+  std::uint8_t controller_value = 0;
 };
 
 class MidiBackend {
