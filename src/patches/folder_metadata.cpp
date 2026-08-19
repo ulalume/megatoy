@@ -118,6 +118,9 @@ bool FolderMetadataStore::load() {
   try {
     nlohmann::json j;
     file >> j;
+    // The normalization below may rewrite the sidecar; Windows refuses to
+    // replace a file that still has an open handle.
+    file.close();
     if (!j.contains("patches") || !j["patches"].is_object()) {
       return true;
     }
