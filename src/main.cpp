@@ -94,10 +94,18 @@ bool run_frame(RuntimeContext &runtime) {
   const auto &saved_prefs = services.preference_manager.ui_preferences();
   const auto &current_prefs = app_state.ui_state().prefs;
   if (current_prefs.use_velocity != saved_prefs.use_velocity ||
+      current_prefs.velocity_sensitivity_depth !=
+          saved_prefs.velocity_sensitivity_depth ||
       current_prefs.steal_oldest_note_when_full !=
           saved_prefs.steal_oldest_note_when_full) {
     services.audio_manager.set_note_options(
-        current_prefs.use_velocity, current_prefs.steal_oldest_note_when_full);
+        current_prefs.use_velocity, current_prefs.velocity_sensitivity_depth,
+        current_prefs.steal_oldest_note_when_full);
+  }
+  if (current_prefs.use_pitch_bend != saved_prefs.use_pitch_bend ||
+      current_prefs.use_mod_wheel != saved_prefs.use_mod_wheel) {
+    services.audio_manager.set_performance_options(current_prefs.use_pitch_bend,
+                                                   current_prefs.use_mod_wheel);
   }
   services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);
   services.gui_manager.end_frame();
@@ -146,13 +154,29 @@ int main(int argc, char *argv[]) {
 #endif
 
   MidiInputManager midi(platform_services.create_midi_backend());
-  // Notes go straight from the driver's thread to the audio thread, so their
-  // timing no longer depends on how fast the UI is drawing.
+  // Performance messages go straight from the driver's thread to the audio
+  // thread, so their timing no longer depends on how fast the UI is drawing.
   midi.set_note_sink([&services](const MidiMessage &message) {
-    services.audio_manager.submit_from_midi(
-        message.type == MidiMessage::Type::NoteOn
-            ? audio::AudioCommand::note_on(message.note, message.velocity)
-            : audio::AudioCommand::note_off(message.note));
+    switch (message.type) {
+    case MidiMessage::Type::NoteOn:
+      services.audio_manager.submit_from_midi(
+          audio::AudioCommand::note_on(message.note, message.velocity));
+      break;
+    case MidiMessage::Type::NoteOff:
+      services.audio_manager.submit_from_midi(
+          audio::AudioCommand::note_off(message.note));
+      break;
+    case MidiMessage::Type::PitchBend:
+      services.audio_manager.submit_from_midi(
+          audio::AudioCommand::pitch_bend(message.pitch_bend));
+      break;
+    case MidiMessage::Type::ControlChange:
+      if (message.controller == 1) {
+        services.audio_manager.submit_from_midi(
+            audio::AudioCommand::mod_wheel(message.controller_value));
+      }
+      break;
+    }
   });
   midi.init();
   app_context.midi = &midi;

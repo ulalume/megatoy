@@ -365,7 +365,7 @@ bool PatchSession::note_on(ym2612::Note note, uint8_t velocity,
   // Handed to the audio thread rather than written here: the chip has exactly
   // one writer, and the note starts on the next audio callback instead of
   // waiting for whenever this frame happens to finish.
-  audio_.set_note_options(prefs.use_velocity,
+  audio_.set_note_options(prefs.use_velocity, prefs.velocity_sensitivity_depth,
                           prefs.steal_oldest_note_when_full);
   const uint8_t clamped_velocity =
       std::min<uint8_t>(velocity, static_cast<uint8_t>(127));

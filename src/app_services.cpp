@@ -35,7 +35,10 @@ void AppServices::initialize_app(AppState &state) {
   state.ui_state().prefs = preference_manager.ui_preferences();
   audio_manager.set_note_options(
       state.ui_state().prefs.use_velocity,
+      state.ui_state().prefs.velocity_sensitivity_depth,
       state.ui_state().prefs.steal_oldest_note_when_full);
+  audio_manager.set_performance_options(state.ui_state().prefs.use_pitch_bend,
+                                        state.ui_state().prefs.use_mod_wheel);
 
   const auto &prefs = state.ui_state().prefs;
   auto &input = state.input_state();

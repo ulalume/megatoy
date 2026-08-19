@@ -50,7 +50,12 @@ public:
   bool submit_from_midi(const audio::AudioCommand &command);
 
   /// How incoming notes are treated. Read by the audio thread.
-  void set_note_options(bool use_velocity, bool steal_oldest);
+  void set_note_options(bool use_velocity, uint8_t velocity_sensitivity_depth,
+                        bool steal_oldest);
+
+  /// Whether pitch-bend / mod-wheel messages take effect. Read by the audio
+  /// thread; disabled commands are applied as their neutral value.
+  void set_performance_options(bool pitch_bend, bool mod_wheel);
 
   /// Apply a patch immediately. Only safe while the device is stopped.
   void apply_patch_to_all_channels(const ym2612::Patch &patch);
@@ -97,7 +102,14 @@ private:
   // The instrument notes are played with, kept here so a note command does
   // not have to carry one and MIDI never reads the UI's patch.
   ym2612::ChannelInstrument current_instrument_{};
+  ym2612::GlobalSettings current_global_{};
+  ym2612::ChannelSettings current_channel_{};
+  float bend_semitones_ = 0.0f;
+  uint8_t mod_wheel_ = 0;
   std::atomic<bool> use_velocity_{true};
+  std::atomic<bool> pitch_bend_enabled_{true};
+  std::atomic<bool> mod_wheel_enabled_{false};
+  std::atomic<uint8_t> velocity_sensitivity_depth_{100};
   std::atomic<bool> steal_oldest_{true};
   // Read by the UI, audio, and MIDI driver threads.
   std::atomic<bool> running_;
