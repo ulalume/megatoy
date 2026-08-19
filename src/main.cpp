@@ -114,27 +114,40 @@ bool run_frame(RuntimeContext &runtime) {
 
 } // namespace
 
+#if defined(MEGATOY_PLATFORM_WEB)
+// The web build returns from main() with the loop still registered, so
+// everything the frames touch must outlive main: page lifetime, never
+// destroyed.
+#define MEGATOY_APP_STORAGE static
+#else
+#define MEGATOY_APP_STORAGE
+#endif
+
 int main(int argc, char *argv[]) {
 #if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::WebPlatformServices platform_services;
+  MEGATOY_APP_STORAGE platform::web::WebPlatformServices platform_services;
 #else
   DesktopPlatformServices platform_services;
 #endif
 
   update::set_release_info_provider(platform_services.release_info_provider());
 
-  AppServices services(platform_services);
-  AppState app_state{};
+  MEGATOY_APP_STORAGE AppServices services(platform_services);
+  MEGATOY_APP_STORAGE AppState app_state{};
   services.initialize_app(app_state);
-  AppContext app_context{services, app_state};
+  MEGATOY_APP_STORAGE AppContext app_context{services, app_state};
 
   services.gui_manager.set_drop_callback(&app_context, handle_file_drop);
+  // Lambdas cannot capture statics on the web build; a reference with
+  // automatic storage duration is capturable on both platforms.
+  AppServices &services_ref = services;
 
 #if defined(MEGATOY_PLATFORM_WEB)
   // Folders dragged onto the page are imported into persistent storage; SDL's
   // own drop handler cannot read directories.
   platform::web::set_drop_import_handler(
-      [&services](platform::web::FolderImportResult result) {
+      [&services_ref](platform::web::FolderImportResult result) {
+        auto &services = services_ref;
         if (!result.ok) {
           megatoy::status::error("Folder drop failed: " + result.error);
           return;
@@ -153,10 +166,12 @@ int main(int argc, char *argv[]) {
       megatoy::system::PathService::web_storage_root());
 #endif
 
-  MidiInputManager midi(platform_services.create_midi_backend());
+  MEGATOY_APP_STORAGE MidiInputManager midi(
+      platform_services.create_midi_backend());
   // Performance messages go straight from the driver's thread to the audio
   // thread, so their timing no longer depends on how fast the UI is drawing.
-  midi.set_note_sink([&services](const MidiMessage &message) {
+  midi.set_note_sink([&services_ref](const MidiMessage &message) {
+    auto &services = services_ref;
     switch (message.type) {
     case MidiMessage::Type::NoteOn:
       services.audio_manager.submit_from_midi(
@@ -181,10 +196,16 @@ int main(int argc, char *argv[]) {
   midi.init();
   app_context.midi = &midi;
 
-  RuntimeContext runtime{&app_context, &midi, true};
+  MEGATOY_APP_STORAGE RuntimeContext runtime{&app_context, &midi, true};
 
   platform::run_main_loop(runtime, run_frame);
+#if defined(MEGATOY_PLATFORM_WEB)
+  // The loop is registered and the app lives in static storage; the page
+  // closing is the only shutdown.
+  return 0;
+#else
   services.shutdown_app();
   std::cout << "Goodbye!\n";
   return 0;
+#endif
 }
