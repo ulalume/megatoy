@@ -140,3 +140,18 @@ FetchContent_Declare(
 set(YM2612_FORMAT_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(YM2612_FORMAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ym2612_format)
+
+# ym2612-patches - the built-in CC0 preset library. Data only (LICENSE,
+# .gitignore, *.dmp files); it ships no CMakeLists.txt, so
+# FetchContent_MakeAvailable just populates ym2612_patches_SOURCE_DIR instead
+# of add_subdirectory()-ing it. The repo publishes no tags, so the pin below
+# is a commit SHA -- bumping that SHA is the entire follow-upstream
+# procedure. For offline/local development, override with
+# FETCHCONTENT_SOURCE_DIR_YM2612_PATCHES (dev-only, never committed; same
+# policy as the other dependency overrides).
+FetchContent_Declare(
+  ym2612_patches
+  GIT_REPOSITORY https://github.com/ulalume/ym2612-patches.git
+  GIT_TAG        60c011ce5c2cb98426ef351089c4802af2cc1441
+)
+FetchContent_MakeAvailable(ym2612_patches)
