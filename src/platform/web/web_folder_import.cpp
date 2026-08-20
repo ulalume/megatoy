@@ -151,10 +151,7 @@ void notify_import_busy() {
   if (g_pending_selection &&
       g_pending_selection->phase.load(std::memory_order_relaxed) ==
           SelectionPhase::WaitingForPicker) {
-    megatoy::status::warning(
-        "The browser is still reading the previous folder selection. Large "
-        "folders can take minutes; cancel the browser's dialog when it "
-        "appears.");
+    megatoy::status::info("Still reading the folder selection.");
     return;
   }
   megatoy::status::warning("A folder import is already in progress.");
@@ -381,6 +378,9 @@ megatoy_folder_import_selection_started(void *selection, double total) {
   g_pending_selection->scanned.store(0, std::memory_order_relaxed);
   g_pending_selection->phase.store(SelectionPhase::Scanning,
                                    std::memory_order_relaxed);
+  // A dialog closed during the wait comes back once there is progress to
+  // show -- closing does not stop the import.
+  g_pending_selection->hidden.store(false, std::memory_order_relaxed);
 }
 
 EMSCRIPTEN_KEEPALIVE void
@@ -1079,6 +1079,8 @@ void render_folder_import_ui() {
         ImGui::TextUnformatted("Choose a folder to import.");
         ImGui::TextDisabled("Large folders can take the browser a while to "
                             "read after you choose.");
+        ImGui::TextDisabled(
+            "You can close this dialog; the import will continue.");
         ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
                            ImVec2(360, 0));
       } else {
@@ -1104,24 +1106,24 @@ void render_folder_import_ui() {
         }
       }
       ImGui::Spacing();
-      if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+      if (phase == SelectionPhase::WaitingForPicker) {
+        // The browser owns the chooser flow and cannot be stopped from here,
+        // so this button only dismisses the dialog. The slot stays held --
+        // hidden -- which keeps a second picker from being queued behind the
+        // pending one, and the dialog returns when the files arrive. To
+        // abort, the user cancels the browser's own dialog, whose cancel
+        // event frees the slot.
+        if (ImGui::Button("Close", ImVec2(120, 0))) {
+          ImGui::CloseCurrentPopup();
+          selection.hidden.store(true, std::memory_order_relaxed);
+        }
+      } else if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+        // The files are already ours; destroying the slot is enough. Any
+        // JavaScript still holding the token sees an unknown token, reads
+        // it as abandoned and unwinds silently.
         selection.abandoned.store(true, std::memory_order_relaxed);
         ImGui::CloseCurrentPopup();
-        if (phase == SelectionPhase::WaitingForPicker) {
-          // The browser still owns the chooser flow and cannot be stopped
-          // from here. Keep the slot -- hidden -- so no second picker can be
-          // queued behind it; the eventual change/cancel event frees it and
-          // the abandoned flag makes that arrival unwind silently.
-          selection.hidden.store(true, std::memory_order_relaxed);
-          megatoy::status::info(
-              "Import cancelled. If the browser still asks about this "
-              "folder later, cancel its dialog there.");
-        } else {
-          // The files are already ours; destroying the slot is enough. Any
-          // JavaScript still holding the token sees an unknown token, reads
-          // it as abandoned and unwinds silently.
-          end_pending_selection();
-        }
+        end_pending_selection();
       }
       ImGui::EndPopup();
     }
