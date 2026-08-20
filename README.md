@@ -71,7 +71,7 @@ Recommended external collections:
 ## Build Instructions
 
 ```bash
-# Clone repository (the built-in preset patches are included)
+# Clone repository (CMake fetches the built-in preset patches at configure time)
 git clone https://github.com/ulalume/megatoy.git
 cd megatoy
 

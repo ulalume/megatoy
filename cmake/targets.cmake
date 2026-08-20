@@ -53,7 +53,9 @@ add_library(megatoy_resampler STATIC
 target_compile_definitions(megatoy_resampler PUBLIC HAVE_STDINT_H)
 target_include_directories(megatoy_resampler PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
-set(MEGATOY_PRESETS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets/presets")
+# Fetched via FetchContent (cmake/deps.cmake); bump the pin there to follow
+# upstream. Every packaging path below flows through this variable.
+set(MEGATOY_PRESETS_SOURCE_DIR "${ym2612_patches_SOURCE_DIR}")
 
 set(MEGATOY_CORE_SOURCES
   src/app_services.cpp
@@ -326,7 +328,27 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     # mere 64 KB. Give it room so a new member does not overflow the stack at
     # startup, which surfaces only as "memory access out of bounds".
     "-sSTACK_SIZE=1048576"
-    "--preload-file" "${CMAKE_SOURCE_DIR}/assets@/app/assets"
+    # Each --preload-file below uses the SHELL: prefix (CMake >= 3.12) rather
+    # than either "--preload-file" "value" as two list entries, or
+    # "--preload-file value" as one. Two entries breaks because
+    # target_link_options de-duplicates repeated list entries by exact
+    # string match, and plain "--preload-file" would collide across the two
+    # uses below, silently dropping the second flag while leaving both of
+    # its values on the command line as bare (unrecognized) arguments. One
+    # combined entry without SHELL: also breaks, the opposite way: CMake
+    # then quotes it as a single atomic shell word (verified via
+    # EMCC_DEBUG=1), so em++ receives "--preload-file value" as ONE argv
+    # token, which its argument parser does not recognize as the
+    # --preload-file flag at all -- it is silently dropped, no .data file is
+    # produced, and no error is printed. SHELL: sidesteps both failure modes:
+    # it is exempt from the de-dup pass, and CMake re-splits its content into
+    # separate argv words for the underlying build tool.
+    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/assets@/app/assets"
+    # Presets no longer live under assets/ on disk (they are fetched via
+    # FetchContent -- see MEGATOY_PRESETS_SOURCE_DIR above), so they need
+    # their own preload to keep landing at the same MEMFS path,
+    # /app/assets/presets, that src/system/path_service.cpp expects.
+    "SHELL:--preload-file ${MEGATOY_PRESETS_SOURCE_DIR}@/app/assets/presets"
   )
   if(MEGATOY_GENERATE_SIMPLE_HTML)
     set(MEGATOY_SIMPLE_SHELL_SRC "${CMAKE_SOURCE_DIR}/dist/web_shell_simple.html")
