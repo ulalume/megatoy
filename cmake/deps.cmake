@@ -135,7 +135,7 @@ FetchContent_MakeAvailable(IconFontCppHeaders)
 FetchContent_Declare(
   ym2612_format
   GIT_REPOSITORY https://github.com/ulalume/ym2612_format
-  GIT_TAG        v0.2.2
+  GIT_TAG        v0.2.3
 )
 set(YM2612_FORMAT_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(YM2612_FORMAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
