@@ -58,6 +58,7 @@ void Device::init(uint32_t sample_rate) {
 
   sample_rate_ = sample_rate;
   chip_ = std::make_unique<YmfmChip>(kClock);
+  chip_->set_chip_type(chip_type_);
   resampler_ = std::make_unique<Resampler>();
   resampler_->init(*chip_, sample_rate_);
   lowpass_.init(sample_rate_);
@@ -71,6 +72,18 @@ void Device::stop() {
 
 uint32_t Device::native_sample_rate() const {
   return chip_ ? chip_->native_sample_rate() : 0;
+}
+
+void Device::set_chip_type(ChipType type) {
+  if (chip_ && chip_->chip_type() != type) {
+    // An inactive chip must not retain keyed envelopes that can resume when
+    // it is selected again.
+    chip_->reset();
+  }
+  chip_type_ = type;
+  if (chip_) {
+    chip_->set_chip_type(type);
+  }
 }
 
 void Device::write(uint8_t reg, uint8_t data, bool port) {

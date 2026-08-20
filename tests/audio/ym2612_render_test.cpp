@@ -9,6 +9,7 @@
 #include "ym2612/channel.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
+#include "ym2612/ymfm_chip.hpp"
 
 #include "../test_check.hpp"
 #include <algorithm>
@@ -96,6 +97,24 @@ float render_ac_peak(AudioEngine &engine, uint32_t frames) {
     peak = std::max(peak, std::abs(static_cast<double>(sample) - mean));
   }
   return static_cast<float>(peak / 32768.0);
+}
+
+void test_raw_idle_dc_by_chip_type() {
+  ym2612::YmfmChip chip(ym2612::Device::kClock);
+  constexpr uint32_t kFrames = 16;
+  int32_t left[kFrames] = {};
+  int32_t right[kFrames] = {};
+
+  CHECK(chip.chip_type() == ym2612::ChipType::Ym2612);
+  chip.render(left, right, kFrames);
+  CHECK(std::abs(left[kFrames - 1] - 504) <= 1);
+  CHECK(std::abs(right[kFrames - 1] - 504) <= 1);
+  CHECK(left[kFrames - 1] != 0);
+
+  chip.set_chip_type(ym2612::ChipType::Ym3438);
+  chip.render(left, right, kFrames);
+  CHECK(left[kFrames - 1] == 0);
+  CHECK(right[kFrames - 1] == 0);
 }
 
 void test_sample_rates() {
@@ -256,15 +275,47 @@ void test_apply_patch_preserves_sustaining_note_velocity() {
   CHECK(after > before * 0.5f);
 }
 
+void test_switching_chip_type_releases_notes_and_keeps_audio_working() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+
+  const auto patch = make_all_carrier_patch(20);
+  submit_patch(engine, patch);
+  const auto first_note = ym2612::Note::from_midi_note(60);
+  CHECK(engine.submit(audio::AudioCommand::note_on(first_note, 127)));
+  CHECK(render_ac_peak(engine, kSampleRate / 10) > 0.01f);
+  CHECK(engine.notes().published_contains(first_note));
+
+  CHECK(engine.submit(
+      audio::AudioCommand::set_chip_type(ym2612::ChipType::Ym3438)));
+  render_ac_peak(engine, 64);
+  CHECK(engine.device().chip_type() == ym2612::ChipType::Ym3438);
+  CHECK(engine.notes().published_notes().empty());
+
+  const auto second_note = ym2612::Note::from_midi_note(64);
+  CHECK(engine.submit(audio::AudioCommand::note_on(second_note, 127)));
+  CHECK(render_ac_peak(engine, kSampleRate / 10) > 0.01f);
+
+  CHECK(engine.submit(audio::AudioCommand::note_off(second_note)));
+  render_ac_peak(engine, kSampleRate * 2);
+
+  std::vector<float> idle(static_cast<size_t>(kSampleRate / 10) * 2, 1.0f);
+  engine.device().render(kSampleRate / 10, idle.data());
+  CHECK(std::abs(idle[idle.size() - 2]) < 0.000001f);
+  CHECK(std::abs(idle[idle.size() - 1]) < 0.000001f);
+}
+
 } // namespace
 
 int main() {
   test_sample_rates();
+  test_raw_idle_dc_by_chip_type();
   test_ctrmml_lowpass_response();
   test_idle_settles_to_digital_silence();
   test_apply_patch_reaches_sustaining_note();
   test_apply_patch_updates_instrument_for_future_notes();
   test_apply_patch_preserves_sustaining_note_velocity();
+  test_switching_chip_type_releases_notes_and_keeps_audio_working();
 
   AudioEngine engine;
   CHECK(engine.initialize(kSampleRate));

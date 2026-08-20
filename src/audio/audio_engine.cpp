@@ -318,6 +318,13 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
     }
     break;
   }
+
+  case Type::SetChipType:
+    device_.set_chip_type(command.chip_type);
+    apply(audio::AudioCommand::apply_patch(current_global_, current_channel_,
+                                           current_instrument_));
+    apply(audio::AudioCommand::all_notes_off());
+    break;
   }
 }
 

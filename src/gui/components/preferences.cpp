@@ -420,6 +420,16 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
       }
     }
 
+    ImGui::SeparatorText("Audio");
+
+    static constexpr const char *chip_types[] = {
+        "YM2612 (Model 1, DAC distortion)", "YM3438 (Model 2, clean)"};
+    ui_prefs.ym2612_chip_type = std::clamp(ui_prefs.ym2612_chip_type, 0, 1);
+    ImGui::Combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
+                 static_cast<int>(std::size(chip_types)));
+    ImGui::TextWrapped(
+        "Model 1's DAC adds a gritty edge, most audible on release tails.");
+
     ImGui::SeparatorText("MIDI Input");
 
     ImGui::Checkbox("Use MIDI velocity", &ui_prefs.use_velocity);

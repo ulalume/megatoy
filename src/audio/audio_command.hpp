@@ -2,6 +2,7 @@
 
 #include "ym2612/note.hpp"
 #include "ym2612/types.hpp"
+#include "ym2612/ymfm_chip.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -30,6 +31,7 @@ struct AudioCommand {
     ApplyPatch,
     PitchBend,
     ModWheel,
+    SetChipType,
   };
 
   Type type = Type::AllNotesOff;
@@ -39,6 +41,7 @@ struct AudioCommand {
   // while mod wheel is the MIDI CC1 value (0..127).
   uint16_t pitch_bend_value = 8192;
   uint8_t mod_wheel_value = 0;
+  ym2612::ChipType chip_type = ym2612::ChipType::Ym2612;
 
   // ApplyPatch only. The patch *name* is deliberately absent: it never
   // reaches a register, and keeping the command trivially copyable keeps the
@@ -90,6 +93,13 @@ struct AudioCommand {
     AudioCommand command;
     command.type = Type::ModWheel;
     command.mod_wheel_value = value;
+    return command;
+  }
+
+  static AudioCommand set_chip_type(ym2612::ChipType type) {
+    AudioCommand command;
+    command.type = Type::SetChipType;
+    command.chip_type = type;
     return command;
   }
 };

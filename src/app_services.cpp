@@ -33,6 +33,8 @@ void AppServices::initialize_app(AppState &state) {
   }
 
   state.ui_state().prefs = preference_manager.ui_preferences();
+  audio_manager.set_chip_type(static_cast<ym2612::ChipType>(
+      std::clamp(state.ui_state().prefs.ym2612_chip_type, 0, 1)));
   audio_manager.set_note_options(
       state.ui_state().prefs.use_velocity,
       state.ui_state().prefs.velocity_sensitivity_depth,
