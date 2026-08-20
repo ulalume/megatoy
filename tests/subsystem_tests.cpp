@@ -885,6 +885,7 @@ int main() {
   const UIPreferences default_ui_preferences;
   CHECK(default_ui_preferences.show_patch_editor);
   CHECK(default_ui_preferences.show_patch_selector);
+  CHECK(default_ui_preferences.show_preferences);
 
   const auto migration_root = std::filesystem::temp_directory_path() /
                               "megatoy_workspace_migration_tests";
