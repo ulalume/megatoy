@@ -21,9 +21,9 @@
 #include "patch_actions.hpp"
 #include "patches/filename_utils.hpp"
 #include "platform/platform_config.hpp"
+#include "platform/web/web_folder_delete.hpp"
 #include "platform/web/web_folder_import.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_storage_persistence.hpp"
 #include "platform/web/web_workspace_download.hpp"
 #include "system/path_service.hpp"
 #include "workspace/path_policy.hpp"
@@ -147,7 +147,7 @@ void request_workspace_folder_removal(AppContext &ctx,
           "\"?\n\nThis permanently deletes the folder and all of its patches "
           "from browser storage. This cannot be undone.",
       "Delete", [&ctx, path, name]() {
-        // remove_all is only safe on directories this app manages: a folder
+        // The deletion is only safe on directories this app manages: a folder
         // still registered in the workspace and sitting directly inside the
         // browser storage root. Anything else means stale UI state.
         if (!ctx.services.preference_manager.workspace().contains(path) ||
@@ -158,22 +158,30 @@ void request_workspace_folder_removal(AppContext &ctx,
                                  "\": not a workspace folder.");
           return;
         }
-        std::error_code error;
-        std::filesystem::remove_all(path, error);
-        if (error) {
-          megatoy::status::error("Could not delete \"" + name +
-                                 "\": " + error.message());
-          return;
+        // Removing the files is instant; getting IndexedDB to agree is not,
+        // and until it does a reload brings the whole folder back. So the
+        // workspace removal and the tree refresh wait for the flush -- the
+        // completion callback runs on the main thread, on a later frame.
+        const bool started = platform::web::begin_folder_delete(
+            path, [&ctx, path, name](bool ok, std::string error) {
+              if (!ok) {
+                megatoy::status::error(
+                    "Could not persist the deletion: " + error +
+                    " -- the folder may reappear after a reload.");
+                return;
+              }
+              if (!ctx.services.preference_manager.remove_workspace_folder(
+                      path)) {
+                megatoy::status::error("Could not remove \"" + name +
+                                       "\" from the workspace.");
+                return;
+              }
+              ctx.services.patch_session.sync_workspace();
+              megatoy::status::success("Deleted \"" + name + "\".");
+            });
+        if (!started) {
+          megatoy::status::warning("Another folder deletion is in progress.");
         }
-        if (!ctx.services.preference_manager.remove_workspace_folder(path)) {
-          platform::web::request_storage_persist();
-          megatoy::status::error("Could not remove \"" + name +
-                                 "\" from the workspace.");
-          return;
-        }
-        ctx.services.patch_session.sync_workspace();
-        platform::web::request_storage_persist();
-        megatoy::status::success("Deleted \"" + name + "\".");
       });
 #else
   if (preferences.remove_workspace_folder(path)) {
@@ -541,6 +549,7 @@ void render_all(AppContext &ctx) {
   render_confirmation_dialog(contexts.confirmation);
 #if defined(MEGATOY_PLATFORM_WEB)
   platform::web::render_folder_import_ui();
+  platform::web::render_folder_delete_ui();
 #else
   render_folder_scan_dialog();
 #endif
