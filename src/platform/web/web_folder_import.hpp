@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/import_pipeline.hpp"
 #include "platform/platform_config.hpp"
 
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -7,16 +8,20 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace platform::web {
 
 struct FolderImportResult {
   bool ok = false;
+  bool cancelled = false;
   /// Name of the folder the user chose, used as the workspace folder name.
   std::string folder_name;
   /// Where the files were written.
   std::filesystem::path path;
   std::size_t file_count = 0;
+  std::size_t filtered_count = 0;
+  std::vector<platform::import_pipeline::ValidationFailure> validation_failures;
   std::string error;
 };
 
@@ -49,6 +54,9 @@ void import_folder(const std::filesystem::path &destination_root,
  */
 void set_drop_import_handler(std::function<void(FolderImportResult)> handler);
 void install_drop_import(const std::filesystem::path &destination_root);
+
+/// Draw the preflight, progress/cancel, and detailed result modals.
+void render_folder_import_ui();
 
 } // namespace platform::web
 

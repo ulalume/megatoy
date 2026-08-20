@@ -97,14 +97,20 @@ void PreferenceManager::request_add_workspace_folder(
   platform::web::import_folder(
       megatoy::system::PathService::web_storage_root(),
       [this, on_changed](platform::web::FolderImportResult result) {
+        if (result.cancelled) {
+          return;
+        }
         if (!result.ok) {
           megatoy::status::error("Folder import failed: " + result.error);
           return;
         }
         if (add_workspace_folder(result.path)) {
-          megatoy::status::success("Imported \"" + result.folder_name + "\" (" +
-                                   std::to_string(result.file_count) +
-                                   " files)");
+          if (result.filtered_count == 0 &&
+              result.validation_failures.empty()) {
+            megatoy::status::success(
+                "Imported \"" + result.folder_name + "\" (" +
+                std::to_string(result.file_count) + " files)");
+          }
           if (on_changed) {
             on_changed();
           }

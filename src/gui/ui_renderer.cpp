@@ -20,6 +20,7 @@
 #include "patch_actions.hpp"
 #include "patches/filename_utils.hpp"
 #include "platform/platform_config.hpp"
+#include "platform/web/web_folder_import.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_storage_persistence.hpp"
 #include "platform/web/web_workspace_download.hpp"
@@ -537,6 +538,9 @@ void render_all(AppContext &ctx) {
   render_main_menu(contexts.main_menu);
   render_patch_drop_feedback(contexts.patch_drop);
   render_confirmation_dialog(contexts.confirmation);
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::render_folder_import_ui();
+#endif
   render_patch_editor(PATCH_EDITOR_TITLE, contexts.patch_editor,
                       ctx.app_state().ui_state().save_export_state);
   render_patch_selector(PATCH_BROWSER_TITLE, contexts.patch_selector);
