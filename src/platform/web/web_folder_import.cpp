@@ -2,12 +2,15 @@
 
 #if defined(MEGATOY_PLATFORM_WEB)
 
+#include "core/status.hpp"
 #include "gui/components/common.hpp"
+#include "platform/clipboard.hpp"
 #include "platform/import_pipeline.hpp"
 #include "platform/web/web_storage_persistence.hpp"
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -73,10 +76,87 @@ struct ResultReport {
   bool open = true;
 };
 
+/**
+ * The stretch between "Import Folder..." was clicked and the browser handing
+ * us a file list, which for a large tree is minutes of total silence: Chrome
+ * enumerates the whole directory before it even shows its own confirmation
+ * dialog, and nothing reaches the page until then. Without this the app looks
+ * frozen and the user reloads -- which leaves the chooser flow pending and
+ * makes the next click do nothing at all.
+ */
+enum class SelectionPhase : int {
+  WaitingForPicker = 0,
+  Scanning = 1,
+};
+
+struct PendingSelection {
+  /// Identity handed to JavaScript. Deliberately NOT the slot address: a
+  /// cancelled selection frees the slot, and the next selection can land on
+  /// the very same heap address, so a stale JS callback would mistake the new
+  /// flow for its own. A monotonic token can never be reused, and nothing
+  /// ever dereferences it.
+  void *token = nullptr;
+  bool is_drop = false;
+  std::atomic<SelectionPhase> phase{SelectionPhase::WaitingForPicker};
+  std::atomic<std::uint64_t> scanned{0};
+  /// 0 while unknown -- drag-drop enumeration has no count until it finishes.
+  std::atomic<std::uint64_t> total{0};
+  std::atomic<bool> abandoned{false};
+  /// Cancelled while the browser still owned the flow. The chooser pipeline is
+  /// a single browser-side resource that a page can neither observe nor stop:
+  /// freeing the slot here would let another picker be clicked, and the
+  /// browser queues those clicks and replays every one of them when the
+  /// pending flow finally resolves (observed: N stacked file dialogs). So the
+  /// slot stays held -- invisibly -- until the change/cancel event arrives.
+  std::atomic<bool> hidden{false};
+};
+
 std::function<void(FolderImportResult)> g_drop_handler;
 std::unique_ptr<ImportRequest> g_active_import;
+std::unique_ptr<PendingSelection> g_pending_selection;
+std::uintptr_t g_next_selection_token = 1;
 std::deque<ResultReport> g_result_reports;
 bool g_close_import_popup = false;
+bool g_close_selection_popup = false;
+
+constexpr const char *kSelectionPopupId = "Import Folder###ImportSelection";
+
+/// Null when a selection or an import is already running; the caller reports
+/// that to the user rather than opening a second picker behind the first.
+void *begin_pending_selection(bool is_drop) {
+  if (g_pending_selection || g_active_import) {
+    return nullptr;
+  }
+  auto selection = std::make_unique<PendingSelection>();
+  selection->token = reinterpret_cast<void *>(g_next_selection_token++);
+  selection->is_drop = is_drop;
+  auto *token = selection->token;
+  g_pending_selection = std::move(selection);
+  return token;
+}
+
+void end_pending_selection() {
+  if (!g_pending_selection) {
+    return;
+  }
+  g_pending_selection.reset();
+  g_close_selection_popup = true;
+}
+
+bool selection_matches(void *token) {
+  return token != nullptr && g_pending_selection &&
+         g_pending_selection->token == token;
+}
+
+void notify_import_busy() {
+  if (g_pending_selection &&
+      g_pending_selection->phase.load(std::memory_order_relaxed) ==
+          SelectionPhase::WaitingForPicker) {
+    megatoy::status::info("Still reading the folder selection.");
+    return;
+  }
+  megatoy::status::warning("A folder import is already in progress.");
+}
 
 std::string format_megabytes(std::uint64_t bytes) {
   std::ostringstream stream;
@@ -257,9 +337,78 @@ void run_validation_slice() {
 
 extern "C" {
 
+/**
+ * The whole supported-extension set as one comma-joined lowercase string, so
+ * JavaScript can build a Set once and filter a million-entry selection with
+ * pure JS lookups. The old per-file wasm roundtrip (a string allocation plus
+ * a call each) froze the tab for minutes on a large folder.
+ */
+EMSCRIPTEN_KEEPALIVE const char *megatoy_folder_import_supported_extensions() {
+  static const std::string joined = [] {
+    std::string result;
+    for (const auto &extension : import_pipeline::supported_extensions()) {
+      if (!result.empty()) {
+        result.push_back(',');
+      }
+      for (const char character : extension) {
+        result.push_back(static_cast<char>(
+            std::tolower(static_cast<unsigned char>(character))));
+      }
+    }
+    return result;
+  }();
+  return joined.c_str();
+}
+
+EMSCRIPTEN_KEEPALIVE void megatoy_folder_import_busy_notice() {
+  notify_import_busy();
+}
+
+EMSCRIPTEN_KEEPALIVE void *megatoy_folder_import_selection_begin(int is_drop) {
+  return begin_pending_selection(is_drop != 0);
+}
+
+EMSCRIPTEN_KEEPALIVE void
+megatoy_folder_import_selection_started(void *selection, double total) {
+  if (!selection_matches(selection)) {
+    return;
+  }
+  g_pending_selection->total.store(total > 0 ? static_cast<std::uint64_t>(total)
+                                             : 0,
+                                   std::memory_order_relaxed);
+  g_pending_selection->scanned.store(0, std::memory_order_relaxed);
+  g_pending_selection->phase.store(SelectionPhase::Scanning,
+                                   std::memory_order_relaxed);
+  // A dialog closed during the wait comes back once there is progress to
+  // show -- closing does not stop the import.
+  g_pending_selection->hidden.store(false, std::memory_order_relaxed);
+}
+
+EMSCRIPTEN_KEEPALIVE void
+megatoy_folder_import_selection_progress(void *selection, double scanned) {
+  if (!selection_matches(selection)) {
+    return;
+  }
+  g_pending_selection->scanned.store(
+      scanned > 0 ? static_cast<std::uint64_t>(scanned) : 0,
+      std::memory_order_relaxed);
+}
+
+/// An unknown token means the slot is gone -- the user pressed Cancel -- so
+/// the still-running JavaScript must treat it as abandoned and unwind.
 EMSCRIPTEN_KEEPALIVE int
-megatoy_folder_import_extension_supported(const char *extension) {
-  return extension != nullptr && import_pipeline::supports_extension(extension);
+megatoy_folder_import_selection_abandoned(void *selection) {
+  if (!selection_matches(selection)) {
+    return 1;
+  }
+  return g_pending_selection->abandoned.load(std::memory_order_relaxed) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE void megatoy_folder_import_selection_end(void *selection) {
+  if (!selection_matches(selection)) {
+    return;
+  }
+  end_pending_selection();
 }
 
 EMSCRIPTEN_KEEPALIVE int
@@ -420,6 +569,21 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
   var YIELD_BYTES = 256 * 1024;
   var QUOTA_SAFETY_FRACTION = 0.10;
   var QUOTA_SAFETY_MINIMUM = 16 * 1024 * 1024;
+  // Filtering a million entries must never hold the main thread: work in
+  // chunks and yield, so the progress modal keeps painting and Cancel works.
+  var FILTER_CHUNK = 20000;
+  var ENUMERATE_PROGRESS_INTERVAL = 500;
+
+  // Fetched once; the per-file alternative was two wasm calls per file.
+  var extensionSet = new Set();
+  (function() {
+    var pointer = Module["_megatoy_folder_import_supported_extensions"]();
+    var joined = pointer ? UTF8ToString(pointer) : "";
+    var parts = joined.split(",");
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i]) extensionSet.add(parts[i]);
+    }
+  })();
 
   function mkdirp(dir) {
     var parts = dir.split("/").filter(function(part) { return part.length > 0; });
@@ -451,13 +615,31 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
   }
 
   function supported(file) {
-    var name = file.name || "";
+    var name = (file && file.name) || "";
     var dot = name.lastIndexOf(".");
-    var extension = dot >= 0 ? name.substring(dot).toLowerCase() : "";
-    var ptr = stringToNewUTF8(extension);
-    var result = Module["_megatoy_folder_import_extension_supported"](ptr);
-    _free(ptr);
-    return !!result;
+    if (dot < 0) return false;
+    return extensionSet.has(name.substring(dot).toLowerCase());
+  }
+
+  function selectionStarted(selection, total) {
+    if (selection) {
+      Module["_megatoy_folder_import_selection_started"](selection, total);
+    }
+  }
+  function selectionProgress(selection, scanned) {
+    if (selection) {
+      Module["_megatoy_folder_import_selection_progress"](selection, scanned);
+    }
+  }
+  function selectionAbandoned(selection) {
+    return selection
+        ? !!Module["_megatoy_folder_import_selection_abandoned"](selection)
+        : false;
+  }
+  function selectionEnd(selection) {
+    if (selection) {
+      Module["_megatoy_folder_import_selection_end"](selection);
+    }
   }
 
   function earlyResult(handle, isDrop, cancelled, folderName, error) {
@@ -526,22 +708,69 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
     }
   }
 
-  async function run(candidate, destination, handle, isDrop) {
+  // Filters -- and, for the picker, *builds* -- the item list in chunks with a
+  // yield between them. `candidate.files` is either an array of
+  // {file, relative} (drop) or the picker's raw FileList; mapping a FileList
+  // of 1.7M entries into an array up front is itself a multi-second freeze,
+  // so that mapping happens here, inside the chunked pass.
+  // Returns null when the user abandoned the selection.
+  async function scanCandidate(candidate, selection) {
+    var source = candidate.files;
+    var count = source.length;
+    var fromFileList = !!candidate.fromFileList;
     var kept = [];
     var filtered = 0;
     var totalBytes = 0;
-    for (var i = 0; i < candidate.files.length; i++) {
-      var item = candidate.files[i];
-      if (supported(item.file)) {
-        item.relative = safeRelative(item.relative);
-        if (!item.relative) continue;
-        kept.push(item);
-        totalBytes += item.file.size || 0;
-      } else {
-        filtered++;
+    for (var i = 0; i < count; i++) {
+      if (i > 0 && (i % FILTER_CHUNK) === 0) {
+        selectionProgress(selection, i);
+        if (selectionAbandoned(selection)) return null;
+        await new Promise(function(resolve) { setTimeout(resolve, 0); });
       }
+      var file;
+      var relative;
+      if (fromFileList) {
+        file = source[i];
+        var path = file.webkitRelativePath || file.name;
+        var slash = path.indexOf("/");
+        relative = slash >= 0 ? path.substring(slash + 1) : path;
+      } else {
+        file = source[i].file;
+        relative = source[i].relative;
+      }
+      if (!supported(file)) { filtered++; continue; }
+      relative = safeRelative(relative);
+      if (!relative) continue;
+      kept.push({file: file, relative: relative});
+      totalBytes += file.size || 0;
     }
+    selectionProgress(selection, count);
+    if (selectionAbandoned(selection)) return null;
+    return {kept: kept, filtered: filtered, totalBytes: totalBytes};
+  }
+
+  async function run(candidate, destination, handle, isDrop, selection) {
+    var scan;
+    try {
+      scan = await scanCandidate(candidate, selection);
+    } catch (error) {
+      selectionEnd(selection);
+      earlyResult(handle, isDrop, false, candidate.name, "" + error);
+      return;
+    }
+    if (!scan) {
+      // Cancelled from the modal: unwind quietly, freeing the C++ handle.
+      // The flag lets a multi-directory drop abandon the whole batch.
+      candidate.abandoned = true;
+      selectionEnd(selection);
+      earlyResult(handle, isDrop, true, "", "");
+      return;
+    }
+    var kept = scan.kept;
+    var filtered = scan.filtered;
+    var totalBytes = scan.totalBytes;
     if (!kept.length) {
+      selectionEnd(selection);
       earlyResult(handle, isDrop, false, candidate.name,
                   "No supported instrument files were found (" +
                   filtered + " unrelated files skipped).");
@@ -552,6 +781,7 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
     try {
       quotaRemaining = await estimateStorage(totalBytes);
     } catch (error) {
+      selectionEnd(selection);
       earlyResult(handle, isDrop, false, candidate.name, "" + error);
       return;
     }
@@ -570,6 +800,9 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
     }
     var stagingPath = destination + "/.import-tmp-" + Date.now() + "-" +
                       (uniqueCounter++);
+
+    // The active-import machinery owns the progress UI from here on.
+    selectionEnd(selection);
 
     var namePtr = stringToNewUTF8(safeName);
     var stagePtr = stringToNewUTF8(stagingPath);
@@ -637,12 +870,17 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
     });
   }
 
-  async function enumerateEntry(entry, prefix, output) {
+  // `counter` (optional) carries the pending-selection token so a dropped
+  // tree reports progress while it is walked -- the count is unknown until
+  // the walk ends -- and stops early when the user cancels.
+  async function enumerateEntry(entry, prefix, output, counter) {
+    if (counter && counter.abandoned) return;
     var relative = prefix ? prefix + "/" + entry.name : entry.name;
     if (entry.isDirectory) {
       var children = await readAll(entry.createReader());
       for (var i = 0; i < children.length; i++) {
-        await enumerateEntry(children[i], relative, output);
+        if (counter && counter.abandoned) return;
+        await enumerateEntry(children[i], relative, output, counter);
       }
       return;
     }
@@ -650,11 +888,22 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
       entry.file(resolve, reject);
     });
     output.push({file: file, relative: relative});
+    if (counter) {
+      counter.scanned++;
+      if ((counter.scanned % ENUMERATE_PROGRESS_INTERVAL) === 0) {
+        selectionProgress(counter.selection, counter.scanned);
+        if (selectionAbandoned(counter.selection)) counter.abandoned = true;
+      }
+    }
   }
 
   Module.__megatoyFolderImportCommon = {
     run: run,
     enumerateEntry: enumerateEntry,
+    selectionStarted: selectionStarted,
+    selectionProgress: selectionProgress,
+    selectionAbandoned: selectionAbandoned,
+    selectionEnd: selectionEnd,
     decide: function(request, proceed) {
       var resolve = decisions.get(request);
       decisions.delete(request);
@@ -671,7 +920,7 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
 });
 
 EM_JS(void, megatoy_open_folder_import, (const char *destination,
-                                         void *handle), {
+                                         void *handle, void *selection), {
   var destinationRoot = UTF8ToString(destination);
   var common = Module.__megatoyFolderImportCommon;
   var input = document.createElement("input");
@@ -685,23 +934,30 @@ EM_JS(void, megatoy_open_folder_import, (const char *destination,
     if (settled) return;
     settled = true;
     input.remove();
+    common.selectionEnd(selection);
     common.earlyResult(handle, false, true, "", "");
   }
   input.addEventListener("cancel", cancel);
   input.addEventListener("change", async function() {
     if (settled) return;
-    var files = Array.from(input.files || []);
+    // The user may have given up during the browser's own (minutes-long)
+    // enumeration; the slot is gone, so unwind without a notification.
+    if (common.selectionAbandoned(selection)) {
+      settled = true;
+      input.remove();
+      common.selectionEnd(selection);
+      common.earlyResult(handle, false, true, "", "");
+      return;
+    }
+    // Not Array.from(): copying a million-entry FileList is itself a freeze.
+    var files = input.files || [];
     if (!files.length) { cancel(); return; }
     settled = true;
+    common.selectionStarted(selection, files.length);
     var first = files[0].webkitRelativePath || files[0].name;
     var folderName = first.split("/")[0] || "Imported";
-    var items = files.map(function(file) {
-      var path = file.webkitRelativePath || file.name;
-      var slash = path.indexOf("/");
-      return {file: file, relative: slash >= 0 ? path.substring(slash + 1) : path};
-    });
-    await common.run({name: folderName, files: items}, destinationRoot,
-                     handle, false);
+    await common.run({name: folderName, files: files, fromFileList: true},
+                     destinationRoot, handle, false, selection);
     input.remove();
   });
   input.click();
@@ -728,6 +984,16 @@ EM_JS(void, megatoy_install_drop_import_js, (const char *destination), {
     (async function() {
       for (var index = 0; index < directories.length; index++) {
         var directory = directories[index];
+        // One slot per directory: run() hands its slot to the active import,
+        // and the loop only advances once that import has settled.
+        var selection = Module["_megatoy_folder_import_selection_begin"](1);
+        if (!selection) {
+          Module["_megatoy_folder_import_busy_notice"]();
+          return;
+        }
+        // No count to show until the walk finishes: report as we go.
+        common.selectionStarted(selection, 0);
+        var counter = {selection: selection, scanned: 0, abandoned: false};
         var files = [];
         try {
           var children = await (new Promise(function(resolve, reject) {
@@ -741,11 +1007,20 @@ EM_JS(void, megatoy_install_drop_import_js, (const char *destination), {
             })();
           }));
           for (var child = 0; child < children.length; child++) {
-            await common.enumerateEntry(children[child], "", files);
+            if (counter.abandoned) break;
+            await common.enumerateEntry(children[child], "", files, counter);
           }
-          await common.run({name: directory.name, files: files},
-                           destinationRoot, 0, true);
+          if (counter.abandoned || common.selectionAbandoned(selection)) {
+            common.selectionEnd(selection);
+            common.earlyResult(0, true, true, "", "");
+            return;
+          }
+          common.selectionStarted(selection, files.length);
+          var candidate = {name: directory.name, files: files};
+          await common.run(candidate, destinationRoot, 0, true, selection);
+          if (candidate.abandoned) return;
         } catch (error) {
+          common.selectionEnd(selection);
           common.earlyResult(0, true, false, directory.name, "" + error);
         }
       }
@@ -770,6 +1045,89 @@ void render_folder_import_ui() {
       ImGui::EndPopup();
     }
     g_close_import_popup = false;
+  }
+
+  if (!g_pending_selection && g_close_selection_popup) {
+    if (ImGui::IsPopupOpen(kSelectionPopupId) &&
+        ImGui::BeginPopupModal(kSelectionPopupId, nullptr,
+                               ImGuiWindowFlags_NoMove |
+                                   ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::CloseCurrentPopup();
+      ImGui::EndPopup();
+    }
+    g_close_selection_popup = false;
+  }
+
+  // The active-import modals take over the moment the selection resolves; by
+  // construction the two never coexist, but the guard keeps it that way. A
+  // hidden slot (cancelled while the browser owned the flow) renders nothing.
+  if (g_pending_selection && !g_active_import &&
+      !g_pending_selection->hidden.load(std::memory_order_relaxed)) {
+    auto &selection = *g_pending_selection;
+    // Open on the edge only, as with the import modals below.
+    if (!ImGui::IsPopupOpen(kSelectionPopupId)) {
+      ImGui::OpenPopup(kSelectionPopupId);
+    }
+    ui::center_next_window();
+    if (ImGui::BeginPopupModal(kSelectionPopupId, nullptr,
+                               ImGuiWindowFlags_NoMove |
+                                   ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+      ui::force_center_window();
+      const auto phase = selection.phase.load(std::memory_order_relaxed);
+      if (phase == SelectionPhase::WaitingForPicker) {
+        ImGui::TextUnformatted("Choose a folder to import.");
+        ImGui::TextDisabled("Large folders can take the browser a while to "
+                            "read after you choose.");
+        ImGui::TextDisabled(
+            "You can close this dialog; the import will continue.");
+        ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
+                           ImVec2(360, 0));
+      } else {
+        const auto scanned = static_cast<unsigned long long>(
+            selection.scanned.load(std::memory_order_relaxed));
+        const auto total = static_cast<unsigned long long>(
+            selection.total.load(std::memory_order_relaxed));
+        if (total == 0) {
+          if (selection.is_drop) {
+            ImGui::Text("Scanning dropped folder: %llu files...", scanned);
+          } else {
+            ImGui::Text("Scanning selection: %llu files...", scanned);
+          }
+          ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
+                             ImVec2(360, 0));
+        } else {
+          ImGui::Text("Scanning selection: %llu / %llu files...", scanned,
+                      total);
+          ImGui::ProgressBar(std::clamp(static_cast<float>(scanned) /
+                                            static_cast<float>(total),
+                                        0.0f, 1.0f),
+                             ImVec2(360, 0));
+        }
+      }
+      ImGui::Spacing();
+      if (phase == SelectionPhase::WaitingForPicker) {
+        // The browser owns the chooser flow and cannot be stopped from here,
+        // so this button only dismisses the dialog. The slot stays held --
+        // hidden -- which keeps a second picker from being queued behind the
+        // pending one, and the dialog returns when the files arrive. To
+        // abort, the user cancels the browser's own dialog, whose cancel
+        // event frees the slot.
+        if (ImGui::Button("Close", ImVec2(120, 0))) {
+          ImGui::CloseCurrentPopup();
+          selection.hidden.store(true, std::memory_order_relaxed);
+        }
+      } else if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+        // The files are already ours; destroying the slot is enough. Any
+        // JavaScript still holding the token sees an unknown token, reads
+        // it as abandoned and unwinds silently.
+        selection.abandoned.store(true, std::memory_order_relaxed);
+        ImGui::CloseCurrentPopup();
+        end_pending_selection();
+      }
+      ImGui::EndPopup();
+    }
   }
 
   if (g_active_import) {
@@ -870,9 +1228,12 @@ void render_folder_import_ui() {
   if (!g_result_reports.empty()) {
     auto &report = g_result_reports.front();
     ui::center_next_window();
+    // AlwaysAutoResize keeps the dialog hugging its content; without it the
+    // window inherits whatever size the ini remembered.
     if (ImGui::BeginPopupModal("Folder Import Complete", nullptr,
                                ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoResize)) {
+                                   ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_AlwaysAutoResize)) {
       ui::force_center_window();
       ImGui::TextWrapped("Imported %zu files into %s.", report.imported_count,
                          report.folder_name.c_str());
@@ -882,7 +1243,14 @@ void render_folder_import_ui() {
       }
       if (!report.failures.empty()) {
         ImGui::Text("%zu files failed validation:", report.failures.size());
-        ImGui::BeginChild("validation_failures", ImVec2(520, 180), true);
+        // The list hugs its rows up to a cap, then scrolls.
+        const float row_height = ImGui::GetTextLineHeightWithSpacing();
+        const float list_height = std::min(
+            200.0f,
+            row_height * (static_cast<float>(report.failures.size()) + 0.5f) +
+                ImGui::GetStyle().WindowPadding.y * 2.0f);
+        ImGui::BeginChild("validation_failures", ImVec2(640, list_height),
+                          true);
         for (const auto &failure : report.failures) {
           // ASCII separator: the bundled font has no em-dash glyph.
           ImGui::BulletText("%s - %s",
@@ -895,6 +1263,25 @@ void render_folder_import_ui() {
       if (ImGui::Button("OK", ImVec2(120, 0))) {
         ImGui::CloseCurrentPopup();
         g_result_reports.pop_front();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Copy List", ImVec2(120, 0))) {
+        std::string text = "Imported " + std::to_string(report.imported_count) +
+                           " files into " + report.folder_name + ".\n";
+        if (report.filtered_count > 0) {
+          text += std::to_string(report.filtered_count) +
+                  " files skipped (unsupported type)\n";
+        }
+        if (!report.failures.empty()) {
+          text += std::to_string(report.failures.size()) +
+                  " files failed validation:\n";
+          for (const auto &failure : report.failures) {
+            text += failure.relative_path.generic_string() + " - " +
+                    failure.reason + "\n";
+          }
+        }
+        platform::clipboard::copy_text(text);
+        megatoy::status::success("Copied the import report.");
       }
       ImGui::EndPopup();
     }
@@ -912,9 +1299,17 @@ void install_drop_import(const std::filesystem::path &destination_root) {
 
 void import_folder(const std::filesystem::path &destination_root,
                    std::function<void(FolderImportResult)> on_complete) {
+  // A second picker behind a pending one is what made the original incident
+  // unrecoverable: the click looked like it did nothing at all.
+  auto *selection = begin_pending_selection(false);
+  if (selection == nullptr) {
+    notify_import_busy();
+    return;
+  }
   megatoy_install_folder_import_common_js();
   auto *pending = new PendingImport{std::move(on_complete)};
-  megatoy_open_folder_import(destination_root.string().c_str(), pending);
+  megatoy_open_folder_import(destination_root.string().c_str(), pending,
+                             selection);
 }
 
 } // namespace platform::web
