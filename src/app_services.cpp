@@ -2,6 +2,7 @@
 
 #include "app_state.hpp"
 #include "core/status.hpp"
+#include "patches/background_folder_scan.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_patch_url.hpp"
@@ -39,6 +40,9 @@ AppServices::AppServices(platform::PlatformServicesProvider &platform_services)
 
 void AppServices::initialize_app(AppState &state) {
   path_service.ensure_directories();
+#if defined(MEGATOY_PLATFORM_DESKTOP)
+  patches::background_folder_scan::configure(persistent_parse_cache.get());
+#endif
   patch_session.initialize_patch_defaults();
   bool loaded_url_patch = false;
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -96,6 +100,8 @@ void AppServices::initialize_app(AppState &state) {
 void AppServices::shutdown_app() {
   patch_session.release_all_notes();
 #if defined(MEGATOY_PLATFORM_DESKTOP)
+  // Join first: a scan still running writes into the same cache.
+  patches::background_folder_scan::shutdown();
   if (persistent_parse_cache && persistent_parse_cache->dirty()) {
     persistent_parse_cache->save();
   }

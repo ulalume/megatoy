@@ -3,6 +3,7 @@
 #include "drop_actions.hpp"
 #include "gui/components/confirmation_dialog.hpp"
 #include "gui/components/file_manager.hpp"
+#include "gui/components/folder_scan_dialog.hpp"
 #include "gui/components/main_menu.hpp"
 #include "gui/components/midi_keyboard.hpp"
 #include "gui/components/mml_console.hpp"
@@ -540,6 +541,8 @@ void render_all(AppContext &ctx) {
   render_confirmation_dialog(contexts.confirmation);
 #if defined(MEGATOY_PLATFORM_WEB)
   platform::web::render_folder_import_ui();
+#else
+  render_folder_scan_dialog();
 #endif
   render_patch_editor(PATCH_EDITOR_TITLE, contexts.patch_editor,
                       ctx.app_state().ui_state().save_export_state);

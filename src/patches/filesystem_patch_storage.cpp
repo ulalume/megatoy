@@ -49,9 +49,14 @@ bool FilesystemPatchStorage::owns_relative_path(
          relative_path.rfind(root_label_ + "/", 0) == 0;
 }
 
+void FilesystemPatchStorage::set_scan_observer(ScanObserver observer) {
+  scan_observer_ = std::move(observer);
+}
+
 void FilesystemPatchStorage::append_entries(
     std::vector<PatchEntry> &tree) const {
   seen_container_paths_.clear();
+  scan_aborted_ = false;
 
   PatchEntry root_entry;
   root_entry.name = label_;
@@ -64,7 +69,10 @@ void FilesystemPatchStorage::append_entries(
   if (vfs_.is_directory(root_)) {
     scan_directory(root_, root_entry.children, root_label_);
   }
-  for (auto it = parse_cache_.begin(); it != parse_cache_.end();) {
+  // An aborted walk never reached the rest of the tree, so its record of what
+  // is still on disk is not one to evict from.
+  for (auto it = parse_cache_.begin();
+       !scan_aborted_ && it != parse_cache_.end();) {
     if (!seen_container_paths_.contains(it->first)) {
       it = parse_cache_.erase(it);
     } else {
@@ -425,7 +433,15 @@ void FilesystemPatchStorage::scan_directory(
       if (!info.children.empty()) {
         tree.push_back(std::move(info));
       }
+      if (scan_aborted_) {
+        return;
+      }
     } else if (entry.is_regular_file) {
+      if (scan_observer_.on_file && !scan_observer_.on_file(path)) {
+        scan_aborted_ = true;
+        return;
+      }
+
       std::string extension = path.extension().string();
       std::transform(extension.begin(), extension.end(), extension.begin(),
                      ::tolower);

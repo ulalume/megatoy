@@ -5,6 +5,7 @@
 #include "platform/virtual_file_system.hpp"
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -68,6 +69,18 @@ public:
     return container_parse_count_;
   }
 
+  /**
+   * Hook for a walk that has to report progress or stop early.
+   *
+   * `on_file` runs once per regular file, before that file is classified or
+   * parsed, and returning false abandons the rest of the walk. Unset by
+   * default, which is exactly the plain scan.
+   */
+  struct ScanObserver {
+    std::function<bool(const std::filesystem::path &)> on_file;
+  };
+  void set_scan_observer(ScanObserver observer);
+
 private:
   struct ParseCacheEntry {
     std::uintmax_t file_size = 0;
@@ -86,6 +99,8 @@ private:
       parse_cache_;
   mutable std::unordered_set<std::filesystem::path> seen_container_paths_;
   mutable std::size_t container_parse_count_ = 0;
+  ScanObserver scan_observer_;
+  mutable bool scan_aborted_ = false;
 
   void scan_directory(const std::filesystem::path &dir_path,
                       std::vector<PatchEntry> &tree,
