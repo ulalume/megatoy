@@ -50,6 +50,8 @@ using SaveFormatInfo = formats::SaveFormatInfo;
 
 class PatchSession {
 public:
+  enum class RememberPatchPath { Yes, No };
+
   PatchSession(megatoy::system::PathService &directories,
                PreferenceManager &preferences, AudioManager &audio);
 
@@ -64,7 +66,9 @@ public:
   // The source path is the file Save targets. The selection path identifies
   // one visible repository entry, which can be a version inside that file.
   const std::string &current_patch_path() const;
-  void set_current_patch_path(const std::filesystem::path &path);
+  void
+  set_current_patch_path(const std::filesystem::path &path,
+                         RememberPatchPath remember = RememberPatchPath::Yes);
   const std::string &current_patch_selection_path() const;
   void set_current_patch_selection_path(const std::filesystem::path &path);
 
@@ -78,8 +82,11 @@ public:
   void sync_workspace();
 
   // Patch loading
+  bool load_patch_from_entry(const PatchEntry &entry);
+  bool restore_patch(const std::filesystem::path &relative_path);
   void set_current_patch(const ym2612::Patch &patch,
-                         const std::filesystem::path &source_path);
+                         const std::filesystem::path &source_path,
+                         RememberPatchPath remember = RememberPatchPath::Yes);
 
   // Audio integration
   void apply_patch_to_audio();

@@ -55,6 +55,8 @@ public:
   /// Starting directory for the next save/export dialog.
   std::filesystem::path last_save_directory() const;
   void set_last_save_directory(const std::filesystem::path &path);
+  const std::string &last_patch_path() const;
+  void set_last_patch_path(const std::string &path);
 
   std::filesystem::path get_imgui_ini_file() const;
 
@@ -89,6 +91,7 @@ private:
   UIPreferences ui_preferences_;
   megatoy::workspace::Workspace workspace_;
   std::filesystem::path last_save_directory_;
+  std::string last_patch_path_;
   bool show_builtin_presets_ = true;
   bool legacy_workspace_migration_complete_ = false;
   bool legacy_metadata_migration_complete_ = false;

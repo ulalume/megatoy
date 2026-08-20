@@ -40,25 +40,28 @@ const std::string &PatchSession::current_patch_path() const {
   return current_patch_path_;
 }
 
-void PatchSession::set_current_patch_path(const std::filesystem::path &path) {
+void PatchSession::set_current_patch_path(const std::filesystem::path &path,
+                                          RememberPatchPath remember) {
   if (path.empty()) {
     current_patch_path_.clear();
     current_patch_selection_path_.clear();
-    return;
-  }
-  if (!path.is_absolute()) {
+  } else if (!path.is_absolute()) {
     current_patch_path_ = path.generic_string();
     current_patch_selection_path_ = current_patch_path_;
     if (path.extension() == ".ginpkg") {
       current_patch_selection_path_ += "/latest";
     }
-    return;
+  } else {
+    const auto relative = repository_->to_relative_path(path);
+    current_patch_path_ = relative.generic_string();
+    current_patch_selection_path_ = current_patch_path_;
+    if (path.extension() == ".ginpkg") {
+      current_patch_selection_path_ += "/latest";
+    }
   }
-  const auto relative = repository_->to_relative_path(path);
-  current_patch_path_ = relative.generic_string();
-  current_patch_selection_path_ = current_patch_path_;
-  if (path.extension() == ".ginpkg") {
-    current_patch_selection_path_ += "/latest";
+
+  if (remember == RememberPatchPath::Yes) {
+    preferences_.set_last_patch_path(current_patch_path_);
   }
 }
 
@@ -94,7 +97,7 @@ void PatchSession::initialize_patch_defaults() {
   if (!paths.builtin_presets_root.empty() && vfs.exists(init_patch_path)) {
     auto load_result = formats::load_patch_from_file(init_patch_path);
     if (load_result.status == formats::PatchLoadStatus::Success) {
-      set_current_patch_path(init_patch_path);
+      set_current_patch_path(init_patch_path, RememberPatchPath::No);
       current_patch_ = std::move(load_result.patches[0]);
       set_file_identity(init_patch_path);
       mark_as_clean();
@@ -126,7 +129,7 @@ void PatchSession::initialize_patch_defaults() {
               {31, 0, 0, 5, 0, 12, 0, 1, 4, 0, false, false},
           },
   };
-  set_current_patch_path({});
+  set_current_patch_path({}, RememberPatchPath::No);
   mark_as_clean();
 }
 
@@ -157,10 +160,55 @@ void PatchSession::sync_workspace() {
   set_current_patch_path(relative);
 }
 
+bool PatchSession::load_patch_from_entry(const PatchEntry &entry) {
+  ym2612::Patch patch;
+  if (!repository_->load_patch(entry, patch)) {
+    return false;
+  }
+  set_current_patch(patch, entry.source_relative_path.empty()
+                               ? entry.relative_path
+                               : entry.source_relative_path);
+  set_current_patch_selection_path(entry.relative_path);
+  mark_as_clean();
+  return true;
+}
+
+bool PatchSession::restore_patch(const std::filesystem::path &relative_path) {
+  if (relative_path.empty()) {
+    return false;
+  }
+  const auto relative_string = relative_path.generic_string();
+  const auto absolute = repository_->to_absolute_path(relative_path);
+  std::error_code error;
+  if (!absolute.is_absolute() || !std::filesystem::exists(absolute, error) ||
+      error) {
+    return false;
+  }
+
+  const auto find_entry =
+      [&](const auto &self,
+          const std::vector<PatchEntry> &entries) -> const PatchEntry * {
+    for (const auto &entry : entries) {
+      if (!entry.is_directory &&
+          (entry.relative_path == relative_string ||
+           entry.source_relative_path == relative_string)) {
+        return &entry;
+      }
+      if (const auto *found = self(self, entry.children)) {
+        return found;
+      }
+    }
+    return nullptr;
+  };
+  const auto *entry = find_entry(find_entry, repository_->tree());
+  return entry != nullptr && load_patch_from_entry(*entry);
+}
+
 void PatchSession::set_current_patch(const ym2612::Patch &patch,
-                                     const std::filesystem::path &source_path) {
+                                     const std::filesystem::path &source_path,
+                                     RememberPatchPath remember) {
   current_patch_ = patch;
-  set_current_patch_path(source_path);
+  set_current_patch_path(source_path, remember);
   if (!source_path.empty()) {
     const auto format = formats::adapter::format_for_extension(
         lowercase_extension(source_path));
