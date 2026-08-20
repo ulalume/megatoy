@@ -1,5 +1,6 @@
 #include "audio/audio_manager.hpp"
 #include "audio/audio_transport.hpp"
+#include "core/status.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/folder_metadata.hpp"
 #include "patches/patch_session.hpp"
@@ -268,6 +269,33 @@ void test_chip_type_preference_round_trip(const std::filesystem::path &root) {
     megatoy::system::PathService paths(fs, config);
     PreferenceManager preferences(paths);
     CHECK(preferences.ui_preferences().ym2612_chip_type == 1);
+  }
+}
+
+void test_last_patch_preference_round_trip(const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "last-patch-preference-config";
+  std::filesystem::remove_all(config);
+  std::filesystem::create_directories(config);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.last_patch_path().empty());
+    preferences.set_last_patch_path("patches/bass.gin");
+  }
+
+  nlohmann::json stored;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> stored;
+  }
+  CHECK(stored.at("last_patch_path").get<std::string>() == "patches/bass.gin");
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.last_patch_path() == "patches/bass.gin");
   }
 }
 
@@ -851,6 +879,67 @@ void test_current_patch_rename_preserves_clean_identity(TestEnvironment &env) {
   CHECK(!env.session.is_modified());
 }
 
+void test_current_patch_path_recording(TestEnvironment &env) {
+  env.preferences.set_last_patch_path("patches/remembered.gin");
+  const auto url_patch = env.session.current_patch();
+  env.session.set_current_patch(url_patch, {},
+                                patches::PatchSession::RememberPatchPath::No);
+  CHECK(env.preferences.last_patch_path() == "patches/remembered.gin");
+
+  const auto source_path = env.patches_folder / "recorded.gin";
+  env.session.set_current_patch_path(source_path);
+  CHECK(
+      env.preferences.last_patch_path() ==
+      env.session.repository().to_relative_path(source_path).generic_string());
+
+  env.session.set_current_patch_path({});
+  CHECK(env.preferences.last_patch_path().empty());
+}
+
+void test_restore_last_patch(TestEnvironment &env) {
+  auto patch = env.session.current_patch();
+  patch.name = "embedded name";
+  patch.instrument.algorithm = 6;
+  const auto source_path = env.patches_folder / "restored.gin";
+  CHECK(patches::write_patch(patch, source_path));
+  env.session.repository().refresh();
+
+  const auto relative =
+      env.session.repository().to_relative_path(source_path).generic_string();
+  env.preferences.set_last_patch_path(relative);
+  CHECK(env.session.restore_patch(env.preferences.last_patch_path()));
+  CHECK(env.session.current_patch_path() == relative);
+  CHECK(env.session.current_patch_selection_path() == relative);
+  CHECK(env.session.current_patch().name == "restored");
+  CHECK(env.session.current_patch().instrument.algorithm == 6);
+  CHECK(!env.session.is_modified());
+
+  const auto package_path = env.patches_folder / "restored-package.ginpkg";
+  CHECK(patches::write_patch(patch, package_path));
+  env.session.repository().refresh();
+  const auto package_relative =
+      env.session.repository().to_relative_path(package_path).generic_string();
+  env.preferences.set_last_patch_path(package_relative);
+  CHECK(env.session.restore_patch(env.preferences.last_patch_path()));
+  CHECK(env.session.current_patch_path() == package_relative);
+  CHECK(env.session.current_patch_selection_path() ==
+        package_relative + "/latest");
+  CHECK(!env.session.is_modified());
+}
+
+void test_missing_last_patch_falls_back_silently(TestEnvironment &env) {
+  env.session.initialize_patch_defaults();
+  const auto fallback = env.session.capture_snapshot();
+  const std::string missing = "patches/missing.gin";
+  env.preferences.set_last_patch_path(missing);
+  megatoy::status::clear();
+
+  CHECK(!env.session.restore_patch(env.preferences.last_patch_path()));
+  CHECK(env.session.capture_snapshot() == fallback);
+  CHECK(env.preferences.last_patch_path() == missing);
+  CHECK(megatoy::status::entries().empty());
+}
+
 void test_patch_snapshot_roundtrip(TestEnvironment &env) {
   auto before = env.session.capture_snapshot();
   env.session.current_patch().name = "modified";
@@ -885,6 +974,7 @@ int main() {
   const UIPreferences default_ui_preferences;
   CHECK(default_ui_preferences.show_patch_editor);
   CHECK(default_ui_preferences.show_patch_selector);
+  CHECK(default_ui_preferences.show_preferences);
 
   const auto migration_root = std::filesystem::temp_directory_path() /
                               "megatoy_workspace_migration_tests";
@@ -897,6 +987,7 @@ int main() {
       migration_root);
   test_velocity_sensitivity_preference_round_trip(migration_root);
   test_chip_type_preference_round_trip(migration_root);
+  test_last_patch_preference_round_trip(migration_root);
   test_legacy_data_directory_migration();
   test_legacy_metadata_migration(migration_root);
   test_legacy_metadata_waits_for_custom_folder(migration_root);
@@ -917,6 +1008,9 @@ int main() {
   test_save_and_metadata_roundtrip(env);
   test_save_in_place_rules(env);
   test_current_patch_rename_preserves_clean_identity(env);
+  test_current_patch_path_recording(env);
+  test_restore_last_patch(env);
+  test_missing_last_patch_falls_back_silently(env);
 
   std::cout << "All subsystem tests passed\n";
   std::filesystem::remove_all(migration_root);

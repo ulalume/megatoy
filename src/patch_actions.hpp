@@ -35,17 +35,10 @@ inline bool load(AppContext &context, const patches::PatchEntry &patch_info) {
   auto &patch_session = context.services.patch_session;
   const auto before = patch_session.capture_snapshot();
 
-  ym2612::Patch loaded_patch;
-  if (!patch_session.repository().load_patch(patch_info, loaded_patch)) {
+  if (!patch_session.load_patch_from_entry(patch_info)) {
     megatoy::status::error("Failed to load \"" + patch_info.name + "\"");
     return false;
   }
-
-  patch_session.set_current_patch(loaded_patch,
-                                  patch_info.source_relative_path.empty()
-                                      ? patch_info.relative_path
-                                      : patch_info.source_relative_path);
-  patch_session.set_current_patch_selection_path(patch_info.relative_path);
 
   const auto after = patch_session.capture_snapshot();
   detail::record_change(context, "Load: " + patch_info.name, before, after);

@@ -13,7 +13,7 @@ struct UIPreferences {
   bool show_midi_keyboard = true;
   bool show_patch_selector = true;
   bool show_mml_console = true;
-  bool show_preferences = false;
+  bool show_preferences = true;
   bool show_waveform = true;
   bool show_patch_lab = true;
   int ym2612_chip_type = 0;
@@ -83,6 +83,8 @@ struct PreferenceData {
   /// Where the last save/export dialog was pointed, so the next one starts
   /// there rather than at a fixed location.
   std::filesystem::path last_save_directory;
+  /// Repository-relative source path of the patch selected most recently.
+  std::string last_patch_path;
   bool show_builtin_presets = true;
 
   // Runtime-only flag set while adopting a pre-workspace patch folder.

@@ -156,6 +156,18 @@ void PreferenceManager::set_last_save_directory(
   save_preferences();
 }
 
+const std::string &PreferenceManager::last_patch_path() const {
+  return last_patch_path_;
+}
+
+void PreferenceManager::set_last_patch_path(const std::string &path) {
+  if (path == last_patch_path_) {
+    return;
+  }
+  last_patch_path_ = path;
+  save_preferences();
+}
+
 bool PreferenceManager::ensure_directories_exist() {
   directories_initialized = paths_.ensure_directories();
   return directories_initialized;
@@ -274,6 +286,7 @@ PreferenceData PreferenceManager::to_data() const {
   PreferenceData data;
   data.workspace_folders = workspace_.paths();
   data.last_save_directory = last_save_directory_;
+  data.last_patch_path = last_patch_path_;
   data.show_builtin_presets = show_builtin_presets_;
   data.legacy_workspace_migration_complete =
       legacy_workspace_migration_complete_;
@@ -286,6 +299,7 @@ PreferenceData PreferenceManager::to_data() const {
 void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
   workspace_.set_paths(data.workspace_folders);
   last_save_directory_ = data.last_save_directory;
+  last_patch_path_ = data.last_patch_path;
   show_builtin_presets_ = data.show_builtin_presets;
   legacy_workspace_migration_complete_ =
       data.legacy_workspace_migration_complete;
