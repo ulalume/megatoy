@@ -3,6 +3,7 @@
 #include "formats/ym2612_format_adapter.hpp"
 #include "patch_storage.hpp"
 #include "patches/filesystem_patch_storage.hpp"
+#include "patches/persistent_parse_cache.hpp"
 #include "platform/import_pipeline.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -20,9 +21,10 @@ namespace patches {
 PatchRepository::PatchRepository(
     platform::VirtualFileSystem &vfs,
     const megatoy::workspace::Workspace &workspace,
-    const std::filesystem::path &builtin_presets_dir)
+    const std::filesystem::path &builtin_presets_dir,
+    PersistentParseCache *persistent_cache)
     : workspace_(workspace), builtin_presets_directory_(builtin_presets_dir),
-      vfs_(vfs) {
+      vfs_(vfs), persistent_cache_(persistent_cache) {
   rebuild_storages();
   refresh();
 }
@@ -73,7 +75,7 @@ void PatchRepository::rebuild_storages() {
   for (const auto &folder : workspace_.folders()) {
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, folder.path, unique_label(folder.name), folder.writable,
-        /*enable_metadata=*/folder.writable));
+        /*enable_metadata=*/folder.writable, persistent_cache_));
     if (folder.available) {
       watched_directories_.push_back(folder.path);
     }
@@ -82,7 +84,7 @@ void PatchRepository::rebuild_storages() {
   if (show_builtin_presets_ && !builtin_presets_directory_.empty()) {
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, builtin_presets_directory_, kBuiltinRootName,
-        /*writable=*/false, /*enable_metadata=*/false));
+        /*writable=*/false, /*enable_metadata=*/false, persistent_cache_));
     watched_directories_.push_back(builtin_presets_directory_);
   }
 
@@ -101,6 +103,13 @@ void PatchRepository::refresh() {
 
   for (const auto &storage : storages_) {
     storage->append_entries(tree_cache_);
+  }
+
+  if (persistent_cache_ && persistent_cache_->dirty() &&
+      persistent_cache_->save()) {
+#if defined(MEGATOY_PLATFORM_WEB)
+    platform::web::request_storage_persist();
+#endif
   }
 
   cache_initialized_ = true;

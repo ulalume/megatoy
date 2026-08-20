@@ -13,6 +13,8 @@
 
 namespace patches {
 
+class PersistentParseCache;
+
 /**
  * One workspace folder (or the built-in presets directory) presented as a
  * patch source.
@@ -31,7 +33,8 @@ public:
   FilesystemPatchStorage(platform::VirtualFileSystem &vfs,
                          std::filesystem::path root,
                          std::string relative_root_label, bool writable,
-                         bool enable_metadata);
+                         bool enable_metadata,
+                         PersistentParseCache *persistent_cache = nullptr);
 
   void append_entries(std::vector<PatchEntry> &tree) const override;
   bool load_patch(const PatchEntry &entry,
@@ -78,6 +81,7 @@ private:
   bool writable_;
   std::string label_;
   std::unique_ptr<FolderMetadataStore> metadata_;
+  PersistentParseCache *persistent_cache_;
   mutable std::unordered_map<std::filesystem::path, ParseCacheEntry>
       parse_cache_;
   mutable std::unordered_set<std::filesystem::path> seen_container_paths_;

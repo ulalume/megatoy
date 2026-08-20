@@ -22,11 +22,12 @@
 namespace patches {
 
 PatchSession::PatchSession(megatoy::system::PathService &directories,
-                           PreferenceManager &preferences, AudioManager &audio)
+                           PreferenceManager &preferences, AudioManager &audio,
+                           PersistentParseCache *persistent_cache)
     : directories_(directories), preferences_(preferences), audio_(audio),
       repository_(std::make_unique<PatchRepository>(
           directories_.file_system(), preferences_.workspace(),
-          directories_.paths().builtin_presets_root)) {
+          directories_.paths().builtin_presets_root, persistent_cache)) {
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
 }
 

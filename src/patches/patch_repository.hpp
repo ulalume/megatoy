@@ -16,6 +16,8 @@
 
 namespace patches {
 
+class PersistentParseCache;
+
 struct PatchEntry {
   std::string name;
   std::string relative_path;
@@ -49,7 +51,8 @@ class PatchRepository {
 public:
   PatchRepository(platform::VirtualFileSystem &vfs,
                   const megatoy::workspace::Workspace &workspace,
-                  const std::filesystem::path &builtin_presets_dir = {});
+                  const std::filesystem::path &builtin_presets_dir = {},
+                  PersistentParseCache *persistent_cache = nullptr);
 
   /// Rebuild the storage list if the workspace has changed since last call.
   /// Returns true when something changed.
@@ -113,6 +116,7 @@ private:
   const megatoy::workspace::Workspace &workspace_;
   std::filesystem::path builtin_presets_directory_;
   platform::VirtualFileSystem &vfs_;
+  PersistentParseCache *persistent_cache_;
 
   std::vector<PatchEntry> tree_cache_;
   std::vector<std::filesystem::path> watched_directories_;

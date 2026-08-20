@@ -179,6 +179,11 @@ add_executable(import_pipeline_test tests/platform/import_pipeline_test.cpp)
 target_include_directories(import_pipeline_test PRIVATE src)
 target_link_libraries(import_pipeline_test PRIVATE megatoy_core)
 add_test(NAME import_pipeline_test COMMAND import_pipeline_test)
+add_executable(persistent_parse_cache_test
+  tests/patches/persistent_parse_cache_test.cpp)
+target_include_directories(persistent_parse_cache_test PRIVATE src)
+target_link_libraries(persistent_parse_cache_test PRIVATE megatoy_core)
+add_test(NAME persistent_parse_cache_test COMMAND persistent_parse_cache_test)
 add_executable(version_test tests/update/version_test.cpp src/update/version.cpp)
 target_include_directories(version_test PRIVATE src)
 add_test(NAME version_test COMMAND version_test)
@@ -197,7 +202,7 @@ add_custom_target(check
           patch_repository_delete_test patch_repository_rename_test
           folder_metadata_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
-          version_test import_pipeline_test
+          version_test import_pipeline_test persistent_parse_cache_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

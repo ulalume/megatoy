@@ -9,6 +9,34 @@
 #include <algorithm>
 #include <iostream>
 
+namespace {
+
+std::unique_ptr<patches::PersistentParseCache> load_persistent_parse_cache() {
+  auto cache = std::make_unique<patches::PersistentParseCache>();
+#if defined(MEGATOY_PLATFORM_WEB)
+  cache->load(megatoy::system::PathService::web_storage_root() /
+              ".parse-cache.json");
+#else
+  cache->load(
+      megatoy::system::PathService::preferences_file_path().parent_path() /
+      "parse_cache.json");
+#endif
+  return cache;
+}
+
+} // namespace
+
+AppServices::AppServices(platform::PlatformServicesProvider &platform_services)
+    : platform_services_(platform_services),
+      path_service(platform_services.file_system()),
+      preference_manager(path_service),
+      audio_manager(platform_services.create_audio_transport()),
+      gui_manager(preference_manager),
+      persistent_parse_cache(load_persistent_parse_cache()),
+      patch_session(path_service, preference_manager, audio_manager,
+                    persistent_parse_cache.get()),
+      spectrum_analyzer(2048) {}
+
 void AppServices::initialize_app(AppState &state) {
   path_service.ensure_directories();
   patch_session.initialize_patch_defaults();
@@ -67,6 +95,11 @@ void AppServices::initialize_app(AppState &state) {
 
 void AppServices::shutdown_app() {
   patch_session.release_all_notes();
+#if defined(MEGATOY_PLATFORM_DESKTOP)
+  if (persistent_parse_cache && persistent_parse_cache->dirty()) {
+    persistent_parse_cache->save();
+  }
+#endif
   audio_manager.shutdown();
   gui_manager.shutdown();
 }

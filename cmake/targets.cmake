@@ -112,6 +112,7 @@ set(MEGATOY_CORE_SOURCES
   src/workspace/path_policy.cpp
   src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
+  src/patches/persistent_parse_cache.cpp
   src/patches/patch_repository.cpp
   src/patches/patch_write.cpp
   src/patches/filesystem_patch_storage.cpp
