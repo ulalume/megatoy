@@ -776,7 +776,11 @@ void render_folder_import_ui() {
     auto &request = *g_active_import;
     const auto phase = request.phase.load(std::memory_order_relaxed);
     if (phase == ImportPhase::AwaitingConfirmation) {
-      ImGui::OpenPopup("Import Folder");
+      // Open on the edge only: re-opening an already-open popup every frame
+      // resets popup state and can swallow clicks (see confirmation_dialog).
+      if (!ImGui::IsPopupOpen("Import Folder")) {
+        ImGui::OpenPopup("Import Folder");
+      }
       ui::center_next_window();
       if (ImGui::BeginPopupModal("Import Folder", nullptr,
                                  ImGuiWindowFlags_NoMove |
@@ -812,7 +816,9 @@ void render_folder_import_ui() {
         ImGui::EndPopup();
       }
     } else {
-      ImGui::OpenPopup("Importing Folder");
+      if (!ImGui::IsPopupOpen("Importing Folder")) {
+        ImGui::OpenPopup("Importing Folder");
+      }
       ui::center_next_window();
       if (ImGui::BeginPopupModal("Importing Folder", nullptr,
                                  ImGuiWindowFlags_NoMove |
@@ -878,7 +884,8 @@ void render_folder_import_ui() {
         ImGui::Text("%zu files failed validation:", report.failures.size());
         ImGui::BeginChild("validation_failures", ImVec2(520, 180), true);
         for (const auto &failure : report.failures) {
-          ImGui::BulletText("%s — %s",
+          // ASCII separator: the bundled font has no em-dash glyph.
+          ImGui::BulletText("%s - %s",
                             failure.relative_path.generic_string().c_str(),
                             failure.reason.c_str());
         }
