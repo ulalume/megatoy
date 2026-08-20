@@ -169,6 +169,10 @@ add_executable(folder_metadata_test tests/patches/folder_metadata_test.cpp)
 target_include_directories(folder_metadata_test PRIVATE src)
 target_link_libraries(folder_metadata_test PRIVATE megatoy_core)
 add_test(NAME folder_metadata_test COMMAND folder_metadata_test)
+add_executable(patch_tree_flatten_test tests/gui/patch_tree_flatten_test.cpp)
+target_include_directories(patch_tree_flatten_test PRIVATE src)
+target_link_libraries(patch_tree_flatten_test PRIVATE megatoy_core)
+add_test(NAME patch_tree_flatten_test COMMAND patch_tree_flatten_test)
 add_executable(status_test tests/core/status_test.cpp src/core/status.cpp)
 target_include_directories(status_test PRIVATE src)
 add_test(NAME status_test COMMAND status_test)
@@ -205,7 +209,7 @@ add_custom_target(check
           ginpkg_history_test patch_write_test status_test
           filename_utils_test utf8_utils_test
           patch_repository_delete_test patch_repository_rename_test
-          folder_metadata_test
+          folder_metadata_test patch_tree_flatten_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           version_test import_pipeline_test persistent_parse_cache_test
           background_folder_scan_test

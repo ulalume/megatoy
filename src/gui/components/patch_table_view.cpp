@@ -135,12 +135,16 @@ struct PatchTableCache {
   TableSortColumn sort_column = TableSortColumn::Name;
   SortOrder sort_order = SortOrder::Ascending;
   std::vector<const patches::PatchEntry *> rows;
+  /// Whether the last get() rebuilt the row set, i.e. whether entries may have
+  /// disappeared since the previous frame.
+  bool rebuilt = false;
 
   const std::vector<const patches::PatchEntry *> &
   get(PatchSelectorContext &context) {
     const auto revision = context.repository.revision();
     const auto column = context.get_sort_column();
     const auto order = context.get_sort_order();
+    rebuilt = false;
     if (repository != &context.repository || repository_revision != revision ||
         search_query != context.prefs.metadata_search_query ||
         star_filter != context.prefs.metadata_star_filter ||
@@ -153,6 +157,7 @@ struct PatchTableCache {
       sort_order = order;
       rows = filtered_patches(context);
       sort_patches(rows, context);
+      rebuilt = true;
     }
     return rows;
   }
@@ -250,7 +255,9 @@ void render_patch_table(PatchSelectorContext &context) {
   static PatchTableCache cache;
   static PendingEdits edits;
   const auto &patches = cache.get(context);
-  edits.drop_stale(patches);
+  if (cache.rebuilt) {
+    edits.drop_stale(patches);
+  }
 
   const std::string &current_selection_path =
       context.session.current_patch_selection_path();
@@ -273,56 +280,63 @@ void render_patch_table(PatchSelectorContext &context) {
 
     apply_table_sort_specs(context);
 
-    for (size_t i = 0; i < patches.size(); ++i) {
-      const auto *entry = patches[i];
-      ImGui::PushID(static_cast<int>(i));
-      ImGui::TableNextRow();
+    // Every row is one framed line high, so the clipper can size the list
+    // from the first one it draws.
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(patches.size()));
+    while (clipper.Step()) {
+      for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+        const auto *entry = patches[static_cast<size_t>(i)];
+        ImGui::PushID(i);
+        ImGui::TableNextRow();
 
-      ImGui::TableSetColumnIndex(0);
-      const bool is_current = !current_selection_path.empty() &&
-                              current_selection_path == entry->relative_path;
-      if (is_current) {
-        ImGui::PushStyleColor(ImGuiCol_Text,
-                              styles::color(styles::MegatoyCol::TextHighlight));
+        ImGui::TableSetColumnIndex(0);
+        const bool is_current = !current_selection_path.empty() &&
+                                current_selection_path == entry->relative_path;
+        if (is_current) {
+          ImGui::PushStyleColor(
+              ImGuiCol_Text, styles::color(styles::MegatoyCol::TextHighlight));
+        }
+        const bool name_selected =
+            ImGui::Selectable(entry->name.c_str(), false);
+        if (is_current) {
+          ImGui::PopStyleColor();
+        }
+        if (name_selected && context.safe_load_patch) {
+          context.safe_load_patch(*entry);
+        }
+        entry_context_menu(context, *entry);
+
+        const bool can_edit_metadata =
+            context.repository.can_edit_metadata(*entry);
+        ImGui::BeginDisabled(!can_edit_metadata);
+        ImGui::TableSetColumnIndex(1);
+        refresh_required |= render_star_cell(context, *entry, edits);
+
+        ImGui::TableSetColumnIndex(2);
+        refresh_required |= render_category_cell(context, *entry, edits);
+        ImGui::EndDisabled();
+
+        ImGui::TableSetColumnIndex(3);
+        if (is_current) {
+          ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
+                             "%s", entry->format.c_str());
+        } else {
+          ImGui::Text("%s", entry->format.c_str());
+        }
+
+        ImGui::TableSetColumnIndex(4);
+        const std::string display_path =
+            display_preset_path(entry->relative_path);
+        if (is_current) {
+          ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
+                             "%s", display_path.c_str());
+        } else {
+          ImGui::TextDisabled("%s", display_path.c_str());
+        }
+
+        ImGui::PopID();
       }
-      const bool name_selected = ImGui::Selectable(entry->name.c_str(), false);
-      if (is_current) {
-        ImGui::PopStyleColor();
-      }
-      if (name_selected && context.safe_load_patch) {
-        context.safe_load_patch(*entry);
-      }
-      entry_context_menu(context, *entry);
-
-      const bool can_edit_metadata =
-          context.repository.can_edit_metadata(*entry);
-      ImGui::BeginDisabled(!can_edit_metadata);
-      ImGui::TableSetColumnIndex(1);
-      refresh_required |= render_star_cell(context, *entry, edits);
-
-      ImGui::TableSetColumnIndex(2);
-      refresh_required |= render_category_cell(context, *entry, edits);
-      ImGui::EndDisabled();
-
-      ImGui::TableSetColumnIndex(3);
-      if (is_current) {
-        ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
-                           "%s", entry->format.c_str());
-      } else {
-        ImGui::Text("%s", entry->format.c_str());
-      }
-
-      ImGui::TableSetColumnIndex(4);
-      const std::string display_path =
-          display_preset_path(entry->relative_path);
-      if (is_current) {
-        ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
-                           "%s", display_path.c_str());
-      } else {
-        ImGui::TextDisabled("%s", display_path.c_str());
-      }
-
-      ImGui::PopID();
     }
 
     ImGui::EndTable();
