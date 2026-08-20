@@ -3,6 +3,7 @@
 #include "formats/ym2612_format_adapter.hpp"
 #include "patch_storage.hpp"
 #include "patches/filesystem_patch_storage.hpp"
+#include "platform/import_pipeline.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_storage_persistence.hpp"
@@ -170,9 +171,8 @@ bool PatchRepository::has_directory_changed() const {
 }
 
 std::vector<std::string> PatchRepository::supported_extensions() {
-  auto extensions = formats::adapter::readable_extensions();
-  extensions.push_back(".ginpkg");
-  return extensions;
+  const auto &extensions = platform::import_pipeline::supported_extensions();
+  return {extensions.begin(), extensions.end()};
 }
 
 SavePatchResult

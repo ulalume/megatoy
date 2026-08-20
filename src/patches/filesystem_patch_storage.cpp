@@ -7,20 +7,11 @@
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
 #include "patches/patch_write.hpp"
+#include "platform/import_pipeline.hpp"
 #include <algorithm>
 #include <cctype>
 #include <system_error>
 #include <unordered_map>
-
-namespace {
-
-std::vector<std::string> supported_extensions() {
-  auto extensions = formats::adapter::readable_extensions();
-  extensions.push_back(".ginpkg");
-  return extensions;
-}
-
-} // namespace
 
 namespace patches {
 
@@ -471,10 +462,16 @@ void FilesystemPatchStorage::scan_directory(
           parse_cache_.erase(cached);
         }
 
-        ++container_parse_count_;
+        auto warmed =
+            platform::import_pipeline::take_warmed_container(cache_path);
+        if (!warmed) {
+          ++container_parse_count_;
+        }
         std::optional<PatchEntry> parsed_container;
         if (is_ginpkg) {
-          auto package = formats::ginpkg::load_package(path);
+          auto package = warmed && warmed->package
+                             ? warmed->package
+                             : formats::ginpkg::load_package(path);
           auto current =
               package ? formats::ginpkg::read_current(*package) : std::nullopt;
           if (package && current) {
@@ -519,7 +516,9 @@ void FilesystemPatchStorage::scan_directory(
           }
         } else {
           std::vector<ym2612::Patch> instruments =
-              formats::adapter::read_file(*format, path);
+              warmed && !warmed->instruments.empty()
+                  ? warmed->instruments
+                  : formats::adapter::read_file(*format, path);
           if (!instruments.empty()) {
             const std::string format_name =
                 ym2612_format::format_to_extension(*format);
@@ -609,7 +608,7 @@ bool FilesystemPatchStorage::is_supported_file(
   std::transform(extension.begin(), extension.end(), extension.begin(),
                  ::tolower);
 
-  auto supported = supported_extensions();
+  const auto &supported = platform::import_pipeline::supported_extensions();
   return std::find(supported.begin(), supported.end(), extension) !=
          supported.end();
 }
