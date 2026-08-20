@@ -101,6 +101,13 @@ struct PendingSelection {
   /// 0 while unknown -- drag-drop enumeration has no count until it finishes.
   std::atomic<std::uint64_t> total{0};
   std::atomic<bool> abandoned{false};
+  /// Cancelled while the browser still owned the flow. The chooser pipeline is
+  /// a single browser-side resource that a page can neither observe nor stop:
+  /// freeing the slot here would let another picker be clicked, and the
+  /// browser queues those clicks and replays every one of them when the
+  /// pending flow finally resolves (observed: N stacked file dialogs). So the
+  /// slot stays held -- invisibly -- until the change/cancel event arrives.
+  std::atomic<bool> hidden{false};
 };
 
 std::function<void(FolderImportResult)> g_drop_handler;
@@ -141,6 +148,15 @@ bool selection_matches(void *token) {
 }
 
 void notify_import_busy() {
+  if (g_pending_selection &&
+      g_pending_selection->phase.load(std::memory_order_relaxed) ==
+          SelectionPhase::WaitingForPicker) {
+    megatoy::status::warning(
+        "The browser is still reading the previous folder selection. Large "
+        "folders can take minutes; cancel the browser's dialog when it "
+        "appears.");
+    return;
+  }
   megatoy::status::warning("A folder import is already in progress.");
 }
 
@@ -1043,8 +1059,10 @@ void render_folder_import_ui() {
   }
 
   // The active-import modals take over the moment the selection resolves; by
-  // construction the two never coexist, but the guard keeps it that way.
-  if (g_pending_selection && !g_active_import) {
+  // construction the two never coexist, but the guard keeps it that way. A
+  // hidden slot (cancelled while the browser owned the flow) renders nothing.
+  if (g_pending_selection && !g_active_import &&
+      !g_pending_selection->hidden.load(std::memory_order_relaxed)) {
     auto &selection = *g_pending_selection;
     // Open on the edge only, as with the import modals below.
     if (!ImGui::IsPopupOpen(kSelectionPopupId)) {
@@ -1089,9 +1107,21 @@ void render_folder_import_ui() {
       if (ImGui::Button("Cancel", ImVec2(120, 0))) {
         selection.abandoned.store(true, std::memory_order_relaxed);
         ImGui::CloseCurrentPopup();
-        // Destroys the slot: any JavaScript still holding the token sees an
-        // unknown token, reads it as abandoned and unwinds silently.
-        end_pending_selection();
+        if (phase == SelectionPhase::WaitingForPicker) {
+          // The browser still owns the chooser flow and cannot be stopped
+          // from here. Keep the slot -- hidden -- so no second picker can be
+          // queued behind it; the eventual change/cancel event frees it and
+          // the abandoned flag makes that arrival unwind silently.
+          selection.hidden.store(true, std::memory_order_relaxed);
+          megatoy::status::info(
+              "Import cancelled. If the browser still asks about this "
+              "folder later, cancel its dialog there.");
+        } else {
+          // The files are already ours; destroying the slot is enough. Any
+          // JavaScript still holding the token sees an unknown token, reads
+          // it as abandoned and unwinds silently.
+          end_pending_selection();
+        }
       }
       ImGui::EndPopup();
     }
