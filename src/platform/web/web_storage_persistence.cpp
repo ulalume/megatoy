@@ -2,9 +2,19 @@
 
 #if defined(MEGATOY_PLATFORM_WEB)
 
+#include "core/status.hpp"
 #include <emscripten.h>
 
 namespace platform::web {
+
+EM_JS_DEPS(megatoy_storage_persist, "$stringToNewUTF8");
+
+extern "C" EMSCRIPTEN_KEEPALIVE void
+megatoy_storage_persist_failed(const char *error) {
+  megatoy::status::error(
+      "Could not persist browser storage: " +
+      std::string(error != nullptr ? error : "unknown storage error"));
+}
 
 // clang-format off
 EM_JS(bool, megatoy_storage_load_failed_js, (), {
@@ -20,6 +30,9 @@ EM_JS(void, megatoy_request_storage_persist_js, (), {
     FS.syncfs(false, function(err) {
       if (err) {
         console.error("megatoy: could not persist browser storage", err);
+        var ptr = stringToNewUTF8("" + err);
+        Module["_megatoy_storage_persist_failed"](ptr);
+        _free(ptr);
       }
     });
   }, 250);

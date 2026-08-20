@@ -445,6 +445,30 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
 
   const std::size_t migrated = migrate_legacy_library(home);
 
+  // A tab closed mid-import can leave staging behind, and a concurrent
+  // debounced sync may already have persisted it. Sweep it before the
+  // re-adoption loop below could mistake it for a library folder.
+  std::size_t swept = 0;
+  {
+    std::vector<std::filesystem::path> stale_staging;
+    std::filesystem::directory_iterator stale(storage_root, ec);
+    const std::filesystem::directory_iterator stale_end;
+    while (!ec && stale != stale_end) {
+      if (stale->path().filename().string().starts_with(".import-tmp-")) {
+        stale_staging.push_back(stale->path());
+      }
+      stale.increment(ec);
+    }
+    ec.clear();
+    for (const auto &path : stale_staging) {
+      std::error_code remove_error;
+      std::filesystem::remove_all(path, remove_error);
+      if (!remove_error) {
+        ++swept;
+      }
+    }
+  }
+
   bool changed = false;
   if (!workspace.contains(home)) {
     changed = workspace.add(home);
@@ -458,7 +482,9 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
   while (!ec && entry != end) {
     std::error_code type_error;
     const bool is_directory = entry->is_directory(type_error);
-    if (type_error || !is_directory || workspace.contains(entry->path())) {
+    if (type_error || !is_directory ||
+        entry->path().filename().string().starts_with(".") ||
+        workspace.contains(entry->path())) {
       entry.increment(ec);
       continue;
     }
@@ -468,7 +494,7 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
     entry.increment(ec);
   }
 
-  if (changed || migrated > 0 || !existed) {
+  if (changed || migrated > 0 || swept > 0 || !existed) {
     request_storage_persist();
   }
   return changed || migrated > 0;
