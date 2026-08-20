@@ -9,6 +9,7 @@
 #include "platform/web/web_folder_import.hpp"
 #include "platform/web/web_storage_bootstrap.hpp"
 #else
+#include "patches/background_folder_scan.hpp"
 #include "patches/legacy_metadata_migration.hpp"
 #endif
 #include "preference_storage.hpp"
@@ -126,8 +127,30 @@ void PreferenceManager::request_add_workspace_folder(
       platform::file_dialog::DialogResult::Ok) {
     return;
   }
-  if (add_workspace_folder(chosen) && on_changed) {
-    on_changed();
+
+  // Warm the parse cache on a worker before the folder joins the workspace:
+  // the sync that follows re-walks it on the UI thread, and for a folder of
+  // thousands of banks that first parse is a freeze measured in seconds.
+  // Warm the same path the workspace will store, or the cache keys miss.
+  const auto folder = megatoy::workspace::normalize_path(chosen);
+  const std::string folder_name = folder.filename().string();
+  const bool started = patches::background_folder_scan::begin(
+      folder, [this, folder, folder_name, on_changed](bool cancelled) {
+        if (cancelled) {
+          megatoy::status::info("Folder scan cancelled.");
+          return;
+        }
+        if (add_workspace_folder(folder)) {
+          if (on_changed) {
+            on_changed();
+          }
+        } else {
+          megatoy::status::warning("\"" + folder_name +
+                                   "\" is already in the workspace.");
+        }
+      });
+  if (!started) {
+    megatoy::status::warning("Another folder scan is in progress.");
   }
 #endif
 }

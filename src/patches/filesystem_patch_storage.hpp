@@ -5,6 +5,7 @@
 #include "platform/virtual_file_system.hpp"
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -12,6 +13,8 @@
 #include <unordered_set>
 
 namespace patches {
+
+class PersistentParseCache;
 
 /**
  * One workspace folder (or the built-in presets directory) presented as a
@@ -31,7 +34,8 @@ public:
   FilesystemPatchStorage(platform::VirtualFileSystem &vfs,
                          std::filesystem::path root,
                          std::string relative_root_label, bool writable,
-                         bool enable_metadata);
+                         bool enable_metadata,
+                         PersistentParseCache *persistent_cache = nullptr);
 
   void append_entries(std::vector<PatchEntry> &tree) const override;
   bool load_patch(const PatchEntry &entry,
@@ -65,6 +69,18 @@ public:
     return container_parse_count_;
   }
 
+  /**
+   * Hook for a walk that has to report progress or stop early.
+   *
+   * `on_file` runs once per regular file, before that file is classified or
+   * parsed, and returning false abandons the rest of the walk. Unset by
+   * default, which is exactly the plain scan.
+   */
+  struct ScanObserver {
+    std::function<bool(const std::filesystem::path &)> on_file;
+  };
+  void set_scan_observer(ScanObserver observer);
+
 private:
   struct ParseCacheEntry {
     std::uintmax_t file_size = 0;
@@ -78,10 +94,13 @@ private:
   bool writable_;
   std::string label_;
   std::unique_ptr<FolderMetadataStore> metadata_;
+  PersistentParseCache *persistent_cache_;
   mutable std::unordered_map<std::filesystem::path, ParseCacheEntry>
       parse_cache_;
   mutable std::unordered_set<std::filesystem::path> seen_container_paths_;
   mutable std::size_t container_parse_count_ = 0;
+  ScanObserver scan_observer_;
+  mutable bool scan_aborted_ = false;
 
   void scan_directory(const std::filesystem::path &dir_path,
                       std::vector<PatchEntry> &tree,

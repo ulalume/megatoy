@@ -7,6 +7,7 @@
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
 #include "patches/patch_write.hpp"
+#include "patches/persistent_parse_cache.hpp"
 #include "platform/import_pipeline.hpp"
 #include <algorithm>
 #include <cctype>
@@ -15,14 +16,13 @@
 
 namespace patches {
 
-FilesystemPatchStorage::FilesystemPatchStorage(platform::VirtualFileSystem &vfs,
-                                               std::filesystem::path root,
-                                               std::string relative_root_label,
-                                               bool writable,
-                                               bool enable_metadata)
+FilesystemPatchStorage::FilesystemPatchStorage(
+    platform::VirtualFileSystem &vfs, std::filesystem::path root,
+    std::string relative_root_label, bool writable, bool enable_metadata,
+    PersistentParseCache *persistent_cache)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)), writable_(writable),
-      label_(root_label_) {
+      label_(root_label_), persistent_cache_(persistent_cache) {
   if (label_.empty()) {
     label_ = root_.filename().generic_string();
     root_label_ = label_;
@@ -49,9 +49,14 @@ bool FilesystemPatchStorage::owns_relative_path(
          relative_path.rfind(root_label_ + "/", 0) == 0;
 }
 
+void FilesystemPatchStorage::set_scan_observer(ScanObserver observer) {
+  scan_observer_ = std::move(observer);
+}
+
 void FilesystemPatchStorage::append_entries(
     std::vector<PatchEntry> &tree) const {
   seen_container_paths_.clear();
+  scan_aborted_ = false;
 
   PatchEntry root_entry;
   root_entry.name = label_;
@@ -64,7 +69,10 @@ void FilesystemPatchStorage::append_entries(
   if (vfs_.is_directory(root_)) {
     scan_directory(root_, root_entry.children, root_label_);
   }
-  for (auto it = parse_cache_.begin(); it != parse_cache_.end();) {
+  // An aborted walk never reached the rest of the tree, so its record of what
+  // is still on disk is not one to evict from.
+  for (auto it = parse_cache_.begin();
+       !scan_aborted_ && it != parse_cache_.end();) {
     if (!seen_container_paths_.contains(it->first)) {
       it = parse_cache_.erase(it);
     } else {
@@ -425,7 +433,15 @@ void FilesystemPatchStorage::scan_directory(
       if (!info.children.empty()) {
         tree.push_back(std::move(info));
       }
+      if (scan_aborted_) {
+        return;
+      }
     } else if (entry.is_regular_file) {
+      if (scan_observer_.on_file && !scan_observer_.on_file(path)) {
+        scan_aborted_ = true;
+        return;
+      }
+
       std::string extension = path.extension().string();
       std::transform(extension.begin(), extension.end(), extension.begin(),
                      ::tolower);
@@ -464,6 +480,17 @@ void FilesystemPatchStorage::scan_directory(
 
         auto warmed =
             platform::import_pipeline::take_warmed_container(cache_path);
+        if (!warmed && has_identity && persistent_cache_) {
+          auto persistent = persistent_cache_->lookup(cache_path, file_size,
+                                                      modified, root_label_);
+          if (persistent) {
+            parse_cache_.insert_or_assign(
+                cache_path, ParseCacheEntry{file_size, modified, *persistent});
+            load_metadata_for_subtree(*persistent);
+            tree.push_back(std::move(*persistent));
+            continue;
+          }
+        }
         if (!warmed) {
           ++container_parse_count_;
         }
@@ -559,6 +586,10 @@ void FilesystemPatchStorage::scan_directory(
             parse_cache_.insert_or_assign(
                 cache_path,
                 ParseCacheEntry{file_size, modified, *parsed_container});
+            if (persistent_cache_) {
+              persistent_cache_->store(cache_path, file_size, modified,
+                                       root_label_, *parsed_container);
+            }
           }
           load_metadata_for_subtree(*parsed_container);
           tree.push_back(std::move(*parsed_container));

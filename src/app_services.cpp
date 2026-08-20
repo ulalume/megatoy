@@ -2,6 +2,7 @@
 
 #include "app_state.hpp"
 #include "core/status.hpp"
+#include "patches/background_folder_scan.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_patch_url.hpp"
@@ -9,8 +10,39 @@
 #include <algorithm>
 #include <iostream>
 
+namespace {
+
+std::unique_ptr<patches::PersistentParseCache> load_persistent_parse_cache() {
+  auto cache = std::make_unique<patches::PersistentParseCache>();
+#if defined(MEGATOY_PLATFORM_WEB)
+  cache->load(megatoy::system::PathService::web_storage_root() /
+              ".parse-cache.json");
+#else
+  cache->load(
+      megatoy::system::PathService::preferences_file_path().parent_path() /
+      "parse_cache.json");
+#endif
+  return cache;
+}
+
+} // namespace
+
+AppServices::AppServices(platform::PlatformServicesProvider &platform_services)
+    : platform_services_(platform_services),
+      path_service(platform_services.file_system()),
+      preference_manager(path_service),
+      audio_manager(platform_services.create_audio_transport()),
+      gui_manager(preference_manager),
+      persistent_parse_cache(load_persistent_parse_cache()),
+      patch_session(path_service, preference_manager, audio_manager,
+                    persistent_parse_cache.get()),
+      spectrum_analyzer(2048) {}
+
 void AppServices::initialize_app(AppState &state) {
   path_service.ensure_directories();
+#if defined(MEGATOY_PLATFORM_DESKTOP)
+  patches::background_folder_scan::configure(persistent_parse_cache.get());
+#endif
   patch_session.initialize_patch_defaults();
   bool loaded_url_patch = false;
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -67,6 +99,13 @@ void AppServices::initialize_app(AppState &state) {
 
 void AppServices::shutdown_app() {
   patch_session.release_all_notes();
+#if defined(MEGATOY_PLATFORM_DESKTOP)
+  // Join first: a scan still running writes into the same cache.
+  patches::background_folder_scan::shutdown();
+  if (persistent_parse_cache && persistent_parse_cache->dirty()) {
+    persistent_parse_cache->save();
+  }
+#endif
   audio_manager.shutdown();
   gui_manager.shutdown();
 }

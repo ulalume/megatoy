@@ -112,6 +112,7 @@ set(MEGATOY_CORE_SOURCES
   src/workspace/path_policy.cpp
   src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
+  src/patches/persistent_parse_cache.cpp
   src/patches/patch_repository.cpp
   src/patches/patch_write.cpp
   src/patches/filesystem_patch_storage.cpp
@@ -149,7 +150,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   )
 else()
   list(APPEND MEGATOY_CORE_SOURCES
+    src/gui/components/folder_scan_dialog.cpp
     src/midi/rtmidi_backend.cpp
+    src/patches/background_folder_scan.cpp
     src/patches/legacy_metadata_migration.cpp
     src/platform/native/native_file_system.cpp
     src/platform/native/desktop_platform_services.cpp

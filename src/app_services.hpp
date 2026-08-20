@@ -5,10 +5,12 @@
 #include "gui/gui_manager.hpp"
 #include "history/history_manager.hpp"
 #include "patches/patch_session.hpp"
+#include "patches/persistent_parse_cache.hpp"
 #include "platform/platform_services.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 #include <cstdint>
+#include <memory>
 #include <string>
 
 class AppState;
@@ -16,13 +18,7 @@ class AppState;
 struct AppServices {
   static constexpr std::uint32_t SampleRate = 44100;
 
-  explicit AppServices(platform::PlatformServicesProvider &platform_services)
-      : platform_services_(platform_services),
-        path_service(platform_services.file_system()),
-        preference_manager(path_service),
-        audio_manager(platform_services.create_audio_transport()),
-        gui_manager(preference_manager),
-        patch_session(path_service, preference_manager, audio_manager), spectrum_analyzer(2048) {}
+  explicit AppServices(platform::PlatformServicesProvider &platform_services);
 
   bool initialize_gui(const std::string &title, int width, int height) {
     return gui_manager.initialize(title, width, height);
@@ -36,6 +32,7 @@ struct AppServices {
   PreferenceManager preference_manager;
   AudioManager audio_manager;
   GuiManager gui_manager;
+  std::unique_ptr<patches::PersistentParseCache> persistent_parse_cache;
   patches::PatchSession patch_session;
   history::HistoryManager history;
   audio::SpectrumAnalyzer spectrum_analyzer;

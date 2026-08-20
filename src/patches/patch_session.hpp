@@ -19,6 +19,8 @@ class AudioManager;
 
 namespace patches {
 
+class PersistentParseCache;
+
 struct SaveResult {
   enum class Status {
     Success,
@@ -53,7 +55,8 @@ public:
   enum class RememberPatchPath { Yes, No };
 
   PatchSession(megatoy::system::PathService &directories,
-               PreferenceManager &preferences, AudioManager &audio);
+               PreferenceManager &preferences, AudioManager &audio,
+               PersistentParseCache *persistent_cache = nullptr);
 
   // Patch access
   ym2612::Patch &current_patch();
