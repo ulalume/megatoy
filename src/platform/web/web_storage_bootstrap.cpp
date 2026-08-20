@@ -6,8 +6,10 @@
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/filename_utils.hpp"
 #include "platform/web/local_storage.hpp"
+#include "platform/web/web_folder_delete.hpp"
 #include "platform/web/web_storage_persistence.hpp"
 #include "system/path_service.hpp"
+#include "workspace/path_policy.hpp"
 #include "workspace/workspace.hpp"
 #include "ym2612/patch.hpp"
 
@@ -469,6 +471,29 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
     }
   }
 
+  // A folder deletion whose flush never committed -- the tab reloaded during
+  // the tens of seconds a large folder takes to leave IndexedDB -- left a
+  // tombstone behind, and the populate above has just handed every one of
+  // those files back. Replay the deletion here, before the re-adoption loop
+  // below could mistake the folder for a library the user still has.
+  //
+  // The tombstone deliberately stays: only a committed flush proves the files
+  // are gone for good, and that is where on_persist_succeeded() retires it.
+  bool pending_deletions_remain = false;
+  for (const auto &pending : pending_deletions()) {
+    // Same guard as the delete path itself: only a directory sitting directly
+    // inside the storage root is ever something this app deleted. Anything
+    // else is a stale or mangled entry, and dropping it keeps the list from
+    // growing without bound.
+    if (!megatoy::workspace::paths_equal(pending.parent_path(), storage_root)) {
+      clear_pending_deletion(pending);
+      continue;
+    }
+    pending_deletions_remain = true;
+    std::error_code remove_error;
+    std::filesystem::remove_all(pending, remove_error);
+  }
+
   bool changed = false;
   if (!workspace.contains(home)) {
     changed = workspace.add(home);
@@ -494,7 +519,10 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
     entry.increment(ec);
   }
 
-  if (changed || migrated > 0 || swept > 0 || !existed) {
+  // A surviving tombstone always needs a flush, whether or not this startup
+  // found anything left to remove: the flush is what retires it.
+  if (changed || migrated > 0 || swept > 0 || pending_deletions_remain ||
+      !existed) {
     request_storage_persist();
   }
   return changed || migrated > 0;
