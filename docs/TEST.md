@@ -18,9 +18,9 @@ This will:
 - Build `megatoy_core` and all test executables.
 - Run `ctest --output-on-failure` in `build-release`.
 
-### Included tests
+### Listing and running individual tests
 
-- `random_utils_test` — core utility checks.
-- `patch_registry_test` — verifies export formats (DefleMask/MML) are registered.
-- `patch_io_roundtrip_test` — roundtrips gin → ginpkg, gin → dmp → gin, gin → mml → gin.
-- `subsystem_tests` — lightweight subsystem checks (patch session snapshot, note allocation).
+```bash
+ctest --test-dir build-release -N              # list
+ctest --test-dir build-release -R patch_write  # run one
+```

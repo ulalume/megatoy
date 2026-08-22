@@ -25,7 +25,7 @@ emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
 cmake --build build-web --target megatoy --parallel
 ```
 
-The build copies the required web bundle into `build-web/web-dist`. Serve the files from that directory, e.g.:
+The build copies the web bundle into `build-web/web_dist`. Serve it, e.g.:
 
 ```bash
 python3 -m http.server 8080 --directory ./build-web/web_dist
@@ -51,21 +51,11 @@ rm -rf build-web
 emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
 ```
 
-## Storage
-
-Patches are real files in an IDBFS filesystem backed by IndexedDB, mounted at
-`/megatoy` by `dist/web_pre.js`, so the web build shares the desktop build's
-workspace and patch storage code. `/megatoy/My Patches` is created on first
-run. Preferences and the window layout live in `localStorage`.
-
 ## Current limitations
 
-- **Folders are imported, not referenced.** No browser offers a directory
-  picker megatoy can read in place: Firefox and Safari have none, and
-  Chromium's `showDirectoryPicker()` is asynchronous. "Import Folder" copies
-  the chosen tree into `/megatoy` instead, and edits never reach the original
-  -- use Export to get a patch back out.
-- Clearing site data removes the library. Export anything you want to keep.
-- Exports download rather than write to disk.
+- Unlike the desktop build, folders are imported rather than referenced.
+  "Import Folder into Workspace" copies the chosen tree into `/megatoy`, and
+  edits never reach the original folder -- use Download to get them back out.
+- Clearing site data removes the library. Download anything you want to keep.
 - MIDI input needs a browser with Web MIDI (Chromium-based) and one-time
   permission, granted from Preferences.
