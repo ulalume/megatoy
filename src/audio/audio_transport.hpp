@@ -20,4 +20,7 @@ public:
    * and not on the one already running.
    */
   virtual void set_buffer_frames(int /*frames*/) {}
+
+  /// Frames the device uses when set_buffer_frames() is left at 0.
+  virtual int default_buffer_frames() const { return 0; }
 };

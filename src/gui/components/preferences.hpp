@@ -27,6 +27,8 @@ struct PreferencesContext {
   std::function<void(const std::filesystem::path &)> remove_workspace_folder;
   std::function<void(ui::styles::ThemeId theme_id)> apply_theme;
   bool allow_workspace_ui = true;
+  /// Frames the audio device uses when the buffer preference is unset.
+  int default_audio_buffer_frames = 0;
 };
 
 void render_preferences_window(const char *title, PreferencesContext &context);

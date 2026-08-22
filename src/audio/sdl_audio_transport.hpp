@@ -32,6 +32,7 @@ public:
   void stop() override;
   bool is_active() const override { return initialized_; }
   void set_buffer_frames(int frames) override { buffer_frames_ = frames; }
+  int default_buffer_frames() const override { return kDefaultBufferFrames; }
 
 private:
   static void SDLCALL stream_callback(void *userdata, SDL_AudioStream *stream,

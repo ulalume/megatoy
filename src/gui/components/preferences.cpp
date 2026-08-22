@@ -282,7 +282,6 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   }
 }
 
-
 void render_general_tab(PreferencesContext &context) {
   auto &prefs = context.preferences;
   auto &ui_prefs = context.ui_prefs;
@@ -434,25 +433,38 @@ void render_sound_tab(PreferencesContext &context) {
 
   ImGui::Spacing();
 
-  // Listed as the frames the device ends up with. The web backend is asked
-  // for half of it, because it doubles whatever it is given.
-  static constexpr int kBufferChoices[] = {0, 256, 384, 512, 1024, 2048};
-  static constexpr const char *kBufferLabels[] = {
-      "Default",   "256 frames",  "384 frames",
-      "512 frames", "1024 frames", "2048 frames"};
+  // The frames the device ends up with. The web backend is asked for half of
+  // it, because it doubles whatever it is given, so the default is not the
+  // same number on every platform.
+  static constexpr int kBufferChoices[] = {256, 384, 512, 1024, 2048};
+  const int platform_default = context.default_audio_buffer_frames;
+  std::vector<std::string> buffer_labels;
+  std::vector<const char *> buffer_label_pointers;
+  buffer_labels.reserve(std::size(kBufferChoices));
+  for (const int frames : kBufferChoices) {
+    buffer_labels.push_back(std::to_string(frames) + " frames" +
+                            (frames == platform_default ? " (default)" : ""));
+  }
+  for (const auto &label : buffer_labels) {
+    buffer_label_pointers.push_back(label.c_str());
+  }
+
+  const int selected_frames = ui_prefs.audio_buffer_frames > 0
+                                  ? ui_prefs.audio_buffer_frames
+                                  : platform_default;
   int buffer_index = 0;
   for (int i = 0; i < static_cast<int>(std::size(kBufferChoices)); ++i) {
-    if (kBufferChoices[i] == ui_prefs.audio_buffer_frames) {
+    if (kBufferChoices[i] == selected_frames) {
       buffer_index = i;
       break;
     }
   }
-  if (ImGui::Combo("Buffer size", &buffer_index, kBufferLabels,
-                   static_cast<int>(std::size(kBufferLabels)))) {
+  if (ImGui::Combo("Buffer size", &buffer_index, buffer_label_pointers.data(),
+                   static_cast<int>(buffer_label_pointers.size()))) {
     ui_prefs.audio_buffer_frames = kBufferChoices[buffer_index];
   }
-  ImGui::TextWrapped("Smaller is less latency and less room to absorb a "
-                     "stall. Takes effect on the next launch.");
+  ImGui::TextWrapped("Lower values reduce latency but increase the risk of "
+                     "audio dropouts. Changes apply on the next launch.");
 
   ImGui::Spacing();
 

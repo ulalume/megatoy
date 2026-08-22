@@ -30,6 +30,11 @@ public:
    */
   bool initialize(uint32_t sample_rate, int buffer_frames = 0);
 
+  /// Frames the device uses when the buffer preference is left unset.
+  int default_buffer_frames() const {
+    return transport_ ? transport_->default_buffer_frames() : 0;
+  }
+
   /**
    * Shutdown and cleanup complete audio system
    */

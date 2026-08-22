@@ -553,6 +553,7 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
         ctx.services.gui_manager.set_theme(theme_id);
       },
       true,
+      ctx.services.audio_manager.default_buffer_frames(),
   };
 }
 
