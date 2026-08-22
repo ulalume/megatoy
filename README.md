@@ -84,18 +84,6 @@ cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --config Release --parallel
 ```
 
-CMake stores the source directory as an absolute path. If the repository has
-been moved since a build directory was configured, refresh that build tree
-before building it again:
-
-```bash
-cmake --fresh -S . -B build-release -DCMAKE_BUILD_TYPE=Release
-cmake --build build-release --config Release --parallel
-```
-
-Alternatively, choose a new build directory name and run the normal two
-commands against that directory.
-
 For distribution-specific notes on dependencies and audio drivers, see the Linux guide at [docs/BUILD_LINUX.md](docs/BUILD_LINUX.md).
 
 For experimental WebAssembly builds, see [docs/BUILD_WEB.md](docs/BUILD_WEB.md).
