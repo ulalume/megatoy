@@ -62,8 +62,8 @@ void announce_version_change(PreferenceManager &preferences) {
     return;
   }
 
-  // A first run and an upgrade from before this existed both have nothing
-  // stored, so neither claims to have updated anything.
+  // Nothing stored means either a fresh install or a build that predates the
+  // change log; neither can claim to have updated anything.
   const std::string message = stored.empty()
                                   ? "Welcome to megatoy " + current + "."
                                   : "Updated to megatoy " + current + ".";

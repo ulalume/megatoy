@@ -456,9 +456,8 @@ void render_sound_tab(PreferencesContext &context) {
 
   ImGui::Spacing();
 
-  // Not a MIDI setting, though it used to be filed as one: this is the
-  // channel allocator, and it runs the same whichever keyboard the notes
-  // came from.
+  // Not a MIDI setting: the channel allocator runs the same whichever
+  // keyboard the note arrived from.
   ImGui::Checkbox("Steal oldest note when all 6 channels are busy",
                   &ui_prefs.steal_oldest_note_when_full);
 }

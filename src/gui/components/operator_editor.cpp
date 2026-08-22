@@ -438,7 +438,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
 
   const ImVec2 block_min = ImGui::GetCursorScreenPos();
   // Not GetColumnWidth(): a column clips its draw list tighter than that,
-  // which cut the right border off.
+  // and the right border falls outside.
   const float frame_width = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
 
   // The header straddles the top border, aligned with the sliders in the
@@ -471,9 +471,9 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // for the header, the padding and any borrowed height.
   ImGui::SetCursorScreenPos(ImVec2(block_min.x, frame_max.y));
 
-  // By rectangle rather than an invisible button underneath: such a button
-  // would have to yield hover to every widget on top of it, which is what
-  // IsAnyItemHovered already reports.
+  // By rectangle rather than an invisible button underneath, which would
+  // have to yield hover to every widget on top of it -- IsAnyItemHovered
+  // reports that directly.
   const bool window_hovered =
       ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
   // From block_min: the header sits above the border, and clicking beside

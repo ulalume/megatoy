@@ -28,11 +28,10 @@ EM_JS(bool, megatoy_storage_load_failed_js, (), {
   return Module.__megatoyStorageLoadFailed === true;
 });
 
-// The debounce timer only ever guarded the *scheduling*. Once a flush was
-// under way a new request started a second one alongside it -- Emscripten
-// warns about that, and on a large library the two walked a tree that the
-// other was still moving, which is where the ENOENT came from. A request
-// during a flush is remembered and run after it instead.
+// One flush at a time. The debounce only spaces out the scheduling; two
+// flushes running together walk a tree each other is still moving, which
+// Emscripten warns about and which surfaces as ENOENT. A request arriving
+// during a flush is remembered and run after it.
 EM_JS(void, megatoy_request_storage_persist_js, (), {
   var run = function() {
     if (Module.__megatoyStorageSyncing) {

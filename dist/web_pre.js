@@ -73,11 +73,11 @@ Module["preRun"].push(function () {
   try {
     // Every write path requests an explicit debounced flush, and deleting a
     // whole folder awaits its own (see web_folder_delete.cpp). autoPersist is
-    // deliberately off: it schedules a syncfs of its own that knows nothing
-    // about those, so the two ran alongside each other -- which is where the
-    // "N FS.syncfs operations in flight" warnings came from. The explicit
-    // flush is the one to keep, because only it reports completion back to
-    // the app, and that is what retires a pending deletion.
+    // deliberately off: it would schedule a syncfs of its own that knows
+    // nothing about those, and two flushes running together are what produce
+    // the "N FS.syncfs operations in flight" warnings. The explicit flush is
+    // the one to keep, because only it reports completion back to the app,
+    // and that is what retires a pending deletion.
     FS.mount(IDBFS, {}, root);
   } catch (e) {
     Module.__megatoyStorageLoadFailed = true;

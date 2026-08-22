@@ -18,8 +18,9 @@ enum class ChangelogAction {
  *
  * Only an upgrade is announced; a downgrade or an unreadable stored version
  * is recorded silently, since the notice claims the app was updated. No
- * stored version means a fresh install or a build from before this existed --
- * indistinguishable here, so both are announced and the caller words it.
+ * stored version means a fresh install or a build that predates the change
+ * log -- indistinguishable here, so both are announced and the caller words
+ * it.
  *
  * The caller must record the version whatever it decides, or a user who
  * ignores the notice gets it again on every launch.

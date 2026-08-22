@@ -102,8 +102,8 @@ struct PreferenceData {
   std::string last_patch_path;
   /**
    * The version whose change log the user has already been offered. Empty on
-   * a fresh install and on builds from before this existed. Written as soon
-   * as the decision is made, so ignoring the notice still counts.
+   * a fresh install and on builds that predate the change log. Written as
+   * soon as the decision is made, so ignoring the notice still counts.
    */
   std::string last_seen_version;
   bool show_builtin_presets = true;

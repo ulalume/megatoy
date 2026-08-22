@@ -21,8 +21,8 @@ enum class ModalDismiss {
  *
  * Stated rather than fitted, because sizing to contents and right-aligning
  * buttons cannot both hold: the alignment measures the width it is about to
- * define. The loop never settles at the natural size, so a wide app window
- * used to open a wide dialog.
+ * define, and that loop settles wherever it starts rather than at the
+ * natural size.
  */
 inline constexpr float kDialogWidth = 400.0f;
 /// Passed as the height to fit the contents.
@@ -41,7 +41,7 @@ void align_buttons_right(std::initializer_list<float> widths);
 struct ModalScope {
   /// Draw the contents, then call end_modal().
   bool visible = false;
-  /// Closed this frame without a button. Clean up whatever Cancel would have.
+  /// Closed this frame without a button. Clean up whatever Cancel cleans up.
   bool dismissed = false;
 };
 
@@ -49,8 +49,7 @@ struct ModalScope {
  * Open a modal that centres itself and says how it closed.
  *
  * ImGui never dismisses modals itself, so every way out here is ours and has
- * to be reported: a dialog that vanishes with its callback still armed is
- * worse than one that cannot be dismissed.
+ * to be reported: a dialog must not vanish with its callback still armed.
  */
 ModalScope begin_modal(const char *title, ModalDismiss dismiss,
                        float width = kDialogWidth,

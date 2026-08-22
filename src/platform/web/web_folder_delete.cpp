@@ -3,9 +3,11 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 
 #include "gui/components/common.hpp"
+#include "gui/components/modal.hpp"
 #include "platform/web/local_storage.hpp"
 
 #include <algorithm>
+#include <cfloat>
 #include <cstdint>
 #include <emscripten.h>
 #include <imgui.h>
@@ -219,12 +221,9 @@ bool begin_folder_delete(
 void render_folder_delete_ui() {
   if (!g_active_delete && g_close_delete_popup) {
     if (ImGui::IsPopupOpen(kPopupId) &&
-        ImGui::BeginPopupModal(kPopupId, nullptr,
-                               ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+        ui::begin_modal(kPopupId, ui::ModalDismiss::None).visible) {
       ImGui::CloseCurrentPopup();
-      ImGui::EndPopup();
+      ui::end_modal();
     }
     g_close_delete_popup = false;
   }
@@ -239,20 +238,15 @@ void render_folder_delete_ui() {
   if (!ImGui::IsPopupOpen(kPopupId)) {
     ImGui::OpenPopup(kPopupId);
   }
-  ui::center_next_window();
-  if (ImGui::BeginPopupModal(kPopupId, nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    ui::force_center_window();
+  if (ui::begin_modal(kPopupId, ui::ModalDismiss::None).visible) {
     ImGui::Text("Deleting \"%s\"...", active.name.c_str());
     ImGui::TextDisabled("Saving the change to browser storage.");
     // Indeterminate: IndexedDB reports no progress, only completion. No
     // Cancel either -- the files are already gone from MEMFS, and stopping
     // the flush would leave storage in exactly the state this fixes.
     ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
-                       ImVec2(360, 0));
-    ImGui::EndPopup();
+                       ImVec2(-FLT_MIN, 0));
+    ui::end_modal();
   }
 }
 

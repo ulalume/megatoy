@@ -5,8 +5,8 @@
 #include <string>
 
 // The undo stack drops a step whose before and after are identical. Correct
-// on its own terms, and also how a mis-ordered commit vanishes without a
-// trace -- which is what checkboxes used to do.
+// on its own terms, and also how a commit taken on the wrong side of the
+// write vanishes without a trace.
 
 namespace {
 

@@ -100,10 +100,9 @@ bool render_patch_combo(const char *label,
       ImVec2(ImGui::GetMainViewport()->WorkSize.x * 0.6f, FLT_MAX));
 
   if (ImGui::BeginCombo(label, preview.c_str())) {
-    // Fills the width without the feedback loop -1.0f caused: that asks for
-    // one pixel less than is available, which becomes the widest content,
-    // which is what the next frame's width is measured from, so the list
-    // crept a pixel narrower every frame it was open.
+    // -FLT_MIN, not -1.0f: a negative width is relative to what is
+    // available, so -1.0f makes this the widest content by one pixel less
+    // each frame, and the list creeps narrower for as long as it is open.
     ImGui::SetNextItemWidth(-FLT_MIN);
 
     // Use char buffer for ImGui compatibility
