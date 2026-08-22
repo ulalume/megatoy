@@ -120,9 +120,9 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Low Frequency Oscillator");
   bool lfo_enable = patch.global.lfo_enable;
   if (ImGui::Checkbox("LFO Enable", &lfo_enable)) {
-    patch.global.lfo_enable = lfo_enable;
+    track_instant_patch_history(context, "LFO Enable",
+                                [&] { patch.global.lfo_enable = lfo_enable; });
   }
-  track_patch_history(context, "LFO Enable", "global.lfo_enable");
 
   ImGui::PushItemWidth(hslider_width);
 
@@ -167,17 +167,19 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Channel");
   bool left_speaker = patch.channel.left_speaker;
   if (ImGui::Checkbox("Left Speaker", &left_speaker)) {
-    patch.channel.left_speaker = left_speaker;
+    track_instant_patch_history(
+        context, "Left Speaker",
+        [&] { patch.channel.left_speaker = left_speaker; });
   }
-  track_patch_history(context, "Left Speaker", "channel.left_speaker");
 
   ImGui::SameLine();
 
   bool right_speaker = patch.channel.right_speaker;
   if (ImGui::Checkbox("Right Speaker", &right_speaker)) {
-    patch.channel.right_speaker = right_speaker;
+    track_instant_patch_history(
+        context, "Right Speaker",
+        [&] { patch.channel.right_speaker = right_speaker; });
   }
-  track_patch_history(context, "Right Speaker", "channel.right_speaker");
 
   ImGui::PushItemWidth(hslider_width);
 

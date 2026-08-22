@@ -246,8 +246,7 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
  * would undo the thing the user just arranged.
  */
 void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
-                       const char *key, bool ym2612::OperatorSettings::*flag,
-                       bool spread) {
+                       bool ym2612::OperatorSettings::*flag, bool spread) {
   auto &state = widget.editor.operator_edit;
   auto &op = ym2612::operator_at(widget.instrument, widget.slot);
 
@@ -256,16 +255,18 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
   if (ImGui::IsItemActivated()) {
     note_operator_edit(state.selection, widget.slot);
   }
-  track_patch_history(widget.editor,
-                      history_label(state.selection, widget.slot, name),
-                      history_key(widget.slot, key));
   if (changed) {
-    if (spread) {
-      ym2612::apply_operator_flag_edit(widget.instrument,
-                                       state.selection.selected, flag, value);
-    } else {
-      op.*flag = value;
-    }
+    track_instant_patch_history(
+        widget.editor, history_label(state.selection, widget.slot, name),
+        [&] {
+          if (spread) {
+            ym2612::apply_operator_flag_edit(widget.instrument,
+                                             state.selection.selected, flag,
+                                             value);
+          } else {
+            op.*flag = value;
+          }
+        });
   }
 }
 
@@ -288,7 +289,7 @@ float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
 
   ImGui::SetCursorScreenPos(header_min);
   ImGui::BeginGroup();
-  operator_checkbox(widget, "##Operator Enable", "Enable", "op_enable",
+  operator_checkbox(widget, "##Operator Enable", "Enable",
                     &ym2612::OperatorSettings::enable, false);
   ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
   if (is_modulator) {
@@ -380,7 +381,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   operator_checkbox(widget, "Amplitude Modulation Enable",
-                    "Amplitude Modulation", "am_enable",
+                    "Amplitude Modulation",
                     &ym2612::OperatorSettings::amplitude_modulation_enable,
                     true);
   ImGui::Spacing();
@@ -406,7 +407,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
   ImGui::SameLine();
 
-  operator_checkbox(widget, "SSG EG Enable", "SSG EG Enable", "ssg_enable",
+  operator_checkbox(widget, "SSG EG Enable", "SSG EG Enable",
                     &ym2612::OperatorSettings::ssg_enable, true);
 
   const bool ssg_enable = op.ssg_enable;
