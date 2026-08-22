@@ -104,28 +104,33 @@ ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
 }
 
 /**
- * The frame, with the top edge broken between `gap_begin` and `gap_end` so
- * the header sits in the line instead of under it. AddRect would draw
- * straight through the checkbox and the label.
+ * The frame, opened up around the header.
+ *
+ * The header lines up with the sliders in the sections above rather than
+ * being indented into the frame, which leaves it sitting across the corner
+ * instead of along the top edge -- so the corner is what gets cut. The top
+ * border resumes past the label at `top_resume_x` and the left border picks
+ * up below the checkbox at `left_resume_y`; AddRect would draw through both.
  *
  * The half-pixel inset is what AddRect does internally, and without it the
  * line lands between two pixels and comes out blurred.
  */
-void draw_operator_frame(const ImVec2 &min, const ImVec2 &max, float gap_begin,
-                         float gap_end, ImU32 color) {
+void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
+                         float top_resume_x, float left_resume_y,
+                         ImU32 color) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float left = min.x + 0.5f;
   const float top = min.y + 0.5f;
   const float right = max.x - 0.5f;
   const float bottom = max.y - 0.5f;
 
-  if (gap_begin > left) {
-    draw_list->AddLine(ImVec2(left, top), ImVec2(gap_begin, top), color);
+  if (top_resume_x < right) {
+    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(right, top), color);
   }
-  if (gap_end < right) {
-    draw_list->AddLine(ImVec2(gap_end, top), ImVec2(right, top), color);
+  if (left_resume_y < bottom) {
+    draw_list->AddLine(ImVec2(left, left_resume_y), ImVec2(left, bottom),
+                       color);
   }
-  draw_list->AddLine(ImVec2(left, top), ImVec2(left, bottom), color);
   draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
   draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
 }
@@ -470,14 +475,15 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
 
   // The header straddles the top border, so the frame starts half a header
   // below the cursor and the header is drawn before the frame is measured.
+  // It is not indented into the frame: it lines up with the sliders in the
+  // sections above it, which leaves it sitting across the corner.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
   const float header_end =
-      render_operator_header(widget, patch.instrument.algorithm,
-                             ImVec2(frame_min.x + frame_padding, block_min.y));
-  const float gap_begin = frame_min.x + frame_padding - header_gap;
-  const float gap_end =
+      render_operator_header(widget, patch.instrument.algorithm, block_min);
+  const float top_resume_x =
       std::min(header_end + header_gap, frame_min.x + frame_width);
+  const float left_resume_y = block_min.y + header_height + header_gap;
 
   ImGui::SetCursorScreenPos(
       ImVec2(frame_min.x + frame_padding,
@@ -549,7 +555,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndPopup();
   }
 
-  draw_operator_frame(frame_min, frame_max, gap_begin, gap_end,
+  draw_operator_frame(frame_min, frame_max, top_resume_x, left_resume_y,
                       operator_frame_color(state.selection.contains(slot),
                                            state.selection.primary == slot,
                                            background_hovered));

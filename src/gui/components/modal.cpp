@@ -45,6 +45,17 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss,
                        ImGuiWindowFlags flags) {
   ModalScope scope;
 
+  // Nothing else stops a modal from being taller than the screen -- neither
+  // AlwaysAutoResize nor an explicit size is clamped to the viewport -- and a
+  // dialog whose buttons are below the bottom edge cannot be answered at all.
+  // Applied every frame, so shrinking the window pulls the dialog in with it.
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  const ImVec2 margin(48.0f, 48.0f);
+  ImGui::SetNextWindowSizeConstraints(
+      ImVec2(0.0f, 0.0f),
+      ImVec2(std::max(viewport->WorkSize.x - margin.x, 240.0f),
+             std::max(viewport->WorkSize.y - margin.y, 160.0f)));
+
   center_next_window();
   if (!ImGui::BeginPopupModal(title, nullptr, flags)) {
     return scope;
