@@ -159,8 +159,8 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   auto is_modulator =
       static_cast<int>(op_enum) <
       ym2612::algorithm_modulator_count[patch.instrument.algorithm];
-  std::string op_label = "Operator " + std::to_string(op_index + 1) +
-                         (is_modulator ? "" : " (Carrier)");
+  std::string op_label =
+      "OP" + std::to_string(op_index + 1) + (is_modulator ? "" : " (Carrier)");
   std::string key_prefix = "instrument.op" + std::to_string(op_index);
 
   if (!is_modulator) {
