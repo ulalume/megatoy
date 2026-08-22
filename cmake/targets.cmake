@@ -66,6 +66,8 @@ set(MEGATOY_CORE_SOURCES
   src/audio/spectrum_analyzer.cpp
   src/audio/audio_manager.cpp
   src/audio/sdl_audio_transport.cpp
+  src/changelog.cpp
+  src/changelog_gate.cpp
   src/channel_allocator.cpp
   src/core/random_utils.cpp
   src/core/status.cpp
@@ -75,6 +77,7 @@ set(MEGATOY_CORE_SOURCES
   src/formats/ym2612_format_adapter.cpp
   src/formats/patch_registry.cpp
   src/gui/components/about_dialog.cpp
+  src/gui/components/changelog_dialog.cpp
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
   src/gui/input/keyboard_typing.cpp

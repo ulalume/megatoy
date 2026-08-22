@@ -58,6 +58,10 @@ public:
   const std::string &last_patch_path() const;
   void set_last_patch_path(const std::string &path);
 
+  /// The version whose change log the user has already been offered.
+  const std::string &last_seen_version() const;
+  void set_last_seen_version(const std::string &version);
+
   std::filesystem::path get_imgui_ini_file() const;
 
   void set_theme(ui::styles::ThemeId theme);
@@ -92,6 +96,7 @@ private:
   megatoy::workspace::Workspace workspace_;
   std::filesystem::path last_save_directory_;
   std::string last_patch_path_;
+  std::string last_seen_version_;
   bool show_builtin_presets_ = true;
   bool legacy_workspace_migration_complete_ = false;
   bool legacy_metadata_migration_complete_ = false;

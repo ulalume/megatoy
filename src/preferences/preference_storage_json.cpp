@@ -105,6 +105,9 @@ public:
       if (j.contains("last_patch_path")) {
         data.last_patch_path = j["last_patch_path"].get<std::string>();
       }
+      if (j.contains("last_seen_version")) {
+        data.last_seen_version = j["last_seen_version"].get<std::string>();
+      }
 
       if (j.contains("show_builtin_presets")) {
         data.show_builtin_presets = j["show_builtin_presets"].get<bool>();
@@ -244,6 +247,7 @@ public:
       j["workspace_folders"] = std::move(folders);
       j["last_save_directory"] = data.last_save_directory.string();
       j["last_patch_path"] = data.last_patch_path;
+      j["last_seen_version"] = data.last_seen_version;
       j["show_builtin_presets"] = data.show_builtin_presets;
       j["theme"] = ui::styles::storage_key(data.theme);
 

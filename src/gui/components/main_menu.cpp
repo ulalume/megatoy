@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "about_dialog.hpp"
+#include "changelog_dialog.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
 #include <imgui.h>
@@ -22,6 +23,9 @@ void render_main_menu(MainMenuContext &context) {
 
       if (ImGui::MenuItem("About megatoy")) {
         open_about = true;
+      }
+      if (ImGui::MenuItem("Change Log...")) {
+        open_changelog_dialog();
       }
       if (context.gui.supports_quit()) {
         ImGui::Separator();
@@ -215,6 +219,7 @@ void render_main_menu(MainMenuContext &context) {
     open_about_dialog();
   }
   render_about_dialog();
+  render_changelog_dialog();
 }
 
 } // namespace ui

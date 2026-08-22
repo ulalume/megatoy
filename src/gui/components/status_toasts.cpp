@@ -5,6 +5,7 @@
 
 #include <IconsFontAwesome7.h>
 #include <chrono>
+#include <functional>
 #include <imgui.h>
 #include <string>
 
@@ -47,8 +48,11 @@ ImVec4 severity_color(Severity severity) {
   return styles::color(styles::MegatoyCol::TextMuted);
 }
 
-bool sticky(Severity severity) {
-  return severity == Severity::Warning || severity == Severity::Error;
+bool sticky(const megatoy::status::Entry &entry) {
+  // A toast offering an action waits to be answered. Four seconds is long
+  // enough to notice a result and too short to read an offer and act on it.
+  return entry.severity == Severity::Warning ||
+         entry.severity == Severity::Error || entry.action.valid();
 }
 
 } // namespace
@@ -60,7 +64,7 @@ void render_status_toasts() {
   // Expire transient toasts here rather than in the service, so an entry
   // posted while the tab was hidden still gets its time on screen.
   std::erase_if(entries, [&](const megatoy::status::Entry &entry) {
-    if (!sticky(entry.severity) && now - entry.posted_at > kAutoDismiss) {
+    if (!sticky(entry) && now - entry.posted_at > kAutoDismiss) {
       megatoy::status::dismiss(entry.id);
       return true;
     }
@@ -92,6 +96,10 @@ void render_status_toasts() {
     return;
   }
 
+  // Run after the loop: the action may post its own toast, and mutating the
+  // list mid-iteration would drop one.
+  std::function<void()> action_to_perform;
+
   // Oldest at the top, newest nearest the corner.
   for (const auto &entry : entries) {
     ImGui::PushID(static_cast<int>(entry.id));
@@ -112,14 +120,22 @@ void render_status_toasts() {
                              ImGui::GetStyle().WindowPadding.x * 2.0f);
       ImGui::TextUnformatted(entry.message.c_str());
       ImGui::PopTextWrapPos();
+
+      if (entry.action.valid()) {
+        ImGui::Spacing();
+        if (ImGui::Button(entry.action.label.c_str())) {
+          action_to_perform = entry.action.perform;
+          megatoy::status::dismiss(entry.id);
+        }
+      }
     }
     ImGui::EndChild();
 
-    // The whole toast is its own close button.
+    // Everywhere the button is not, the toast is its own close button.
     if (ImGui::IsItemClicked()) {
       megatoy::status::dismiss(entry.id);
     }
-    if (ImGui::IsItemHovered() && sticky(entry.severity)) {
+    if (ImGui::IsItemHovered() && sticky(entry)) {
       ImGui::SetTooltip("Click to dismiss");
     }
 
@@ -129,6 +145,10 @@ void render_status_toasts() {
   }
 
   ImGui::End();
+
+  if (action_to_perform) {
+    action_to_perform();
+  }
 }
 
 } // namespace ui

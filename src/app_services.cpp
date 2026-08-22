@@ -1,7 +1,10 @@
 #include "app_services.hpp"
 
 #include "app_state.hpp"
+#include "changelog_gate.hpp"
 #include "core/status.hpp"
+#include "gui/components/changelog_dialog.hpp"
+#include "project_info.hpp"
 #include "patches/background_folder_scan.hpp"
 #include "platform/platform_config.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -9,6 +12,7 @@
 #endif
 #include <algorithm>
 #include <iostream>
+#include <string>
 
 namespace {
 
@@ -37,6 +41,41 @@ AppServices::AppServices(platform::PlatformServicesProvider &platform_services)
       patch_session(path_service, preference_manager, audio_manager,
                     persistent_parse_cache.get()),
       spectrum_analyzer(2048) {}
+
+namespace {
+
+/**
+ * Offer the change log once per version.
+ *
+ * A toast rather than the dialog megamml opens: it is a notice, not something
+ * the user asked for, and it should not stand between them and the patch they
+ * came to edit. The version is recorded before the toast can be acted on, so
+ * dismissing it -- or ignoring it -- still counts as having been told.
+ */
+void announce_version_change(PreferenceManager &preferences) {
+  const std::string current = megatoy::kVersionTag;
+  const std::string stored = preferences.last_seen_version();
+  const auto action = megatoy::decide_changelog_action(stored, current);
+  if (action == megatoy::ChangelogAction::Nothing) {
+    return;
+  }
+
+  preferences.set_last_seen_version(current);
+  if (action != megatoy::ChangelogAction::Show) {
+    return;
+  }
+
+  // A first run and an upgrade from before this existed look identical from
+  // here -- both have nothing stored -- so the first run does not claim to
+  // have updated anything.
+  const std::string message = stored.empty()
+                                  ? "Welcome to megatoy " + current + "."
+                                  : "Updated to megatoy " + current + ".";
+  megatoy::status::info(message,
+                        {"What's new", [] { ui::open_changelog_dialog(); }});
+}
+
+} // namespace
 
 void AppServices::initialize_app(AppState &state) {
   path_service.ensure_directories();
@@ -69,6 +108,8 @@ void AppServices::initialize_app(AppState &state) {
   } else {
     gui_manager.sync_imgui_ini();
   }
+
+  announce_version_change(preference_manager);
 
   state.ui_state().prefs = preference_manager.ui_preferences();
   audio_manager.set_chip_type(static_cast<ym2612::ChipType>(

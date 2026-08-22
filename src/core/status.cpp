@@ -18,7 +18,7 @@ std::uint64_t g_next_id = 1;
 
 } // namespace
 
-void post(Severity severity, std::string message) {
+void post(Severity severity, std::string message, Action action) {
   // Mirror before queueing so the terminal / browser console sees messages
   // even if the UI never renders (early startup failures).
   if (severity == Severity::Warning || severity == Severity::Error) {
@@ -33,6 +33,7 @@ void post(Severity severity, std::string message) {
   entry.severity = severity;
   entry.message = std::move(message);
   entry.posted_at = std::chrono::steady_clock::now();
+  entry.action = std::move(action);
   g_entries.push_back(std::move(entry));
   while (g_entries.size() > kMaxEntries) {
     g_entries.pop_front();

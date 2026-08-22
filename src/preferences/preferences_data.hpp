@@ -97,6 +97,14 @@ struct PreferenceData {
   std::filesystem::path last_save_directory;
   /// Repository-relative source path of the patch selected most recently.
   std::string last_patch_path;
+  /**
+   * The version tag whose change log the user has already been offered.
+   *
+   * Empty on a fresh install and on any build from before this existed; both
+   * get the notice once. Written as soon as the decision is made, so ignoring
+   * the notice still counts as having seen it.
+   */
+  std::string last_seen_version;
   bool show_builtin_presets = true;
 
   // Runtime-only flag set while adopting a pre-workspace patch folder.

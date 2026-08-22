@@ -1,5 +1,8 @@
 #include "about_dialog.hpp"
 
+#include "changelog_dialog.hpp"
+#include "common.hpp"
+
 #include "gui/styles/megatoy_style.hpp"
 #include "platform/platform_config.hpp"
 #include "project_info.hpp"
@@ -141,6 +144,7 @@ void render_about_dialog() {
   auto &state = about_modal_state();
   poll_update_request(state);
   ImGui::SetNextWindowSize(ImVec2(350, -1));
+  center_next_window();
   if (!ImGui::BeginPopupModal("About megatoy", nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize)) {
     if (!ImGui::IsPopupOpen("About megatoy")) {
@@ -148,12 +152,21 @@ void render_about_dialog() {
     }
     return;
   }
+  // The dialog auto-resizes, and the update check grows it after it opened.
+  // Centering once on appearance would leave it drifting down and right.
+  force_center_window();
 
   if (ImGui::IsWindowAppearing()) {
     state.reset();
   }
 
   ImGui::Text("Version: %s", megatoy::kVersionTag);
+  ImGui::SameLine();
+  if (ImGui::TextLink("Change log")) {
+    state.reset();
+    ImGui::CloseCurrentPopup();
+    open_changelog_dialog();
+  }
 
 #if defined(MEGATOY_PLATFORM_WEB)
   ImGui::Spacing();

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -32,19 +33,37 @@ enum class Severity {
   Error,
 };
 
+/**
+ * An optional button on the toast.
+ *
+ * `perform` runs on the UI thread when the button is clicked, so it can touch
+ * anything the frame can -- opening a dialog, revealing a file. The rest of
+ * the toast still dismisses on click.
+ *
+ * A toast carrying one does not expire on its own: an offer the user never
+ * got to read is worse than one that has to be dismissed.
+ */
+struct Action {
+  std::string label;
+  std::function<void()> perform;
+
+  bool valid() const { return !label.empty() && perform != nullptr; }
+};
+
 struct Entry {
   std::uint64_t id = 0;
   Severity severity = Severity::Info;
   std::string message;
   std::chrono::steady_clock::time_point posted_at{};
+  Action action;
 };
 
 /// Post a notification. Also mirrored to stdout/stderr so terminals and the
 /// browser console keep working.
-void post(Severity severity, std::string message);
+void post(Severity severity, std::string message, Action action = {});
 
-inline void info(std::string message) {
-  post(Severity::Info, std::move(message));
+inline void info(std::string message, Action action = {}) {
+  post(Severity::Info, std::move(message), std::move(action));
 }
 inline void success(std::string message) {
   post(Severity::Success, std::move(message));
