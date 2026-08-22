@@ -215,16 +215,22 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
   return save_ginpkg();
 }
 
-bool FilesystemPatchStorage::can_delete_patch(const PatchEntry &entry) const {
+bool FilesystemPatchStorage::can_rename_patch(const PatchEntry &entry) const {
   if (!writable_ || !owns_relative_path(entry.relative_path) ||
       !entry.source_relative_path.empty() || !entry.container_item_id.empty() ||
-      entry.full_path.empty() || vfs_.is_directory(entry.full_path)) {
+      entry.full_path.empty()) {
     return false;
   }
 
   const auto mapped = to_absolute_path(entry.relative_path);
   return mapped &&
          mapped->lexically_normal() == entry.full_path.lexically_normal();
+}
+
+bool FilesystemPatchStorage::can_delete_patch(const PatchEntry &entry) const {
+  // A directory can be renamed but not deleted: deleting one would take
+  // everything inside it.
+  return can_rename_patch(entry) && !vfs_.is_directory(entry.full_path);
 }
 
 bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
@@ -244,13 +250,18 @@ bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
 
 bool FilesystemPatchStorage::rename_patch(const PatchEntry &entry,
                                           const std::string &new_stem) {
-  if (!can_delete_patch(entry) || new_stem.empty() ||
+  if (!can_rename_patch(entry) || new_stem.empty() ||
       sanitize_filename(new_stem) != new_stem) {
     return false;
   }
 
-  const auto target = entry.full_path.parent_path() /
-                      (new_stem + entry.full_path.extension().string());
+  // A directory's name is its whole name; only a file has an extension to
+  // keep. "drums.old" is a folder called that, not one called "drums".
+  const bool is_directory = vfs_.is_directory(entry.full_path);
+  const auto target =
+      entry.full_path.parent_path() /
+      (is_directory ? new_stem
+                    : new_stem + entry.full_path.extension().string());
   if (target == entry.full_path) {
     return true;
   }
@@ -269,7 +280,11 @@ bool FilesystemPatchStorage::rename_patch(const PatchEntry &entry,
     return false;
   }
 
-  if (metadata_) {
+  // The sidecar lives inside the storage root with keys relative to it, so
+  // renaming the root moves the file and leaves every key correct. Anything
+  // below the root needs its keys re-prefixed.
+  const bool is_storage_root = entry.relative_path == root_label_;
+  if (metadata_ && !is_storage_root) {
     const auto relative = std::filesystem::path(entry.relative_path);
     const auto renamed_relative = relative.parent_path() / target.filename();
     if (!metadata_->rename_key_prefix(

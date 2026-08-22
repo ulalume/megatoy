@@ -879,6 +879,79 @@ void test_current_patch_rename_preserves_clean_identity(TestEnvironment &env) {
   CHECK(!env.session.is_modified());
 }
 
+// Renaming a folder that holds the current patch has to carry the patch with
+// it, and renaming an unrelated one has to leave it alone.
+void test_folder_rename_follows_the_current_patch(TestEnvironment &env) {
+  const auto folder = env.patches_folder / "pads";
+  std::filesystem::create_directories(folder);
+  std::filesystem::create_directories(env.patches_folder / "elsewhere");
+
+  auto patch = env.session.current_patch();
+  const auto source_path = folder / "warm.gin";
+  CHECK(patches::write_patch(patch, source_path));
+  // An empty directory does not show up in the tree, so the decoy needs
+  // something in it too.
+  CHECK(patches::write_patch(patch, env.patches_folder / "elsewhere" / "x.gin"));
+  env.session.repository().refresh();
+
+  const auto *found =
+      find_patch_entry(env.session.repository().tree(), source_path);
+  CHECK(found != nullptr);
+  ym2612::Patch loaded;
+  CHECK(env.session.repository().load_patch(*found, loaded));
+  env.session.set_current_patch(loaded, found->relative_path);
+  const auto path_before = env.session.current_patch_path();
+  CHECK(!path_before.empty());
+
+  // An unrelated folder: the current patch keeps the path it had.
+  const auto *unrelated = find_patch_entry(env.session.repository().tree(),
+                                           env.patches_folder / "elsewhere");
+  CHECK(unrelated != nullptr);
+  CHECK(env.session.rename_patch(*unrelated, "somewhere"));
+  CHECK(env.session.current_patch_path() == path_before);
+
+  // The folder it lives in: the path follows.
+  const auto *pads =
+      find_patch_entry(env.session.repository().tree(), folder);
+  CHECK(pads != nullptr);
+  CHECK(pads->is_directory);
+  const auto pads_entry = *pads;
+  CHECK(env.session.rename_patch(pads_entry, "warm pads"));
+
+  CHECK(!std::filesystem::exists(folder));
+  CHECK(std::filesystem::exists(env.patches_folder / "warm pads" / "warm.gin"));
+  CHECK(env.session.current_patch_path() != path_before);
+  CHECK(std::filesystem::path(env.session.current_patch_path()).parent_path()
+            .filename() == "warm pads");
+  CHECK(env.session.current_patch().name == "warm");
+}
+
+// A workspace folder is registered by path, so renaming one has to move the
+// registration with it or the folder comes back missing.
+void test_workspace_root_rename_follows_the_preference(TestEnvironment &env) {
+  const auto *root = find_patch_entry(env.session.repository().tree(),
+                                      env.patches_folder);
+  CHECK(root != nullptr);
+  CHECK(root->is_directory);
+  CHECK(env.preferences.workspace().contains(env.patches_folder));
+
+  const auto entry = *root;
+  CHECK(env.session.rename_patch(entry, "sound library"));
+
+  const auto renamed = env.root / "sound library";
+  CHECK(!std::filesystem::exists(env.patches_folder));
+  CHECK(std::filesystem::exists(renamed));
+
+  CHECK(!env.preferences.workspace().contains(env.patches_folder));
+  CHECK(env.preferences.workspace().contains(renamed));
+  CHECK(env.preferences.workspace().folders().size() == 1);
+
+  // And the repository is looking at the new location.
+  CHECK(find_patch_entry(env.session.repository().tree(), renamed) != nullptr);
+
+  env.patches_folder = renamed;
+}
+
 void test_current_patch_path_recording(TestEnvironment &env) {
   env.preferences.set_last_patch_path("patches/remembered.gin");
   const auto url_patch = env.session.current_patch();
@@ -1009,6 +1082,8 @@ int main() {
   test_save_in_place_rules(env);
   test_current_patch_rename_preserves_clean_identity(env);
   test_current_patch_path_recording(env);
+  test_folder_rename_follows_the_current_patch(env);
+  test_workspace_root_rename_follows_the_preference(env);
   test_restore_last_patch(env);
   test_missing_last_patch_falls_back_silently(env);
 

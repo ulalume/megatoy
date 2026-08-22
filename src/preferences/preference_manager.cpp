@@ -60,6 +60,18 @@ bool PreferenceManager::remove_workspace_folder(
   return true;
 }
 
+bool PreferenceManager::rename_workspace_folder(const std::filesystem::path &from,
+                                                const std::filesystem::path &to) {
+  if (workspace_folder_is_protected(from)) {
+    return false;
+  }
+  if (!workspace_.rename(from, to)) {
+    return false;
+  }
+  save_preferences();
+  return true;
+}
+
 bool PreferenceManager::workspace_folder_is_protected(
     const std::filesystem::path &path) const {
 #if defined(MEGATOY_PLATFORM_WEB)

@@ -227,12 +227,21 @@ void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
 
 void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
   auto &session = ctx.services.patch_session;
-  if (!session.repository().can_delete_patch(entry)) {
+  if (!session.repository().can_rename_patch(entry)) {
     return;
   }
 
+  // A folder's name is its whole name; only a file has an extension held back
+  // and put on again afterwards.
+  const bool is_directory = entry.is_directory;
+  const std::string title = is_directory ? "Rename Folder" : "Rename Patch";
+  const std::string label = is_directory ? "Folder name" : "Filename";
+  const std::string initial = is_directory
+                                  ? entry.full_path.filename().string()
+                                  : entry.full_path.stem().string();
+
   ctx.ui_state().text_prompt_state.request(
-      "Rename Patch", "Filename", entry.full_path.stem().string(), "Rename",
+      title, label, initial, "Rename",
       [&ctx, entry](const std::string &new_stem) {
         if (!ctx.services.patch_session.rename_patch(entry, new_stem)) {
           megatoy::status::error("Could not rename \"" + entry.name + "\".");
@@ -240,26 +249,31 @@ void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
         }
         megatoy::status::success("Renamed to \"" + new_stem + "\".");
       },
-      [entry](const std::string &new_stem) {
+      [entry, is_directory](const std::string &new_stem) {
         if (new_stem.empty()) {
-          return std::string("Filename cannot be empty.");
+          return std::string(is_directory ? "Folder name cannot be empty."
+                                          : "Filename cannot be empty.");
         }
         if (patches::sanitize_filename(new_stem) != new_stem) {
-          return std::string("Filename contains invalid characters.");
+          return std::string("Name contains invalid characters.");
         }
 
-        const auto target = entry.full_path.parent_path() /
-                            (new_stem + entry.full_path.extension().string());
+        const auto target =
+            entry.full_path.parent_path() /
+            (is_directory ? new_stem
+                          : new_stem + entry.full_path.extension().string());
         std::error_code error;
         if (!std::filesystem::exists(target, error)) {
-          return error ? std::string("Could not check the target filename.")
+          return error ? std::string("Could not check the target name.")
                        : std::string{};
         }
         if (std::filesystem::equivalent(entry.full_path, target, error) &&
             !error) {
           return std::string{};
         }
-        return std::string("A file with that name already exists.");
+        return std::string(is_directory
+                               ? "A folder with that name already exists."
+                               : "A file with that name already exists.");
       });
 }
 

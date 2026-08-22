@@ -95,6 +95,40 @@ bool Workspace::contains(const fs::path &path) const {
       [&](const Folder &folder) { return folder.path == resolved; });
 }
 
+const Folder *Workspace::find(const fs::path &path) const {
+  const auto resolved = normalize_path(path);
+  const auto it =
+      std::find_if(folders_.begin(), folders_.end(), [&](const Folder &folder) {
+        return folder.path == resolved;
+      });
+  return it == folders_.end() ? nullptr : &*it;
+}
+
+bool Workspace::rename(const fs::path &from, const fs::path &to) {
+  const auto it =
+      std::find_if(folders_.begin(), folders_.end(),
+                   [&](const Folder &folder) { return folder.path == from; });
+  if (it == folders_.end()) {
+    return false;
+  }
+
+  const auto resolved_to = normalize_path(to);
+  const bool taken =
+      std::any_of(folders_.begin(), folders_.end(), [&](const Folder &folder) {
+        return &folder != &*it && folder.path == resolved_to;
+      });
+  if (taken) {
+    return false;
+  }
+
+  const bool was_writable = it->writable;
+  *it = make_folder(resolved_to);
+  it->available = true;
+  it->writable = was_writable;
+  ++revision_;
+  return true;
+}
+
 const Folder *Workspace::owner_of(const fs::path &path) const {
   const auto resolved = normalize_path(path);
   const Folder *best = nullptr;

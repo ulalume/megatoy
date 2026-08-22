@@ -30,6 +30,10 @@ public:
 
   bool add_workspace_folder(const std::filesystem::path &path);
   bool remove_workspace_folder(const std::filesystem::path &path);
+  /// Follow a workspace folder that was renamed on disk. `from` must be a
+  /// path taken from workspace().folders().
+  bool rename_workspace_folder(const std::filesystem::path &from,
+                               const std::filesystem::path &to);
   bool workspace_folder_is_protected(const std::filesystem::path &path) const;
   bool reorder_workspace_folder(std::size_t from, std::size_t to);
   bool refresh_workspace_availability();

@@ -44,6 +44,7 @@ public:
                              const std::string &name, bool overwrite,
                              std::string_view preferred_extension) override;
   bool can_delete_patch(const PatchEntry &entry) const override;
+  bool can_rename_patch(const PatchEntry &entry) const override;
   bool delete_patch(const PatchEntry &entry) override;
   bool rename_patch(const PatchEntry &entry,
                     const std::string &new_stem) override;

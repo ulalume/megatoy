@@ -252,10 +252,16 @@ bool PatchRepository::delete_patch(const PatchEntry &entry) {
   return false;
 }
 
+bool PatchRepository::can_rename_patch(const PatchEntry &entry) const {
+  return std::any_of(
+      storages_.begin(), storages_.end(),
+      [&](const auto &storage) { return storage->can_rename_patch(entry); });
+}
+
 bool PatchRepository::rename_patch(const PatchEntry &entry,
                                    const std::string &new_stem) {
   for (const auto &storage : storages_) {
-    if (!storage->can_delete_patch(entry)) {
+    if (!storage->can_rename_patch(entry)) {
       continue;
     }
     if (!storage->rename_patch(entry, new_stem)) {

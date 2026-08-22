@@ -102,18 +102,22 @@ void entry_context_menu(PatchSelectorContext &context,
     ImGui::Separator();
   }
 
-  if (context.repository.can_delete_patch(entry)) {
-    if (context.rename_patch && ImGui::MenuItem("Rename...")) {
+  const bool protected_folder = context.folder_is_protected &&
+                                context.folder_is_protected(entry.full_path);
+
+  const bool can_rename =
+      context.repository.can_rename_patch(entry) && !protected_folder;
+  const bool can_delete = context.repository.can_delete_patch(entry);
+  if (can_rename || can_delete) {
+    if (can_rename && context.rename_patch && ImGui::MenuItem("Rename...")) {
       context.rename_patch(entry);
     }
-    if (context.delete_patch && ImGui::MenuItem("Delete...")) {
+    if (can_delete && context.delete_patch && ImGui::MenuItem("Delete...")) {
       context.delete_patch(entry);
     }
     ImGui::Separator();
   }
 
-  const bool protected_folder = context.folder_is_protected &&
-                                context.folder_is_protected(entry.full_path);
   if (allow_remove_folder && context.remove_folder && !protected_folder) {
     const char *label =
         megatoy::platform::is_web() ? "Delete Folder..." : "Remove Folder";

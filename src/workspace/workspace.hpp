@@ -54,6 +54,17 @@ public:
 
   bool contains(const std::filesystem::path &path) const;
 
+  /// The folder registered at exactly this path, if any.
+  const Folder *find(const std::filesystem::path &path) const;
+
+  /**
+   * Point a registered folder at its new location after it was renamed on
+   * disk, keeping its place in the list. `from` must be a path taken from
+   * folders(): once the directory is gone its old path can no longer be
+   * resolved the same way, so it is not re-normalised here.
+   */
+  bool rename(const std::filesystem::path &from, const std::filesystem::path &to);
+
   /// The folder that owns `path`, if any.
   const Folder *owner_of(const std::filesystem::path &path) const;
 

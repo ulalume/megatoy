@@ -58,6 +58,10 @@ public:
   // File deletion is opt-in so read-only and non-filesystem storages refuse it.
   virtual bool can_delete_patch(const PatchEntry &) const { return false; }
   virtual bool delete_patch(const PatchEntry &) { return false; }
+
+  // Separate from deleting: a directory can be renamed but not deleted, since
+  // deleting one would take everything inside it.
+  virtual bool can_rename_patch(const PatchEntry &) const { return false; }
   virtual bool rename_patch(const PatchEntry &, const std::string &) {
     return false;
   }
