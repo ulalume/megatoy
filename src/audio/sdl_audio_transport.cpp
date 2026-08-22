@@ -1,5 +1,6 @@
 #include "audio/sdl_audio_transport.hpp"
 #include <algorithm>
+#include <string>
 #include <cstdint>
 #include <iostream>
 
@@ -47,7 +48,10 @@ bool SdlAudioTransport::start(std::uint32_t sample_rate,
   // from ~58 ms to ~30 ms at 44.1 kHz. Plain SetHint keeps NORMAL priority,
   // so the SDL_AUDIO_DEVICE_SAMPLE_FRAMES environment variable still
   // overrides it for tuning.
-  SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "384");
+  SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES,
+              std::to_string(buffer_frames_ > 0 ? buffer_frames_
+                                                : kDefaultBufferFrames)
+                  .c_str());
 
   SDL_AudioSpec desired{};
   desired.freq = static_cast<int>(effective_sample_rate);

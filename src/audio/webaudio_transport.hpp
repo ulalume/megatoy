@@ -7,12 +7,17 @@
 
 class WebAudioTransport : public AudioTransport {
 public:
+  /// Frames the device ends up with when the preference is left at 0. SDL's
+  /// Emscripten backend doubles what it is asked for, so the request is half.
+  static constexpr int kDefaultBufferFrames = 1024;
+
   WebAudioTransport();
   ~WebAudioTransport() override;
 
   bool start(std::uint32_t sample_rate, RenderCallback callback) override;
   void stop() override;
   bool is_active() const override { return initialized_; }
+  void set_buffer_frames(int frames) override { buffer_frames_ = frames; }
 
 private:
   static void SDLCALL stream_callback(void *userdata, SDL_AudioStream *stream,
@@ -28,4 +33,5 @@ private:
   bool initialized_;
   std::uint32_t frame_size_;
   std::uint32_t sample_rate_;
+  int buffer_frames_ = 0;
 };

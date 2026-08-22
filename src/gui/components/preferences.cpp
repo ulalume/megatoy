@@ -434,6 +434,28 @@ void render_sound_tab(PreferencesContext &context) {
 
   ImGui::Spacing();
 
+  // Listed as the frames the device ends up with. The web backend is asked
+  // for half of it, because it doubles whatever it is given.
+  static constexpr int kBufferChoices[] = {0, 256, 384, 512, 1024, 2048};
+  static constexpr const char *kBufferLabels[] = {
+      "Default",   "256 frames",  "384 frames",
+      "512 frames", "1024 frames", "2048 frames"};
+  int buffer_index = 0;
+  for (int i = 0; i < static_cast<int>(std::size(kBufferChoices)); ++i) {
+    if (kBufferChoices[i] == ui_prefs.audio_buffer_frames) {
+      buffer_index = i;
+      break;
+    }
+  }
+  if (ImGui::Combo("Buffer size", &buffer_index, kBufferLabels,
+                   static_cast<int>(std::size(kBufferLabels)))) {
+    ui_prefs.audio_buffer_frames = kBufferChoices[buffer_index];
+  }
+  ImGui::TextWrapped("Smaller is less latency and less room to absorb a "
+                     "stall. Takes effect on the next launch.");
+
+  ImGui::Spacing();
+
   // Not a MIDI setting, though it used to be filed as one: this is the
   // channel allocator, and it runs the same whichever keyboard the notes
   // came from.

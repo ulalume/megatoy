@@ -28,7 +28,7 @@ public:
    * @param sample_rate Target sample rate
    * @return true on success, false on failure
    */
-  bool initialize(uint32_t sample_rate);
+  bool initialize(uint32_t sample_rate, int buffer_frames = 0);
 
   /**
    * Shutdown and cleanup complete audio system

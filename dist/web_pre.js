@@ -71,12 +71,14 @@ Module["preRun"].push(function () {
   }
 
   try {
-    // autoPersist is the baseline for incidental writes. User-visible save,
-    // import, and patch-delete paths also request an explicit debounced flush
-    // so a reload immediately after the operation cannot outrun persistence.
-    // Deleting a whole folder is slow enough that a debounce is not sufficient
-    // -- that path awaits its own flush (see web_folder_delete.cpp).
-    FS.mount(IDBFS, { autoPersist: true }, root);
+    // Every write path requests an explicit debounced flush, and deleting a
+    // whole folder awaits its own (see web_folder_delete.cpp). autoPersist is
+    // deliberately off: it schedules a syncfs of its own that knows nothing
+    // about those, so the two ran alongside each other -- which is where the
+    // "N FS.syncfs operations in flight" warnings came from. The explicit
+    // flush is the one to keep, because only it reports completion back to
+    // the app, and that is what retires a pending deletion.
+    FS.mount(IDBFS, {}, root);
   } catch (e) {
     Module.__megatoyStorageLoadFailed = true;
     console.error(

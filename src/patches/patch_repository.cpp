@@ -308,6 +308,9 @@ bool PatchRepository::save_patch_metadata(const std::string &relative_path,
                                           const PatchMetadata &metadata) {
   for (const auto &storage : storages_) {
     if (storage->save_patch_metadata(relative_path, patch, metadata)) {
+#if defined(MEGATOY_PLATFORM_WEB)
+      platform::web::request_storage_persist();
+#endif
       return true;
     }
   }
@@ -318,6 +321,12 @@ bool PatchRepository::update_patch_metadata(const std::string &relative_path,
                                             const PatchMetadata &metadata) {
   for (const auto &storage : storages_) {
     if (storage->update_patch_metadata(relative_path, metadata)) {
+#if defined(MEGATOY_PLATFORM_WEB)
+      // Stars and categories write a sidecar like any other file, and until
+      // this was here nothing asked for them to be flushed -- IDBFS's
+      // autoPersist happened to catch them.
+      platform::web::request_storage_persist();
+#endif
       return true;
     }
   }

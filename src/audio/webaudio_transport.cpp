@@ -1,5 +1,6 @@
 #include "audio/webaudio_transport.hpp"
 #include <algorithm>
+#include <string>
 #include <iostream>
 
 namespace {
@@ -35,16 +36,13 @@ bool WebAudioTransport::start(std::uint32_t sample_rate,
     owns_audio_subsystem_ = true;
   }
 
-  // SDL picks 1024 frames for 44.1 kHz and then the Emscripten backend
-  // doubles it, so the browser default is 2048 frames -- 46 ms per callback.
-  // That is twice the desktop buffer, and it sets the rate at which the scope
-  // can possibly update as well as the floor on note latency.
-  //
-  // Asking for 512 lands on 1024 after the doubling, matching desktop.
-  // Going lower is tempting but riskier here than on desktop: Emscripten runs
-  // the audio callback on the main thread, so it competes with rendering and
-  // has less slack, not more.
-  SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "512");
+  // SDL's Emscripten backend doubles whatever it is asked for, so the
+  // request is half the frames the device will end up with. Bigger is safer
+  // here than on desktop: Emscripten runs the audio callback on the main
+  // thread, where it competes with rendering rather than having its own.
+  const int frames = buffer_frames_ > 0 ? buffer_frames_ : kDefaultBufferFrames;
+  SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES,
+              std::to_string(std::max(frames / 2, 64)).c_str());
 
   SDL_AudioSpec desired{};
   desired.freq = static_cast<int>(sample_rate);

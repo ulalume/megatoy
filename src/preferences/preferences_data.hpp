@@ -17,6 +17,12 @@ struct UIPreferences {
   bool show_waveform = true;
   bool show_patch_lab = true;
   int ym2612_chip_type = 0;
+  /**
+   * Frames per audio callback; 0 keeps the platform's default. Smaller means
+   * less latency and less room to absorb a stall. Read when the audio device
+   * opens, so a change lands on the next launch.
+   */
+  int audio_buffer_frames = 0;
   bool use_velocity = true;
   int velocity_sensitivity_depth = 100;
   bool use_pitch_bend = true;
@@ -61,6 +67,7 @@ struct UIPreferences {
            lhs.show_waveform == rhs.show_waveform &&
            lhs.show_patch_lab == rhs.show_patch_lab &&
            lhs.ym2612_chip_type == rhs.ym2612_chip_type &&
+           lhs.audio_buffer_frames == rhs.audio_buffer_frames &&
            lhs.use_velocity == rhs.use_velocity &&
            lhs.velocity_sensitivity_depth == rhs.velocity_sensitivity_depth &&
            lhs.steal_oldest_note_when_full == rhs.steal_oldest_note_when_full &&

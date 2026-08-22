@@ -18,7 +18,7 @@ AudioManager::AudioManager(std::unique_ptr<AudioTransport> transport)
 
 AudioManager::~AudioManager() { shutdown(); }
 
-bool AudioManager::initialize(uint32_t sample_rate) {
+bool AudioManager::initialize(uint32_t sample_rate, int buffer_frames) {
   if (engine_.is_running()) {
     return true;
   }
@@ -26,6 +26,7 @@ bool AudioManager::initialize(uint32_t sample_rate) {
   if (!transport_) {
     transport_ = make_default_transport();
   }
+  transport_->set_buffer_frames(buffer_frames);
 
   if (!engine_.initialize(sample_rate)) {
     std::cerr << "Failed to initialize audio engine\n";

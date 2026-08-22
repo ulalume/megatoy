@@ -92,7 +92,9 @@ void AppServices::initialize_app(AppState &state) {
     patch_session.restore_patch(preference_manager.last_patch_path());
   }
 
-  if (!audio_manager.initialize(SampleRate)) {
+  if (!audio_manager.initialize(
+          SampleRate,
+          preference_manager.ui_preferences().audio_buffer_frames)) {
     megatoy::status::error(
         "Audio device unavailable -- megatoy is running without sound.");
   } else {
