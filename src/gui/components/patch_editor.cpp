@@ -1,6 +1,7 @@
 #include "patch_editor.hpp"
 #include "common.hpp"
 #include "core/status.hpp"
+#include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
@@ -214,17 +215,96 @@ void render_operator_section(PatchEditorContext &context,
   } else {
     ImGui::Columns(1, "operation_columns", false);
   }
-  for (auto i = 0; i < 4; i++) {
-    auto op_index = static_cast<int>(ym2612::all_operator_indices[i]);
 
-    render_operator_editor(context, patch, patch.instrument.operators[op_index],
-                           i, context.envelope_states[i],
-                           space_for_feedbacks[i]);
+  // The four frames share one height so their borders line up; each operator
+  // reports what it needed and the tallest wins the next frame.
+  context.operator_edit.pending_frame_height = 0.0f;
+  for (int slot = 0; slot < 4; slot++) {
+    render_operator_editor(context, patch, slot, context.envelope_states[slot],
+                           space_for_feedbacks[slot]);
 
     ImGui::Spacing();
     ImGui::NextColumn();
   }
+  context.operator_edit.frame_height =
+      context.operator_edit.pending_frame_height;
   ImGui::Columns(1);
+}
+
+OperatorCommandContext make_operator_commands(PatchEditorContext &context,
+                                              ym2612::Patch &patch) {
+  return {patch.instrument, context.operator_edit,
+          [&context](const std::string &label) {
+            if (context.begin_history) {
+              // Empty merge key: two pastes in a row stay two undo steps.
+              context.begin_history(label, {},
+                                    context.session.current_patch());
+            }
+          },
+          [&context]() {
+            if (context.commit_history) {
+              context.commit_history();
+            }
+          }};
+}
+
+/**
+ * Copy, paste and swap while the patch editor has the keyboard.
+ *
+ * Gated on this window rather than handled globally: Ctrl+C in the patch
+ * browser belongs to the browser, and WantTextInput keeps it out of the
+ * search box and every other text field.
+ */
+void handle_operator_shortcuts(PatchEditorContext &context,
+                               ym2612::Patch &patch) {
+  const ImGuiIO &io = ImGui::GetIO();
+  if (io.WantTextInput ||
+      !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+    return;
+  }
+  if (!io.KeyCtrl && !io.KeySuper) {
+    return;
+  }
+
+  auto commands = make_operator_commands(context, patch);
+  if (io.KeyShift) {
+    if (ImGui::IsKeyPressed(ImGuiKey_X, false)) {
+      swap_operators_command(commands);
+    }
+    return;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+    copy_operator_command(commands);
+  } else if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+    paste_operator_command(commands);
+  }
+}
+
+/**
+ * Escape, or a click that landed on nothing, drops the selection.
+ *
+ * Called after the operators are drawn so IsAnyItemHovered() already
+ * accounts for them: a click inside an operator is a click on something.
+ */
+void handle_operator_deselect(PatchEditorContext &context) {
+  auto &selection = context.operator_edit.selection;
+  if (selection.empty()) {
+    return;
+  }
+
+  const ImGuiIO &io = ImGui::GetIO();
+  if (!io.WantTextInput &&
+      ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+      ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    selection.clear();
+    return;
+  }
+
+  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+      ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+      !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive()) {
+    selection.clear();
+  }
 }
 
 } // namespace
@@ -234,6 +314,18 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
                          PatchEditorState &state) {
   auto &patch = context.session.current_patch();
   auto is_modified = context.session.is_modified();
+
+  // The selection belongs to the patch it was made in, so loading another
+  // one -- or undoing a load back to the previous one -- drops it. Patch Lab
+  // results keep it: they replace the contents of the same slot, and the
+  // user is still working on the operators they picked. The clipboard is
+  // deliberately untouched, so an operator can be carried across.
+  const auto &selection_path = context.session.current_patch_selection_path();
+  if (context.operator_edit.selection_patch_path != selection_path) {
+    context.operator_edit.selection_patch_path = selection_path;
+    context.operator_edit.selection.clear();
+    context.operator_edit.baseline.clear();
+  }
 
   if (!context.prefs.show_patch_editor) {
     return;
@@ -259,6 +351,8 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
     render_channel_section(context, patch);
     ImGui::Columns(1);
     render_operator_section(context, patch);
+    handle_operator_deselect(context);
+    handle_operator_shortcuts(context, patch);
   }
 
   ImGui::End();

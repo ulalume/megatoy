@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gui/components/operator_commands.hpp"
 #include "gui/save_export_state.hpp"
 #include "input_state.hpp"
 #include "patches/patch_repository.hpp"
@@ -38,6 +39,8 @@ struct UIState {
     SliderState sustain_rate = SliderState::None;
     SliderState release_rate = SliderState::None;
   } envelope_states[4];
+
+  ui::OperatorEditState operator_edit;
 
   struct ConfirmationState {
     bool show_unsaved_changes_dialog = false;

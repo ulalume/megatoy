@@ -177,6 +177,10 @@ public:
           data.ui_preferences.steal_oldest_note_when_full =
               ui["steal_oldest_note_when_full"].get<bool>();
         }
+        if (ui.contains("multi_operator_edit_absolute")) {
+          data.ui_preferences.multi_operator_edit_absolute =
+              ui["multi_operator_edit_absolute"].get<bool>();
+        }
         if (ui.contains("midi_keyboard_scale")) {
           data.ui_preferences.midi_keyboard_scale =
               ui["midi_keyboard_scale"].get<int>();
@@ -260,6 +264,8 @@ public:
           data.ui_preferences.velocity_sensitivity_depth;
       ui["steal_oldest_note_when_full"] =
           data.ui_preferences.steal_oldest_note_when_full;
+      ui["multi_operator_edit_absolute"] =
+          data.ui_preferences.multi_operator_edit_absolute;
       ui["patch_sort_column"] = data.ui_preferences.patch_sort_column;
       ui["patch_sort_order"] = data.ui_preferences.patch_sort_order;
       ui["midi_keyboard_scale"] = data.ui_preferences.midi_keyboard_scale;

@@ -1,13 +1,17 @@
 #include "operator_editor.hpp"
 #include "envelope_image.hpp"
-#include "formats/ym2612_format_adapter.hpp"
+#include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "patch_editor.hpp"
+#include "ym2612/operator_edit.hpp"
 #include "ym2612/types.hpp"
+#include <algorithm>
 #include <imgui.h>
 #include <string>
 
 namespace ui {
+
 void text_centered(std::string text, float frame_width) {
   ImGui::Dummy(ImVec2(frame_width, ImGui::GetTextLineHeight()));
 
@@ -31,9 +35,210 @@ update_slider_state(UIState::EnvelopeState::SliderState &slider_state) {
   }
 }
 
-void render_envelope(PatchEditorContext &context, ym2612::OperatorSettings &op,
-                     UIState::EnvelopeState &envelope_state,
-                     std::string op_label, std::string key_prefix) {
+namespace {
+
+// Room between an operator's border and its contents.
+constexpr float frame_padding = 6.0f;
+// Keeps neighbouring operators' borders from touching in a columns layout.
+constexpr float frame_gutter = 6.0f;
+
+ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
+  return context.prefs.multi_operator_edit_absolute
+             ? ym2612::MultiEditMode::Absolute
+             : ym2612::MultiEditMode::Relative;
+}
+
+/**
+ * Clicking an operator replaces the selection; shift toggles it.
+ *
+ * Toggling is what lets a mis-picked operator come back out of a
+ * shift-selection, which matters when the selection is what a paste is about
+ * to overwrite.
+ */
+void note_operator_click(OperatorSelection &selection, int slot) {
+  if (ImGui::GetIO().KeyShift) {
+    selection.toggle_extend(slot);
+  } else {
+    selection.select_only(slot);
+  }
+}
+
+/**
+ * Editing a widget keeps a multi-operator selection together and only moves
+ * the lead; editing an operator outside the selection collapses onto it.
+ *
+ * Shift extends here rather than toggling: a shift-drag must not take the
+ * operator under the cursor back out of the selection halfway through.
+ */
+void note_operator_edit(OperatorSelection &selection, int slot) {
+  if (ImGui::GetIO().KeyShift) {
+    selection.extend(slot);
+  } else {
+    selection.touch(slot);
+  }
+}
+
+/**
+ * Border colour by state. Unselected is the same near-black line the Patch
+ * Lab results panel is drawn with; hover only shows on unselected operators,
+ * where it is advertising that the frame can be clicked at all.
+ */
+ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
+  if (is_primary) {
+    return ImGui::GetColorU32(
+        styles::color(styles::MegatoyCol::TextHighlight));
+  }
+  if (selected) {
+    return ImGui::GetColorU32(ImGuiCol_Separator);
+  }
+  if (hovered) {
+    return ImGui::GetColorU32(ImGuiCol_SeparatorHovered);
+  }
+  return ImGui::GetColorU32(ImGuiCol_Border);
+}
+
+struct FieldLabels {
+  const char *name;
+  // Kept identical to the keys the editor has always used, so a drag started
+  // before this change and one started after still merge into one undo step.
+  const char *key;
+};
+
+FieldLabels field_labels(ym2612::OperatorField field) {
+  switch (field) {
+  case ym2612::OperatorField::TotalLevel:
+    return {"Total Level", "total_level"};
+  case ym2612::OperatorField::AttackRate:
+    return {"Attack Rate", "attack_rate"};
+  case ym2612::OperatorField::DecayRate:
+    return {"Decay Rate", "decay_rate"};
+  case ym2612::OperatorField::SustainLevel:
+    return {"Sustain Level", "sustain_level"};
+  case ym2612::OperatorField::SustainRate:
+    return {"Sustain Rate", "sustain_rate"};
+  case ym2612::OperatorField::ReleaseRate:
+    return {"Release Rate", "release_rate"};
+  case ym2612::OperatorField::KeyScale:
+    return {"Key Scale", "key_scale"};
+  case ym2612::OperatorField::Multiple:
+    return {"Multiple", "multiple"};
+  case ym2612::OperatorField::Detune:
+    return {"Detune", "detune"};
+  case ym2612::OperatorField::SsgType:
+    return {"SSG EG Type", "ssg_type"};
+  }
+  return {"", ""};
+}
+
+std::string history_key(int slot, const char *suffix) {
+  return "instrument.op" + std::to_string(slot) + "." + suffix;
+}
+
+/// "OP1 Total Level", or "OP1, OP3 Total Level" while several are selected,
+/// so the Edit menu's "Undo ..." says how far the change reached.
+std::string history_label(const OperatorSelection &selection, int slot,
+                          const char *name) {
+  const std::string who = selection.contains(slot) && selection.count() > 1
+                              ? operator_selection_label(selection)
+                              : operator_slot_label(slot);
+  return who + " " + name;
+}
+
+struct OperatorWidget {
+  PatchEditorContext &editor;
+  ym2612::ChannelInstrument &instrument;
+  int slot;
+};
+
+/**
+ * One operator parameter, wired to the selection, to relative spreading and
+ * to the undo history in a single place. Ten near-identical slider blocks
+ * used to repeat all three by hand.
+ *
+ * `vertical_size` picks a VSliderInt over a SliderInt, and those are the
+ * ones with hidden labels, so they are also the ones that get a tooltip.
+ */
+void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
+                     const char *id, const ImVec2 *vertical_size,
+                     const char *value_format,
+                     UIState::EnvelopeState::SliderState *slider_state) {
+  auto &state = widget.editor.operator_edit;
+  auto &op = ym2612::operator_at(widget.instrument, widget.slot);
+  const auto range = ym2612::operator_field_range(field);
+  const auto labels = field_labels(field);
+
+  int value = ym2612::read_operator_field(op, field);
+  const bool changed =
+      vertical_size
+          ? ImGui::VSliderInt(id, *vertical_size, &value, range.max, range.min)
+          : ImGui::SliderInt(id, &value, range.min, range.max, value_format);
+  if (slider_state) {
+    update_slider_state(*slider_state);
+  }
+
+  // Order matters on the frame a drag starts. The selection has to settle
+  // before the baseline is captured, and the baseline has to be read before
+  // the new value is written -- otherwise the primary operator's own
+  // starting point is already gone and its delta comes out as zero.
+  if (ImGui::IsItemActivated()) {
+    note_operator_edit(state.selection, widget.slot);
+    ym2612::capture_operator_baseline(state.baseline, widget.instrument, field,
+                                      widget.slot);
+  }
+
+  track_patch_history(widget.editor,
+                      history_label(state.selection, widget.slot, labels.name),
+                      history_key(widget.slot, labels.key));
+
+  if (changed) {
+    ym2612::apply_operator_field_edit(
+        widget.instrument, state.selection.selected, state.baseline, field,
+        value, multi_edit_mode(widget.editor));
+  }
+  if (ImGui::IsItemDeactivated()) {
+    state.baseline.clear();
+  }
+
+  if (vertical_size && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%s", labels.name);
+  }
+}
+
+/**
+ * A per-operator flag. Booleans have no meaningful delta, so a spread one is
+ * absolute in both edit modes.
+ *
+ * `spread` is off for the operator's own enable flag: that one is a mute set
+ * up to audition part of a patch, and dragging three others along with it
+ * would undo the thing the user just arranged.
+ */
+void operator_checkbox(OperatorWidget &widget, const char *id,
+                       const char *name, const char *key,
+                       bool ym2612::OperatorSettings::*flag, bool spread) {
+  auto &state = widget.editor.operator_edit;
+  auto &op = ym2612::operator_at(widget.instrument, widget.slot);
+
+  bool value = op.*flag;
+  const bool changed = ImGui::Checkbox(id, &value);
+  if (ImGui::IsItemActivated()) {
+    note_operator_edit(state.selection, widget.slot);
+  }
+  track_patch_history(widget.editor,
+                      history_label(state.selection, widget.slot, name),
+                      history_key(widget.slot, key));
+  if (changed) {
+    if (spread) {
+      ym2612::apply_operator_flag_edit(widget.instrument,
+                                       state.selection.selected, flag, value);
+    } else {
+      op.*flag = value;
+    }
+  }
+}
+
+void render_envelope(OperatorWidget &widget,
+                     UIState::EnvelopeState &envelope_state) {
+  const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
 
   ImGui::BeginGroup(); // ADSR Envelope group
   render_envelope_image(op, envelope_state, image_size);
@@ -52,116 +257,44 @@ void render_envelope(PatchEditorContext &context, ym2612::OperatorSettings &op,
   text_centered("RR", vslider_width);
   ImGui::EndGroup();
 
-  // Attack Rate (0-31)
   ImGui::BeginGroup();
-
-  // Total Level (0-127)
-  int total_level = op.total_level;
-  bool total_changed =
-      ImGui::VSliderInt("##Total Level", vslider_size, &total_level, 127, 0);
-  update_slider_state(envelope_state.total_level);
-  track_patch_history(context, op_label + " Total Level",
-                      key_prefix + ".total_level");
-  if (total_changed) {
-    op.total_level = static_cast<uint8_t>(total_level);
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Total Level");
-  }
-
+  operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
+                  &vslider_size, nullptr, &envelope_state.total_level);
   ImGui::SameLine();
-
-  int attack_rate = op.attack_rate;
-  bool attack_changed =
-      ImGui::VSliderInt("##Attack Rate", vslider_size, &attack_rate, 31, 0);
-  update_slider_state(envelope_state.attack_rate);
-  track_patch_history(context, op_label + " Attack Rate",
-                      key_prefix + ".attack_rate");
-  if (attack_changed) {
-    op.attack_rate = static_cast<uint8_t>(attack_rate);
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Attack Rate");
-  }
+  operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
+                  &vslider_size, nullptr, &envelope_state.attack_rate);
   ImGui::SameLine();
-
-  // Decay Rate (0-31)
-  int decay_rate = op.decay_rate;
-  bool decay_changed =
-      ImGui::VSliderInt("##Decay Rate", vslider_size, &decay_rate, 31, 0);
-  update_slider_state(envelope_state.decay_rate);
-  track_patch_history(context, op_label + " Decay Rate",
-                      key_prefix + ".decay_rate");
-  if (decay_changed) {
-    op.decay_rate = static_cast<uint8_t>(decay_rate);
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Decay Rate");
-  }
+  operator_slider(widget, ym2612::OperatorField::DecayRate, "##Decay Rate",
+                  &vslider_size, nullptr, &envelope_state.decay_rate);
   ImGui::SameLine();
-
-  // Sustain Level (0-15)
-  int sustain_level = op.sustain_level;
-  bool sustain_level_changed =
-      ImGui::VSliderInt("##Sustain Level", vslider_size, &sustain_level, 15, 0);
-  update_slider_state(envelope_state.sustain_level);
-  track_patch_history(context, op_label + " Sustain Level",
-                      key_prefix + ".sustain_level");
-  if (sustain_level_changed) {
-    op.sustain_level = static_cast<uint8_t>(sustain_level);
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Sustain Level");
-  };
+  operator_slider(widget, ym2612::OperatorField::SustainLevel,
+                  "##Sustain Level", &vslider_size, nullptr,
+                  &envelope_state.sustain_level);
   ImGui::SameLine();
-
-  // Sustain Rate (0-31)
-  int sustain_rate = op.sustain_rate;
-  bool sustain_rate_changed =
-      ImGui::VSliderInt("##Sustain Rate", vslider_size, &sustain_rate, 31, 0);
-  update_slider_state(envelope_state.sustain_rate);
-  track_patch_history(context, op_label + " Sustain Rate",
-                      key_prefix + ".sustain_rate");
-  if (sustain_rate_changed) {
-    op.sustain_rate = static_cast<uint8_t>(sustain_rate);
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Sustain Rate");
-  }
+  operator_slider(widget, ym2612::OperatorField::SustainRate, "##Sustain Rate",
+                  &vslider_size, nullptr, &envelope_state.sustain_rate);
   ImGui::SameLine();
-
-  // Release Rate (0-15)
-  int release_rate = op.release_rate;
-  bool release_changed =
-      ImGui::VSliderInt("##Release Rate", vslider_size, &release_rate, 15, 0);
-  update_slider_state(envelope_state.release_rate);
-  track_patch_history(context, op_label + " Release Rate",
-                      key_prefix + ".release_rate");
-  if (release_changed) {
-    op.release_rate = static_cast<uint8_t>(release_rate);
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Release Rate");
-  }
+  operator_slider(widget, ym2612::OperatorField::ReleaseRate, "##Release Rate",
+                  &vslider_size, nullptr, &envelope_state.release_rate);
   ImGui::EndGroup();
 
   ImGui::EndGroup(); // End ADSR Envelope group
 }
 
-// Helper function to render operator settings
-void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
-                            ym2612::OperatorSettings &op, int op_index,
-                            UIState::EnvelopeState &envelope_state,
-                            bool space_for_feedback) {
-  const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
+void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
+                              int slot, UIState::EnvelopeState &envelope_state,
+                              bool space_for_feedback) {
+  auto &state = context.operator_edit;
+  auto &instrument = patch.instrument;
+  auto &op = ym2612::operator_at(instrument, slot);
+  OperatorWidget widget{context, instrument, slot};
 
-  ym2612::OperatorIndex op_enum = ym2612::all_operator_indices[op_index];
-  auto is_modulator =
-      static_cast<int>(op_enum) <
-      ym2612::algorithm_modulator_count[patch.instrument.algorithm];
-  std::string op_label =
-      "OP" + std::to_string(op_index + 1) + (is_modulator ? "" : " (Carrier)");
-  std::string key_prefix = "instrument.op" + std::to_string(op_index);
+  const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
+  const bool is_modulator =
+      ym2612::operator_register_index(slot) <
+      ym2612::algorithm_modulator_count[instrument.algorithm];
+  const std::string op_label =
+      operator_slot_label(slot) + (is_modulator ? "" : " (Carrier)");
 
   if (!is_modulator) {
     ImGui::PushStyleColor(ImGuiCol_Text,
@@ -173,12 +306,8 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::SeparatorText(op_label.c_str());
   ImGui::SetCursorPosY(pos.y);
 
-  ImGui::PushID(op_index);
-  bool operator_enable = op.enable;
-  if (ImGui::Checkbox("##Operator Enable", &operator_enable)) {
-    op.enable = operator_enable;
-  }
-  track_patch_history(context, op_label + " Enable", key_prefix + ".op_enable");
+  operator_checkbox(widget, "##Operator Enable", "Enable", "op_enable",
+                    &ym2612::OperatorSettings::enable, false);
 
   if (!is_modulator) {
     ImGui::PopStyleColor();
@@ -190,29 +319,31 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
   ImGui::PushItemWidth(hslider_width);
 
-  if (op_index == 0) {
-    // Feedback (0-7)
-    int feedback = patch.instrument.feedback;
-    bool feedback_changed = ImGui::SliderInt("Feedback", &feedback, 0, 7);
-    track_patch_history(context, "Operator 1 Feedback", "instrument.feedback");
+  if (slot == 0) {
+    // Feedback belongs to the channel, not to an operator -- there is one of
+    // it, and OP1's panel is only where it is drawn. So it spreads nowhere,
+    // but it still leads: editing it makes OP1 the primary operator.
+    int feedback = instrument.feedback;
+    const bool feedback_changed = ImGui::SliderInt("Feedback", &feedback, 0, 7);
+    if (ImGui::IsItemActivated()) {
+      note_operator_edit(state.selection, 0);
+    }
+    track_patch_history(context, "OP1 Feedback", "instrument.feedback");
     if (feedback_changed) {
-      patch.instrument.feedback = static_cast<uint8_t>(feedback);
+      instrument.feedback = static_cast<uint8_t>(feedback);
     }
   } else if (space_for_feedback) {
-    ImVec2 pos = ImGui::GetCursorPos();
-    ImGui::SetCursorPosY(pos.y + 20);
+    ImVec2 feedback_gap = ImGui::GetCursorPos();
+    ImGui::SetCursorPosY(feedback_gap.y + 20);
   }
 
-  // Amplitude Modulation Enable
-  bool amplitude_mod = op.amplitude_modulation_enable;
-  if (ImGui::Checkbox("Amplitude Modulation Enable", &amplitude_mod)) {
-    op.amplitude_modulation_enable = amplitude_mod;
-  }
-  track_patch_history(context, op_label + " Amplitude Modulation",
-                      key_prefix + ".am_enable");
+  operator_checkbox(widget, "Amplitude Modulation Enable",
+                    "Amplitude Modulation", "am_enable",
+                    &ym2612::OperatorSettings::amplitude_modulation_enable,
+                    true);
   ImGui::Spacing();
 
-  render_envelope(context, op, envelope_state, op_label, key_prefix);
+  render_envelope(widget, envelope_state);
 
   if (column_layout) {
     ImGui::SameLine();
@@ -223,10 +354,8 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::Spacing();
   }
 
-  // SSG Enable
-  //
   // SSG Type Envelope Control (0-7)
-  int ssg_type = op.ssg_type_envelope_control;
+  const int ssg_type = op.ssg_type_envelope_control;
   if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
                                           : get_ssg_preview_off_texture()) {
     if (preview->valid()) {
@@ -235,68 +364,41 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
   ImGui::SameLine();
 
-  bool ssg_enable = op.ssg_enable;
-  if (ImGui::Checkbox("SSG EG Enable", &ssg_enable)) {
-    op.ssg_enable = ssg_enable;
-  }
-  track_patch_history(context, op_label + " SSG EG Enable",
-                      key_prefix + ".ssg_enable");
+  operator_checkbox(widget, "SSG EG Enable", "SSG EG Enable", "ssg_enable",
+                    &ym2612::OperatorSettings::ssg_enable, true);
 
+  const bool ssg_enable = op.ssg_enable;
   if (!ssg_enable) {
     ImGui::BeginDisabled();
   }
-
-  bool ssg_type_changed = ImGui::SliderInt("SSG EG Type", &ssg_type, 0, 7);
-  track_patch_history(context, op_label + " SSG EG Type",
-                      key_prefix + ".ssg_type");
-  if (ssg_type_changed) {
-    op.ssg_type_envelope_control = static_cast<uint8_t>(ssg_type);
-  }
+  operator_slider(widget, ym2612::OperatorField::SsgType, "SSG EG Type",
+                  nullptr, nullptr, nullptr);
   if (!ssg_enable) {
     ImGui::EndDisabled();
   }
 
   if (column_layout) {
-    ImVec2 pos = ImGui::GetCursorPos();
-    ImGui::SetCursorPosY(pos.y + 123);
+    ImVec2 ssg_gap = ImGui::GetCursorPos();
+    ImGui::SetCursorPosY(ssg_gap.y + 123);
   } else {
     ImGui::Spacing();
   }
 
-  // Key Scale (0-3)
-  int key_scale = op.key_scale;
-  bool key_scale_changed = ImGui::SliderInt("Key Scale", &key_scale, 0, 3);
-  track_patch_history(context, op_label + " Key Scale",
-                      key_prefix + ".key_scale");
-  if (key_scale_changed) {
-    op.key_scale = static_cast<uint8_t>(key_scale);
-  }
+  operator_slider(widget, ym2612::OperatorField::KeyScale, "Key Scale", nullptr,
+                  nullptr, nullptr);
 
-  // Multiple (0-15)
-  const char *multiple_labels[] = {"0.5", "1",  "2",  "3", "4",  "5",
-                                   "6",   "7",  "8",  "9", "10", "11",
-                                   "12",  "13", "14", "15"};
-  int multiple = op.multiple;
-  bool multiple_changed =
-      ImGui::SliderInt("Multiple", &multiple, 0, 15, multiple_labels[multiple]);
-  track_patch_history(context, op_label + " Multiple",
-                      key_prefix + ".multiple");
-  if (multiple_changed) {
-    op.multiple = static_cast<uint8_t>(multiple);
-  }
+  static const char *multiple_labels[] = {"0.5", "1",  "2",  "3", "4",  "5",
+                                          "6",   "7",  "8",  "9", "10", "11",
+                                          "12",  "13", "14", "15"};
+  operator_slider(widget, ym2612::OperatorField::Multiple, "Multiple", nullptr,
+                  multiple_labels[op.multiple], nullptr);
 
-  // Detune (0-7)
-  const char *detune_labels[] = {
-      "-3", "-2", "-1", "0", "1", "2", "3",
-  };
-  int detune = formats::adapter::detune_to_linear(op.detune);
-  bool detune_changed =
-      ImGui::SliderInt("Detune", &detune, 0, 6, detune_labels[detune]);
-  track_patch_history(context, op_label + " Detune", key_prefix + ".detune");
-  if (detune_changed) {
-    op.detune =
-        static_cast<uint8_t>(formats::adapter::detune_from_linear(detune));
-  }
+  static const char *detune_labels[] = {"-3", "-2", "-1", "0", "1", "2", "3"};
+  operator_slider(
+      widget, ym2612::OperatorField::Detune, "Detune", nullptr,
+      detune_labels[ym2612::read_operator_field(
+          op, ym2612::OperatorField::Detune)],
+      nullptr);
 
   if (column_layout) {
     ImGui::EndGroup();
@@ -306,6 +408,90 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   if (!op.enable) {
     ImGui::EndDisabled();
   }
+}
+
+} // namespace
+
+void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
+                            int slot, UIState::EnvelopeState &envelope_state,
+                            bool space_for_feedback) {
+  auto &state = context.operator_edit;
+
+  ImGui::PushID(slot);
+
+  const ImVec2 frame_min = ImGui::GetCursorScreenPos();
+  const float frame_width =
+      std::max(ImGui::GetColumnWidth() - frame_gutter, 1.0f);
+
+  ImGui::SetCursorScreenPos(
+      ImVec2(frame_min.x + frame_padding, frame_min.y + frame_padding));
+  ImGui::BeginGroup();
+  render_operator_contents(context, patch, slot, envelope_state,
+                           space_for_feedback);
+  ImGui::EndGroup();
+
+  const float content_height =
+      ImGui::GetItemRectMax().y - frame_min.y + frame_padding;
+  state.pending_frame_height =
+      std::max(state.pending_frame_height, content_height);
+  // Every operator is drawn to the tallest one's height so the four borders
+  // line up. That height comes from the previous frame; measuring and
+  // applying it in the same one would mean laying the section out twice.
+  const float frame_height = std::max(content_height, state.frame_height);
+  const ImVec2 frame_max(frame_min.x + frame_width,
+                         frame_min.y + frame_height);
+  // Claim the full frame so the columns row and the window's scroll extent
+  // account for the padding and for any height borrowed from a taller
+  // neighbour.
+  ImGui::SetCursorScreenPos(ImVec2(frame_min.x, frame_max.y));
+
+  // Hit testing by rectangle rather than by an invisible button underneath:
+  // a button large enough to cover the operator would have to yield the
+  // hover to every widget drawn on top of it, and IsAnyItemHovered already
+  // says exactly that. Items submitted so far this frame are the ones that
+  // could be under the cursor here, since the others are in other columns.
+  const bool window_hovered =
+      ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+  const bool frame_hovered =
+      window_hovered && ImGui::IsMouseHoveringRect(frame_min, frame_max);
+  const bool background_hovered =
+      frame_hovered && !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive();
+
+  if (background_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    note_operator_click(state.selection, slot);
+  }
+
+  // Right-click opens the operator's menu wherever it lands inside the
+  // frame, including on top of a slider, which has no use for the button.
+  if (frame_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    if (!state.selection.contains(slot)) {
+      state.selection.select_only(slot);
+    }
+    ImGui::OpenPopup("##operator_menu");
+  }
+  if (ImGui::BeginPopup("##operator_menu")) {
+    OperatorCommandContext commands{
+        patch.instrument, state,
+        [&context](const std::string &label) {
+          if (context.begin_history) {
+            context.begin_history(label, {}, context.session.current_patch());
+          }
+        },
+        [&context]() {
+          if (context.commit_history) {
+            context.commit_history();
+          }
+        }};
+    render_operator_command_items(commands);
+    ImGui::EndPopup();
+  }
+
+  ImGui::GetWindowDrawList()->AddRect(
+      frame_min, frame_max,
+      operator_frame_color(state.selection.contains(slot),
+                           state.selection.primary == slot,
+                           background_hovered),
+      ImGui::GetStyle().FrameRounding);
 
   ImGui::PopID();
 }

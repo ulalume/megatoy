@@ -420,6 +420,21 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
       }
     }
 
+    ImGui::SeparatorText("Patch Editor");
+
+    static constexpr const char *multi_edit_modes[] = {
+        "Relative (keep the distance between operators)",
+        "Absolute (set every selected operator to the same value)"};
+    int multi_edit_mode = ui_prefs.multi_operator_edit_absolute ? 1 : 0;
+    if (ImGui::Combo("Multi-operator edit", &multi_edit_mode, multi_edit_modes,
+                     static_cast<int>(std::size(multi_edit_modes)))) {
+      ui_prefs.multi_operator_edit_absolute = multi_edit_mode == 1;
+    }
+    ImGui::TextWrapped(
+        "Applies while several operators are selected. Checkboxes and the SSG "
+        "envelope type are always absolute -- neither has a meaningful "
+        "difference to carry.");
+
     ImGui::SeparatorText("Audio");
 
     static constexpr const char *chip_types[] = {

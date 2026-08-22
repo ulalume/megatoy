@@ -81,6 +81,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/main_menu.cpp
   src/gui/components/midi_keyboard.cpp
   src/gui/components/mml_console.cpp
+  src/gui/components/operator_commands.cpp
   src/gui/components/operator_editor.cpp
   src/gui/components/operator_selection.cpp
   src/gui/components/patch_drop.cpp
