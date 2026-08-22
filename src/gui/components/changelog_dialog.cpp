@@ -62,7 +62,8 @@ void render_changelog_dialog() {
   ImGui::EndChild();
 
   ImGui::Separator();
-  if (ImGui::Button("Close", ImVec2(120.0f, 0.0f))) {
+  align_buttons_right({kDialogButtonWidth});
+  if (ImGui::Button("Close", ImVec2(kDialogButtonWidth, 0.0f))) {
     ImGui::CloseCurrentPopup();
   }
 

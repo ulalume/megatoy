@@ -70,7 +70,8 @@ void render_folder_scan_dialog() {
     // fills: a negative fraction is ImGui's indeterminate mode.
     ImGui::ProgressBar(static_cast<float>(-ImGui::GetTime()), ImVec2(360, 0));
     ImGui::Spacing();
-    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+    align_buttons_right({kDialogButtonWidth});
+    if (ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0))) {
       scan::request_cancel();
     }
     end_modal();

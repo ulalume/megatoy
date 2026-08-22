@@ -155,7 +155,9 @@ void render_save_export_popups(patches::PatchSession &session,
     ImGui::Text("Do you want to overwrite it?");
     ImGui::Spacing();
 
-    const bool cancel_button = ImGui::Button("Cancel", ImVec2(120, 0));
+    align_buttons_right({kDialogButtonWidth, kDialogButtonWidth});
+    const bool cancel_button =
+        ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0));
     if (cancel_button) {
       state.pending_save_as_extension.reset();
       state.pending_save_as_stem.reset();
@@ -163,7 +165,8 @@ void render_save_export_popups(patches::PatchSession &session,
     }
 
     ImGui::SameLine();
-    const bool overwrite_button = ImGui::Button("Overwrite", ImVec2(120, 0));
+    const bool overwrite_button =
+        ImGui::Button("Overwrite", ImVec2(kDialogButtonWidth, 0));
     if (overwrite_button) {
       ImGui::CloseCurrentPopup();
     }

@@ -190,7 +190,8 @@ void render_about_dialog() {
 #endif
 
   ImGui::Separator();
-  if (ImGui::Button("OK", ImVec2(120.0f, 0.0f))) {
+  align_buttons_right({kDialogButtonWidth});
+  if (ImGui::Button("OK", ImVec2(kDialogButtonWidth, 0.0f))) {
     state.reset();
     ImGui::CloseCurrentPopup();
   }

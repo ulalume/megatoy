@@ -2,6 +2,8 @@
 
 #include <imgui.h>
 
+#include <initializer_list>
+
 namespace ui {
 
 /// What closes a modal besides its own buttons.
@@ -24,6 +26,25 @@ inline constexpr ImGuiWindowFlags kModalAutoResize =
 /// For a modal that sets its own size because its contents scroll.
 inline constexpr ImGuiWindowFlags kModalFixedSize =
     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+
+/// What a dialog button gets when its label does not need more.
+inline constexpr float kDialogButtonWidth = 120.0f;
+
+/// The width ImGui will give a button with this label.
+float button_width(const char *label);
+
+/**
+ * Push the cursor right so a row of buttons of these widths finishes flush
+ * with the right edge, in the order they are then drawn.
+ *
+ * Right-aligning inside a window that sizes itself to its contents sounds
+ * circular -- the offset needs the width, the width needs the contents -- but
+ * it settles, because the row is placed to end exactly at the content edge
+ * measured last frame, which leaves the content width unchanged and the
+ * auto-fit with nothing to grow towards. Placing it any further right would
+ * widen the window every frame.
+ */
+void align_buttons_right(std::initializer_list<float> widths);
 
 struct ModalScope {
   /// Draw the contents, then call end_modal().

@@ -51,14 +51,15 @@ void render_patch_drop_feedback(PatchDropContext &context) {
         ImGui::EndCombo();
       }
 
-      if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+      align_buttons_right({kDialogButtonWidth, kDialogButtonWidth});
+      if (ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0))) {
         if (context.cancel_selection) {
           context.cancel_selection();
         }
         ImGui::CloseCurrentPopup();
       }
       ImGui::SameLine();
-      if (ImGui::Button("Load", ImVec2(120, 0))) {
+      if (ImGui::Button("Load", ImVec2(kDialogButtonWidth, 0))) {
         if (context.apply_selection) {
           context.apply_selection(
               static_cast<size_t>(drop.selected_instrument));
@@ -67,7 +68,8 @@ void render_patch_drop_feedback(PatchDropContext &context) {
       }
     } else {
       ImGui::TextUnformatted(kFallbackErrorMessage);
-      if (ImGui::Button("OK", ImVec2(120, 0))) {
+      align_buttons_right({kDialogButtonWidth});
+      if (ImGui::Button("OK", ImVec2(kDialogButtonWidth, 0))) {
         if (context.cancel_selection) {
           context.cancel_selection();
         }

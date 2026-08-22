@@ -1,6 +1,8 @@
 #include "modal.hpp"
 #include "common.hpp"
 
+#include <algorithm>
+
 namespace ui {
 namespace {
 
@@ -61,5 +63,28 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss,
 }
 
 void end_modal() { ImGui::EndPopup(); }
+
+float button_width(const char *label) {
+  return ImGui::CalcTextSize(label, nullptr, true).x +
+         ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+void align_buttons_right(std::initializer_list<float> widths) {
+  if (widths.size() == 0) {
+    return;
+  }
+
+  float total = 0.0f;
+  for (const float width : widths) {
+    total += width;
+  }
+  total += ImGui::GetStyle().ItemSpacing.x *
+           static_cast<float>(widths.size() - 1);
+
+  const float offset = ImGui::GetContentRegionAvail().x - total;
+  if (offset > 0.0f) {
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
+  }
+}
 
 } // namespace ui

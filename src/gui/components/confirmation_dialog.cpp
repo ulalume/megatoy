@@ -2,6 +2,7 @@
 #include "common.hpp"
 #include "modal.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include <algorithm>
 #include <cstring>
 #include <imgui.h>
 
@@ -22,14 +23,18 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     ImGui::TextWrapped("%s", confirmation_state.dialog_message.c_str());
     ImGui::Spacing();
 
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel")) {
+    // "Discard Changes" does not fit the standard width, so the row is
+    // measured rather than assumed.
+    const float cancel_width = button_width("Cancel");
+    const float discard_width = button_width("Discard Changes");
+    align_buttons_right({cancel_width, discard_width});
+    if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
       confirmation_state.show_unsaved_changes_dialog = false;
       ImGui::CloseCurrentPopup();
     }
 
     ImGui::SameLine();
-    if (ImGui::Button("Discard Changes")) {
+    if (ImGui::Button("Discard Changes", ImVec2(discard_width, 0))) {
       // Handle different confirmation types
 
       switch (confirmation_state.operation) {
@@ -86,12 +91,17 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     ImGui::TextWrapped("%s", danger.message.c_str());
     ImGui::Spacing();
 
-    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+    // The confirm label is whatever the caller named the action, so it is
+    // allowed to outgrow the standard width rather than be clipped by it.
+    const float confirm_width = std::max(
+        kDialogButtonWidth, button_width(danger.confirm_label.c_str()));
+    align_buttons_right({kDialogButtonWidth, confirm_width});
+    if (ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0))) {
       cancel_danger = true;
       ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
-    if (ImGui::Button(danger.confirm_label.c_str(), ImVec2(120, 0))) {
+    if (ImGui::Button(danger.confirm_label.c_str(), ImVec2(confirm_width, 0))) {
       confirm_danger = true;
       ImGui::CloseCurrentPopup();
     }
@@ -140,13 +150,17 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     }
     ImGui::Spacing();
 
-    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+    const float prompt_confirm_width = std::max(
+        kDialogButtonWidth, button_width(prompt.confirm_label.c_str()));
+    align_buttons_right({kDialogButtonWidth, prompt_confirm_width});
+    if (ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0))) {
       cancel_prompt = true;
       ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!validation_error.empty());
-    if (ImGui::Button(prompt.confirm_label.c_str(), ImVec2(120, 0))) {
+    if (ImGui::Button(prompt.confirm_label.c_str(),
+                      ImVec2(prompt_confirm_width, 0))) {
       confirm_prompt = true;
       ImGui::CloseCurrentPopup();
     }
