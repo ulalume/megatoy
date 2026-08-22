@@ -85,9 +85,12 @@ void render_status_toasts() {
                       viewport->WorkPos.y + viewport->WorkSize.y - kMargin);
 
   ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-  ImGui::SetNextWindowBgAlpha(0.0f);
+  // NoBackground rather than a transparent background colour: the host is
+  // only a place to stack the toasts in, and a transparent fill still left
+  // the window's own border drawn around the lot of them.
   const ImGuiWindowFlags host_flags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
+      ImGuiWindowFlags_NoMove |
       ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
       ImGuiWindowFlags_NoDocking;

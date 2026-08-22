@@ -1,5 +1,6 @@
 #include "save_export_actions.hpp"
 #include "components/common.hpp"
+#include "components/modal.hpp"
 #include "core/status.hpp"
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
@@ -135,12 +136,14 @@ void render_save_export_popups(patches::PatchSession &session,
 #endif
   }
 
-  center_next_window();
-  if (ImGui::BeginPopupModal("Overwrite Confirmation", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
+  // Escape cancels: overwriting destroys the file that is already there, so
+  // it only happens when it is asked for.
+  auto overwrite = begin_modal("Overwrite Confirmation", ModalDismiss::Escape);
+  if (overwrite.dismissed) {
+    state.pending_save_as_extension.reset();
+    state.pending_save_as_stem.reset();
+  }
+  if (overwrite.visible) {
     ImGui::Text("A patch with this name already exists:");
     const std::string overwrite_stem =
         state.pending_save_as_stem.value_or(save_as_stem_suggestion(session));
@@ -165,7 +168,7 @@ void render_save_export_popups(patches::PatchSession &session,
       ImGui::CloseCurrentPopup();
     }
 
-    ImGui::EndPopup();
+    end_modal();
 
     if (overwrite_button) {
       const auto pending_extension = state.pending_save_as_extension;

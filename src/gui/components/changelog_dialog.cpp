@@ -2,6 +2,7 @@
 
 #include "changelog.hpp"
 #include "common.hpp"
+#include "modal.hpp"
 #include "gui/styles/megatoy_style.hpp"
 
 #include <imgui.h>
@@ -26,12 +27,10 @@ void render_changelog_dialog() {
   // The only dialog long enough to need scrolling, so the only one with a
   // fixed size rather than AlwaysAutoResize.
   ImGui::SetNextWindowSize(ImVec2(460.0f, 420.0f), ImGuiCond_Appearing);
-  center_next_window();
-  if (!ImGui::BeginPopupModal(kTitle, nullptr, ImGuiWindowFlags_NoResize |
-                                                   ImGuiWindowFlags_NoMove)) {
+  if (!begin_modal(kTitle, ModalDismiss::EscapeOrOutsideClick, kModalFixedSize)
+           .visible) {
     return;
   }
-  force_center_window();
 
   const float footer = ImGui::GetFrameHeightWithSpacing() +
                        ImGui::GetStyle().ItemSpacing.y +
@@ -67,7 +66,7 @@ void render_changelog_dialog() {
     ImGui::CloseCurrentPopup();
   }
 
-  ImGui::EndPopup();
+  end_modal();
 }
 
 } // namespace ui

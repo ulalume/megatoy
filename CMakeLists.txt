@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.8.2" CACHE STRING "megatoy application version")
+# Deliberately not a cache entry. As one it outlived the bump meant to replace
+# it: an existing build directory kept stamping the old number into
+# project_info.hpp, which is where the update notice and the change log
+# headings read the version from, so the app announced a version whose entry
+# was not in the log yet. Nothing passes -DMEGATOY_VERSION -- CI configures
+# fresh build directories every time -- so the cache bought nothing and cost
+# that. A plain variable shadows any stale cache entry left over from before.
+set(MEGATOY_VERSION "0.8.2")
 project(megatoy VERSION ${MEGATOY_VERSION})
 
 # Objective-C sources are used for macOS integrations

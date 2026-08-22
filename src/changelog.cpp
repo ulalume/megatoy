@@ -5,22 +5,14 @@
 namespace megatoy {
 namespace {
 
-// Sizes are deduced, so adding or removing a line is one line of editing.
-// Spelling the count out meant every edit had to update it too, and getting
-// it wrong either padded the dialog with blank bullets or failed to build.
-
 constexpr std::string_view kOperatorDetails[] = {
     "Click an operator to select it, shift-click to add more",
-    "Editing one moves every selected operator by the same amount",
     "Copy, paste and swap operators",
 };
 
 constexpr ChangelogItem kItems_0_8_2[] = {
     {"Select operators and edit them together", kOperatorDetails},
     {"Preferences are grouped into tabs", {}},
-    {"This change log, and a notice when megatoy updates", {}},
-    {"Fixed checkbox changes not being undoable", {}},
-    {"Dialogs open centred on the window", {}},
 };
 
 constexpr std::string_view kLibraryDetails[] = {

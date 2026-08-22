@@ -1,5 +1,6 @@
 #include "confirmation_dialog.hpp"
 #include "common.hpp"
+#include "modal.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include <cstring>
 #include <imgui.h>
@@ -9,14 +10,15 @@ namespace ui {
 void render_confirmation_dialog(ConfirmationDialogContext &context) {
   auto &confirmation_state = context.state;
 
-  // Unsaved changes confirmation dialog
-  center_next_window();
-  if (ImGui::BeginPopupModal("Unsaved Changes", nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-
+  // Unsaved changes confirmation dialog. Escape stands in for Cancel; keeping
+  // the changes is the answer that loses nothing.
+  auto unsaved = begin_modal("Unsaved Changes", ModalDismiss::Escape);
+  if (unsaved.dismissed) {
+    // The flag has to go with it: the reopen at the bottom of this function
+    // would otherwise put the dialog straight back up.
+    confirmation_state.show_unsaved_changes_dialog = false;
+  }
+  if (unsaved.visible) {
     ImGui::TextWrapped("%s", confirmation_state.dialog_message.c_str());
     ImGui::Spacing();
 
@@ -57,7 +59,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
       }
     }
 
-    ImGui::EndPopup();
+    end_modal();
   }
 
   // Open the dialog if requested
@@ -73,13 +75,14 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
 
   bool cancel_danger = false;
   bool confirm_danger = false;
-  center_next_window();
-  if (!danger.title.empty() &&
-      ImGui::BeginPopupModal(danger.title.c_str(), nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
+  // Escape cancels. Deleting is the destructive answer, so it is the one that
+  // has to be asked for explicitly.
+  auto danger_modal =
+      danger.title.empty()
+          ? ModalScope{}
+          : begin_modal(danger.title.c_str(), ModalDismiss::Escape);
+  cancel_danger = danger_modal.dismissed;
+  if (danger_modal.visible) {
     ImGui::TextWrapped("%s", danger.message.c_str());
     ImGui::Spacing();
 
@@ -92,7 +95,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
       confirm_danger = true;
       ImGui::CloseCurrentPopup();
     }
-    ImGui::EndPopup();
+    end_modal();
   }
 
   if (cancel_danger) {
@@ -113,14 +116,14 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
 
   bool cancel_prompt = false;
   bool confirm_prompt = false;
-  center_next_window();
-  if (!prompt.title.empty() &&
-      ImGui::BeginPopupModal(prompt.title.c_str(), nullptr,
-                             ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
-
+  // Escape cancels, but only once the text field has let go of it -- see
+  // escape_pressed() in modal.cpp.
+  auto prompt_modal =
+      prompt.title.empty()
+          ? ModalScope{}
+          : begin_modal(prompt.title.c_str(), ModalDismiss::Escape);
+  cancel_prompt = prompt_modal.dismissed;
+  if (prompt_modal.visible) {
     char input[512];
     std::strncpy(input, prompt.buffer.c_str(), sizeof(input) - 1);
     input[sizeof(input) - 1] = '\0';
@@ -148,7 +151,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
       ImGui::CloseCurrentPopup();
     }
     ImGui::EndDisabled();
-    ImGui::EndPopup();
+    end_modal();
   }
 
   if (cancel_prompt) {

@@ -1,5 +1,6 @@
 #include "patch_drop.hpp"
 #include "common.hpp"
+#include "modal.hpp"
 #include <algorithm>
 #include <imgui.h>
 
@@ -19,10 +20,13 @@ void render_patch_drop_feedback(PatchDropContext &context) {
     drop.show_picker_for_multiple_instruments = false;
   }
 
-  center_next_window();
-  if (ImGui::BeginPopupModal(kInstrumentPopupTitle, nullptr,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
-    force_center_window();
+  // Escape cancels: picking nothing means the dropped file is not loaded,
+  // which is what Cancel does.
+  auto picker = begin_modal(kInstrumentPopupTitle, ModalDismiss::Escape);
+  if (picker.dismissed && context.cancel_selection) {
+    context.cancel_selection();
+  }
+  if (picker.visible) {
     if (!drop.instruments.empty()) {
       drop.selected_instrument =
           std::clamp(drop.selected_instrument, 0,
@@ -71,7 +75,7 @@ void render_patch_drop_feedback(PatchDropContext &context) {
       }
     }
 
-    ImGui::EndPopup();
+    end_modal();
   } else if (!drop.instruments.empty() &&
              !ImGui::IsPopupOpen(kInstrumentPopupTitle)) {
     if (context.cancel_selection) {

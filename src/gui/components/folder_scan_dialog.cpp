@@ -3,6 +3,7 @@
 #if !defined(MEGATOY_PLATFORM_WEB)
 
 #include "common.hpp"
+#include "modal.hpp"
 #include "patches/background_folder_scan.hpp"
 
 #include <chrono>
@@ -56,9 +57,10 @@ void render_folder_scan_dialog() {
   if (!ImGui::IsPopupOpen(kScanPopupTitle)) {
     ImGui::OpenPopup(kScanPopupTitle);
   }
-  center_next_window();
-  if (ImGui::BeginPopupModal(kScanPopupTitle, nullptr, kScanPopupFlags)) {
-    force_center_window();
+  // No way out but the button: Cancel stops the scan, and a dismissal that
+  // only hid the dialog would leave it running with nothing to stop it.
+  if (begin_modal(kScanPopupTitle, ModalDismiss::None, kScanPopupFlags)
+          .visible) {
     ImGui::Text("Scanning \"%s\"... %zu files", status.folder_name.c_str(),
                 status.files_seen);
     if (status.containers_parsed > 0) {
@@ -71,7 +73,7 @@ void render_folder_scan_dialog() {
     if (ImGui::Button("Cancel", ImVec2(120, 0))) {
       scan::request_cancel();
     }
-    ImGui::EndPopup();
+    end_modal();
   }
 }
 

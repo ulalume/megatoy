@@ -82,6 +82,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/envelope_image.cpp
   src/gui/input/keyboard_typing.cpp
   src/gui/components/main_menu.cpp
+  src/gui/components/modal.cpp
   src/gui/components/midi_keyboard.cpp
   src/gui/components/mml_console.cpp
   src/gui/components/operator_commands.cpp

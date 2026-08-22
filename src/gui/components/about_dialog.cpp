@@ -2,6 +2,7 @@
 
 #include "changelog_dialog.hpp"
 #include "common.hpp"
+#include "modal.hpp"
 
 #include "gui/styles/megatoy_style.hpp"
 #include "platform/platform_config.hpp"
@@ -144,17 +145,18 @@ void render_about_dialog() {
   auto &state = about_modal_state();
   poll_update_request(state);
   ImGui::SetNextWindowSize(ImVec2(350, -1));
-  center_next_window();
-  if (!ImGui::BeginPopupModal("About megatoy", nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize)) {
+  // Nothing here is a decision, so anything that means "I am done looking"
+  // closes it.
+  auto scope = begin_modal("About megatoy", ModalDismiss::EscapeOrOutsideClick);
+  if (!scope.visible) {
     if (!ImGui::IsPopupOpen("About megatoy")) {
       state.reset();
     }
     return;
   }
-  // The dialog auto-resizes, and the update check grows it after it opened.
-  // Centering once on appearance would leave it drifting down and right.
-  force_center_window();
+  if (scope.dismissed) {
+    state.reset();
+  }
 
   if (ImGui::IsWindowAppearing()) {
     state.reset();
@@ -193,7 +195,7 @@ void render_about_dialog() {
     ImGui::CloseCurrentPopup();
   }
 
-  ImGui::EndPopup();
+  end_modal();
 }
 
 void open_about_dialog() { ImGui::OpenPopup("About megatoy"); }
