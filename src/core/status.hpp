@@ -34,14 +34,9 @@ enum class Severity {
 };
 
 /**
- * An optional button on the toast.
- *
- * `perform` runs on the UI thread when the button is clicked, so it can touch
- * anything the frame can -- opening a dialog, revealing a file. The rest of
- * the toast still dismisses on click.
- *
- * A toast carrying one does not expire on its own: an offer the user never
- * got to read is worse than one that has to be dismissed.
+ * An optional button on the toast. `perform` runs on the UI thread, so it can
+ * open a dialog. The rest of the toast still dismisses on click, and a toast
+ * carrying an action does not expire on its own.
  */
 struct Action {
   std::string label;

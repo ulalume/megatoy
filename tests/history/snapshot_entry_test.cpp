@@ -4,18 +4,13 @@
 #include <iostream>
 #include <string>
 
-// The undo stack drops a step whose before and after are identical. That is
-// the right behaviour -- an edit that changed nothing is not worth a step --
-// but it is also how a mis-ordered commit disappears without a trace: take
-// the "after" snapshot before the widget writes its value and the step comes
-// out empty and is silently thrown away, leaving the change permanently
-// un-undoable. Checkboxes did exactly that, because they write on the same
-// frame they deactivate.
+// The undo stack drops a step whose before and after are identical. Correct
+// on its own terms, and also how a mis-ordered commit vanishes without a
+// trace -- which is what checkboxes used to do.
 
 namespace {
 
-// Never invoked here; undo/redo would need a whole AppContext, and none of
-// what these tests check reaches it.
+// Never invoked; undo/redo would need an AppContext and none of this does.
 history::SnapshotEntry<int>::ApplyFn ignore_apply() {
   return [](AppContext &, const int &) {};
 }
@@ -34,8 +29,7 @@ void test_a_changed_value_produces_an_entry() {
   CHECK(entry->merge_key() == "op0.tl");
 }
 
-// A drag reports many edits; they collapse into the one step the user thinks
-// they made.
+// A drag reports many edits; they collapse into the one the user made.
 void test_entries_sharing_a_merge_key_collapse() {
   auto first = history::make_snapshot_entry<int>("Total Level", "op0.tl", 7, 9,
                                                  ignore_apply());
@@ -54,9 +48,8 @@ void test_entries_with_different_merge_keys_stay_apart() {
   CHECK(!first->try_merge(*second));
 }
 
-// Instantaneous edits -- a checkbox toggle, a paste -- carry no merge key, so
-// two of them in a row stay two undo steps. Toggling on and then off must not
-// collapse into a single step that undoes to nothing.
+// Instant edits carry no merge key: toggling on then off must not collapse
+// into one step that undoes to nothing.
 void test_entries_without_a_merge_key_never_collapse() {
   auto first =
       history::make_snapshot_entry<int>("OP1 Enable", "", 0, 1, ignore_apply());

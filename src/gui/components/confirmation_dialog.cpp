@@ -137,7 +137,10 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     char input[512];
     std::strncpy(input, prompt.buffer.c_str(), sizeof(input) - 1);
     input[sizeof(input) - 1] = '\0';
-    ImGui::SetNextItemWidth(320.0f);
+    // Fills the row, less the label ImGui puts to its right.
+    const float label_width = ImGui::CalcTextSize(prompt.label.c_str()).x;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - label_width -
+                            ImGui::GetStyle().ItemInnerSpacing.x);
     if (ImGui::InputText(prompt.label.c_str(), input, sizeof(input))) {
       prompt.buffer = input;
     }

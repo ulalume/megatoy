@@ -168,9 +168,8 @@ void render_main_menu(MainMenuContext &context) {
 
       ImGui::Separator();
 
-      // The operator commands name their target -- "Copy OP2", "Paste to
-      // OP1, OP3" -- the same way the undo entries above name their change,
-      // which saves the menu a section heading nobody would read twice.
+      // The items name their target the way the undo entries above do, which
+      // saves the menu a section heading.
       OperatorCommandContext operator_commands{
           session.current_patch().instrument, context.operator_edit,
           context.begin_patch_history, context.commit_patch_history};

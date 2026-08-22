@@ -49,8 +49,7 @@ ImVec4 severity_color(Severity severity) {
 }
 
 bool sticky(const megatoy::status::Entry &entry) {
-  // A toast offering an action waits to be answered. Four seconds is long
-  // enough to notice a result and too short to read an offer and act on it.
+  // Four seconds is enough to notice a result, not to act on an offer.
   return entry.severity == Severity::Warning ||
          entry.severity == Severity::Error || entry.action.valid();
 }
@@ -85,9 +84,8 @@ void render_status_toasts() {
                       viewport->WorkPos.y + viewport->WorkSize.y - kMargin);
 
   ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-  // NoBackground rather than a transparent background colour: the host is
-  // only a place to stack the toasts in, and a transparent fill still left
-  // the window's own border drawn around the lot of them.
+  // NoBackground, not a transparent fill: the fill alone still left the
+  // host's own border drawn around the stack.
   const ImGuiWindowFlags host_flags =
       ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
       ImGuiWindowFlags_NoMove |
@@ -99,8 +97,7 @@ void render_status_toasts() {
     return;
   }
 
-  // Run after the loop: the action may post its own toast, and mutating the
-  // list mid-iteration would drop one.
+  // After the loop: an action may post its own toast.
   std::function<void()> action_to_perform;
 
   // Oldest at the top, newest nearest the corner.

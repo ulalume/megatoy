@@ -6,12 +6,9 @@
 #include <iostream>
 #include <set>
 
-// The patch editor draws operators as OP1..OP4 left to right, but the chip
-// stores them in a different order. Nothing tested that the two agree, and
-// every feature that addresses an operator by name -- copy, paste, swap,
-// multi-operator editing -- depends on it. These tests pin the mapping down
-// so a refactor that confuses the two index spaces fails here rather than in
-// somebody's patch.
+// The editor draws operators as OP1..OP4 left to right; the chip stores them
+// in another order. Everything that addresses an operator by name depends on
+// the two agreeing, so the mapping is pinned here.
 
 namespace {
 
@@ -38,9 +35,8 @@ void test_the_mapping_is_a_bijection() {
   CHECK(seen.size() == 4);
 }
 
-// A modulator feeds another operator; a carrier reaches the output. The
-// split is positional in register order, which is why the editor classifies
-// with the register index and not the display slot.
+// The modulator/carrier split is positional in register order, which is why
+// the editor classifies with the register index and not the display slot.
 bool slot_is_carrier(int slot, uint8_t algorithm) {
   return register_index_of_slot(slot) >=
          ym2612::algorithm_modulator_count[algorithm];
@@ -72,8 +68,8 @@ void test_carrier_count_matches_the_modulator_table() {
   }
 }
 
-// Velocity scaling attenuates carriers only. Multi-operator editing writes
-// the same total_level field, so this pins the one other writer of it.
+// Velocity scaling attenuates carriers only, and shares total_level with
+// multi-operator editing.
 void test_velocity_scaling_only_touches_carriers() {
   ym2612::ChannelInstrument instrument;
   instrument.algorithm = 0; // register 3 is the only carrier
@@ -101,10 +97,8 @@ void test_velocity_scaling_clamps_at_the_register_maximum() {
   }
 }
 
-// Detune is stored sign-magnitude: register 7,6,5 are -3,-2,-1 and 1,2,3 are
-// +1,+2,+3, so the register value is not monotonic in pitch. The editor's
-// slider works on the linear 0..6 value instead, and a relative multi-operator
-// edit has to add its delta there.
+// Detune is stored sign-magnitude, so the register value is not monotonic in
+// pitch; the slider and any delta work on the linear 0..6 instead.
 void test_detune_linear_values_round_trip() {
   for (int linear = 0; linear <= 6; ++linear) {
     const uint8_t register_value =

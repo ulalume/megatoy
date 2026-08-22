@@ -6,6 +6,7 @@
 #include "modal.hpp"
 #include "patches/background_folder_scan.hpp"
 
+#include <cfloat>
 #include <chrono>
 #include <imgui.h>
 
@@ -14,9 +15,8 @@ namespace {
 
 constexpr const char *kScanPopupTitle = "Scanning Folder";
 constexpr auto kGracePeriod = std::chrono::milliseconds(150);
-constexpr ImGuiWindowFlags kScanPopupFlags = ImGuiWindowFlags_NoMove |
-                                             ImGuiWindowFlags_NoResize |
-                                             ImGuiWindowFlags_AlwaysAutoResize;
+constexpr ImGuiWindowFlags kScanPopupFlags =
+    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
 
 std::chrono::steady_clock::time_point g_scan_started_at{};
 
@@ -59,8 +59,7 @@ void render_folder_scan_dialog() {
   }
   // No way out but the button: Cancel stops the scan, and a dismissal that
   // only hid the dialog would leave it running with nothing to stop it.
-  if (begin_modal(kScanPopupTitle, ModalDismiss::None, kScanPopupFlags)
-          .visible) {
+  if (begin_modal(kScanPopupTitle, ModalDismiss::None).visible) {
     ImGui::Text("Scanning \"%s\"... %zu files", status.folder_name.c_str(),
                 status.files_seen);
     if (status.containers_parsed > 0) {
@@ -68,7 +67,8 @@ void render_folder_scan_dialog() {
     }
     // Nothing knows the file count up front, so the bar animates rather than
     // fills: a negative fraction is ImGui's indeterminate mode.
-    ImGui::ProgressBar(static_cast<float>(-ImGui::GetTime()), ImVec2(360, 0));
+    ImGui::ProgressBar(static_cast<float>(-ImGui::GetTime()),
+                       ImVec2(-FLT_MIN, 0));
     ImGui::Spacing();
     align_buttons_right({kDialogButtonWidth});
     if (ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0))) {

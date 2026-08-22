@@ -23,13 +23,9 @@ struct UIPreferences {
   bool use_mod_wheel = false;
   bool steal_oldest_note_when_full = true;
   /**
-   * How an edit spreads when several operators are selected. Relative keeps
-   * the distance between them -- nudging one carrier's total level by ten
-   * moves the others by ten as well, so the balance the patch was built on
-   * survives. Absolute lands them all on the same value instead.
-   *
-   * Booleans and the SSG envelope type are always absolute: neither has a
-   * meaningful delta.
+   * How an edit spreads across selected operators. Relative keeps the
+   * distance between them; absolute lands them on the same value. Booleans
+   * and the SSG envelope type are always absolute.
    */
   bool multi_operator_edit_absolute = false;
   std::string patch_search_query;
@@ -98,11 +94,9 @@ struct PreferenceData {
   /// Repository-relative source path of the patch selected most recently.
   std::string last_patch_path;
   /**
-   * The version tag whose change log the user has already been offered.
-   *
-   * Empty on a fresh install and on any build from before this existed; both
-   * get the notice once. Written as soon as the decision is made, so ignoring
-   * the notice still counts as having seen it.
+   * The version whose change log the user has already been offered. Empty on
+   * a fresh install and on builds from before this existed. Written as soon
+   * as the decision is made, so ignoring the notice still counts.
    */
   std::string last_seen_version;
   bool show_builtin_presets = true;

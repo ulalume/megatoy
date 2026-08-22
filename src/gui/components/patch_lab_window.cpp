@@ -84,14 +84,27 @@ std::string combo_preview_label(EntryPtr selection,
 
 bool render_patch_combo(const char *label,
                         const std::vector<EntryDisplay> &entries,
-                        EntryPtr &selection, std::string &filter_text) {
+                        EntryPtr &selection, std::string &filter_text,
+                        float &min_width) {
   const std::string preview = combo_preview_label(selection, entries);
   bool changed = false;
   bool filter_active = !filter_text.empty();
 
+  // The list sizes itself to its widest row, so filtering it would pull it
+  // narrower while the user is still typing into it. The width from before
+  // the search is held as a floor until the list closes. The ceiling is for
+  // the other direction: one very long patch name would otherwise open a
+  // list wider than the window it is in.
+  ImGui::SetNextWindowSizeConstraints(
+      ImVec2(min_width, 0.0f),
+      ImVec2(ImGui::GetMainViewport()->WorkSize.x * 0.6f, FLT_MAX));
+
   if (ImGui::BeginCombo(label, preview.c_str())) {
-    // Add filter input at the top of the combo
-    ImGui::SetNextItemWidth(-1.0f);
+    // Fills the width without the feedback loop -1.0f caused: that asks for
+    // one pixel less than is available, which becomes the widest content,
+    // which is what the next frame's width is measured from, so the list
+    // crept a pixel narrower every frame it was open.
+    ImGui::SetNextItemWidth(-FLT_MIN);
 
     // Use char buffer for ImGui compatibility
     static char filter_buffer[256];
@@ -141,7 +154,11 @@ bool render_patch_combo(const char *label,
       }
     }
 
+    min_width = std::max(min_width, ImGui::GetWindowWidth());
     ImGui::EndCombo();
+  } else {
+    // Closed: forget it, so the next open measures the list afresh.
+    min_width = 0.0f;
   }
   return changed;
 }
@@ -234,9 +251,11 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
   }
 
   render_patch_combo("Patch A", entries, state.source_a,
-                     state.combo_filter_patch_a);
+                     state.combo_filter_patch_a,
+                     state.combo_width_patch_a);
   render_patch_combo("Patch B", entries, state.source_b,
-                     state.combo_filter_patch_b);
+                     state.combo_filter_patch_b,
+                     state.combo_width_patch_b);
 
   ImGui::SetNextItemWidth(120.0f);
   ImGui::InputInt("Seed (auto = -1)##merge", &state.merge_seed);
@@ -297,9 +316,11 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
   }
 
   render_patch_combo("Patch A##morph", entries, state.source_a,
-                     state.combo_filter_patch_a);
+                     state.combo_filter_patch_a,
+                     state.combo_width_patch_a);
   render_patch_combo("Patch B##morph", entries, state.source_b,
-                     state.combo_filter_patch_b);
+                     state.combo_filter_patch_b,
+                     state.combo_width_patch_b);
 
   ImGui::SliderFloat("Blend", &state.morph_mix, 0.0f, 1.0f);
   ImGui::Checkbox("Interpolate algorithm", &state.morph_interpolate_algorithm);

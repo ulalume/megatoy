@@ -26,8 +26,9 @@ void render_changelog_dialog() {
 
   // The only dialog long enough to need scrolling, so the only one with a
   // fixed size rather than AlwaysAutoResize.
-  ImGui::SetNextWindowSize(ImVec2(460.0f, 420.0f), ImGuiCond_Appearing);
-  if (!begin_modal(kTitle, ModalDismiss::EscapeOrOutsideClick, kModalFixedSize)
+  // The one dialog that scrolls, so it needs a height of its own rather than
+  // one taken from however much it happens to hold today.
+  if (!begin_modal(kTitle, ModalDismiss::EscapeOrOutsideClick, 460.0f, 420.0f)
            .visible) {
     return;
   }

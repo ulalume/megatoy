@@ -29,8 +29,7 @@ OperatorFieldRange operator_field_range(OperatorField field) {
 }
 
 bool operator_field_is_relative(OperatorField field) {
-  // The SSG envelope type names one of eight waveform shapes. Everything
-  // else is an amount, and amounts are what a delta is for.
+  // The SSG type names a shape; everything else is an amount.
   return field != OperatorField::SsgType;
 }
 
@@ -124,10 +123,9 @@ void apply_operator_field_edit(ChannelInstrument &instrument, uint8_t selection,
   // state the baseline is in.
   write_operator_field(operator_at(instrument, primary_slot), field, value);
 
+  // No drag behind this edit means no starting point to measure against.
   if (!baseline.active || baseline.field != field ||
       baseline.primary != primary_slot) {
-    // No drag behind this edit, so there is no starting point to measure a
-    // delta from and nothing to spread.
     return;
   }
 
@@ -139,9 +137,8 @@ void apply_operator_field_edit(ChannelInstrument &instrument, uint8_t selection,
     if (slot == primary_slot || (selection & (1u << slot)) == 0) {
       continue;
     }
-    // Each operator clamps on its own. Holding the whole group back at the
-    // first one to reach an end would make the operator under the cursor
-    // stop following it.
+    // Each clamps on its own: holding the group back at the first one to
+    // reach an end would stop the operator under the cursor following it.
     const int target = relative ? baseline.values[slot] + delta : value;
     write_operator_field(operator_at(instrument, slot), field, target);
   }

@@ -48,13 +48,8 @@ ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
              : ym2612::MultiEditMode::Relative;
 }
 
-/**
- * Clicking an operator replaces the selection; shift toggles it.
- *
- * Toggling is what lets a mis-picked operator come back out of a
- * shift-selection, which matters when the selection is what a paste is about
- * to overwrite.
- */
+/// Clicking replaces the selection; shift toggles, so a mis-picked operator
+/// can come back out of what a paste is about to overwrite.
 void note_operator_click(OperatorSelection &selection, int slot) {
   if (ImGui::GetIO().KeyShift) {
     selection.toggle_extend(slot);
@@ -64,11 +59,9 @@ void note_operator_click(OperatorSelection &selection, int slot) {
 }
 
 /**
- * Editing a widget keeps a multi-operator selection together and only moves
- * the lead; editing an operator outside the selection collapses onto it.
- *
- * Shift extends here rather than toggling: a shift-drag must not take the
- * operator under the cursor back out of the selection halfway through.
+ * Editing keeps the group and only moves the lead; editing outside the
+ * selection collapses onto it. Shift extends rather than toggles -- a
+ * shift-drag must not drop the operator under the cursor mid-drag.
  */
 void note_operator_edit(OperatorSelection &selection, int slot) {
   if (ImGui::GetIO().KeyShift) {
@@ -79,14 +72,9 @@ void note_operator_edit(OperatorSelection &selection, int slot) {
 }
 
 /**
- * Border colour by state. Unselected is the same near-black line the Patch
- * Lab results panel is drawn with; hover only shows on unselected operators,
- * where it is advertising that the frame can be clicked at all.
- *
- * A selected operator is the highlight faded rather than a neutral grey. Grey
- * sat too close to the three unselected borders around it to register as a
- * state; a dimmer version of the colour the lead operator wears reads as "one
- * of these, but not the one leading".
+ * Border colour by state. Selected is the lead's highlight faded rather than
+ * a grey, which sat too close to the unselected borders to register. Hover
+ * only shows on unselected operators, where it advertises the click.
  */
 ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
   const ImVec4 highlight = styles::color(styles::MegatoyCol::TextHighlight);
@@ -104,16 +92,11 @@ ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
 }
 
 /**
- * The frame, opened up around the header.
+ * The frame, cut open at the corner the header sits across: the top border
+ * resumes past the label, the left border below the checkbox.
  *
- * The header lines up with the sliders in the sections above rather than
- * being indented into the frame, which leaves it sitting across the corner
- * instead of along the top edge -- so the corner is what gets cut. The top
- * border resumes past the label at `top_resume_x` and the left border picks
- * up below the checkbox at `left_resume_y`; AddRect would draw through both.
- *
- * The half-pixel inset is what AddRect does internally, and without it the
- * line lands between two pixels and comes out blurred.
+ * The half-pixel inset is what AddRect does internally; without it the line
+ * falls between two pixels and blurs.
  */
 void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
                          float top_resume_x, float left_resume_y,
@@ -137,8 +120,7 @@ void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
 
 struct FieldLabels {
   const char *name;
-  // Kept identical to the keys the editor has always used, so a drag started
-  // before this change and one started after still merge into one undo step.
+  /// Undo merge key; unchanged from before so drags still merge.
   const char *key;
 };
 
@@ -172,8 +154,8 @@ std::string history_key(int slot, const char *suffix) {
   return "instrument.op" + std::to_string(slot) + "." + suffix;
 }
 
-/// "OP1 Total Level", or "OP1, OP3 Total Level" while several are selected,
-/// so the Edit menu's "Undo ..." says how far the change reached.
+/// "OP1 Total Level", or "OP1, OP3 Total Level" with several selected, so
+/// the Edit menu's "Undo ..." says how far the change reached.
 std::string history_label(const OperatorSelection &selection, int slot,
                           const char *name) {
   const std::string who = selection.contains(slot) && selection.count() > 1
@@ -189,12 +171,11 @@ struct OperatorWidget {
 };
 
 /**
- * One operator parameter, wired to the selection, to relative spreading and
- * to the undo history in a single place. Ten near-identical slider blocks
- * used to repeat all three by hand.
+ * One operator parameter, with the selection, the relative spreading and the
+ * undo history in a single place rather than repeated per slider.
  *
- * `vertical_size` picks a VSliderInt over a SliderInt, and those are the
- * ones with hidden labels, so they are also the ones that get a tooltip.
+ * `vertical_size` picks a VSliderInt, and those hide their label, so they are
+ * the ones that get a tooltip.
  */
 void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
                      const char *id, const ImVec2 *vertical_size,
@@ -214,10 +195,8 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
     update_slider_state(*slider_state);
   }
 
-  // Order matters on the frame a drag starts. The selection has to settle
-  // before the baseline is captured, and the baseline has to be read before
-  // the new value is written -- otherwise the primary operator's own
-  // starting point is already gone and its delta comes out as zero.
+  // Order matters on the frame a drag starts: the selection settles, then
+  // the baseline is captured, and only then is the new value written.
   if (ImGui::IsItemActivated()) {
     note_operator_edit(state.selection, widget.slot);
     ym2612::capture_operator_baseline(state.baseline, widget.instrument, field,
@@ -243,12 +222,9 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
 }
 
 /**
- * A per-operator flag. Booleans have no meaningful delta, so a spread one is
- * absolute in both edit modes.
- *
- * `spread` is off for the operator's own enable flag: that one is a mute set
- * up to audition part of a patch, and dragging three others along with it
- * would undo the thing the user just arranged.
+ * A per-operator flag. Booleans have no delta, so spreading one is absolute
+ * in both modes. `spread` is off for the enable flag: it is a mute, and
+ * dragging the others along would undo the audition it was set up for.
  */
 void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
                        bool ym2612::OperatorSettings::*flag, bool spread) {
@@ -275,15 +251,8 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
   }
 }
 
-/**
- * The operator's enable checkbox and its name, drawn to sit in the frame's
- * top border. Returns the x where the border can pick up again.
- *
- * There used to be a SeparatorText rule here as well. With a frame around
- * every operator that rule was a second horizontal line saying the same
- * thing, and in the single-column layout it ran straight out through the
- * border.
- */
+/// The operator's enable checkbox and name, sitting in the frame's top
+/// border. Returns the x where the border can pick up again.
 float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
                              const ImVec2 &header_min) {
   const int slot = widget.slot;
@@ -468,15 +437,12 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::PushID(slot);
 
   const ImVec2 block_min = ImGui::GetCursorScreenPos();
-  // Measured from the cursor rather than from GetColumnWidth(): a column
-  // clips its own draw list, and it clips a little tighter than the column
-  // width suggests, which cut the right border off entirely.
+  // Not GetColumnWidth(): a column clips its draw list tighter than that,
+  // which cut the right border off.
   const float frame_width = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
 
-  // The header straddles the top border, so the frame starts half a header
-  // below the cursor and the header is drawn before the frame is measured.
-  // It is not indented into the frame: it lines up with the sliders in the
-  // sections above it, which leaves it sitting across the corner.
+  // The header straddles the top border, aligned with the sliders in the
+  // sections above rather than indented into the frame.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
   const float header_end =
@@ -497,31 +463,26 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       ImGui::GetItemRectMax().y - frame_min.y + frame_padding;
   state.pending_frame_height =
       std::max(state.pending_frame_height, content_height);
-  // Every operator is drawn to the tallest one's height so the four borders
-  // line up. That height comes from the previous frame; measuring and
-  // applying it in the same one would mean laying the section out twice.
+  // All four drawn to the tallest one's height so the borders line up. From
+  // the previous frame; measuring and applying in one would need two passes.
   const float frame_height = std::max(content_height, state.frame_height);
   const ImVec2 frame_max(frame_min.x + frame_width, frame_min.y + frame_height);
-  // Claim the full block so the columns row and the window's scroll extent
-  // account for the header, the padding, and any height borrowed from a
-  // taller neighbour.
+  // Claim the full block so the columns row and the scroll extent account
+  // for the header, the padding and any borrowed height.
   ImGui::SetCursorScreenPos(ImVec2(block_min.x, frame_max.y));
 
-  // Hit testing by rectangle rather than by an invisible button underneath:
-  // a button large enough to cover the operator would have to yield the
-  // hover to every widget drawn on top of it, and IsAnyItemHovered already
-  // says exactly that. Items submitted so far this frame are the ones that
-  // could be under the cursor here, since the others are in other columns.
+  // By rectangle rather than an invisible button underneath: such a button
+  // would have to yield hover to every widget on top of it, which is what
+  // IsAnyItemHovered already reports.
   const bool window_hovered =
       ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
-  // From block_min, not frame_min: the header sits above the border and
-  // clicking beside the label should select like anywhere else.
+  // From block_min: the header sits above the border, and clicking beside
+  // the label should select too.
   const bool frame_hovered =
       window_hovered && ImGui::IsMouseHoveringRect(block_min, frame_max);
   const bool on_background = frame_hovered && !ImGui::IsAnyItemHovered();
-  // The border only lights up on hover when nothing is being dragged, so a
-  // slider drag that wanders out of its own operator does not light up the
-  // one it passes over.
+  // Not while something is being dragged, so a slider drag that wanders out
+  // does not light up the operator it passes over.
   const bool background_hovered = on_background && !ImGui::IsAnyItemActive();
 
   if (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
@@ -529,8 +490,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     state.click_claimed = true;
   }
 
-  // Right-click opens the operator's menu wherever it lands inside the
-  // frame, including on top of a slider, which has no use for the button.
+  // Anywhere in the frame, including on a slider, which ignores right-click.
   if (frame_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
     if (!state.selection.contains(slot)) {
       state.selection.select_only(slot);

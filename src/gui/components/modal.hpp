@@ -8,24 +8,25 @@ namespace ui {
 
 /// What closes a modal besides its own buttons.
 enum class ModalDismiss {
-  /// Nothing does. For a question that has to be answered, and for progress,
-  /// whose Cancel does real work that quietly hiding the dialog would skip.
+  /// Nothing does. For a question that has to be answered.
   None,
-  /// Escape, standing in for the modal's own cancel. Clicks outside are left
-  /// alone so a stray one cannot throw away a half-typed name.
+  /// Escape, standing in for the modal's own cancel.
   Escape,
-  /// Escape or a click outside. For a modal that only shows things, where
-  /// closing it costs nothing.
+  /// Escape or a click outside. For a modal that only shows things.
   EscapeOrOutsideClick,
 };
 
-/// Auto-sized to its contents; what almost every dialog wants.
-inline constexpr ImGuiWindowFlags kModalAutoResize =
-    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-    ImGuiWindowFlags_AlwaysAutoResize;
-/// For a modal that sets its own size because its contents scroll.
-inline constexpr ImGuiWindowFlags kModalFixedSize =
-    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+/**
+ * How wide a dialog is unless it says otherwise.
+ *
+ * Stated rather than fitted, because sizing to contents and right-aligning
+ * buttons cannot both hold: the alignment measures the width it is about to
+ * define. The loop never settles at the natural size, so a wide app window
+ * used to open a wide dialog.
+ */
+inline constexpr float kDialogWidth = 400.0f;
+/// Passed as the height to fit the contents.
+inline constexpr float kDialogAutoHeight = -1.0f;
 
 /// What a dialog button gets when its label does not need more.
 inline constexpr float kDialogButtonWidth = 120.0f;
@@ -33,38 +34,27 @@ inline constexpr float kDialogButtonWidth = 120.0f;
 /// The width ImGui will give a button with this label.
 float button_width(const char *label);
 
-/**
- * Push the cursor right so a row of buttons of these widths finishes flush
- * with the right edge, in the order they are then drawn.
- *
- * Right-aligning inside a window that sizes itself to its contents sounds
- * circular -- the offset needs the width, the width needs the contents -- but
- * it settles, because the row is placed to end exactly at the content edge
- * measured last frame, which leaves the content width unchanged and the
- * auto-fit with nothing to grow towards. Placing it any further right would
- * widen the window every frame.
- */
+/// Push the cursor right so a row of buttons of these widths ends flush with
+/// the right edge, in the order they are then drawn.
 void align_buttons_right(std::initializer_list<float> widths);
 
 struct ModalScope {
   /// Draw the contents, then call end_modal().
   bool visible = false;
-  /// It closed this frame without a button being pressed. Whatever the cancel
-  /// button would have cleaned up has to be cleaned up here too.
+  /// Closed this frame without a button. Clean up whatever Cancel would have.
   bool dismissed = false;
 };
 
 /**
- * Open a modal that centres itself, stays centred, and says how it closed.
+ * Open a modal that centres itself and says how it closed.
  *
- * ImGui never closes a modal popup on its own -- NavUpdateCancelRequest
- * skips anything flagged Modal -- so before this every dialog could only be
- * closed by its own buttons, and every way out added here is one this has to
- * report: a dialog that vanishes while its pending callback is still armed
- * is worse than one that cannot be dismissed at all.
+ * ImGui never dismisses modals itself, so every way out here is ours and has
+ * to be reported: a dialog that vanishes with its callback still armed is
+ * worse than one that cannot be dismissed.
  */
 ModalScope begin_modal(const char *title, ModalDismiss dismiss,
-                       ImGuiWindowFlags flags = kModalAutoResize);
+                       float width = kDialogWidth,
+                       float height = kDialogAutoHeight);
 
 /// Only when the scope was visible.
 void end_modal();

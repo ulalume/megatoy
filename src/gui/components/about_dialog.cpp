@@ -144,10 +144,10 @@ void render_update_status(const AboutModalState &state) {
 void render_about_dialog() {
   auto &state = about_modal_state();
   poll_update_request(state);
-  ImGui::SetNextWindowSize(ImVec2(350, -1));
   // Nothing here is a decision, so anything that means "I am done looking"
   // closes it.
-  auto scope = begin_modal("About megatoy", ModalDismiss::EscapeOrOutsideClick);
+  auto scope =
+      begin_modal("About megatoy", ModalDismiss::EscapeOrOutsideClick, 350.0f);
   if (!scope.visible) {
     if (!ImGui::IsPopupOpen("About megatoy")) {
       state.reset();

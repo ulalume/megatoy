@@ -45,12 +45,9 @@ AppServices::AppServices(platform::PlatformServicesProvider &platform_services)
 namespace {
 
 /**
- * Offer the change log once per version.
- *
- * A toast rather than the dialog megamml opens: it is a notice, not something
- * the user asked for, and it should not stand between them and the patch they
- * came to edit. The version is recorded before the toast can be acted on, so
- * dismissing it -- or ignoring it -- still counts as having been told.
+ * Offer the change log once per version. A toast rather than a dialog: it is
+ * a notice, not something the user asked for. The version is recorded before
+ * the toast can be acted on, so ignoring it still counts as having been told.
  */
 void announce_version_change(PreferenceManager &preferences) {
   const std::string current = megatoy::kVersionTag;
@@ -65,9 +62,8 @@ void announce_version_change(PreferenceManager &preferences) {
     return;
   }
 
-  // A first run and an upgrade from before this existed look identical from
-  // here -- both have nothing stored -- so the first run does not claim to
-  // have updated anything.
+  // A first run and an upgrade from before this existed both have nothing
+  // stored, so neither claims to have updated anything.
   const std::string message = stored.empty()
                                   ? "Welcome to megatoy " + current + "."
                                   : "Updated to megatoy " + current + ".";

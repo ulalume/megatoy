@@ -57,6 +57,10 @@ struct PatchLabState {
   // Combo filter states
   std::string combo_filter_patch_a;
   std::string combo_filter_patch_b;
+  // Widest the open list has been, so filtering it cannot pull it narrower
+  // than it was when the user started typing. Reset when the list closes.
+  float combo_width_patch_a = 0.0f;
+  float combo_width_patch_b = 0.0f;
 };
 
 void render_patch_lab(const char *title, PatchLabContext &context,
