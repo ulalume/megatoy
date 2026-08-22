@@ -114,17 +114,21 @@ void capture_operator_baseline(OperatorEditBaseline &baseline,
                                OperatorField field, int primary_slot);
 
 /**
- * Write `value` into the primary operator and spread it across `selection`.
+ * Write `value` into `primary_slot` and spread it across `selection`.
  *
  * `selection` is a bit per display slot. Operators whose `enable` is off are
  * written like any other: the flag mutes the operator, it does not archive
- * its settings. If the baseline does not match this field and primary, only
- * the primary operator is written -- an edit with no drag behind it has no
- * delta to spread.
+ * its settings.
+ *
+ * The baseline is only an anchor for the spreading. If it does not belong to
+ * this field and this operator -- an edit that arrived without a drag behind
+ * it, or after the drag ended -- the edited operator is still written and
+ * the others are left alone, because there is no starting point to measure a
+ * delta from.
  */
 void apply_operator_field_edit(ChannelInstrument &instrument, uint8_t selection,
                                const OperatorEditBaseline &baseline,
-                               OperatorField field, int value,
+                               OperatorField field, int primary_slot, int value,
                                MultiEditMode mode);
 
 /**

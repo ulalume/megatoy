@@ -114,29 +114,29 @@ void capture_operator_baseline(OperatorEditBaseline &baseline,
 
 void apply_operator_field_edit(ChannelInstrument &instrument, uint8_t selection,
                                const OperatorEditBaseline &baseline,
-                               OperatorField field, int value,
+                               OperatorField field, int primary_slot, int value,
                                MultiEditMode mode) {
-  const int primary = baseline.primary;
-  const bool baseline_matches =
-      baseline.active && baseline.field == field && primary >= 0 && primary < 4;
-
-  if (!baseline_matches) {
-    // No drag behind this edit, so there is no delta to spread and no
-    // starting point to spread it from. Write the one operator we know.
-    if (primary >= 0 && primary < 4) {
-      write_operator_field(operator_at(instrument, primary), field, value);
-    }
+  if (primary_slot < 0 || primary_slot >= 4) {
     return;
   }
 
-  write_operator_field(operator_at(instrument, primary), field, value);
+  // The operator the user is actually dragging is always written, whatever
+  // state the baseline is in.
+  write_operator_field(operator_at(instrument, primary_slot), field, value);
+
+  if (!baseline.active || baseline.field != field ||
+      baseline.primary != primary_slot) {
+    // No drag behind this edit, so there is no starting point to measure a
+    // delta from and nothing to spread.
+    return;
+  }
 
   const bool relative =
       mode == MultiEditMode::Relative && operator_field_is_relative(field);
-  const int delta = value - baseline.values[primary];
+  const int delta = value - baseline.values[primary_slot];
 
   for (int slot = 0; slot < 4; ++slot) {
-    if (slot == primary || (selection & (1u << slot)) == 0) {
+    if (slot == primary_slot || (selection & (1u << slot)) == 0) {
       continue;
     }
     // Each operator clamps on its own. Holding the whole group back at the

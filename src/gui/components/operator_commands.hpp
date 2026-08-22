@@ -26,6 +26,13 @@ struct OperatorEditState {
    */
   float frame_height = 0.0f;
   float pending_frame_height = 0.0f;
+  /**
+   * Set for the frame an operator acts on a mouse click, so the patch
+   * editor's "clicked on nothing, drop the selection" rule can tell a click
+   * that landed on an operator's own background from one that missed
+   * everything. Both look identical to IsAnyItemHovered().
+   */
+  bool click_claimed = false;
 };
 
 struct OperatorCommandContext {

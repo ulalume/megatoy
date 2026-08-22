@@ -219,6 +219,7 @@ void render_operator_section(PatchEditorContext &context,
   // The four frames share one height so their borders line up; each operator
   // reports what it needed and the tallest wins the next frame.
   context.operator_edit.pending_frame_height = 0.0f;
+  context.operator_edit.click_claimed = false;
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_states[slot],
                            space_for_feedbacks[slot]);
@@ -300,7 +301,11 @@ void handle_operator_deselect(PatchEditorContext &context) {
     return;
   }
 
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+  // An operator's own background is not "nothing": the click that selected
+  // it looks exactly like a click on the window behind it, so the operators
+  // say when one was theirs.
+  if (!context.operator_edit.click_claimed &&
+      ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
       ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
       !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive()) {
     selection.clear();

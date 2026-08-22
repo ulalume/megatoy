@@ -193,7 +193,7 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
   if (changed) {
     ym2612::apply_operator_field_edit(
         widget.instrument, state.selection.selected, state.baseline, field,
-        value, multi_edit_mode(widget.editor));
+        widget.slot, value, multi_edit_mode(widget.editor));
   }
   if (ImGui::IsItemDeactivated()) {
     state.baseline.clear();
@@ -454,11 +454,15 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
   const bool frame_hovered =
       window_hovered && ImGui::IsMouseHoveringRect(frame_min, frame_max);
-  const bool background_hovered =
-      frame_hovered && !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive();
+  const bool on_background = frame_hovered && !ImGui::IsAnyItemHovered();
+  // The border only lights up on hover when nothing is being dragged, so a
+  // slider drag that wanders out of its own operator does not light up the
+  // one it passes over.
+  const bool background_hovered = on_background && !ImGui::IsAnyItemActive();
 
-  if (background_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+  if (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     note_operator_click(state.selection, slot);
+    state.click_claimed = true;
   }
 
   // Right-click opens the operator's menu wherever it lands inside the
@@ -467,6 +471,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     if (!state.selection.contains(slot)) {
       state.selection.select_only(slot);
     }
+    state.click_claimed = true;
     ImGui::OpenPopup("##operator_menu");
   }
   if (ImGui::BeginPopup("##operator_menu")) {

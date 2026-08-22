@@ -73,7 +73,7 @@ void test_a_relative_edit_moves_the_whole_selection_by_the_delta() {
 
   // OP1 10 -> 20 carries OP2 20 -> 30.
   ym2612::apply_operator_field_edit(instrument, slots({0, 1}), baseline,
-                                    OperatorField::TotalLevel, 20,
+                                    OperatorField::TotalLevel, 0, 20,
                                     MultiEditMode::Relative);
   CHECK(total_level(instrument, 0) == 20);
   CHECK(total_level(instrument, 1) == 30);
@@ -89,7 +89,7 @@ void test_an_absolute_edit_lands_every_selected_operator_on_one_value() {
                                     OperatorField::TotalLevel, 0);
 
   ym2612::apply_operator_field_edit(instrument, slots({0, 1, 3}), baseline,
-                                    OperatorField::TotalLevel, 55,
+                                    OperatorField::TotalLevel, 0, 55,
                                     MultiEditMode::Absolute);
   CHECK(total_level(instrument, 0) == 55);
   CHECK(total_level(instrument, 1) == 55);
@@ -112,14 +112,14 @@ void test_a_clamped_operator_returns_to_its_starting_value() {
   const uint8_t selection = slots({0, 1});
   // Push past the ceiling: OP2 clamps at 127.
   ym2612::apply_operator_field_edit(instrument, selection, baseline,
-                                    OperatorField::TotalLevel, 127,
+                                    OperatorField::TotalLevel, 0, 127,
                                     MultiEditMode::Relative);
   CHECK(total_level(instrument, 0) == 127);
   CHECK(total_level(instrument, 1) == 127);
 
   // Same drag, back to where it began.
   ym2612::apply_operator_field_edit(instrument, selection, baseline,
-                                    OperatorField::TotalLevel, 120,
+                                    OperatorField::TotalLevel, 0, 120,
                                     MultiEditMode::Relative);
   CHECK(total_level(instrument, 0) == 120);
   CHECK(total_level(instrument, 1) == 125);
@@ -134,7 +134,7 @@ void test_operators_clamp_independently() {
   ym2612::capture_operator_baseline(baseline, instrument,
                                     OperatorField::TotalLevel, 0);
   ym2612::apply_operator_field_edit(instrument, slots({0, 1}), baseline,
-                                    OperatorField::TotalLevel, 110,
+                                    OperatorField::TotalLevel, 0, 110,
                                     MultiEditMode::Relative);
 
   // OP2 stopping at its ceiling does not hold OP1 back.
@@ -154,7 +154,7 @@ void test_relative_detune_moves_in_linear_space() {
                                     0);
   // -1 -> +1 is a delta of two linear steps, so 0 becomes +2.
   ym2612::apply_operator_field_edit(instrument, slots({0, 1}), baseline,
-                                    OperatorField::Detune, 4,
+                                    OperatorField::Detune, 0, 4,
                                     MultiEditMode::Relative);
   CHECK(ym2612::operator_at(instrument, 0).detune == 1); // +1
   CHECK(ym2612::operator_at(instrument, 1).detune == 2); // +2
@@ -170,7 +170,7 @@ void test_the_ssg_type_is_always_absolute() {
   ym2612::capture_operator_baseline(baseline, instrument, OperatorField::SsgType,
                                     0);
   ym2612::apply_operator_field_edit(instrument, slots({0, 1}), baseline,
-                                    OperatorField::SsgType, 6,
+                                    OperatorField::SsgType, 0, 6,
                                     MultiEditMode::Relative);
   CHECK(ym2612::operator_at(instrument, 0).ssg_type_envelope_control == 6);
   CHECK(ym2612::operator_at(instrument, 1).ssg_type_envelope_control == 6);
@@ -184,7 +184,7 @@ void test_a_disabled_operator_still_follows_the_edit() {
   ym2612::capture_operator_baseline(baseline, instrument,
                                     OperatorField::TotalLevel, 0);
   ym2612::apply_operator_field_edit(instrument, slots({0, 1}), baseline,
-                                    OperatorField::TotalLevel, 15,
+                                    OperatorField::TotalLevel, 0, 15,
                                     MultiEditMode::Relative);
   CHECK(total_level(instrument, 1) == 25);
   CHECK(!ym2612::operator_at(instrument, 1).enable);
@@ -192,14 +192,49 @@ void test_a_disabled_operator_still_follows_the_edit() {
 
 void test_an_edit_without_a_baseline_writes_only_the_primary() {
   auto instrument = make_instrument();
-  OperatorEditBaseline baseline;
-  baseline.primary = 0; // never captured, so active stays false
+  OperatorEditBaseline baseline; // never captured, so active stays false
 
   ym2612::apply_operator_field_edit(instrument, slots({0, 1}), baseline,
-                                    OperatorField::TotalLevel, 99,
+                                    OperatorField::TotalLevel, 0, 99,
                                     MultiEditMode::Relative);
   CHECK(total_level(instrument, 0) == 99);
   CHECK(total_level(instrument, 1) == 20);
+}
+
+// A drag that has ended, or an edit that never had one, still has to write
+// the operator under the cursor -- it just has nothing to spread.
+void test_an_edit_with_no_baseline_still_writes_a_non_zero_slot() {
+  auto instrument = make_instrument();
+  OperatorEditBaseline baseline;
+
+  ym2612::apply_operator_field_edit(instrument, slots({1, 2}), baseline,
+                                    OperatorField::TotalLevel, 2, 77,
+                                    MultiEditMode::Relative);
+  CHECK(total_level(instrument, 2) == 77);
+  CHECK(total_level(instrument, 1) == 20);
+}
+
+void test_a_baseline_belonging_to_another_operator_does_not_spread() {
+  auto instrument = make_instrument();
+  OperatorEditBaseline baseline;
+  ym2612::capture_operator_baseline(baseline, instrument,
+                                    OperatorField::TotalLevel, 0);
+
+  // The drag was started on OP1; this edit is on OP2.
+  ym2612::apply_operator_field_edit(instrument, slots({0, 1}), baseline,
+                                    OperatorField::TotalLevel, 1, 77,
+                                    MultiEditMode::Relative);
+  CHECK(total_level(instrument, 1) == 77);
+  CHECK(total_level(instrument, 0) == 10);
+}
+
+void test_an_out_of_range_slot_is_ignored() {
+  auto instrument = make_instrument();
+  OperatorEditBaseline baseline;
+  ym2612::apply_operator_field_edit(instrument, slots({0}), baseline,
+                                    OperatorField::TotalLevel, -1, 77,
+                                    MultiEditMode::Relative);
+  CHECK(total_level(instrument, 0) == 10);
 }
 
 void test_a_stale_baseline_for_another_field_writes_only_the_primary() {
@@ -209,7 +244,7 @@ void test_a_stale_baseline_for_another_field_writes_only_the_primary() {
                                     OperatorField::AttackRate, 0);
 
   ym2612::apply_operator_field_edit(instrument, slots({0, 1}), baseline,
-                                    OperatorField::TotalLevel, 99,
+                                    OperatorField::TotalLevel, 0, 99,
                                     MultiEditMode::Relative);
   CHECK(total_level(instrument, 0) == 99);
   CHECK(total_level(instrument, 1) == 20);
@@ -329,6 +364,9 @@ int main() {
   test_the_ssg_type_is_always_absolute();
   test_a_disabled_operator_still_follows_the_edit();
   test_an_edit_without_a_baseline_writes_only_the_primary();
+  test_an_edit_with_no_baseline_still_writes_a_non_zero_slot();
+  test_a_baseline_belonging_to_another_operator_does_not_spread();
+  test_an_out_of_range_slot_is_ignored();
   test_a_stale_baseline_for_another_field_writes_only_the_primary();
   test_flags_spread_absolutely();
   test_copying_op1_carries_the_feedback();
