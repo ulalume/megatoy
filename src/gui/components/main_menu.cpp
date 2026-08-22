@@ -112,7 +112,9 @@ void render_main_menu(MainMenuContext &context) {
       });
     }
 
-    if (context.gui.supports_quit() && !save_disabled) {
+    // Not gated on supports_quit(): saving has nothing to do with whether the
+    // platform can be quit, and on the web that gate silently took Cmd+S away.
+    if (!save_disabled) {
       const bool primary_modifier = (io.KeyCtrl || io.KeySuper) && !io.KeyShift;
       if (primary_modifier && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
         if (is_user_patch) {
