@@ -267,6 +267,7 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
   auto history_actions = HistoryActions{ctx};
+  auto patch_history = PatchHistoryActions{ctx};
   return {ctx.services.history,
           ctx.services.gui_manager,
           ctx.services.preference_manager,
@@ -279,7 +280,14 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
           ctx.services.patch_session,
           ui_state.save_export_state,
           [history_actions]() { history_actions.undo(); },
-          [history_actions]() { history_actions.redo(); }};
+          [history_actions]() { history_actions.redo(); },
+          ui_state.operator_edit,
+          [patch_history](const std::string &label) {
+            // Empty merge key: two operator commands in a row stay two
+            // separate undo steps.
+            patch_history.begin_snapshot(label, {});
+          },
+          [patch_history]() { patch_history.commit(); }};
 }
 
 void render_save_export_popup_host(AppContext &ctx) {
@@ -337,6 +345,7 @@ PatchEditorContext make_patch_editor_context(AppContext &ctx) {
   return {ctx.services.patch_session,
           ui_state.prefs,
           ui_state.envelope_states,
+          ui_state.operator_edit,
           ui_state.text_prompt_state,
           [patch_history](const std::string &label,
                           const std::string &merge_key, const ym2612::Patch &) {

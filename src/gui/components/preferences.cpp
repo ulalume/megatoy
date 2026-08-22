@@ -282,10 +282,232 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   }
 }
 
+
+void render_general_tab(PreferencesContext &context) {
+  auto &prefs = context.preferences;
+  auto &ui_prefs = context.ui_prefs;
+
+  const auto &themes = ui::styles::available_themes();
+  int current_theme_index = 0;
+  auto current_theme = prefs.theme();
+  for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
+    if (themes[i].id == current_theme) {
+      current_theme_index = i;
+      break;
+    }
+  }
+
+  const char *theme_preview =
+      themes.empty() ? "" : themes[current_theme_index].display_name;
+  if (ImGui::BeginCombo("Theme", theme_preview)) {
+    for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
+      const bool is_selected = (i == current_theme_index);
+      if (ImGui::Selectable(themes[i].display_name, is_selected)) {
+        current_theme_index = i;
+        auto selected_id = themes[i].id;
+        prefs.set_theme(selected_id);
+        if (context.apply_theme) {
+          context.apply_theme(selected_id);
+        }
+      }
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  ImGui::Spacing();
+
+  static constexpr const char *multi_edit_modes[] = {
+      "Relative (keep the distance between operators)",
+      "Absolute (set every selected operator to the same value)"};
+  int multi_edit_mode = ui_prefs.multi_operator_edit_absolute ? 1 : 0;
+  if (ImGui::Combo("Multi-operator edit", &multi_edit_mode, multi_edit_modes,
+                   static_cast<int>(std::size(multi_edit_modes)))) {
+    ui_prefs.multi_operator_edit_absolute = multi_edit_mode == 1;
+  }
+  ImGui::TextWrapped("Applies while several operators are selected.");
+}
+
+// Named for what the list is rather than what it holds: the built-in presets
+// switch below it is a patch source too, and it has nowhere to sit under a
+// heading that only admits folders.
+void render_patches_tab(PreferencesContext &context) {
+  ImGui::SeparatorText("Sources");
+  ImGui::TextWrapped("megatoy reads patches from the folders you add here.");
+  ImGui::Spacing();
+
+  const auto &folders = context.preferences.workspace().folders();
+  if (folders.empty()) {
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                       "No folders added yet.");
+  }
+
+  std::optional<std::filesystem::path> folder_to_remove;
+  std::optional<std::pair<std::size_t, std::size_t>> reorder;
+
+  for (std::size_t i = 0; i < folders.size(); ++i) {
+    const auto &folder = folders[i];
+    ImGui::PushID(static_cast<int>(i));
+
+    ImGui::BeginDisabled(i == 0);
+    if (ImGui::ArrowButton("##up", ImGuiDir_Up)) {
+      reorder = {i, i - 1};
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(i + 1 >= folders.size());
+    if (ImGui::ArrowButton("##down", ImGuiDir_Down)) {
+      reorder = {i, i + 1};
+    }
+    ImGui::EndDisabled();
+
+    if (!context.preferences.workspace_folder_is_protected(folder.path)) {
+      ImGui::SameLine();
+      const char *remove_label =
+          megatoy::platform::is_web() ? "Delete" : "Remove";
+      if (ImGui::Button(remove_label)) {
+        folder_to_remove = folder.path;
+      }
+    }
+
+    ImGui::SameLine();
+    if (!folder.available) {
+      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusError),
+                         "%s (missing)", folder.name.c_str());
+    } else if (!folder.writable) {
+      ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                         "%s (read-only)", folder.name.c_str());
+    } else {
+      ImGui::TextUnformatted(folder.name.c_str());
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", folder.path.string().c_str());
+    }
+
+    // The first writable folder is where new patches land.
+    if (folder.available && folder.writable &&
+        context.preferences.workspace().default_save_folder() == folder.path) {
+      ImGui::SameLine();
+      ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
+                         "(default)");
+    }
+
+    ImGui::PopID();
+  }
+
+  ImGui::Spacing();
+  if (ImGui::Button("Add Folder...")) {
+    context.open_add_folder_dialog = true;
+  }
+
+  bool show_presets = context.preferences.show_builtin_presets();
+  if (ImGui::Checkbox("Show built-in presets", &show_presets)) {
+    context.preferences.set_show_builtin_presets(show_presets);
+    if (context.sync_workspace) {
+      context.sync_workspace();
+    }
+  }
+
+  if (folder_to_remove) {
+    if (context.remove_workspace_folder) {
+      context.remove_workspace_folder(*folder_to_remove);
+    }
+  } else if (reorder) {
+    context.preferences.reorder_workspace_folder(reorder->first,
+                                                 reorder->second);
+    if (context.sync_workspace) {
+      context.sync_workspace();
+    }
+  }
+}
+
+void render_sound_tab(PreferencesContext &context) {
+  auto &ui_prefs = context.ui_prefs;
+
+  static constexpr const char *chip_types[] = {
+      "YM2612 (Model 1, DAC distortion)", "YM3438 (Model 2, clean)"};
+  ui_prefs.ym2612_chip_type = std::clamp(ui_prefs.ym2612_chip_type, 0, 1);
+  ImGui::Combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
+               static_cast<int>(std::size(chip_types)));
+
+  ImGui::Spacing();
+
+  // Not a MIDI setting, though it used to be filed as one: this is the
+  // channel allocator, and it runs the same whichever keyboard the notes
+  // came from.
+  ImGui::Checkbox("Steal oldest note when all 6 channels are busy",
+                  &ui_prefs.steal_oldest_note_when_full);
+}
+
+// MIDI and the typing keyboard share a tab because they answer the same
+// question -- how notes get in -- and neither fills one on its own.
+void render_input_tab(PreferencesContext &context) {
+  auto &ui_prefs = context.ui_prefs;
+
+  ImGui::SeparatorText("MIDI");
+
+  ImGui::Checkbox("Use MIDI velocity", &ui_prefs.use_velocity);
+  if (!ui_prefs.use_velocity) {
+    ImGui::TextWrapped("Notes play at full velocity.");
+  }
+  ImGui::SliderInt("Velocity sensitivity", &ui_prefs.velocity_sensitivity_depth,
+                   0, 100, "%d%%");
+
+  ImGui::Checkbox("Use pitch bend", &ui_prefs.use_pitch_bend);
+  ImGui::Checkbox("Use mod wheel (vibrato)", &ui_prefs.use_mod_wheel);
+
+  if (!context.midi_status_message.empty()) {
+    ImGui::TextWrapped("%s", context.midi_status_message.c_str());
+  }
+  if (context.show_web_midi_button) {
+    if (context.web_midi_button_disabled) {
+      ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Enable WebMIDI")) {
+      if (context.request_web_midi) {
+        context.request_web_midi();
+      }
+    }
+    if (context.web_midi_button_disabled) {
+      ImGui::EndDisabled();
+    }
+  }
+
+  if (context.connected_midi_devices.empty()) {
+    ImGui::TextUnformatted("No MIDI devices detected.");
+  } else {
+    ImGui::Text("Connected devices (%zu)",
+                context.connected_midi_devices.size());
+    ImGui::Indent();
+    for (const auto &name : context.connected_midi_devices) {
+      ImGui::BulletText("%s", name.c_str());
+    }
+    ImGui::Unindent();
+  }
+
+  ImGui::SeparatorText("Typing Keyboard");
+
+  const int layout_count =
+      static_cast<int>(ui::typing_keyboard_layout_names.size());
+  ui_prefs.midi_keyboard_layout =
+      std::clamp(ui_prefs.midi_keyboard_layout, 0, layout_count - 1);
+  int current_layout = ui_prefs.midi_keyboard_layout;
+  if (ImGui::Combo("Layout", &current_layout,
+                   ui::typing_keyboard_layout_names.data(), layout_count)) {
+    ui_prefs.midi_keyboard_layout = current_layout;
+  }
+  const auto selected_layout = clamp_layout_pref(ui_prefs.midi_keyboard_layout);
+  if (selected_layout == TypingKeyboardLayout::Custom) {
+    ImGui::Spacing();
+    render_custom_layout_editor(ui_prefs);
+  }
+}
+
 } // namespace
 
 void render_preferences_window(const char *title, PreferencesContext &context) {
-  auto &prefs = context.preferences;
   auto &ui_prefs = context.ui_prefs;
   normalize_custom_layout(ui_prefs);
   if (!ui_prefs.show_preferences) {
@@ -295,200 +517,34 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
   ImGui::SetNextWindowSize(ImVec2(480, 260), ImGuiCond_FirstUseEver);
 
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
-
-    ImGui::SeparatorText("Theme");
-
-    const auto &themes = ui::styles::available_themes();
-    int current_theme_index = 0;
-    auto current_theme = prefs.theme();
-    for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
-      if (themes[i].id == current_theme) {
-        current_theme_index = i;
-        break;
+    if (ImGui::BeginTabBar("##preference_tabs")) {
+      // Each tab scrolls in its own child so the tab bar stays put. Input in
+      // particular is taller than the window once a few devices show up.
+      if (ImGui::BeginTabItem("General")) {
+        ImGui::BeginChild("##general");
+        render_general_tab(context);
+        ImGui::EndChild();
+        ImGui::EndTabItem();
       }
-    }
-
-    const char *theme_preview =
-        themes.empty() ? "" : themes[current_theme_index].display_name;
-    if (ImGui::BeginCombo("##UI Theme", theme_preview)) {
-      for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
-        const bool is_selected = (i == current_theme_index);
-        if (ImGui::Selectable(themes[i].display_name, is_selected)) {
-          current_theme_index = i;
-          auto selected_id = themes[i].id;
-          prefs.set_theme(selected_id);
-          if (context.apply_theme) {
-            context.apply_theme(selected_id);
-          }
-        }
-        if (is_selected) {
-          ImGui::SetItemDefaultFocus();
-        }
+      if (context.allow_workspace_ui && ImGui::BeginTabItem("Patches")) {
+        ImGui::BeginChild("##patches");
+        render_patches_tab(context);
+        ImGui::EndChild();
+        ImGui::EndTabItem();
       }
-      ImGui::EndCombo();
-    }
-
-    if (context.allow_workspace_ui) {
-      ImGui::SeparatorText("Patch Folders");
-      ImGui::TextWrapped(
-          "megatoy reads patches from the folders you add here.");
-      ImGui::Spacing();
-
-      const auto &folders = context.preferences.workspace().folders();
-      if (folders.empty()) {
-        ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
-                           "No folders added yet.");
+      if (ImGui::BeginTabItem("Sound")) {
+        ImGui::BeginChild("##sound");
+        render_sound_tab(context);
+        ImGui::EndChild();
+        ImGui::EndTabItem();
       }
-
-      std::optional<std::filesystem::path> folder_to_remove;
-      std::optional<std::pair<std::size_t, std::size_t>> reorder;
-
-      for (std::size_t i = 0; i < folders.size(); ++i) {
-        const auto &folder = folders[i];
-        ImGui::PushID(static_cast<int>(i));
-
-        ImGui::BeginDisabled(i == 0);
-        if (ImGui::ArrowButton("##up", ImGuiDir_Up)) {
-          reorder = {i, i - 1};
-        }
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        ImGui::BeginDisabled(i + 1 >= folders.size());
-        if (ImGui::ArrowButton("##down", ImGuiDir_Down)) {
-          reorder = {i, i + 1};
-        }
-        ImGui::EndDisabled();
-
-        if (!context.preferences.workspace_folder_is_protected(folder.path)) {
-          ImGui::SameLine();
-          const char *remove_label =
-              megatoy::platform::is_web() ? "Delete" : "Remove";
-          if (ImGui::Button(remove_label)) {
-            folder_to_remove = folder.path;
-          }
-        }
-
-        ImGui::SameLine();
-        if (!folder.available) {
-          ImGui::TextColored(styles::color(styles::MegatoyCol::StatusError),
-                             "%s (missing)", folder.name.c_str());
-        } else if (!folder.writable) {
-          ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
-                             "%s (read-only)", folder.name.c_str());
-        } else {
-          ImGui::TextUnformatted(folder.name.c_str());
-        }
-        if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("%s", folder.path.string().c_str());
-        }
-
-        // The first writable folder is where new patches land.
-        if (folder.available && folder.writable &&
-            context.preferences.workspace().default_save_folder() ==
-                folder.path) {
-          ImGui::SameLine();
-          ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
-                             "(default)");
-        }
-
-        ImGui::PopID();
+      if (ImGui::BeginTabItem("Input")) {
+        ImGui::BeginChild("##input");
+        render_input_tab(context);
+        ImGui::EndChild();
+        ImGui::EndTabItem();
       }
-
-      ImGui::Spacing();
-      if (ImGui::Button("Add Folder...")) {
-        context.open_add_folder_dialog = true;
-      }
-
-      bool show_presets = context.preferences.show_builtin_presets();
-      if (ImGui::Checkbox("Show built-in presets", &show_presets)) {
-        context.preferences.set_show_builtin_presets(show_presets);
-        if (context.sync_workspace) {
-          context.sync_workspace();
-        }
-      }
-
-      if (folder_to_remove) {
-        if (context.remove_workspace_folder) {
-          context.remove_workspace_folder(*folder_to_remove);
-        }
-      } else if (reorder) {
-        context.preferences.reorder_workspace_folder(reorder->first,
-                                                     reorder->second);
-        if (context.sync_workspace) {
-          context.sync_workspace();
-        }
-      }
-    }
-
-    ImGui::SeparatorText("Audio");
-
-    static constexpr const char *chip_types[] = {
-        "YM2612 (Model 1, DAC distortion)", "YM3438 (Model 2, clean)"};
-    ui_prefs.ym2612_chip_type = std::clamp(ui_prefs.ym2612_chip_type, 0, 1);
-    ImGui::Combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
-                 static_cast<int>(std::size(chip_types)));
-    ImGui::TextWrapped(
-        "Model 1's DAC adds a gritty edge, most audible on release tails.");
-
-    ImGui::SeparatorText("MIDI Input");
-
-    ImGui::Checkbox("Use MIDI velocity", &ui_prefs.use_velocity);
-    if (!ui_prefs.use_velocity) {
-      ImGui::TextWrapped("Notes play at full velocity.");
-    }
-    ImGui::SliderInt("Velocity sensitivity",
-                     &ui_prefs.velocity_sensitivity_depth, 0, 100, "%d%%");
-
-    ImGui::Checkbox("Use pitch bend", &ui_prefs.use_pitch_bend);
-    ImGui::Checkbox("Use mod wheel (vibrato)", &ui_prefs.use_mod_wheel);
-
-    ImGui::Checkbox("Steal oldest note when all 6 channels are busy",
-                    &ui_prefs.steal_oldest_note_when_full);
-
-    if (!context.midi_status_message.empty()) {
-      ImGui::TextWrapped("%s", context.midi_status_message.c_str());
-    }
-    if (context.show_web_midi_button) {
-      if (context.web_midi_button_disabled) {
-        ImGui::BeginDisabled();
-      }
-      if (ImGui::Button("Enable WebMIDI")) {
-        if (context.request_web_midi) {
-          context.request_web_midi();
-        }
-      }
-      if (context.web_midi_button_disabled) {
-        ImGui::EndDisabled();
-      }
-    }
-
-    if (context.connected_midi_devices.empty()) {
-      ImGui::TextUnformatted("No MIDI devices detected.");
-    } else {
-      ImGui::Text("Connected devices (%zu)",
-                  context.connected_midi_devices.size());
-      ImGui::Indent();
-      for (const auto &name : context.connected_midi_devices) {
-        ImGui::BulletText("%s", name.c_str());
-      }
-      ImGui::Unindent();
-    }
-
-    ImGui::SeparatorText("Typing Keyboard");
-    const int layout_count =
-        static_cast<int>(ui::typing_keyboard_layout_names.size());
-    ui_prefs.midi_keyboard_layout =
-        std::clamp(ui_prefs.midi_keyboard_layout, 0, layout_count - 1);
-    int current_layout = ui_prefs.midi_keyboard_layout;
-    if (ImGui::Combo("Layout", &current_layout,
-                     ui::typing_keyboard_layout_names.data(), layout_count)) {
-      ui_prefs.midi_keyboard_layout = current_layout;
-    }
-    const auto selected_layout =
-        clamp_layout_pref(ui_prefs.midi_keyboard_layout);
-    if (selected_layout == TypingKeyboardLayout::Custom) {
-      ImGui::Spacing();
-      render_custom_layout_editor(ui_prefs);
+      ImGui::EndTabBar();
     }
   }
 

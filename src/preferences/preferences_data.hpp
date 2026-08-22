@@ -22,6 +22,16 @@ struct UIPreferences {
   bool use_pitch_bend = true;
   bool use_mod_wheel = false;
   bool steal_oldest_note_when_full = true;
+  /**
+   * How an edit spreads when several operators are selected. Relative keeps
+   * the distance between them -- nudging one carrier's total level by ten
+   * moves the others by ten as well, so the balance the patch was built on
+   * survives. Absolute lands them all on the same value instead.
+   *
+   * Booleans and the SSG envelope type are always absolute: neither has a
+   * meaningful delta.
+   */
+  bool multi_operator_edit_absolute = false;
   std::string patch_search_query;
 
   // Patch selector view settings
@@ -58,6 +68,8 @@ struct UIPreferences {
            lhs.use_velocity == rhs.use_velocity &&
            lhs.velocity_sensitivity_depth == rhs.velocity_sensitivity_depth &&
            lhs.steal_oldest_note_when_full == rhs.steal_oldest_note_when_full &&
+           lhs.multi_operator_edit_absolute ==
+               rhs.multi_operator_edit_absolute &&
            lhs.use_pitch_bend == rhs.use_pitch_bend &&
            lhs.use_mod_wheel == rhs.use_mod_wheel &&
            lhs.patch_sort_column == rhs.patch_sort_column &&

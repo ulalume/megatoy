@@ -81,7 +81,9 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/main_menu.cpp
   src/gui/components/midi_keyboard.cpp
   src/gui/components/mml_console.cpp
+  src/gui/components/operator_commands.cpp
   src/gui/components/operator_editor.cpp
+  src/gui/components/operator_selection.cpp
   src/gui/components/patch_drop.cpp
   src/gui/components/patch_editor.cpp
   src/gui/components/patch_filter.cpp
@@ -134,6 +136,7 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/channel.cpp
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
+  src/ym2612/operator_edit.cpp
   src/ym2612/ymfm_chip.cpp
 )
 
