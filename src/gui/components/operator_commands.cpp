@@ -55,8 +55,7 @@ void copy_operator_command(OperatorCommandContext &context) {
 
   context.state.clipboard = ym2612::copy_operator(context.instrument, primary);
   const bool with_feedback = context.state.clipboard.feedback.has_value();
-  megatoy::status::info("Copied " + operator_slot_label(primary) +
-                        (with_feedback ? " and its feedback." : "."));
+  megatoy::status::info("Copied " + operator_slot_label(primary) + "."));
 }
 
 void paste_operator_command(OperatorCommandContext &context) {

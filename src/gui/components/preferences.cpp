@@ -430,10 +430,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
                      static_cast<int>(std::size(multi_edit_modes)))) {
       ui_prefs.multi_operator_edit_absolute = multi_edit_mode == 1;
     }
-    ImGui::TextWrapped(
-        "Applies while several operators are selected. Checkboxes and the SSG "
-        "envelope type are always absolute -- neither has a meaningful "
-        "difference to carry.");
+    ImGui::TextWrapped("Applies while several operators are selected.");
 
     ImGui::SeparatorText("Audio");
 
@@ -442,8 +439,6 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     ui_prefs.ym2612_chip_type = std::clamp(ui_prefs.ym2612_chip_type, 0, 1);
     ImGui::Combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
                  static_cast<int>(std::size(chip_types)));
-    ImGui::TextWrapped(
-        "Model 1's DAC adds a gritty edge, most audible on release tails.");
 
     ImGui::SeparatorText("MIDI Input");
 
