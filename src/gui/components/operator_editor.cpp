@@ -95,7 +95,7 @@ ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
   }
   if (selected) {
     return ImGui::GetColorU32(
-        ImVec4(highlight.x, highlight.y, highlight.z, highlight.w * 0.6f));
+        ImVec4(highlight.x, highlight.y, highlight.z, highlight.w * 0.5f));
   }
   if (hovered) {
     return ImGui::GetColorU32(ImGuiCol_SeparatorHovered);
@@ -245,9 +245,9 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
  * up to audition part of a patch, and dragging three others along with it
  * would undo the thing the user just arranged.
  */
-void operator_checkbox(OperatorWidget &widget, const char *id,
-                       const char *name, const char *key,
-                       bool ym2612::OperatorSettings::*flag, bool spread) {
+void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
+                       const char *key, bool ym2612::OperatorSettings::*flag,
+                       bool spread) {
   auto &state = widget.editor.operator_edit;
   auto &op = ym2612::operator_at(widget.instrument, widget.slot);
 
@@ -436,11 +436,10 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                   multiple_labels[op.multiple], nullptr);
 
   static const char *detune_labels[] = {"-3", "-2", "-1", "0", "1", "2", "3"};
-  operator_slider(
-      widget, ym2612::OperatorField::Detune, "Detune", nullptr,
-      detune_labels[ym2612::read_operator_field(
-          op, ym2612::OperatorField::Detune)],
-      nullptr);
+  operator_slider(widget, ym2612::OperatorField::Detune, "Detune", nullptr,
+                  detune_labels[ym2612::read_operator_field(
+                      op, ym2612::OperatorField::Detune)],
+                  nullptr);
 
   if (column_layout) {
     ImGui::EndGroup();
@@ -472,15 +471,16 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // below the cursor and the header is drawn before the frame is measured.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
-  const float header_end = render_operator_header(
-      widget, patch.instrument.algorithm,
-      ImVec2(frame_min.x + frame_padding, block_min.y));
+  const float header_end =
+      render_operator_header(widget, patch.instrument.algorithm,
+                             ImVec2(frame_min.x + frame_padding, block_min.y));
   const float gap_begin = frame_min.x + frame_padding - header_gap;
   const float gap_end =
       std::min(header_end + header_gap, frame_min.x + frame_width);
 
-  ImGui::SetCursorScreenPos(ImVec2(frame_min.x + frame_padding,
-                                   block_min.y + header_height + frame_padding));
+  ImGui::SetCursorScreenPos(
+      ImVec2(frame_min.x + frame_padding,
+             block_min.y + header_height + frame_padding));
   ImGui::BeginGroup();
   render_operator_contents(context, patch, slot, envelope_state,
                            space_for_feedback);
@@ -494,8 +494,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // line up. That height comes from the previous frame; measuring and
   // applying it in the same one would mean laying the section out twice.
   const float frame_height = std::max(content_height, state.frame_height);
-  const ImVec2 frame_max(frame_min.x + frame_width,
-                         frame_min.y + frame_height);
+  const ImVec2 frame_max(frame_min.x + frame_width, frame_min.y + frame_height);
   // Claim the full block so the columns row and the window's scroll extent
   // account for the header, the padding, and any height borrowed from a
   // taller neighbour.
