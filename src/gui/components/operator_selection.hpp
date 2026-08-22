@@ -10,9 +10,9 @@ namespace ui {
  * Which operators an edit applies to, and which one leads.
  *
  * `primary` is the one touched most recently: Copy's source, and what a
- * multi-operator edit measures its delta against. Named primary rather than
- * focus because ImGui already uses focus for window and item keyboard focus.
- * It is always a member of the selection, and -1 exactly when it is empty.
+ * multi-operator edit measures its delta against. It is always a member of
+ * the selection, and -1 exactly when the selection is empty. Named primary
+ * because ImGui already uses focus for window and item keyboard focus.
  *
  * Slots are display slots: 0..3 is OP1..OP4 as drawn.
  */

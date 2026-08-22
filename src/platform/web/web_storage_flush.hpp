@@ -12,19 +12,11 @@ namespace platform::web {
 /**
  * Flush to browser storage and wait for it, behind a modal.
  *
- * For operations too big for the debounced fire-and-forget persist. Two
- * reasons to wait rather than to schedule:
- *
- * The flush snapshots the filesystem, then yields to read IndexedDB, then
- * reads the listed files one by one. Anything that moves a file during that
- * yield makes the second half read a path that is no longer there, which
- * comes back as ENOENT. Blocking input for the duration closes that window.
- *
- * And a caller that has to know whether the change reached IndexedDB, to put
- * a preference back if it did not, needs something to wait on.
- *
- * `on_complete` runs on a later frame, on the main thread. Returns false,
- * touching nothing, when a flush is already being awaited.
+ * The flush lists the filesystem, yields to read IndexedDB, then reads the
+ * listed files; a file moved during that yield comes back as ENOENT, so
+ * input stays blocked throughout. Callers that must know whether the change
+ * reached IndexedDB get that from `on_complete`, which runs on a later
+ * frame. Returns false, touching nothing, when a flush is already awaited.
  */
 bool begin_awaited_flush(std::string title, std::string detail,
                          std::function<void(bool ok, std::string error)>

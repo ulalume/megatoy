@@ -4,9 +4,7 @@
 #include <string_view>
 
 /**
- * What each release changed, in the user's terms. Hand-written, newest first,
- * and not generated from the GitHub release notes: those list merged pull
- * requests, which is the wrong unit and the wrong language.
+ * What each release changed, in the user's terms. Hand-written, newest first.
  *
  * `version` must match MEGATOY_VERSION_TAG for the release it describes, or
  * the update notice points at a heading that is not there.

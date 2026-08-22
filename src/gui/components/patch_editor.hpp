@@ -33,13 +33,13 @@ inline void track_patch_history(PatchEditorContext &context, const char *label,
 }
 
 /**
- * Record one undo step around a change that begins and ends in the same frame.
+ * Record one undo step around a change that begins and ends in the same
+ * frame, taking the two snapshots either side of the write.
  *
- * track_patch_history() opens on activation and closes on deactivation, which
- * fits a drag. A checkbox writes on the frame it is released -- the same one
- * the step closes -- so the closing snapshot was taken before the write and
- * the step came out empty. Handing the write in puts the snapshots either
- * side of it. No merge key: two toggles are two steps.
+ * track_patch_history() opens on activation and closes on deactivation,
+ * which fits a drag but not a checkbox: that writes on the frame it is
+ * released, so the closing snapshot would come before the write. No merge
+ * key here, so two toggles are two steps.
  */
 template <typename Apply>
 void track_instant_patch_history(PatchEditorContext &context,

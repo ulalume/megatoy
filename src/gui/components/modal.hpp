@@ -16,14 +16,8 @@ enum class ModalDismiss {
   EscapeOrOutsideClick,
 };
 
-/**
- * How wide a dialog is unless it says otherwise.
- *
- * Stated rather than fitted, because sizing to contents and right-aligning
- * buttons cannot both hold: the alignment measures the width it is about to
- * define, and that loop settles wherever it starts rather than at the
- * natural size.
- */
+/// How wide a dialog is unless it says otherwise. Stated rather than fitted:
+/// right-aligning buttons measures the width it would otherwise define.
 inline constexpr float kDialogWidth = 400.0f;
 /// Passed as the height to fit the contents.
 inline constexpr float kDialogAutoHeight = -1.0f;
@@ -45,12 +39,8 @@ struct ModalScope {
   bool dismissed = false;
 };
 
-/**
- * Open a modal that centres itself and says how it closed.
- *
- * ImGui never dismisses modals itself, so every way out here is ours and has
- * to be reported: a dialog must not vanish with its callback still armed.
- */
+/// Open a modal that centres itself and says how it closed. ImGui never
+/// dismisses modals itself, so every way out here is ours to report.
 ModalScope begin_modal(const char *title, ModalDismiss dismiss,
                        float width = kDialogWidth,
                        float height = kDialogAutoHeight);

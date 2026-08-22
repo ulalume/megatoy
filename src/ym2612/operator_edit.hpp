@@ -5,8 +5,7 @@
 #include <optional>
 
 /**
- * Editing operations on a channel's four operators. Pure data, so what an
- * edit means is decided here once and tested headlessly.
+ * Editing operations on a channel's four operators. No ImGui, no app state.
  *
  * Operators are addressed by display slot: 0..3 is OP1..OP4 as drawn, which
  * is not the order the chip stores them in -- see operator_at().
@@ -75,11 +74,9 @@ enum class MultiEditMode {
 };
 
 /**
- * What the selected operators held when the drag began.
- *
- * A relative edit is `baseline + delta`, never `current + delta`: accumulated
- * deltas let an operator that clamps at the end of its range come to rest
- * somewhere it never was when the drag comes back.
+ * What the selected operators held when the drag began. A relative edit is
+ * `baseline + delta`, never `current + delta`, or an operator that clamps at
+ * the end of its range drifts as the drag comes back.
  */
 struct OperatorEditBaseline {
   bool active = false;
@@ -99,11 +96,8 @@ void capture_operator_baseline(OperatorEditBaseline &baseline,
 
 /**
  * Write `value` into `primary_slot` and spread it across `selection`, a bit
- * per display slot. Disabled operators are written like any other -- the flag
- * mutes, it does not archive.
- *
- * A baseline belonging to another field or operator spreads nothing; the
- * edited operator is still written.
+ * per display slot. Disabled operators are written like any other. A
+ * baseline belonging to another field or operator spreads nothing.
  */
 void apply_operator_field_edit(ChannelInstrument &instrument, uint8_t selection,
                                const OperatorEditBaseline &baseline,

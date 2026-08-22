@@ -20,10 +20,8 @@ namespace {
 constexpr const char *kPopupId = "Saving###AwaitedStorageFlush";
 
 struct ActiveFlush {
-  /// Identity handed to JavaScript. Not the slot address: a finished flush
-  /// frees the slot and the next one can land on the same heap address, so a
-  /// stale callback would mistake the new flow for its own. A monotonic
-  /// token can never be reused, and nothing dereferences it.
+  /// Identity handed to JavaScript. Monotonic rather than the slot address,
+  /// which a later flush could reuse and a stale callback then claim.
   void *token = nullptr;
   std::string title;
   std::string detail;
@@ -115,8 +113,7 @@ void render_awaited_flush_ui() {
     ImGui::TextUnformatted(active.title.c_str());
     ImGui::TextDisabled("%s", active.detail.c_str());
     // Indeterminate, and no Cancel: IndexedDB reports only completion, and
-    // the first half of a flush runs without giving the frame back at all,
-    // so this sits still rather than animating through the worst of it.
+    // the first half of a flush never gives the frame back.
     ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
                        ImVec2(-FLT_MIN, 0));
     ui::end_modal();
