@@ -39,8 +39,8 @@ namespace {
 
 // Room between an operator's border and its contents.
 constexpr float frame_padding = 6.0f;
-// Keeps neighbouring operators' borders from touching in a columns layout.
-constexpr float frame_gutter = 6.0f;
+// Clearance either side of the header where the top border breaks for it.
+constexpr float header_gap = 4.0f;
 
 ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
   return context.prefs.multi_operator_edit_absolute
@@ -82,19 +82,52 @@ void note_operator_edit(OperatorSelection &selection, int slot) {
  * Border colour by state. Unselected is the same near-black line the Patch
  * Lab results panel is drawn with; hover only shows on unselected operators,
  * where it is advertising that the frame can be clicked at all.
+ *
+ * A selected operator is the highlight faded rather than a neutral grey. Grey
+ * sat too close to the three unselected borders around it to register as a
+ * state; a dimmer version of the colour the lead operator wears reads as "one
+ * of these, but not the one leading".
  */
 ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
+  const ImVec4 highlight = styles::color(styles::MegatoyCol::TextHighlight);
   if (is_primary) {
-    return ImGui::GetColorU32(
-        styles::color(styles::MegatoyCol::TextHighlight));
+    return ImGui::GetColorU32(highlight);
   }
   if (selected) {
-    return ImGui::GetColorU32(ImGuiCol_Separator);
+    return ImGui::GetColorU32(
+        ImVec4(highlight.x, highlight.y, highlight.z, highlight.w * 0.6f));
   }
   if (hovered) {
     return ImGui::GetColorU32(ImGuiCol_SeparatorHovered);
   }
   return ImGui::GetColorU32(ImGuiCol_Border);
+}
+
+/**
+ * The frame, with the top edge broken between `gap_begin` and `gap_end` so
+ * the header sits in the line instead of under it. AddRect would draw
+ * straight through the checkbox and the label.
+ *
+ * The half-pixel inset is what AddRect does internally, and without it the
+ * line lands between two pixels and comes out blurred.
+ */
+void draw_operator_frame(const ImVec2 &min, const ImVec2 &max, float gap_begin,
+                         float gap_end, ImU32 color) {
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const float left = min.x + 0.5f;
+  const float top = min.y + 0.5f;
+  const float right = max.x - 0.5f;
+  const float bottom = max.y - 0.5f;
+
+  if (gap_begin > left) {
+    draw_list->AddLine(ImVec2(left, top), ImVec2(gap_begin, top), color);
+  }
+  if (gap_end < right) {
+    draw_list->AddLine(ImVec2(gap_end, top), ImVec2(right, top), color);
+  }
+  draw_list->AddLine(ImVec2(left, top), ImVec2(left, bottom), color);
+  draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
+  draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
 }
 
 struct FieldLabels {
@@ -236,6 +269,38 @@ void operator_checkbox(OperatorWidget &widget, const char *id,
   }
 }
 
+/**
+ * The operator's enable checkbox and its name, drawn to sit in the frame's
+ * top border. Returns the x where the border can pick up again.
+ *
+ * There used to be a SeparatorText rule here as well. With a frame around
+ * every operator that rule was a second horizontal line saying the same
+ * thing, and in the single-column layout it ran straight out through the
+ * border.
+ */
+float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
+                             const ImVec2 &header_min) {
+  const int slot = widget.slot;
+  // Carriers reach the output; modulators only feed other operators. Which
+  // is which moves with the algorithm, so it is worth saying on every one.
+  const bool is_modulator = ym2612::operator_register_index(slot) <
+                            ym2612::algorithm_modulator_count[algorithm];
+
+  ImGui::SetCursorScreenPos(header_min);
+  ImGui::BeginGroup();
+  operator_checkbox(widget, "##Operator Enable", "Enable", "op_enable",
+                    &ym2612::OperatorSettings::enable, false);
+  ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+  if (is_modulator) {
+    ImGui::TextUnformatted(operator_slot_label(slot).c_str());
+  } else {
+    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive),
+                       "%s (Carrier)", operator_slot_label(slot).c_str());
+  }
+  ImGui::EndGroup();
+  return ImGui::GetItemRectMax().x;
+}
+
 void render_envelope(OperatorWidget &widget,
                      UIState::EnvelopeState &envelope_state) {
   const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
@@ -290,29 +355,6 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   OperatorWidget widget{context, instrument, slot};
 
   const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
-  const bool is_modulator =
-      ym2612::operator_register_index(slot) <
-      ym2612::algorithm_modulator_count[instrument.algorithm];
-  const std::string op_label =
-      operator_slot_label(slot) + (is_modulator ? "" : " (Carrier)");
-
-  if (!is_modulator) {
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
-    ImGui::PushStyleColor(ImGuiCol_Separator,
-                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
-  }
-  ImVec2 pos = ImGui::GetCursorPos();
-  ImGui::SeparatorText(op_label.c_str());
-  ImGui::SetCursorPosY(pos.y);
-
-  operator_checkbox(widget, "##Operator Enable", "Enable", "op_enable",
-                    &ym2612::OperatorSettings::enable, false);
-
-  if (!is_modulator) {
-    ImGui::PopStyleColor();
-    ImGui::PopStyleColor();
-  }
 
   if (!op.enable) {
     ImGui::BeginDisabled();
@@ -416,15 +458,29 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
                             bool space_for_feedback) {
   auto &state = context.operator_edit;
+  OperatorWidget widget{context, patch.instrument, slot};
 
   ImGui::PushID(slot);
 
-  const ImVec2 frame_min = ImGui::GetCursorScreenPos();
-  const float frame_width =
-      std::max(ImGui::GetColumnWidth() - frame_gutter, 1.0f);
+  const ImVec2 block_min = ImGui::GetCursorScreenPos();
+  // Measured from the cursor rather than from GetColumnWidth(): a column
+  // clips its own draw list, and it clips a little tighter than the column
+  // width suggests, which cut the right border off entirely.
+  const float frame_width = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
 
-  ImGui::SetCursorScreenPos(
-      ImVec2(frame_min.x + frame_padding, frame_min.y + frame_padding));
+  // The header straddles the top border, so the frame starts half a header
+  // below the cursor and the header is drawn before the frame is measured.
+  const float header_height = ImGui::GetFrameHeight();
+  const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
+  const float header_end = render_operator_header(
+      widget, patch.instrument.algorithm,
+      ImVec2(frame_min.x + frame_padding, block_min.y));
+  const float gap_begin = frame_min.x + frame_padding - header_gap;
+  const float gap_end =
+      std::min(header_end + header_gap, frame_min.x + frame_width);
+
+  ImGui::SetCursorScreenPos(ImVec2(frame_min.x + frame_padding,
+                                   block_min.y + header_height + frame_padding));
   ImGui::BeginGroup();
   render_operator_contents(context, patch, slot, envelope_state,
                            space_for_feedback);
@@ -440,10 +496,10 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   const float frame_height = std::max(content_height, state.frame_height);
   const ImVec2 frame_max(frame_min.x + frame_width,
                          frame_min.y + frame_height);
-  // Claim the full frame so the columns row and the window's scroll extent
-  // account for the padding and for any height borrowed from a taller
-  // neighbour.
-  ImGui::SetCursorScreenPos(ImVec2(frame_min.x, frame_max.y));
+  // Claim the full block so the columns row and the window's scroll extent
+  // account for the header, the padding, and any height borrowed from a
+  // taller neighbour.
+  ImGui::SetCursorScreenPos(ImVec2(block_min.x, frame_max.y));
 
   // Hit testing by rectangle rather than by an invisible button underneath:
   // a button large enough to cover the operator would have to yield the
@@ -452,8 +508,10 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // could be under the cursor here, since the others are in other columns.
   const bool window_hovered =
       ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+  // From block_min, not frame_min: the header sits above the border and
+  // clicking beside the label should select like anywhere else.
   const bool frame_hovered =
-      window_hovered && ImGui::IsMouseHoveringRect(frame_min, frame_max);
+      window_hovered && ImGui::IsMouseHoveringRect(block_min, frame_max);
   const bool on_background = frame_hovered && !ImGui::IsAnyItemHovered();
   // The border only lights up on hover when nothing is being dragged, so a
   // slider drag that wanders out of its own operator does not light up the
@@ -491,12 +549,10 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndPopup();
   }
 
-  ImGui::GetWindowDrawList()->AddRect(
-      frame_min, frame_max,
-      operator_frame_color(state.selection.contains(slot),
-                           state.selection.primary == slot,
-                           background_hovered),
-      ImGui::GetStyle().FrameRounding);
+  draw_operator_frame(frame_min, frame_max, gap_begin, gap_end,
+                      operator_frame_color(state.selection.contains(slot),
+                                           state.selection.primary == slot,
+                                           background_hovered));
 
   ImGui::PopID();
 }
