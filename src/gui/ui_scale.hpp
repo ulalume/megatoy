@@ -10,7 +10,8 @@ inline constexpr float kMin = 1.0f;
 inline constexpr float kMax = 3.0f;
 
 /// Factors the Preferences combo offers, in the order it lists them.
-inline constexpr float kChoices[] = {1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f};
+inline constexpr float kChoices[] = {1.0f, 1.25f, 1.5f, 1.75f,
+                                     2.0f, 2.5f,  3.0f};
 
 /**
  * Turn a stored preference into the factor to draw at.
