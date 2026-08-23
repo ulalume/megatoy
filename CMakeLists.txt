@@ -219,6 +219,9 @@ add_executable(workspace_test tests/workspace/workspace_test.cpp)
 target_include_directories(workspace_test PRIVATE src)
 target_link_libraries(workspace_test PRIVATE megatoy_core)
 add_test(NAME workspace_test COMMAND workspace_test)
+add_test(NAME platform_macro_include_test
+         COMMAND ${CMAKE_COMMAND} -DMEGATOY_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+                 -P ${CMAKE_SOURCE_DIR}/tests/platform/platform_macro_include_test.cmake)
 
 # Convenience target to build and run tests
 add_custom_target(check
@@ -232,6 +235,8 @@ add_custom_target(check
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           version_test import_pipeline_test persistent_parse_cache_test
           background_folder_scan_test
+          operator_layout_test operator_edit_test operator_selection_test
+          snapshot_entry_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

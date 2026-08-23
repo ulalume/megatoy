@@ -14,6 +14,7 @@ constexpr ChangelogItem kItems_0_8_2[] = {
     {"Select operators and edit them together", kOperatorDetails},
     {"Preferences are grouped into tabs", {}},
     {"Audio buffer size can be set in Preferences", {}},
+    {"MML Console copies to the clipboard again on the web", {}},
 };
 
 constexpr std::string_view kLibraryDetails[] = {

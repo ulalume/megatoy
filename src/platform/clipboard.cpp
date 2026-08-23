@@ -1,4 +1,5 @@
 #include "platform/clipboard.hpp"
+#include "platform/platform_config.hpp"
 
 #include <string>
 #if !defined(MEGATOY_PLATFORM_WEB)
