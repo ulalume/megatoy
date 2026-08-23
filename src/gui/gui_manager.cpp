@@ -4,6 +4,7 @@
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/styles/theme.hpp"
+#include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "platform/platform_config.hpp"
 #include <filesystem>
@@ -149,16 +150,9 @@ bool GuiManager::initialize(const std::string &window_title, int width,
 
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
 
-  // Setup Dear ImGui style
-  ImGuiStyle &style = ImGui::GetStyle();
-  style.ScrollbarSize = 8;
-  style.ScrollbarRounding = 0;
-  style.ScrollbarPadding = 0;
-  style.SeparatorTextBorderSize = 1;
-  style.FramePadding = ImVec2(4, 2);
-
-  // Apply theme from preferences
-  set_theme(preferences_.theme());
+  // Apply theme and scale from preferences
+  theme_ = preferences_.theme();
+  apply_ui_scale(preferences_.ui_preferences().ui_scale);
 
   // Setup Platform/Renderer backends
   ImGui_ImplSDL3_InitForOpenGL(window_, gl_context_);
@@ -320,6 +314,12 @@ void GuiManager::process_event(const SDL_Event &event) {
       should_close_ = true;
     }
     break;
+  case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+    if (event.window.windowID == window_id_ &&
+        ui_scale_preference_ == ui::scale::kAuto) {
+      apply_ui_scale(ui_scale_preference_);
+    }
+    break;
   case SDL_EVENT_DROP_FILE:
     if (event.drop.windowID == window_id_ && event.drop.data != nullptr) {
       std::string dropped_path(event.drop.data);
@@ -407,11 +407,26 @@ bool GuiManager::supports_quit() const {
 
 void GuiManager::set_theme(ui::styles::ThemeId theme) {
   theme_ = theme;
-  ui::styles::apply_theme(theme_);
+  ui::styles::apply_style(theme_, ui_scale_);
   if (ImGui::GetCurrentContext() != nullptr) {
     ui::reset_algorithm_preview_textures();
     ui::reset_ssg_preview_textures();
   }
+}
+
+float GuiManager::display_scale() const {
+  if (window_ == nullptr) {
+    return 1.0f;
+  }
+  const float scale =
+      SDL_GetDisplayContentScale(SDL_GetDisplayForWindow(window_));
+  return scale > 0.0f ? scale : 1.0f;
+}
+
+void GuiManager::apply_ui_scale(float preference) {
+  ui_scale_preference_ = preference;
+  ui_scale_ = ui::scale::resolve(preference, display_scale());
+  ui::styles::apply_style(theme_, ui_scale_);
 }
 
 void GuiManager::set_imgui_ini_file(const std::string &path) {

@@ -3,14 +3,17 @@
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
+#include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <imgui.h>
 #include <map>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace ui {
 
@@ -282,6 +285,46 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   }
 }
 
+std::string scale_label(float factor) {
+  return std::to_string(static_cast<int>(std::lround(factor * 100.0f))) + "%";
+}
+
+void render_ui_scale_combo(PreferencesContext &context) {
+  auto &ui_prefs = context.ui_prefs;
+
+  std::vector<std::string> labels;
+  labels.push_back(
+      "Auto (" +
+      scale_label(ui::scale::resolve(ui::scale::kAuto, context.display_scale)) +
+      ")");
+  for (const float factor : ui::scale::kChoices) {
+    labels.push_back(scale_label(factor));
+  }
+
+  std::vector<const char *> label_pointers;
+  label_pointers.reserve(labels.size());
+  for (const auto &label : labels) {
+    label_pointers.push_back(label.c_str());
+  }
+
+  int index = 0;
+  for (int i = 0; i < static_cast<int>(std::size(ui::scale::kChoices)); ++i) {
+    if (ui_prefs.ui_scale == ui::scale::kChoices[i]) {
+      index = i + 1;
+      break;
+    }
+  }
+
+  if (ImGui::Combo("Interface scale", &index, label_pointers.data(),
+                   static_cast<int>(label_pointers.size()))) {
+    ui_prefs.ui_scale =
+        index == 0 ? ui::scale::kAuto : ui::scale::kChoices[index - 1];
+    if (context.apply_ui_scale) {
+      context.apply_ui_scale(ui_prefs.ui_scale);
+    }
+  }
+}
+
 void render_general_tab(PreferencesContext &context) {
   auto &prefs = context.preferences;
   auto &ui_prefs = context.ui_prefs;
@@ -315,6 +358,8 @@ void render_general_tab(PreferencesContext &context) {
     }
     ImGui::EndCombo();
   }
+
+  render_ui_scale_combo(context);
 
   ImGui::Spacing();
 
@@ -547,7 +592,8 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     return;
   }
 
-  ImGui::SetNextWindowSize(ImVec2(480, 260), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(480, 260)),
+                           ImGuiCond_FirstUseEver);
 
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
     if (ImGui::BeginTabBar("##preference_tabs")) {

@@ -2,6 +2,7 @@
 
 #include "core/status.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 
 #include <IconsFontAwesome7.h>
 #include <chrono>
@@ -80,18 +81,18 @@ void render_status_toasts() {
   }
 
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
-  const ImVec2 corner(viewport->WorkPos.x + viewport->WorkSize.x - kMargin,
-                      viewport->WorkPos.y + viewport->WorkSize.y - kMargin);
+  const float margin = ui::scale::px(kMargin);
+  const ImVec2 corner(viewport->WorkPos.x + viewport->WorkSize.x - margin,
+                      viewport->WorkPos.y + viewport->WorkSize.y - margin);
 
   ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
   // NoBackground, not a transparent fill: the fill alone still left the
   // host's own border drawn around the stack.
   const ImGuiWindowFlags host_flags =
       ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
-      ImGuiWindowFlags_NoMove |
-      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-      ImGuiWindowFlags_NoDocking;
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
+      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking;
   if (!ImGui::Begin("##status_toasts", nullptr, host_flags)) {
     ImGui::End();
     return;
@@ -110,13 +111,14 @@ void render_status_toasts() {
                           ImGui::GetStyleColorVec4(ImGuiCol_PopupBg));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
 
-    if (ImGui::BeginChild("toast", ImVec2(kToastWidth, 0.0f),
+    const float toast_width = ui::scale::px(kToastWidth);
+    if (ImGui::BeginChild("toast", ImVec2(toast_width, 0.0f),
                           ImGuiChildFlags_Borders |
                               ImGuiChildFlags_AutoResizeY |
                               ImGuiChildFlags_AlwaysUseWindowPadding)) {
       ImGui::TextColored(accent, "%s", severity_icon(entry.severity));
       ImGui::SameLine();
-      ImGui::PushTextWrapPos(kToastWidth -
+      ImGui::PushTextWrapPos(toast_width -
                              ImGui::GetStyle().WindowPadding.x * 2.0f);
       ImGui::TextUnformatted(entry.message.c_str());
       ImGui::PopTextWrapPos();

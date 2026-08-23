@@ -24,6 +24,14 @@ const std::vector<ThemeDefinition> &available_themes();
 void apply_theme(ThemeId id);
 ThemeId current_theme();
 
+/**
+ * Rebuild the whole style: base metrics, then theme colours, then scale.
+ *
+ * ScaleAllSizes multiplies what it finds, so the metrics have to start from
+ * their unscaled values every time.
+ */
+void apply_style(ThemeId id, float scale);
+
 ThemeId theme_id_from_storage_key(const std::string &key, ThemeId fallback);
 const char *storage_key(ThemeId id);
 const char *asset_subdirectory(ThemeId id);

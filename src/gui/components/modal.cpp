@@ -1,5 +1,6 @@
 #include "modal.hpp"
 #include "common.hpp"
+#include "gui/ui_scale.hpp"
 
 #include <algorithm>
 
@@ -44,14 +45,16 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss, float width,
   // ImGui clamps neither an explicit size nor auto-resize to the viewport,
   // and buttons past the bottom edge cannot be reached.
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
-  const ImVec2 margin(48.0f, 48.0f);
+  const ImVec2 margin = ui::scale::px(ImVec2(48.0f, 48.0f));
   ImGui::SetNextWindowSizeConstraints(
       ImVec2(0.0f, 0.0f),
-      ImVec2(std::max(viewport->WorkSize.x - margin.x, 240.0f),
-             std::max(viewport->WorkSize.y - margin.y, 160.0f)));
+      ImVec2(std::max(viewport->WorkSize.x - margin.x, ui::scale::px(240.0f)),
+             std::max(viewport->WorkSize.y - margin.y, ui::scale::px(160.0f))));
 
-  // A non-positive component means fit the contents on that axis.
-  ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
+  // A non-positive component means fit the contents on that axis, and stays
+  // non-positive through the scale.
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(width, height)),
+                           ImGuiCond_Always);
   center_next_window();
   if (!ImGui::BeginPopupModal(title, nullptr,
                               ImGuiWindowFlags_NoMove |
@@ -71,6 +74,8 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss, float width,
 }
 
 void end_modal() { ImGui::EndPopup(); }
+
+float dialog_button_width() { return ui::scale::px(kDialogButtonWidth); }
 
 float button_width(const char *label) {
   return ImGui::CalcTextSize(label, nullptr, true).x +

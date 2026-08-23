@@ -4,6 +4,7 @@
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/keyboard_typing.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 #include "util.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
@@ -254,7 +255,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     return;
   }
 
-  ImGui::SetNextWindowSize(ImVec2(400, 180), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 180)),
+                           ImGuiCond_FirstUseEver);
   if (!ImGui::Begin(title, &ui_prefs.show_midi_keyboard)) {
     ImGui::End();
     return;
@@ -262,7 +264,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
 
   // Scale selector
   int current_scale = static_cast<int>(keyboard_settings.scale);
-  ImGui::SetNextItemWidth(150);
+  ImGui::SetNextItemWidth(ui::scale::px(150.0f));
   if (ImGui::Combo("Scale", &current_scale, scale_names,
                    IM_ARRAYSIZE(scale_names))) {
     keyboard_settings.scale = static_cast<Scale>(current_scale);
@@ -274,13 +276,13 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     refresh_state(context.state, input, typing_layout, custom_layout);
   }
 
-  ImGui::SameLine(0, 16);
+  ImGui::SameLine(0, ui::scale::px(16.0f));
 
   if (keyboard_settings.scale == Scale::CHROMATIC)
     ImGui::BeginDisabled();
   // Key selector
   int current_key = static_cast<int>(keyboard_settings.key);
-  ImGui::SetNextItemWidth(40);
+  ImGui::SetNextItemWidth(ui::scale::px(40.0f));
   if (ImGui::Combo("Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
     keyboard_settings.key = static_cast<Key>(current_key);
     context.ui_prefs.midi_keyboard_key = current_key;
@@ -289,7 +291,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (keyboard_settings.scale == Scale::CHROMATIC)
     ImGui::EndDisabled();
 
-  ImGui::SameLine(0, 16);
+  ImGui::SameLine(0, ui::scale::px(16.0f));
   const bool can_start_playback = !context.state.playback_sequence.empty() &&
                                   context.key_on && context.key_off;
   const bool disable_controls =
@@ -309,10 +311,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (disable_controls) {
     ImGui::EndDisabled();
   }
-  ImGui::SameLine(0, 32);
+  ImGui::SameLine(0, ui::scale::px(32.0f));
 
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
-  ImGui::SetNextItemWidth(100);
+  ImGui::SetNextItemWidth(ui::scale::px(100.0f));
   if (ImGui::SliderInt("Typing", &current_key_octave, 0, 7,
                        typing_label(context.state))) {
     input.keyboard_typing_octave = current_key_octave;
@@ -336,7 +338,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     ImGui::SetTooltip("%s", tooltip.c_str());
   }
 
-  ImGui::SameLine(0, 16);
+  ImGui::SameLine(0, ui::scale::px(16.0f));
 
   std::vector<ym2612::Note> active_notes = context.active_notes
                                                ? context.active_notes()
@@ -358,10 +360,12 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), true,
                         ImGuiWindowFlags_HorizontalScrollbar)) {
     const auto &notes = context.state.display_notes;
+    const float min_key_width = ui::scale::px(14.0f);
     const float key_width =
         notes.empty()
-            ? 14.0f
-            : std::max(14.0f, (available_region.x - 16) / notes.size());
+            ? min_key_width
+            : std::max(min_key_width,
+                       (available_region.x - ui::scale::px(16)) / notes.size());
 
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     const ImVec2 cursor = ImGui::GetCursorScreenPos();

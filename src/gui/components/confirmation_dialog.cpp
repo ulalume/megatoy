@@ -1,7 +1,7 @@
 #include "confirmation_dialog.hpp"
 #include "common.hpp"
-#include "modal.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "modal.hpp"
 #include <algorithm>
 #include <cstring>
 #include <imgui.h>
@@ -82,10 +82,9 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
   bool confirm_danger = false;
   // Escape cancels. Deleting is the destructive answer, so it is the one that
   // has to be asked for explicitly.
-  auto danger_modal =
-      danger.title.empty()
-          ? ModalScope{}
-          : begin_modal(danger.title.c_str(), ModalDismiss::Escape);
+  auto danger_modal = danger.title.empty() ? ModalScope{}
+                                           : begin_modal(danger.title.c_str(),
+                                                         ModalDismiss::Escape);
   cancel_danger = danger_modal.dismissed;
   if (danger_modal.visible) {
     ImGui::TextWrapped("%s", danger.message.c_str());
@@ -94,9 +93,9 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     // The confirm label is whatever the caller named the action, so it is
     // allowed to outgrow the standard width rather than be clipped by it.
     const float confirm_width = std::max(
-        kDialogButtonWidth, button_width(danger.confirm_label.c_str()));
-    align_buttons_right({kDialogButtonWidth, confirm_width});
-    if (ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0))) {
+        dialog_button_width(), button_width(danger.confirm_label.c_str()));
+    align_buttons_right({dialog_button_width(), confirm_width});
+    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
       cancel_danger = true;
       ImGui::CloseCurrentPopup();
     }
@@ -128,10 +127,9 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
   bool confirm_prompt = false;
   // Escape cancels, but only once the text field has let go of it -- see
   // escape_pressed() in modal.cpp.
-  auto prompt_modal =
-      prompt.title.empty()
-          ? ModalScope{}
-          : begin_modal(prompt.title.c_str(), ModalDismiss::Escape);
+  auto prompt_modal = prompt.title.empty() ? ModalScope{}
+                                           : begin_modal(prompt.title.c_str(),
+                                                         ModalDismiss::Escape);
   cancel_prompt = prompt_modal.dismissed;
   if (prompt_modal.visible) {
     char input[512];
@@ -154,9 +152,9 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     ImGui::Spacing();
 
     const float prompt_confirm_width = std::max(
-        kDialogButtonWidth, button_width(prompt.confirm_label.c_str()));
-    align_buttons_right({kDialogButtonWidth, prompt_confirm_width});
-    if (ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0))) {
+        dialog_button_width(), button_width(prompt.confirm_label.c_str()));
+    align_buttons_right({dialog_button_width(), prompt_confirm_width});
+    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
       cancel_prompt = true;
       ImGui::CloseCurrentPopup();
     }

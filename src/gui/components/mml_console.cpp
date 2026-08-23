@@ -1,5 +1,6 @@
 #include "mml_console.hpp"
 #include "formats/ym2612_format_adapter.hpp"
+#include "gui/ui_scale.hpp"
 #include "platform/clipboard.hpp"
 #include <cstring>
 #include <imgui.h>
@@ -7,7 +8,8 @@
 namespace ui {
 
 void render_mml_console(const char *title, MmlConsoleContext &context) {
-  ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(300, 180)),
+                           ImGuiCond_FirstUseEver);
 
   if (!context.ui_prefs.show_mml_console) {
     return;

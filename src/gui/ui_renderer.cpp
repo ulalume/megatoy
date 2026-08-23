@@ -22,8 +22,8 @@
 #include "patches/filename_utils.hpp"
 #include "platform/platform_config.hpp"
 #include "platform/web/web_folder_delete.hpp"
-#include "platform/web/web_storage_flush.hpp"
 #include "platform/web/web_folder_import.hpp"
+#include "platform/web/web_storage_flush.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_workspace_download.hpp"
 #include "system/path_service.hpp"
@@ -273,9 +273,8 @@ void perform_patch_rename(AppContext &ctx, const patches::PatchEntry &entry,
             ctx.services.preference_manager.rename_workspace_folder(new_path,
                                                                     old_path);
           }
-          megatoy::status::error(
-              "Could not save the rename: " + error +
-              " -- the old name comes back after a reload.");
+          megatoy::status::error("Could not save the rename: " + error +
+                                 " -- the old name comes back after a reload.");
         });
     if (!started) {
       megatoy::status::warning("Another storage operation is in progress.");
@@ -297,9 +296,8 @@ void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
   const bool is_directory = entry.is_directory;
   const std::string title = is_directory ? "Rename Folder" : "Rename Patch";
   const std::string label = is_directory ? "Folder name" : "Filename";
-  const std::string initial = is_directory
-                                  ? entry.full_path.filename().string()
-                                  : entry.full_path.stem().string();
+  const std::string initial = is_directory ? entry.full_path.filename().string()
+                                           : entry.full_path.stem().string();
 
   ctx.ui_state().text_prompt_state.request(
       title, label, initial, "Rename",
@@ -552,8 +550,12 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
       [&ctx](ui::styles::ThemeId theme_id) {
         ctx.services.gui_manager.set_theme(theme_id);
       },
+      [&ctx](float preference) {
+        ctx.services.gui_manager.apply_ui_scale(preference);
+      },
       true,
       ctx.services.audio_manager.default_buffer_frames(),
+      ctx.services.gui_manager.display_scale(),
   };
 }
 

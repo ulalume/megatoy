@@ -23,6 +23,11 @@ struct UIPreferences {
    * opens, so a change lands on the next launch.
    */
   int audio_buffer_frames = 0;
+  /**
+   * Factor the interface is drawn at; 0 follows the display. Values outside
+   * the supported range are clamped when the style is built.
+   */
+  float ui_scale = 0.0f;
   bool use_velocity = true;
   int velocity_sensitivity_depth = 100;
   bool use_pitch_bend = true;
@@ -68,6 +73,7 @@ struct UIPreferences {
            lhs.show_patch_lab == rhs.show_patch_lab &&
            lhs.ym2612_chip_type == rhs.ym2612_chip_type &&
            lhs.audio_buffer_frames == rhs.audio_buffer_frames &&
+           lhs.ui_scale == rhs.ui_scale &&
            lhs.use_velocity == rhs.use_velocity &&
            lhs.velocity_sensitivity_depth == rhs.velocity_sensitivity_depth &&
            lhs.steal_oldest_note_when_full == rhs.steal_oldest_note_when_full &&

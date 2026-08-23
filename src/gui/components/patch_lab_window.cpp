@@ -1,6 +1,7 @@
 #include "patch_lab_window.hpp"
 
 #include "common.hpp"
+#include "gui/ui_scale.hpp"
 #include "imgui_internal.h"
 #include "patches/patch_lab.hpp"
 #include <IconsFontAwesome7.h>
@@ -213,7 +214,7 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::TextWrapped("Generates a new patch each time.");
   ImGui::Spacing();
 
-  ImGui::SetNextItemWidth(120.0f);
+  ImGui::SetNextItemWidth(ui::scale::px(120.0f));
   ImGui::InputInt("Seed (auto = -1)", &state.random_seed);
 
   if (ImGui::Button("Apply to current patch")) {
@@ -250,13 +251,11 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
   }
 
   render_patch_combo("Patch A", entries, state.source_a,
-                     state.combo_filter_patch_a,
-                     state.combo_width_patch_a);
+                     state.combo_filter_patch_a, state.combo_width_patch_a);
   render_patch_combo("Patch B", entries, state.source_b,
-                     state.combo_filter_patch_b,
-                     state.combo_width_patch_b);
+                     state.combo_filter_patch_b, state.combo_width_patch_b);
 
-  ImGui::SetNextItemWidth(120.0f);
+  ImGui::SetNextItemWidth(ui::scale::px(120.0f));
   ImGui::InputInt("Seed (auto = -1)##merge", &state.merge_seed);
 
   if (!entries.empty()) {
@@ -315,11 +314,9 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
   }
 
   render_patch_combo("Patch A##morph", entries, state.source_a,
-                     state.combo_filter_patch_a,
-                     state.combo_width_patch_a);
+                     state.combo_filter_patch_a, state.combo_width_patch_a);
   render_patch_combo("Patch B##morph", entries, state.source_b,
-                     state.combo_filter_patch_b,
-                     state.combo_width_patch_b);
+                     state.combo_filter_patch_b, state.combo_width_patch_b);
 
   ImGui::SliderFloat("Blend", &state.morph_mix, 0.0f, 1.0f);
   ImGui::Checkbox("Interpolate algorithm", &state.morph_interpolate_algorithm);
@@ -419,7 +416,8 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     return;
   }
 
-  ImGui::SetNextWindowSize(ImVec2(700, 320), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(700, 320)),
+                           ImGuiCond_FirstUseEver);
 
   if (!ImGui::Begin(title, &context.prefs.show_patch_lab)) {
     ImGui::End();

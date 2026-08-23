@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "file_manager.hpp"
+#include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
 
 #include <IconsFontAwesome7.h>
@@ -141,7 +142,7 @@ void render_filter_bar(PatchSelectorContext &context) {
                sizeof(search_buffer));
   search_buffer[sizeof(search_buffer) - 1] = '\0';
 
-  ImGui::SetNextItemWidth(130);
+  ImGui::SetNextItemWidth(ui::scale::px(130.0f));
   if (ImGui::InputTextWithHint("##SharedSearch",
                                ICON_FA_MAGNIFYING_GLASS " Search...",
                                search_buffer, sizeof(search_buffer))) {
@@ -150,7 +151,7 @@ void render_filter_bar(PatchSelectorContext &context) {
   prefs.patch_search_query = prefs.metadata_search_query;
 
   ImGui::SameLine();
-  ImGui::SetNextItemWidth(60);
+  ImGui::SetNextItemWidth(ui::scale::px(60.0f));
   prefs.metadata_star_filter = std::clamp(prefs.metadata_star_filter, 0, 5);
   ImGui::SliderInt("##Stars", &prefs.metadata_star_filter, 0, 5,
                    prefs.metadata_star_filter == 0

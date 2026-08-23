@@ -105,6 +105,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/preview/ssg_preview.cpp
   src/gui/components/waveform.cpp
   src/gui/gui_manager.cpp
+  src/gui/ui_scale.cpp
   src/gui/ui_renderer.cpp
   src/gui/image/resource_manager.cpp
   src/gui/image/stb_image_impl.cpp

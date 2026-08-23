@@ -70,8 +70,8 @@ void render_folder_scan_dialog() {
     ImGui::ProgressBar(static_cast<float>(-ImGui::GetTime()),
                        ImVec2(-FLT_MIN, 0));
     ImGui::Spacing();
-    align_buttons_right({kDialogButtonWidth});
-    if (ImGui::Button("Cancel", ImVec2(kDialogButtonWidth, 0))) {
+    align_buttons_right({dialog_button_width()});
+    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
       scan::request_cancel();
     }
     end_modal();

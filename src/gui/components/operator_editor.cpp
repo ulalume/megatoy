@@ -3,6 +3,7 @@
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 #include "patch_editor.hpp"
 #include "ym2612/operator_edit.hpp"
 #include "ym2612/types.hpp"
@@ -38,9 +39,9 @@ update_slider_state(UIState::EnvelopeState::SliderState &slider_state) {
 namespace {
 
 // Room between an operator's border and its contents.
-constexpr float frame_padding = 6.0f;
+float frame_padding() { return ui::scale::px(6.0f); }
 // Clearance either side of the header where the top border breaks for it.
-constexpr float header_gap = 4.0f;
+float header_gap() { return ui::scale::px(4.0f); }
 
 ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
   return context.prefs.multi_operator_edit_absolute
@@ -99,8 +100,7 @@ ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
  * falls between two pixels and blurs.
  */
 void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
-                         float top_resume_x, float left_resume_y,
-                         ImU32 color) {
+                         float top_resume_x, float left_resume_y, ImU32 color) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float left = min.x + 0.5f;
   const float top = min.y + 0.5f;
@@ -238,12 +238,10 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
   }
   if (changed) {
     track_instant_patch_history(
-        widget.editor, history_label(state.selection, widget.slot, name),
-        [&] {
+        widget.editor, history_label(state.selection, widget.slot, name), [&] {
           if (spread) {
-            ym2612::apply_operator_flag_edit(widget.instrument,
-                                             state.selection.selected, flag,
-                                             value);
+            ym2612::apply_operator_flag_edit(
+                widget.instrument, state.selection.selected, flag, value);
           } else {
             op.*flag = value;
           }
@@ -354,10 +352,9 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::SetCursorPosY(feedback_gap.y + 20);
   }
 
-  operator_checkbox(widget, "Amplitude Modulation Enable",
-                    "Amplitude Modulation",
-                    &ym2612::OperatorSettings::amplitude_modulation_enable,
-                    true);
+  operator_checkbox(
+      widget, "Amplitude Modulation Enable", "Amplitude Modulation",
+      &ym2612::OperatorSettings::amplitude_modulation_enable, true);
   ImGui::Spacing();
 
   render_envelope(widget, envelope_state);
@@ -376,7 +373,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
                                           : get_ssg_preview_off_texture()) {
     if (preview->valid()) {
-      ImGui::Image(preview->texture_id, preview->size);
+      ImGui::Image(preview->texture_id, ui::scale::px(preview->size));
     }
   }
   ImGui::SameLine();
@@ -448,19 +445,19 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   const float header_end =
       render_operator_header(widget, patch.instrument.algorithm, block_min);
   const float top_resume_x =
-      std::min(header_end + header_gap, frame_min.x + frame_width);
-  const float left_resume_y = block_min.y + header_height + header_gap;
+      std::min(header_end + header_gap(), frame_min.x + frame_width);
+  const float left_resume_y = block_min.y + header_height + header_gap();
 
   ImGui::SetCursorScreenPos(
-      ImVec2(frame_min.x + frame_padding,
-             block_min.y + header_height + frame_padding));
+      ImVec2(frame_min.x + frame_padding(),
+             block_min.y + header_height + frame_padding()));
   ImGui::BeginGroup();
   render_operator_contents(context, patch, slot, envelope_state,
                            space_for_feedback);
   ImGui::EndGroup();
 
   const float content_height =
-      ImGui::GetItemRectMax().y - frame_min.y + frame_padding;
+      ImGui::GetItemRectMax().y - frame_min.y + frame_padding();
   state.pending_frame_height =
       std::max(state.pending_frame_height, content_height);
   // All four drawn to the tallest one's height so the borders line up. From

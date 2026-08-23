@@ -59,6 +59,26 @@ void apply_theme(ThemeId id) {
   }
 }
 
+void apply_style(ThemeId id, float scale) {
+  if (ImGui::GetCurrentContext() == nullptr) {
+    apply_theme(id);
+    return;
+  }
+
+  ImGuiStyle &style = ImGui::GetStyle();
+  style = ImGuiStyle();
+  style.ScrollbarSize = 8;
+  style.ScrollbarRounding = 0;
+  style.ScrollbarPadding = 0;
+  style.SeparatorTextBorderSize = 1;
+  style.FramePadding = ImVec2(4, 2);
+
+  apply_theme(id);
+
+  style.ScaleAllSizes(scale);
+  style.FontScaleMain = scale;
+}
+
 ThemeId current_theme() { return g_current_theme; }
 
 ThemeId theme_id_from_storage_key(const std::string &key, ThemeId fallback) {

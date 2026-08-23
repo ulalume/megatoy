@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gui/styles/theme.hpp"
+#include "gui/ui_scale.hpp"
 #include "preferences/preference_manager.hpp"
 #include <string>
 
@@ -108,6 +109,14 @@ public:
   ui::styles::ThemeId theme() const { return theme_; }
 
   /**
+   * Interface scale
+   */
+  /// Rebuild the style for a scale preference; 0 follows the display.
+  void apply_ui_scale(float preference);
+  /// Enlargement the display asks content for; 1.0 when it cannot be read.
+  float display_scale() const;
+
+  /**
    * File drop callback management
    */
   void set_drop_callback(void *user_pointer,
@@ -140,6 +149,8 @@ private:
   bool pending_imgui_ini_update_;
   std::string imgui_ini_file_path_;
   ui::styles::ThemeId theme_;
+  float ui_scale_preference_ = ui::scale::kAuto;
+  float ui_scale_ = 1.0f;
   bool web_layout_loaded_ = false;
 
   // Internal methods

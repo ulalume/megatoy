@@ -26,9 +26,13 @@ struct PreferencesContext {
   std::function<void()> sync_workspace;
   std::function<void(const std::filesystem::path &)> remove_workspace_folder;
   std::function<void(ui::styles::ThemeId theme_id)> apply_theme;
+  /// Called with the new interface scale preference.
+  std::function<void(float preference)> apply_ui_scale;
   bool allow_workspace_ui = true;
   /// Frames the audio device uses when the buffer preference is unset.
   int default_audio_buffer_frames = 0;
+  /// Enlargement the display asks content for, for the automatic label.
+  float display_scale = 1.0f;
 };
 
 void render_preferences_window(const char *title, PreferencesContext &context);

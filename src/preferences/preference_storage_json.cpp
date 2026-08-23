@@ -159,6 +159,9 @@ public:
           data.ui_preferences.audio_buffer_frames =
               ui["audio_buffer_frames"].get<int>();
         }
+        if (ui.contains("ui_scale")) {
+          data.ui_preferences.ui_scale = ui["ui_scale"].get<float>();
+        }
         if (ui.contains("use_velocity")) {
           data.ui_preferences.use_velocity = ui["use_velocity"].get<bool>();
         }
@@ -266,6 +269,7 @@ public:
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
       ui["ym2612_chip_type"] = data.ui_preferences.ym2612_chip_type;
       ui["audio_buffer_frames"] = data.ui_preferences.audio_buffer_frames;
+      ui["ui_scale"] = data.ui_preferences.ui_scale;
       ui["use_velocity"] = data.ui_preferences.use_velocity;
       ui["use_pitch_bend"] = data.ui_preferences.use_pitch_bend;
       ui["use_mod_wheel"] = data.ui_preferences.use_mod_wheel;

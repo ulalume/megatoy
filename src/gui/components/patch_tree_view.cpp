@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 #include "patch_selector_shared.hpp"
 #include "patch_tree_flatten.hpp"
 
@@ -76,7 +77,7 @@ float row_indent(const TreeRow &row, float indent_spacing) {
   if (row.depth == 0) {
     return indent_spacing;
   }
-  return base + kDepthIndent * static_cast<float>(row.depth);
+  return base + ui::scale::px(kDepthIndent) * static_cast<float>(row.depth);
 }
 
 void render_directory_row(PatchSelectorContext &context, const TreeRow &row,

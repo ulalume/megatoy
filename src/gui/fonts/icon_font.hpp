@@ -12,7 +12,9 @@ inline void init_icon_font() {
   ImGuiIO &io = ImGui::GetIO();
 
   if (io.Fonts->Fonts.Size == 0) {
-    io.Fonts->AddFontDefault(); // ensure merge target exists
+    // Vector rather than the bitmap default: the UI scale re-rasterizes at
+    // arbitrary sizes, which ProggyClean does not survive.
+    io.Fonts->AddFontDefaultVector(); // ensure merge target exists
   }
 
   ImFontConfig config;
@@ -28,7 +30,7 @@ inline void init_icon_font() {
   // Size 0 inherits the destination font's reference size. The default font
   // uses an implicit reference size since ImGui 1.92, and AddFont asserts if a
   // merged font then names an explicit one.
-  io.Fonts->AddFontFromMemoryTTF((void *)res.data, (int)res.size, 0.0f,
-                                 &config, icon_ranges);
+  io.Fonts->AddFontFromMemoryTTF((void *)res.data, (int)res.size, 0.0f, &config,
+                                 icon_ranges);
 }
 } // namespace ui

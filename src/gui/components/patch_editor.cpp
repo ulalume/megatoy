@@ -4,6 +4,7 @@
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
+#include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
 #include "platform/platform_config.hpp"
@@ -167,25 +168,25 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Channel");
   bool left_speaker = patch.channel.left_speaker;
   if (ImGui::Checkbox("Left Speaker", &left_speaker)) {
-    track_instant_patch_history(
-        context, "Left Speaker",
-        [&] { patch.channel.left_speaker = left_speaker; });
+    track_instant_patch_history(context, "Left Speaker", [&] {
+      patch.channel.left_speaker = left_speaker;
+    });
   }
 
   ImGui::SameLine();
 
   bool right_speaker = patch.channel.right_speaker;
   if (ImGui::Checkbox("Right Speaker", &right_speaker)) {
-    track_instant_patch_history(
-        context, "Right Speaker",
-        [&] { patch.channel.right_speaker = right_speaker; });
+    track_instant_patch_history(context, "Right Speaker", [&] {
+      patch.channel.right_speaker = right_speaker;
+    });
   }
 
   ImGui::PushItemWidth(hslider_width);
 
   if (const auto *preview =
           get_algorithm_preview_texture(patch.instrument.algorithm)) {
-    ImGui::Image(preview->texture_id, preview->size);
+    ImGui::Image(preview->texture_id, ui::scale::px(preview->size));
   }
 
   int algorithm = patch.instrument.algorithm;
@@ -204,13 +205,14 @@ void render_operator_section(PatchEditorContext &context,
 
   const auto avail_width = ImGui::GetContentRegionAvail().x;
   bool space_for_feedbacks[4] = {false};
-  if (avail_width > 250.0f * 4) {
+  const float column_min_width = ui::scale::px(250.0f);
+  if (avail_width > column_min_width * 4) {
     ImGui::Columns(4, "operation_columns", false);
     space_for_feedbacks[0] = true;
     space_for_feedbacks[1] = true;
     space_for_feedbacks[2] = true;
     space_for_feedbacks[3] = true;
-  } else if (avail_width > 250.0f * 2) {
+  } else if (avail_width > column_min_width * 2) {
     ImGui::Columns(2, "operation_columns", false);
     space_for_feedbacks[0] = true;
     space_for_feedbacks[1] = true;
@@ -240,8 +242,7 @@ OperatorCommandContext make_operator_commands(PatchEditorContext &context,
           [&context](const std::string &label) {
             if (context.begin_history) {
               // Empty merge key: two pastes in a row stay two undo steps.
-              context.begin_history(label, {},
-                                    context.session.current_patch());
+              context.begin_history(label, {}, context.session.current_patch());
             }
           },
           [&context]() {
@@ -338,8 +339,10 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
     return;
   }
 
-  ImGui::SetNextWindowPos(ImVec2(400, 50), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ui::scale::px(ImVec2(400, 50)),
+                          ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 600)),
+                           ImGuiCond_FirstUseEver);
 
   auto title_with_id = patch_editor_window_title(
       title, context.session.current_patch_path(), is_modified);
@@ -351,8 +354,8 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
     render_patch_metadata(context, state);
 
     const auto available_width = ImGui::GetContentRegionAvail().x;
-    ImGui::Columns(available_width > 800 ? 2 : 1, "##lfo_channel_columns",
-                   false);
+    ImGui::Columns(available_width > ui::scale::px(800.0f) ? 2 : 1,
+                   "##lfo_channel_columns", false);
     render_lfo_section(context, patch);
     ImGui::NextColumn();
     render_channel_section(context, patch);

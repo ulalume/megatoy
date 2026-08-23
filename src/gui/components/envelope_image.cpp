@@ -1,6 +1,7 @@
 #include "envelope_image.hpp"
 #include "app_state.hpp"
 #include "common.hpp"
+#include "gui/ui_scale.hpp"
 #include <imgui.h>
 
 namespace ui {
@@ -56,7 +57,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   auto sustain_level_height =
       total_level_height +
       (draw_height - total_level_height) * op.sustain_level / 15.0f;
-  const float line_thickness = 3.0f;
+  const float line_thickness = ui::scale::px(3.0f);
 
   ImVec2 envelope_points[5];
   ImU32 envelope_colors[4];

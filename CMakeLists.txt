@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.8.2")
+set(MEGATOY_VERSION "0.8.3")
 project(megatoy VERSION ${MEGATOY_VERSION})
 
 # Objective-C sources are used for macOS integrations
@@ -185,6 +185,10 @@ add_executable(operator_selection_test tests/gui/operator_selection_test.cpp
   src/gui/components/operator_selection.cpp)
 target_include_directories(operator_selection_test PRIVATE src)
 add_test(NAME operator_selection_test COMMAND operator_selection_test)
+add_executable(ui_scale_test tests/gui/ui_scale_test.cpp src/gui/ui_scale.cpp)
+target_include_directories(ui_scale_test PRIVATE src)
+target_link_libraries(ui_scale_test PRIVATE imgui_lib)
+add_test(NAME ui_scale_test COMMAND ui_scale_test)
 add_executable(snapshot_entry_test tests/history/snapshot_entry_test.cpp)
 target_include_directories(snapshot_entry_test PRIVATE src)
 add_test(NAME snapshot_entry_test COMMAND snapshot_entry_test)
@@ -236,6 +240,7 @@ add_custom_target(check
           version_test import_pipeline_test persistent_parse_cache_test
           background_folder_scan_test
           operator_layout_test operator_edit_test operator_selection_test
+          ui_scale_test
           snapshot_entry_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})

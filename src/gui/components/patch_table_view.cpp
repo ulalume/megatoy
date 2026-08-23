@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 #include "patch_selector_shared.hpp"
 
 #include <algorithm>
@@ -189,7 +190,7 @@ bool render_star_cell(PatchSelectorContext &context,
   ImGui::SetNextItemWidth(-1);
   const float available_width = ImGui::GetContentRegionAvail().x;
   if (ImGui::SliderInt("##star", &star_rating, 0, 5,
-                       available_width > 60
+                       available_width > ui::scale::px(60.0f)
                            ? kStarLabels[star_rating].data()
                            : kStarLabelsMini[star_rating].data(),
                        ImGuiSliderFlags_AlwaysClamp)) {

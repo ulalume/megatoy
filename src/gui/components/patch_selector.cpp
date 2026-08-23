@@ -1,6 +1,7 @@
 #include "patch_selector.hpp"
 
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 #include "patch_selector_shared.hpp"
 #include "patch_table_view.hpp"
 #include "patch_tree_view.hpp"
@@ -59,8 +60,10 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     return;
   }
 
-  ImGui::SetNextWindowPos(ImVec2(50, 400), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ui::scale::px(ImVec2(50, 400)),
+                          ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(350, 500)),
+                           ImGuiCond_FirstUseEver);
 
   // Match the waveform panel: no tab bar while this window is docked alone.
   ImGuiWindowClass window_class;

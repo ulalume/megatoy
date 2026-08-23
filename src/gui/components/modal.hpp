@@ -25,6 +25,9 @@ inline constexpr float kDialogAutoHeight = -1.0f;
 /// What a dialog button gets when its label does not need more.
 inline constexpr float kDialogButtonWidth = 120.0f;
 
+/// kDialogButtonWidth at the current interface scale.
+float dialog_button_width();
+
 /// The width ImGui will give a button with this label.
 float button_width(const char *label);
 

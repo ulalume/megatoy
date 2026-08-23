@@ -2,6 +2,7 @@
 
 #include "audio/scope_trigger.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -173,7 +174,9 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
                              grid);
     char text[16];
     std::snprintf(text, sizeof(text), "%.0f", db);
-    panel.draw_list->AddText(ImVec2(panel.min.x + 3.0f, y + 1.0f), label, text);
+    panel.draw_list->AddText(
+        ImVec2(panel.min.x + ui::scale::px(3.0f), y + ui::scale::px(1.0f)),
+        label, text);
   }
 
   for (float hz : {100.0f, 1000.0f, 10000.0f}) {
@@ -185,7 +188,8 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
                              grid);
     const char *text = hz < 1000.0f ? "100" : (hz < 10000.0f ? "1k" : "10k");
     panel.draw_list->AddText(
-        ImVec2(x + 2.0f, panel.max.y - ImGui::GetTextLineHeight() - 1.0f),
+        ImVec2(x + ui::scale::px(2.0f),
+               panel.max.y - ImGui::GetTextLineHeight() - ui::scale::px(1.0f)),
         label, text);
   }
 
@@ -240,7 +244,8 @@ void render_waveform(const char *title, WaveformContext &context) {
   window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
   ImGui::SetNextWindowClass(&window_class);
 
-  ImGui::SetNextWindowSize(ImVec2(420.0f, 240.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(420.0f, 240.0f)),
+                           ImGuiCond_FirstUseEver);
   if (!ImGui::Begin(title, &ui_prefs.show_waveform)) {
     ImGui::End();
     return;

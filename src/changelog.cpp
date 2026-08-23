@@ -10,6 +10,14 @@ constexpr std::string_view kOperatorDetails[] = {
     "Copy, paste and swap operators",
 };
 
+constexpr std::string_view kScaleDetails[] = {
+    "Set it in Preferences, or leave it on Auto to follow the display",
+};
+
+constexpr ChangelogItem kItems_0_8_3[] = {
+    {"The interface can be scaled up", kScaleDetails},
+};
+
 constexpr ChangelogItem kItems_0_8_2[] = {
     {"Select operators and edit them together", kOperatorDetails},
     {"Preferences are grouped into tabs", {}},
@@ -36,6 +44,7 @@ constexpr ChangelogItem kItems_0_6_0[] = {
 };
 
 constexpr ChangelogEntry kEntries[] = {
+    {"v0.8.3", kItems_0_8_3},
     {"v0.8.2", kItems_0_8_2},
     {"v0.8.1", kItems_0_8_1},
     {"v0.8.0", kItems_0_8_0},
