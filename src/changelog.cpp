@@ -12,6 +12,7 @@ constexpr std::string_view kOperatorDetails[] = {
 
 constexpr ChangelogItem kItems_0_8_3[] = {
     {"Interface scale option in Preferences", {}},
+    {"Added 7 built-in FM Patches", {}},
 };
 
 constexpr ChangelogItem kItems_0_8_2[] = {
