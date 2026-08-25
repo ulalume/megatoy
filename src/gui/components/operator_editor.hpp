@@ -1,17 +1,23 @@
 #pragma once
 
 #include "app_state.hpp"
+#include "gui/ui_scale.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/types.hpp"
 #include <imgui.h>
 
 namespace ui {
 
-const float vslider_width = 20;
-const float vslider_height = 102;
-const ImVec2 vslider_size(vslider_width, vslider_height);
-const float hslider_width = vslider_width * 6 + 8 * 5;
-const ImVec2 image_size(hslider_width, vslider_height);
+inline float vslider_width() { return ui::scale::px(20.0f); }
+inline float vslider_height() { return ui::scale::px(102.0f); }
+inline ImVec2 vslider_size() {
+  return ImVec2(vslider_width(), vslider_height());
+}
+/// Six vertical sliders and the gaps between them.
+inline float hslider_width() {
+  return vslider_width() * 6 + ImGui::GetStyle().ItemSpacing.x * 5;
+}
+inline ImVec2 image_size() { return ImVec2(hslider_width(), vslider_height()); }
 
 struct PatchEditorContext;
 

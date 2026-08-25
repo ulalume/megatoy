@@ -125,7 +125,7 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
                                 [&] { patch.global.lfo_enable = lfo_enable; });
   }
 
-  ImGui::PushItemWidth(hslider_width);
+  ImGui::PushItemWidth(hslider_width());
 
   int lfo_freq = patch.global.lfo_frequency;
 
@@ -182,7 +182,7 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
     });
   }
 
-  ImGui::PushItemWidth(hslider_width);
+  ImGui::PushItemWidth(hslider_width());
 
   if (const auto *preview =
           get_algorithm_preview_texture(patch.instrument.algorithm)) {

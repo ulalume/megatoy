@@ -278,42 +278,45 @@ void render_envelope(OperatorWidget &widget,
                      UIState::EnvelopeState &envelope_state) {
   const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
 
+  const ImVec2 slider_size = vslider_size();
+  const float label_width = slider_size.x;
+
   ImGui::BeginGroup(); // ADSR Envelope group
-  render_envelope_image(op, envelope_state, image_size);
+  render_envelope_image(op, envelope_state, image_size());
 
   ImGui::BeginGroup();
-  text_centered("TL", vslider_width);
+  text_centered("TL", label_width);
   ImGui::SameLine();
-  text_centered("AR", vslider_width);
+  text_centered("AR", label_width);
   ImGui::SameLine();
-  text_centered("DR", vslider_width);
+  text_centered("DR", label_width);
   ImGui::SameLine();
-  text_centered("SL", vslider_width);
+  text_centered("SL", label_width);
   ImGui::SameLine();
-  text_centered("SR", vslider_width);
+  text_centered("SR", label_width);
   ImGui::SameLine();
-  text_centered("RR", vslider_width);
+  text_centered("RR", label_width);
   ImGui::EndGroup();
 
   ImGui::BeginGroup();
   operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
-                  &vslider_size, nullptr, &envelope_state.total_level);
+                  &slider_size, nullptr, &envelope_state.total_level);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
-                  &vslider_size, nullptr, &envelope_state.attack_rate);
+                  &slider_size, nullptr, &envelope_state.attack_rate);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::DecayRate, "##Decay Rate",
-                  &vslider_size, nullptr, &envelope_state.decay_rate);
+                  &slider_size, nullptr, &envelope_state.decay_rate);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::SustainLevel,
-                  "##Sustain Level", &vslider_size, nullptr,
+                  "##Sustain Level", &slider_size, nullptr,
                   &envelope_state.sustain_level);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::SustainRate, "##Sustain Rate",
-                  &vslider_size, nullptr, &envelope_state.sustain_rate);
+                  &slider_size, nullptr, &envelope_state.sustain_rate);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::ReleaseRate, "##Release Rate",
-                  &vslider_size, nullptr, &envelope_state.release_rate);
+                  &slider_size, nullptr, &envelope_state.release_rate);
   ImGui::EndGroup();
 
   ImGui::EndGroup(); // End ADSR Envelope group
@@ -332,7 +335,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   if (!op.enable) {
     ImGui::BeginDisabled();
   }
-  ImGui::PushItemWidth(hslider_width);
+  ImGui::PushItemWidth(hslider_width());
 
   if (slot == 0) {
     // Feedback belongs to the channel, not to an operator -- there is one of

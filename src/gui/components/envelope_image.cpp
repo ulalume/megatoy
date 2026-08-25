@@ -53,15 +53,31 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   const float draw_height = size.y - 2;
   const ImVec2 draw_min = ImVec2(canvas_min.x, canvas_min.y);
 
-  auto total_level_height = draw_height * op.total_level / 127.0f;
-  auto sustain_level_height =
-      total_level_height +
-      (draw_height - total_level_height) * op.sustain_level / 15.0f;
+  // The curve is built in register units -- levels are attenuation from 0
+  // (loudest) to kMaxLevel (silent), and a time is a level span divided by a
+  // rate -- so its shape depends only on the patch. Pixels arrive at the end.
+  constexpr float kMaxLevel = 127.0f;
+  constexpr float kTimeGridStep = kMaxLevel / 8.0f;
+  constexpr float kLevelGridStep = kMaxLevel / 2.0f;
+  // Below this span the envelope stops stretching to fill the width, so a
+  // fast envelope still reads as fast.
+  constexpr float kMinSpan = 50.0f;
+  // Sustain rate 0 holds forever; a stub keeps the segment visible.
+  constexpr float kHeldSustainTime = 4.0f;
+
+  const float total_level = static_cast<float>(op.total_level);
+  const float sustain_level =
+      total_level + (kMaxLevel - total_level) * op.sustain_level / 15.0f;
   const float line_thickness = ui::scale::px(3.0f);
 
+  auto y_for = [draw_height](float level) {
+    return draw_height * level / kMaxLevel;
+  };
+
+  // x is a time, y is a level, until the conversion below.
   ImVec2 envelope_points[5];
   ImU32 envelope_colors[4];
-  envelope_points[0] = ImVec2(0, draw_height);
+  envelope_points[0] = ImVec2(0.0f, kMaxLevel);
   envelope_colors[0] = color_from_slider_state(state.attack_rate);
   envelope_colors[1] = color_from_slider_state(state.decay_rate);
   envelope_colors[2] = color_from_slider_state(state.sustain_rate);
@@ -77,12 +93,12 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
     envelope_colors[2] = color_from_slider_state(state.attack_rate);
     envelope_colors[3] = color_from_slider_state(state.attack_rate);
   } else {
-    float attack_width = 0;
+    float attack_time = 0.0f;
     if (op.attack_rate != 31) {
-      attack_width += (127.0f - total_level_height) /
-                      compute_effective_rate_attack(op.attack_rate);
+      attack_time = (kMaxLevel - total_level) /
+                    compute_effective_rate_attack(op.attack_rate);
     }
-    envelope_points[1] = ImVec2(attack_width, total_level_height);
+    envelope_points[1] = ImVec2(attack_time, total_level);
 
     // Decay Rate
     if (op.decay_rate == 0 && op.sustain_level != 0) {
@@ -91,62 +107,59 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       envelope_colors[2] = color_from_slider_state(state.decay_rate);
       envelope_colors[3] = color_from_slider_state(state.decay_rate);
     } else {
-      float decay_width = attack_width;
+      float decay_time = attack_time;
       if (op.decay_rate != 31 && op.sustain_level != 0) {
-        decay_width += (sustain_level_height - total_level_height) /
-                       compute_effective_rate_decay(op.decay_rate);
+        decay_time += (sustain_level - total_level) /
+                      compute_effective_rate_decay(op.decay_rate);
       }
-      envelope_points[2] = ImVec2(decay_width, sustain_level_height);
+      envelope_points[2] = ImVec2(decay_time, sustain_level);
 
       // Sustain Rate
       if (op.sustain_rate == 0) {
-        envelope_points[3] = envelope_points[2] + ImVec2(3, 0);
+        envelope_points[3] =
+            envelope_points[2] + ImVec2(kHeldSustainTime, 0.0f);
         envelope_colors[3] = color_from_slider_state(state.sustain_rate);
       } else {
-        float sustain_rate_width = decay_width;
+        float sustain_time = decay_time;
         if (op.sustain_rate != 31) {
-          sustain_rate_width += (draw_height - sustain_level_height) /
-                                compute_effective_rate_decay(op.sustain_rate);
+          sustain_time += (kMaxLevel - sustain_level) /
+                          compute_effective_rate_decay(op.sustain_rate);
         }
-        envelope_points[3] = ImVec2(sustain_rate_width, draw_height);
+        envelope_points[3] = ImVec2(sustain_time, kMaxLevel);
       }
     }
   }
 
-  float release_width = (draw_height - total_level_height) /
-                        compute_effective_rate_release(op.release_rate);
-  auto r = fmin(4.0f, draw_width / fmax(release_width, envelope_points[3].x));
-  for (int i = 0; i < 4; i++) {
-    envelope_points[i].x *= r;
+  const float release_time = (kMaxLevel - total_level) /
+                             compute_effective_rate_release(op.release_rate);
+
+  // Pixels per time unit, chosen so the longer of the two curves fits.
+  const float span = fmax(fmax(release_time, envelope_points[3].x), kMinSpan);
+  const float time_scale = draw_width / span;
+
+  for (auto &point : envelope_points) {
+    point = ImVec2(point.x * time_scale, y_for(point.y));
   }
-  release_width *= r;
-  ImVec2 rr0 = ImVec2(0, total_level_height);
-  ImVec2 rr1 = ImVec2(release_width, draw_height);
-  ImVec2 rr2 = ImVec2(0, draw_height);
+
+  const ImVec2 rr0 = ImVec2(0.0f, y_for(total_level));
+  const ImVec2 rr1 = ImVec2(release_time * time_scale, draw_height);
+  const ImVec2 rr2 = ImVec2(0.0f, draw_height);
 
   // draw phase
 
   // draw grid
   ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
 
-  auto i = 0;
-  while (true) {
-    auto grid_x = i * 12.4f * r;
-    if (grid_x > draw_width)
-      break;
-    draw_list->AddLine(ImVec2(grid_x, 0) + draw_min,
+  for (float time = 0.0f; time * time_scale <= draw_width;
+       time += kTimeGridStep) {
+    const float grid_x = time * time_scale;
+    draw_list->AddLine(ImVec2(grid_x, 0.0f) + draw_min,
                        ImVec2(grid_x, draw_height) + draw_min, grid_color);
-    i++;
   }
-  i = 0;
-  while (true) {
-    auto grid_y = i * 12.4f * 4.0f;
-    if (grid_y > draw_height)
-      break;
-    draw_list->AddLine(ImVec2(0, draw_height - grid_y) + draw_min,
-                       ImVec2(draw_width, draw_height - grid_y) + draw_min,
-                       grid_color);
-    i++;
+  for (float level = kMaxLevel; level >= 0.0f; level -= kLevelGridStep) {
+    const float grid_y = y_for(level);
+    draw_list->AddLine(ImVec2(0.0f, grid_y) + draw_min,
+                       ImVec2(draw_width, grid_y) + draw_min, grid_color);
   }
 
   // draw Release Rate
@@ -161,17 +174,20 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
                        envelope_points[i + 1] + draw_min, envelope_colors[i],
                        line_thickness);
   }
+  const float marker_thickness = ui::scale::px(1.0f);
   // draw Total Level
   if (state.total_level != UIState::EnvelopeState::SliderState::None) {
-    draw_list->AddLine(ImVec2(0, total_level_height) + draw_min,
-                       ImVec2(draw_width, total_level_height) + draw_min,
-                       color_from_slider_state(state.total_level), 1.0f);
+    const float y = y_for(total_level);
+    draw_list->AddLine(
+        ImVec2(0.0f, y) + draw_min, ImVec2(draw_width, y) + draw_min,
+        color_from_slider_state(state.total_level), marker_thickness);
   }
   // draw Sustain Level
   if (state.sustain_level != UIState::EnvelopeState::SliderState::None) {
-    draw_list->AddLine(ImVec2(0, sustain_level_height) + draw_min,
-                       ImVec2(draw_width, sustain_level_height) + draw_min,
-                       color_from_slider_state(state.sustain_level), 1.0f);
+    const float y = y_for(sustain_level);
+    draw_list->AddLine(
+        ImVec2(0.0f, y) + draw_min, ImVec2(draw_width, y) + draw_min,
+        color_from_slider_state(state.sustain_level), marker_thickness);
   }
 
   ImGui::EndChild();
