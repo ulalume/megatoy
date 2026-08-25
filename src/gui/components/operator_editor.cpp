@@ -330,7 +330,15 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   auto &op = ym2612::operator_at(instrument, slot);
   OperatorWidget widget{context, instrument, slot};
 
-  const auto column_layout = ImGui::GetContentRegionAvail().x > 410.0f;
+  // Two columns only when the right-hand one fits whole. Its widest row is a
+  // full-width slider plus its label, and the gap between the columns is the
+  // SameLine/Spacing/SameLine below.
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float side_column_width = hslider_width() + style.ItemInnerSpacing.x +
+                                  ImGui::CalcTextSize("SSG EG Type").x;
+  const bool column_layout =
+      ImGui::GetContentRegionAvail().x >
+      hslider_width() + style.ItemSpacing.x * 2.0f + side_column_width;
 
   if (!op.enable) {
     ImGui::BeginDisabled();
@@ -351,8 +359,10 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
       instrument.feedback = static_cast<uint8_t>(feedback);
     }
   } else if (space_for_feedback) {
+    // Stand in for the Feedback slider OP1 has and the others do not, so all
+    // four line up.
     ImVec2 feedback_gap = ImGui::GetCursorPos();
-    ImGui::SetCursorPosY(feedback_gap.y + 20);
+    ImGui::SetCursorPosY(feedback_gap.y + ImGui::GetFrameHeightWithSpacing());
   }
 
   operator_checkbox(
@@ -396,7 +406,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
 
   if (column_layout) {
     ImVec2 ssg_gap = ImGui::GetCursorPos();
-    ImGui::SetCursorPosY(ssg_gap.y + 123);
+    ImGui::SetCursorPosY(ssg_gap.y + ui::scale::px(123.0f));
   } else {
     ImGui::Spacing();
   }
