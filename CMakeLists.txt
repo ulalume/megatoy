@@ -189,6 +189,14 @@ add_executable(operator_selection_test tests/gui/operator_selection_test.cpp
   src/gui/components/operator_selection.cpp)
 target_include_directories(operator_selection_test PRIVATE src)
 add_test(NAME operator_selection_test COMMAND operator_selection_test)
+add_executable(envelope_curve_test tests/gui/envelope_curve_test.cpp
+  src/gui/envelope/envelope_curve.cpp)
+target_include_directories(envelope_curve_test PRIVATE src)
+# imgui_lib is only here for the header path: ym2612/types.hpp pulls in
+# core/types.hpp, which includes imgui.h. The envelope logic itself calls no
+# ImGui at all, which is the point of keeping it out of the component.
+target_link_libraries(envelope_curve_test PRIVATE imgui_lib ym2612_eg::ym2612_eg)
+add_test(NAME envelope_curve_test COMMAND envelope_curve_test)
 add_executable(ui_scale_test tests/gui/ui_scale_test.cpp src/gui/ui_scale.cpp)
 target_include_directories(ui_scale_test PRIVATE src)
 target_link_libraries(ui_scale_test PRIVATE imgui_lib)
@@ -245,6 +253,7 @@ add_custom_target(check
           background_folder_scan_test
           operator_layout_test operator_edit_test operator_selection_test
           note_test
+          envelope_curve_test
           ui_scale_test
           snapshot_entry_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

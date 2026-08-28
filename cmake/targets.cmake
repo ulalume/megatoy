@@ -80,6 +80,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/changelog_dialog.cpp
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
+  src/gui/envelope/envelope_curve.cpp
   src/gui/input/keyboard_typing.cpp
   src/gui/components/main_menu.cpp
   src/gui/components/modal.cpp
@@ -213,6 +214,7 @@ target_link_libraries(megatoy_core PUBLIC
   kissfft
   miniz
   ym2612_format
+  ym2612_eg::ym2612_eg
 )
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
