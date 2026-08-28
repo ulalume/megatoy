@@ -1,7 +1,6 @@
 #include "gui_manager.hpp"
 #include "fonts/icon_font.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
-#include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
@@ -182,7 +181,6 @@ void GuiManager::shutdown() {
 
   // Reset preview textures
   ui::reset_algorithm_preview_textures();
-  ui::reset_ssg_preview_textures();
 
   // Cleanup
   ImGui_ImplOpenGL3_Shutdown();
@@ -410,7 +408,6 @@ void GuiManager::set_theme(ui::styles::ThemeId theme) {
   ui::styles::apply_style(theme_, ui_scale_);
   if (ImGui::GetCurrentContext() != nullptr) {
     ui::reset_algorithm_preview_textures();
-    ui::reset_ssg_preview_textures();
   }
 }
 

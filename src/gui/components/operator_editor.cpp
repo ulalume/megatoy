@@ -1,7 +1,6 @@
 #include "operator_editor.hpp"
 #include "envelope_image.hpp"
 #include "gui/components/operator_commands.hpp"
-#include "gui/components/preview/ssg_preview.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_editor.hpp"
@@ -381,16 +380,10 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::Spacing();
   }
 
-  // SSG Type Envelope Control (0-7)
-  const int ssg_type = op.ssg_type_envelope_control;
-  if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
-                                          : get_ssg_preview_off_texture()) {
-    if (preview->valid()) {
-      ImGui::Image(preview->texture_id, ui::scale::px(preview->size));
-    }
-  }
-  ImGui::SameLine();
-
+  // SSG Type Envelope Control (0-7). The schematic thumbnail that used to sit
+  // beside these is gone: the envelope graph draws the real looping shape now,
+  // and a second, idealised picture of it beside the sliders only invited the
+  // question of which one to believe.
   operator_checkbox(widget, "SSG EG Enable", "SSG EG Enable",
                     &ym2612::OperatorSettings::ssg_enable, true);
 
