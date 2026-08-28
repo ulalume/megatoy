@@ -1,27 +1,66 @@
 #include "envelope_image.hpp"
+
 #include "app_state.hpp"
 #include "common.hpp"
+#include "gui/envelope/envelope_curve.hpp"
 #include "gui/ui_scale.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
 #include <imgui.h>
+#include <limits>
+#include <unordered_map>
+
+/**
+ * The envelope graph.
+ *
+ * Everything drawn here comes from ym2612_eg by way of gui/envelope: the
+ * polyline is the chip's own envelope, the x axis is real milliseconds and the
+ * y axis is real attenuation. This file decides nothing about the shape -- it
+ * only turns the curve into pixels, colours the segment the user is dragging,
+ * and prints the one warning the policy layer picked.
+ */
 
 namespace ui {
-ImVec2 operator+(const ImVec2 &lhs, const ImVec2 &rhs) {
-  return ImVec2(lhs.x + rhs.x, lhs.y + rhs.y);
+namespace {
+
+using ui::envelope::EnvelopeCurve;
+using ui::envelope::EnvelopeCurveCache;
+
+/// Attenuation at the bottom of the graph; 0 (full volume) is at the top.
+constexpr double kFullScale = static_cast<double>(ym2612_eg::kMaxAttenuation);
+
+/// The wash under the curve. The old graph filled its release triangle at
+/// 0.4; the fill now follows the whole shape, so it is lighter -- at 0.4 a
+/// full-width fill reads as a slab rather than as shading.
+constexpr float kFillAlpha = 0.25f;
+/// The warning line is a footnote, not an alert.
+constexpr float kWarningAlpha = 0.6f;
+
+/// Which parameter owns a stretch of the curve. The slider highlight follows
+/// these, so the boundaries are the curve's own markers rather than anything
+/// re-derived from the registers.
+enum SegmentIndex {
+  kAttack = 0,
+  kDecay = 1,
+  kSustain = 2,
+  kRelease = 3,
+  kSegmentCount = 4,
+};
+
+/**
+ * The curve has to survive between frames -- rebuilding it on every one would
+ * run the simulator four times a frame for nothing -- and there is one per
+ * operator. operator_editor pushes the slot onto the ID stack, so the widget's
+ * own ID separates them and the map never holds more than four entries.
+ */
+EnvelopeCurveCache &cache_for(ImGuiID id) {
+  static std::unordered_map<ImGuiID, EnvelopeCurveCache> caches;
+  return caches[id];
 }
 
-ImVec2 operator-(const ImVec2 &lhs, const ImVec2 &rhs) {
-  return ImVec2(lhs.x - rhs.x, lhs.y - rhs.y);
-}
-
-int compute_effective_rate_attack(int attack_rate, int rate_key_scaling = 0) {
-  return 2 * attack_rate + rate_key_scaling; // 0 ~ 62
-}
-int compute_effective_rate_decay(int decay_rate, int rate_key_scaling = 0) {
-  return decay_rate + rate_key_scaling; // 0 ~ 31
-}
-int compute_effective_rate_release(int release_rate, int rate_key_scaling = 0) {
-  return 2 * release_rate + 1 + rate_key_scaling; // 0 ~ 31
-}
 ImU32 color_from_slider_state(
     const UIState::EnvelopeState::SliderState &state) {
   switch (state) {
@@ -36,159 +75,287 @@ ImU32 color_from_slider_state(
   return ImGui::GetColorU32(ImGuiCol_FrameBg);
 }
 
+/**
+ * The instants the segments change hands.
+ *
+ * A marker is negative when the segment never happened, and then the segment
+ * before it simply runs on: an AR = 0 patch is attack all the way to key-off,
+ * and a DR = 0 patch decays until key-off without ever reaching sustain. Each
+ * boundary is therefore pinned between the one before it and key-off.
+ */
+struct SegmentBounds {
+  double attack_end = 0.0;
+  double decay_end = 0.0;
+  double key_off = 0.0;
+
+  int index_at(double ms) const {
+    if (ms < attack_end) {
+      return kAttack;
+    }
+    if (ms < decay_end) {
+      return kDecay;
+    }
+    if (ms < key_off) {
+      return kSustain;
+    }
+    return kRelease;
+  }
+};
+
+SegmentBounds segment_bounds(const EnvelopeCurve &curve) {
+  constexpr double kNever = std::numeric_limits<double>::infinity();
+  SegmentBounds bounds;
+  bounds.key_off = curve.key_off_ms >= 0.0 ? curve.key_off_ms : kNever;
+  bounds.attack_end =
+      std::min(curve.attack_end_ms >= 0.0 ? curve.attack_end_ms : kNever,
+               bounds.key_off);
+  bounds.decay_end =
+      std::clamp(curve.decay_end_ms >= 0.0 ? curve.decay_end_ms : kNever,
+                 bounds.attack_end, bounds.key_off);
+  return bounds;
+}
+
+/// Maps the curve's own units onto the canvas: ms across, attenuation down.
+struct PlotArea {
+  ImVec2 min;
+  ImVec2 max;
+  double span_ms = 1.0;
+
+  float width() const { return std::max(max.x - min.x, 1.0f); }
+  float height() const { return std::max(max.y - min.y, 1.0f); }
+
+  float x_of(double ms) const {
+    const double t = std::clamp(ms / span_ms, 0.0, 1.0);
+    return min.x + static_cast<float>(t) * width();
+  }
+  float y_of(double out) const {
+    const double t = std::clamp(out / kFullScale, 0.0, 1.0);
+    return min.y + static_cast<float>(t) * height();
+  }
+  ImVec2 at(double ms, double out) const { return ImVec2(x_of(ms), y_of(out)); }
+};
+
+void format_ms(char (&out)[16], double ms) {
+  std::snprintf(out, sizeof(out), "%dms", static_cast<int>(ms + 0.5));
+}
+
+/**
+ * The time grid, labelled every nth line.
+ *
+ * The graph is about as wide as six vertical sliders, so on most axes the six
+ * divisions do not all have room for their text. Labelling every nth line --
+ * n being however many it takes for the widest label to fit between two of
+ * them -- keeps the labels evenly spaced, which reads as an axis; labelling
+ * whichever ones happen to fit gives 0, 250, 750 and reads as a mistake. The
+ * lines themselves are all drawn.
+ */
+void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
+                    float label_baseline) {
+  const ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
+  const ImU32 label_color =
+      color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha);
+  const double step = ui::envelope::grid_step_ms(plot.span_ms);
+  const int lines = static_cast<int>(plot.span_ms / step + 1e-6);
+
+  char widest[16];
+  format_ms(widest, step * lines);
+  const float needed = ImGui::CalcTextSize(widest).x + ui::scale::px(6.0f);
+  const float pitch = plot.width() * static_cast<float>(step / plot.span_ms);
+  const int label_every =
+      std::max(1, static_cast<int>(std::ceil(needed / std::max(pitch, 1.0f))));
+
+  for (int i = 0; i <= lines; ++i) {
+    const double ms = step * i;
+    const float x = plot.x_of(ms);
+    draw_list->AddLine(ImVec2(x, plot.min.y), ImVec2(x, plot.max.y),
+                       grid_color);
+    if (i % label_every != 0) {
+      continue;
+    }
+    char label[16];
+    format_ms(label, ms);
+    if (x + ImGui::CalcTextSize(label).x > plot.max.x) {
+      continue; // would hang off the right edge
+    }
+    draw_list->AddText(ImVec2(x, label_baseline), label_color, label);
+  }
+
+  // Full volume, half attenuation, silence.
+  for (int i = 0; i <= 2; ++i) {
+    const float y = plot.y_of(kFullScale * 0.5 * i);
+    draw_list->AddLine(ImVec2(plot.min.x, y), ImVec2(plot.max.x, y),
+                       grid_color);
+  }
+}
+
+/**
+ * One more piece of curve past the last simulated point.
+ *
+ * A slow release can outlast the simulation budget, which would leave the line
+ * stopping in mid-air. Post-attack segments are linear in attenuation, so
+ * continuing the final slope to the right edge -- or to silence, whichever
+ * comes first -- is as accurate as the rest of the curve.
+ */
+bool extrapolated_tail(const EnvelopeCurve &curve, double span_ms,
+                       double &end_ms, double &end_out) {
+  const auto &points = curve.curve.points;
+  if (!curve.truncated || points.size() < 2) {
+    return false;
+  }
+  const ym2612_eg::CurvePoint &last = points.back();
+  const ym2612_eg::CurvePoint &previous = points[points.size() - 2];
+  if (last.ms >= span_ms) {
+    return false;
+  }
+  const double dt = static_cast<double>(last.ms) - previous.ms;
+  const double slope =
+      dt > 0.0 ? (static_cast<double>(last.out) - previous.out) / dt : 0.0;
+
+  end_ms = span_ms;
+  if (slope > 0.0) {
+    end_ms = std::min(end_ms, last.ms + (kFullScale - last.out) / slope);
+  }
+  end_out = std::clamp(last.out + slope * (end_ms - last.ms), 0.0, kFullScale);
+  return end_ms > last.ms;
+}
+
+/**
+ * The curve itself: a translucent wash under each segment, then the line on
+ * top of it.
+ *
+ * The fill is one quad per polyline edge rather than a polygon per segment,
+ * because a decayed-then-released shape is not convex and AddConvexPolyFilled
+ * would fold it inside out. Anti-aliased fill is switched off for the run so
+ * the quads meet without leaving seams between them.
+ */
+void draw_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
+                const PlotArea &plot, const SegmentBounds &bounds,
+                const ImU32 (&colors)[kSegmentCount]) {
+  const auto &points = curve.curve.points;
+  if (points.size() < 2) {
+    return;
+  }
+
+  double tail_ms = 0.0;
+  double tail_out = 0.0;
+  const bool has_tail =
+      extrapolated_tail(curve, plot.span_ms, tail_ms, tail_out);
+  const size_t edges = points.size() - 1 + (has_tail ? 1 : 0);
+
+  // Each edge as (start, end, colour); the tail is the one past the end.
+  auto edge_at = [&](size_t i, ImVec2 &a, ImVec2 &b) {
+    const ym2612_eg::CurvePoint &p0 = points[std::min(i, points.size() - 1)];
+    a = plot.at(p0.ms, p0.out);
+    if (i + 1 < points.size()) {
+      const ym2612_eg::CurvePoint &p1 = points[i + 1];
+      b = plot.at(p1.ms, p1.out);
+    } else {
+      b = plot.at(tail_ms, tail_out);
+    }
+    return colors[bounds.index_at(p0.ms)];
+  };
+
+  const ImDrawListFlags saved_flags = draw_list->Flags;
+  draw_list->Flags &= ~ImDrawListFlags_AntiAliasedFill;
+  for (size_t i = 0; i < edges; ++i) {
+    ImVec2 a;
+    ImVec2 b;
+    const ImU32 color = edge_at(i, a, b);
+    if (b.x <= a.x) {
+      continue;
+    }
+    draw_list->AddQuadFilled(a, b, ImVec2(b.x, plot.max.y),
+                             ImVec2(a.x, plot.max.y),
+                             color_with_alpha(color, kFillAlpha));
+  }
+  draw_list->Flags = saved_flags;
+
+  const float thickness = ui::scale::px(3.0f);
+  for (size_t i = 0; i < edges; ++i) {
+    ImVec2 a;
+    ImVec2 b;
+    const ImU32 color = edge_at(i, a, b);
+    draw_list->AddLine(a, b, color, thickness);
+  }
+}
+
+/// TL and SL have no segment of their own: they are levels, so they light up
+/// as a rule across the graph at the level they set.
+void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
+                        const UIState::EnvelopeState &state,
+                        const PlotArea &plot) {
+  const float thickness = ui::scale::px(1.0f);
+  const auto rule = [&](double out, ImU32 color) {
+    const float y = plot.y_of(out);
+    draw_list->AddLine(ImVec2(plot.min.x, y), ImVec2(plot.max.x, y), color,
+                       thickness);
+  };
+
+  if (state.total_level != UIState::EnvelopeState::SliderState::None) {
+    rule(curve.peak_out, color_from_slider_state(state.total_level));
+  }
+  if (state.sustain_level != UIState::EnvelopeState::SliderState::None) {
+    rule(curve.sustain_out, color_from_slider_state(state.sustain_level));
+  }
+}
+
+/// The single warning, bottom left. Wrapped rather than clipped: the longest
+/// of them is a little wider than the graph at the smallest UI scale, and a
+/// sentence cut off mid-word reads as a bug.
+void draw_warning(ImDrawList *draw_list, const char *warning,
+                  const PlotArea &plot) {
+  if (warning == nullptr) {
+    return;
+  }
+  const float inset = ui::scale::px(3.0f);
+  const float wrap_width = plot.width() - inset * 2.0f;
+  const ImVec2 size = ImGui::CalcTextSize(warning, nullptr, false, wrap_width);
+  const ImVec2 pos(plot.min.x + inset, plot.max.y - size.y - inset);
+  draw_list->AddText(
+      ImGui::GetFont(), ImGui::GetFontSize(), pos,
+      color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha),
+      warning, nullptr, wrap_width);
+}
+
+} // namespace
+
 void render_envelope_image(const ym2612::OperatorSettings &op,
                            const UIState::EnvelopeState &state, ImVec2 size) {
+  // Before BeginChild, so the ID comes from the operator's stack rather than
+  // from the child window.
+  const EnvelopeCurve &curve =
+      cache_for(ImGui::GetID("##envelope_curve")).get(op);
+
   ImGui::BeginChild("EnvelopeImage", size, false, ImGuiWindowFlags_NoScrollbar);
 
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
 
-  ImVec2 canvas_min = ImGui::GetCursorScreenPos();
-  ImVec2 canvas_max = ImVec2(canvas_min.x + size.x, canvas_min.y + size.y);
+  const ImVec2 canvas_min = ImGui::GetCursorScreenPos();
+  const ImVec2 canvas_max(canvas_min.x + size.x, canvas_min.y + size.y);
 
-  // draw border
-  ImU32 border_color = ImGui::GetColorU32(ImGuiCol_Separator);
-  draw_list->AddRect(canvas_min, canvas_max, border_color);
+  draw_list->AddRect(canvas_min, canvas_max,
+                     ImGui::GetColorU32(ImGuiCol_Separator));
 
-  const float draw_width = size.x - 2;
-  const float draw_height = size.y - 2;
-  const ImVec2 draw_min = ImVec2(canvas_min.x, canvas_min.y);
+  // The time labels get a strip of their own along the top: a curve at full
+  // volume runs along the very top of the plot, and text over it would be
+  // unreadable in both directions.
+  const float label_height = ImGui::GetTextLineHeight();
+  PlotArea plot;
+  plot.min = ImVec2(canvas_min.x + 1.0f, canvas_min.y + label_height + 1.0f);
+  plot.max = ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f);
+  plot.span_ms = std::max(curve.span_ms, 1.0);
 
-  // The curve is built in register units -- levels are attenuation from 0
-  // (loudest) to kMaxLevel (silent), and a time is a level span divided by a
-  // rate -- so its shape depends only on the patch. Pixels arrive at the end.
-  constexpr float kMaxLevel = 127.0f;
-  constexpr float kTimeGridStep = kMaxLevel / 8.0f;
-  constexpr float kLevelGridStep = kMaxLevel / 2.0f;
-  // Below this span the envelope stops stretching to fill the width, so a
-  // fast envelope still reads as fast.
-  constexpr float kMinSpan = 50.0f;
-  // Sustain rate 0 holds forever; a stub keeps the segment visible.
-  constexpr float kHeldSustainTime = 4.0f;
+  draw_time_grid(draw_list, plot, canvas_min.y + 1.0f);
 
-  const float total_level = static_cast<float>(op.total_level);
-  const float sustain_level =
-      total_level + (kMaxLevel - total_level) * op.sustain_level / 15.0f;
-  const float line_thickness = ui::scale::px(3.0f);
-
-  auto y_for = [draw_height](float level) {
-    return draw_height * level / kMaxLevel;
+  const ImU32 colors[kSegmentCount] = {
+      color_from_slider_state(state.attack_rate),
+      color_from_slider_state(state.decay_rate),
+      color_from_slider_state(state.sustain_rate),
+      color_from_slider_state(state.release_rate),
   };
-
-  // x is a time, y is a level, until the conversion below.
-  ImVec2 envelope_points[5];
-  ImU32 envelope_colors[4];
-  envelope_points[0] = ImVec2(0.0f, kMaxLevel);
-  envelope_colors[0] = color_from_slider_state(state.attack_rate);
-  envelope_colors[1] = color_from_slider_state(state.decay_rate);
-  envelope_colors[2] = color_from_slider_state(state.sustain_rate);
-  envelope_colors[3] =
-      color_from_slider_state(UIState::EnvelopeState::SliderState::None);
-
-  // Attack Rate
-  if (op.attack_rate == 0) {
-    envelope_points[1] = envelope_points[0];
-    envelope_points[2] = envelope_points[0];
-    envelope_points[3] = envelope_points[0];
-    envelope_colors[1] = color_from_slider_state(state.attack_rate);
-    envelope_colors[2] = color_from_slider_state(state.attack_rate);
-    envelope_colors[3] = color_from_slider_state(state.attack_rate);
-  } else {
-    float attack_time = 0.0f;
-    if (op.attack_rate != 31) {
-      attack_time = (kMaxLevel - total_level) /
-                    compute_effective_rate_attack(op.attack_rate);
-    }
-    envelope_points[1] = ImVec2(attack_time, total_level);
-
-    // Decay Rate
-    if (op.decay_rate == 0 && op.sustain_level != 0) {
-      envelope_points[2] = envelope_points[1];
-      envelope_points[3] = envelope_points[1];
-      envelope_colors[2] = color_from_slider_state(state.decay_rate);
-      envelope_colors[3] = color_from_slider_state(state.decay_rate);
-    } else {
-      float decay_time = attack_time;
-      if (op.decay_rate != 31 && op.sustain_level != 0) {
-        decay_time += (sustain_level - total_level) /
-                      compute_effective_rate_decay(op.decay_rate);
-      }
-      envelope_points[2] = ImVec2(decay_time, sustain_level);
-
-      // Sustain Rate
-      if (op.sustain_rate == 0) {
-        envelope_points[3] =
-            envelope_points[2] + ImVec2(kHeldSustainTime, 0.0f);
-        envelope_colors[3] = color_from_slider_state(state.sustain_rate);
-      } else {
-        float sustain_time = decay_time;
-        if (op.sustain_rate != 31) {
-          sustain_time += (kMaxLevel - sustain_level) /
-                          compute_effective_rate_decay(op.sustain_rate);
-        }
-        envelope_points[3] = ImVec2(sustain_time, kMaxLevel);
-      }
-    }
-  }
-
-  const float release_time = (kMaxLevel - total_level) /
-                             compute_effective_rate_release(op.release_rate);
-
-  // Pixels per time unit, chosen so the longer of the two curves fits.
-  const float span = fmax(fmax(release_time, envelope_points[3].x), kMinSpan);
-  const float time_scale = draw_width / span;
-
-  for (auto &point : envelope_points) {
-    point = ImVec2(point.x * time_scale, y_for(point.y));
-  }
-
-  const ImVec2 rr0 = ImVec2(0.0f, y_for(total_level));
-  const ImVec2 rr1 = ImVec2(release_time * time_scale, draw_height);
-  const ImVec2 rr2 = ImVec2(0.0f, draw_height);
-
-  // draw phase
-
-  // draw grid
-  ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
-
-  for (float time = 0.0f; time * time_scale <= draw_width;
-       time += kTimeGridStep) {
-    const float grid_x = time * time_scale;
-    draw_list->AddLine(ImVec2(grid_x, 0.0f) + draw_min,
-                       ImVec2(grid_x, draw_height) + draw_min, grid_color);
-  }
-  for (float level = kMaxLevel; level >= 0.0f; level -= kLevelGridStep) {
-    const float grid_y = y_for(level);
-    draw_list->AddLine(ImVec2(0.0f, grid_y) + draw_min,
-                       ImVec2(draw_width, grid_y) + draw_min, grid_color);
-  }
-
-  // draw Release Rate
-  draw_list->AddTriangleFilled(
-      rr0 + draw_min, rr1 + draw_min, rr2 + draw_min,
-      color_with_alpha(color_from_slider_state(state.release_rate), 0.4f));
-
-  // draw Envelope
-  envelope_points[4] = ImVec2(draw_width, envelope_points[3].y);
-  for (int i = 0; i < 4; i++) {
-    draw_list->AddLine(envelope_points[i] + draw_min,
-                       envelope_points[i + 1] + draw_min, envelope_colors[i],
-                       line_thickness);
-  }
-  const float marker_thickness = ui::scale::px(1.0f);
-  // draw Total Level
-  if (state.total_level != UIState::EnvelopeState::SliderState::None) {
-    const float y = y_for(total_level);
-    draw_list->AddLine(
-        ImVec2(0.0f, y) + draw_min, ImVec2(draw_width, y) + draw_min,
-        color_from_slider_state(state.total_level), marker_thickness);
-  }
-  // draw Sustain Level
-  if (state.sustain_level != UIState::EnvelopeState::SliderState::None) {
-    const float y = y_for(sustain_level);
-    draw_list->AddLine(
-        ImVec2(0.0f, y) + draw_min, ImVec2(draw_width, y) + draw_min,
-        color_from_slider_state(state.sustain_level), marker_thickness);
-  }
+  draw_curve(draw_list, curve, plot, segment_bounds(curve), colors);
+  draw_level_markers(draw_list, curve, state, plot);
+  draw_warning(draw_list, curve.warning, plot);
 
   ImGui::EndChild();
 }
