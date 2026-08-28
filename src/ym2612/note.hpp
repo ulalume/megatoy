@@ -65,9 +65,14 @@ struct Note {
   bool operator>=(const Note &other) const { return !(*this < other); };
 
   static Note from_midi_note(uint8_t midi_note) {
-    uint8_t block = midi_note / 12 - 1;
+    // Signed so MIDI 0-11 (octave -1) clamps to block 0 instead of
+    // underflowing a uint8_t to 255 and landing on the highest block.
+    int octave = midi_note / 12 - 1;
+    if (octave < 0) {
+      octave = 0;
+    }
     uint8_t note = midi_note % 12;
-    return Note{block, all_keys[note]};
+    return Note{static_cast<uint8_t>(octave), all_keys[note]};
   }
   uint8_t midi_note() const {
     return (octave + 1) * 12 + static_cast<uint8_t>(key);

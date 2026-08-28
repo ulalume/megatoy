@@ -177,6 +177,10 @@ add_executable(operator_layout_test tests/ym2612/operator_layout_test.cpp)
 target_include_directories(operator_layout_test PRIVATE src)
 target_link_libraries(operator_layout_test PRIVATE megatoy_core)
 add_test(NAME operator_layout_test COMMAND operator_layout_test)
+add_executable(note_test tests/ym2612/note_test.cpp)
+target_include_directories(note_test PRIVATE src)
+target_link_libraries(note_test PRIVATE megatoy_core)
+add_test(NAME note_test COMMAND note_test)
 add_executable(operator_edit_test tests/ym2612/operator_edit_test.cpp)
 target_include_directories(operator_edit_test PRIVATE src)
 target_link_libraries(operator_edit_test PRIVATE megatoy_core)
@@ -240,6 +244,7 @@ add_custom_target(check
           version_test import_pipeline_test persistent_parse_cache_test
           background_folder_scan_test
           operator_layout_test operator_edit_test operator_selection_test
+          note_test
           ui_scale_test
           snapshot_entry_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
