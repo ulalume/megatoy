@@ -270,7 +270,7 @@ void draw_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
   }
   draw_list->Flags = saved_flags;
 
-  const float thickness = ui::scale::px(3.0f);
+  const float thickness = ui::scale::px(1.0f);
   for (size_t i = 0; i < edges; ++i) {
     ImVec2 a;
     ImVec2 b;
