@@ -141,6 +141,18 @@ set(YM2612_FORMAT_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(YM2612_FORMAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ym2612_format)
 
+# ym2612_eg - sample-accurate envelope generator simulator, header-only.
+# Drives the envelope graph; it is a visualisation model, not an audio path.
+FetchContent_Declare(
+  ym2612_eg
+  GIT_REPOSITORY https://github.com/ulalume/ym2612_eg.git
+  GIT_TAG        v0.1.0
+)
+set(YM2612_EG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YM2612_EG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+set(YM2612_EG_BUILD_GOLDEN_GEN OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(ym2612_eg)
+
 # ym2612-patches - the built-in CC0 preset library. Data only (LICENSE,
 # .gitignore, *.dmp files); it ships no CMakeLists.txt, so
 # FetchContent_MakeAvailable just populates ym2612_patches_SOURCE_DIR instead
