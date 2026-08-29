@@ -338,6 +338,10 @@ struct VoiceCursor {
   /// How long the voice has been inaudible; 0 while it can still be heard.
   /// The graph fades a voice out over kVoiceFadeMs of this.
   double silent_for_ms = 0.0;
+  /// Where on the release trace this voice's release begins -- the point at
+  /// which the drawn release is already at the level the key came up on.
+  /// Negative while the key is still down.
+  double release_from_ms = -1.0;
 };
 
 /**

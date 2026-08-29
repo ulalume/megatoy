@@ -1817,6 +1817,35 @@ void test_a_held_loop_cursor_goes_round() {
   CHECK(near_rel(stuck.ms, pc.span_ms, 0.001));
 }
 
+/// A released voice needs to know where on the release trace its own release
+/// begins -- the graph draws that stretch as a line, since the drawn release
+/// area is the one a note let go at full volume would take, not this one.
+void test_a_released_voice_reports_where_its_release_begins() {
+  ym2612::OperatorSettings op = worked_example();
+  const EnvelopeCurve c = build_envelope_curve(op);
+
+  // Held: no release to draw yet.
+  const VoiceCursor held = cursor_for_voice(c, 100.0, -1.0, c.span_ms);
+  CHECK(held.release_from_ms < 0.0);
+  CHECK(!held.released);
+
+  // Let go while the decay is still running: the release starts high on the
+  // trace, near its beginning.
+  const double early_off = c.attack_end_ms + 1.0;
+  const VoiceCursor early = cursor_for_voice(c, early_off + 5.0, 5.0, c.span_ms);
+  CHECK(early.released);
+  CHECK(early.release_from_ms >= 0.0);
+
+  // Let go from the sustain, lower down: further along the trace, because the
+  // drawn release takes time to fall that far.
+  const double late_off = c.decay_end_ms + 50.0;
+  const VoiceCursor late = cursor_for_voice(c, late_off + 5.0, 5.0, c.span_ms);
+  CHECK(late.release_from_ms > early.release_from_ms);
+
+  // And the cursor is that entry point plus however long it has been falling.
+  CHECK(near_rel(late.ms, late.release_from_ms + 5.0, 0.001));
+}
+
 int main() {
   test_registers_map_straight_through();
   test_ssg_bits_are_packed_the_way_the_chip_wants_them();

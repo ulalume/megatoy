@@ -567,15 +567,56 @@ void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
                      ui::scale::px(1.0f));
 }
 
-/// The voice's own curve, in the graph's two shapes at a fraction of its
-/// weight. One flat colour, not the four segment colours: this is context, and
-/// lighting up a ghost's decay when the DR slider is hovered would claim the
-/// slider edits it.
+/// The voice's own attack, decay and sustain, at a fraction of the reference
+/// curve's weight. One flat colour, not the four segment colours: this is
+/// context, and lighting up a ghost's decay when the DR slider is hovered
+/// would claim the slider edits it.
+///
+/// No release. The drawn release area is the one a note released at full
+/// volume would take, which is not the one this voice took -- that is drawn
+/// separately, from where the key actually came up.
 void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
                       const PlotArea &plot, ImU32 color) {
   const ImU32 colors[kSegmentCount] = {color, color, color, color};
-  draw_release_area(draw_list, curve, plot, color);
   draw_held_line(draw_list, curve, plot, segment_bounds(curve), colors);
+}
+
+/// The release this voice is actually taking: the drawn release trace from the
+/// point where it is already at the level the key came up on, which is exactly
+/// the part of it this note travels. Drawn as a line, like the voice's own
+/// attack and decay, so it reads as this voice rather than as the reference.
+void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
+                             const PlotArea &plot, double from_ms,
+                             ImU32 color) {
+  const std::vector<ym2612_eg::CurvePoint> &points = curve.release.points;
+  if (from_ms < 0.0 || points.size() < 2) {
+    return;
+  }
+  const float thickness = ui::scale::px(1.0f);
+  bool have_previous = false;
+  ImVec2 previous;
+  for (std::size_t i = 0; i < points.size(); ++i) {
+    const double ms = points[i].ms;
+    if (ms <= from_ms) {
+      continue;
+    }
+    if (!have_previous) {
+      // Start exactly where the key came up, between the two points that
+      // straddle it, so the line begins on the trace rather than at whichever
+      // vertex happens to follow.
+      double out = points[i].out;
+      if (i > 0) {
+        const double span = ms - points[i - 1].ms;
+        const double u = span > 0.0 ? (from_ms - points[i - 1].ms) / span : 0.0;
+        out = points[i - 1].out + (points[i].out - points[i - 1].out) * u;
+      }
+      previous = ImVec2(plot.x_of(from_ms), plot.y_of(out));
+      have_previous = true;
+    }
+    const ImVec2 next(plot.x_of(ms), plot.y_of(points[i].out));
+    draw_list->AddLine(previous, next, color, thickness);
+    previous = next;
+  }
 }
 
 /// The single warning, bottom left. Wrapped rather than clipped: it is a
@@ -720,6 +761,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
     const EnvelopeCurve *curve;
     double ms;
     float alpha;
+    double release_from_ms;
   };
   DrawnVoice drawn[6];
   int drawn_count = 0;
@@ -742,7 +784,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
     if (alpha < kVoiceMinAlpha) {
       continue;
     }
-    drawn[drawn_count++] = DrawnVoice{voice_curve, cursor.ms, alpha};
+    drawn[drawn_count++] =
+        DrawnVoice{voice_curve, cursor.ms, alpha, cursor.release_from_ms};
   }
 
   // Ghost curves oldest first, so the newest is the one on top of the others
@@ -756,6 +799,14 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
     }
     draw_voice_curve(
         draw_list, *drawn[i].curve, plot,
+        color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
+  }
+  // The release each voice is taking, over the ghosts and under the reference
+  // curve. Drawn for every voice that has let go, whatever its key scale: it
+  // is the one part of a note the reference curve cannot stand in for.
+  for (int i = drawn_count - 1; i >= 0; --i) {
+    draw_voice_release_line(
+        draw_list, *drawn[i].curve, plot, drawn[i].release_from_ms,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
 

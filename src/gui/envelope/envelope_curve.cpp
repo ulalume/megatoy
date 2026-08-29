@@ -766,7 +766,8 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
     const double att = curve_att_at_ms(curve.held, at_key_off_ms);
     // The release from that level is not a new curve: it is the drawn one,
     // entered at the point where it is already at that level.
-    on_trace_ms = release_entry_ms(curve, att) + released_for;
+    cursor.release_from_ms = release_entry_ms(curve, att);
+    on_trace_ms = cursor.release_from_ms + released_for;
     silence_ms = curve.release_silence_ms;
   }
 
