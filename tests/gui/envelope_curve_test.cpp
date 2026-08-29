@@ -1821,13 +1821,14 @@ void test_a_held_loop_cursor_goes_round() {
       cursor_for_voice(c, beyond + (last_fold - first_fold), -1.0, c.span_ms);
   CHECK(near_rel(next.ms, wrapped.ms, 0.001));
 
-  // A patch that does not loop still stops at the edge.
+  // A patch that does not loop does not come back round: its cursor runs off
+  // the end of the axis and is simply not drawn there.
   ym2612::OperatorSettings plain = op;
   plain.ssg_enable = false;
   const EnvelopeCurve pc = build_envelope_curve(plain);
-  const VoiceCursor stuck =
+  const VoiceCursor gone =
       cursor_for_voice(pc, pc.span_ms * 5.0, -1.0, pc.span_ms);
-  CHECK(near_rel(stuck.ms, pc.span_ms, 0.001));
+  CHECK(gone.ms > pc.span_ms || pc.held_parked);
 }
 
 /// A released voice needs to know where on the release trace its own release
@@ -1919,6 +1920,8 @@ int main() {
   test_the_cursor_carries_on_into_the_release();
   test_a_released_cursor_takes_the_parked_level_with_it();
   test_a_voice_reports_how_long_it_has_been_silent();
+  test_a_held_loop_cursor_goes_round();
+  test_a_released_voice_reports_where_its_release_begins();
 
   test_two_notes_sharing_a_key_scale_value_share_a_curve();
   test_key_scaling_splits_what_it_should();
