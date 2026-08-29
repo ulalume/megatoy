@@ -1,5 +1,6 @@
 #pragma once
 
+#include "channel_allocator.hpp"
 #include "formats/patch_registry.hpp"
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
@@ -124,6 +125,9 @@ public:
   void release_all_notes();
   std::array<bool, 6> active_channels() const;
   const std::vector<ym2612::Note> active_notes() const;
+  /// What each channel is playing -- or was, until its key came up -- with
+  /// the chip's clock, so the envelope graph can place a cursor on it.
+  VoiceActivityFrame voice_activity() const;
 
   // Snapshot functionality for undo/redo
   struct PatchSnapshot {

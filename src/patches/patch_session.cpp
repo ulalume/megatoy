@@ -441,6 +441,10 @@ const std::vector<ym2612::Note> PatchSession::active_notes() const {
   return audio_.notes().published_notes();
 }
 
+VoiceActivityFrame PatchSession::voice_activity() const {
+  return audio_.voice_activity();
+}
+
 PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {
   PatchSnapshot snapshot;
   snapshot.original_patch = original_patch_;

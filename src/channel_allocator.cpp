@@ -3,6 +3,21 @@
 #include "ym2612/device.hpp"
 #include <algorithm>
 
+namespace {
+
+/**
+ * How many times a reader retries a channel's seqlock before giving up.
+ *
+ * The writer's critical section is five relaxed stores, so a reader spinning
+ * in a tight loop loses a race only if the audio thread is descheduled in the
+ * middle of them. The bound is here so a UI frame cannot be hung by that, not
+ * because it is expected to be reached; giving up reports the channel as
+ * never having sounded, which costs one frame of one cursor.
+ */
+constexpr int kSeqlockAttempts = 64;
+
+} // namespace
+
 ChannelAllocator::ChannelAllocator() : channel_key_on_{} { publish(); }
 
 void ChannelAllocator::publish() {
@@ -13,6 +28,66 @@ void ChannelAllocator::publish() {
                                : 0;
     published_[index].store(value, std::memory_order_release);
   }
+}
+
+/**
+ * The write half of the seqlock. Only ever called from the audio thread --
+ * AudioEngine::apply() runs there, or inline on the caller's thread while
+ * nothing is rendering at all -- so there is exactly one writer and no
+ * writer-writer exclusion is needed.
+ *
+ * The generation goes odd before any payload store and even after all of
+ * them. The release fence after the odd store keeps the payload stores from
+ * becoming visible before it; the release on the even store keeps them from
+ * becoming visible after it. A reader that sees an odd generation, or two
+ * different generations either side of its own reads, therefore knows a write
+ * straddled it and retries.
+ */
+void ChannelAllocator::publish_voice(std::size_t index,
+                                     const VoiceActivity &voice) {
+  PublishedVoice &slot = voices_[index];
+  const uint32_t generation = slot.generation.load(std::memory_order_relaxed);
+  slot.generation.store(generation + 1, std::memory_order_relaxed);
+  std::atomic_thread_fence(std::memory_order_release);
+  slot.sequence.store(voice.sequence, std::memory_order_relaxed);
+  slot.key_on.store(voice.key_on_sample, std::memory_order_relaxed);
+  slot.key_off.store(voice.key_off_sample, std::memory_order_relaxed);
+  slot.note.store(voice.midi_note, std::memory_order_relaxed);
+  slot.held.store(voice.held ? 1u : 0u, std::memory_order_relaxed);
+  slot.generation.store(generation + 2, std::memory_order_release);
+}
+
+VoiceActivity ChannelAllocator::published_voice(std::size_t index) const {
+  const PublishedVoice &slot = voices_[index];
+  for (int attempt = 0; attempt < kSeqlockAttempts; ++attempt) {
+    const uint32_t before = slot.generation.load(std::memory_order_acquire);
+    if ((before & 1u) != 0u) {
+      continue; // a write is in flight
+    }
+    VoiceActivity voice;
+    voice.sequence = slot.sequence.load(std::memory_order_relaxed);
+    voice.key_on_sample = slot.key_on.load(std::memory_order_relaxed);
+    voice.key_off_sample = slot.key_off.load(std::memory_order_relaxed);
+    voice.midi_note =
+        static_cast<uint8_t>(slot.note.load(std::memory_order_relaxed));
+    voice.held = slot.held.load(std::memory_order_relaxed) != 0;
+    // Pairs with the release on the generation store above: the payload loads
+    // cannot be sunk past this, so the second generation read really does
+    // bracket them.
+    std::atomic_thread_fence(std::memory_order_acquire);
+    if (slot.generation.load(std::memory_order_relaxed) == before) {
+      return voice;
+    }
+  }
+  return VoiceActivity{};
+}
+
+std::array<VoiceActivity, 6> ChannelAllocator::published_voices() const {
+  std::array<VoiceActivity, 6> out{};
+  for (std::size_t index = 0; index < voices_.size(); ++index) {
+    out[index] = published_voice(index);
+  }
+  return out;
 }
 
 std::vector<ym2612::Note> ChannelAllocator::published_notes() const {
@@ -51,7 +126,7 @@ bool ChannelAllocator::is_note_active(const ym2612::Note &note) const {
 
 std::optional<ChannelAllocator::ChannelClaim>
 ChannelAllocator::note_on(const ym2612::Note &note, uint8_t velocity,
-                          bool allow_voice_steal) {
+                          bool allow_voice_steal, uint64_t sample_position) {
   if (is_note_active(note))
     return std::nullopt;
 
@@ -89,6 +164,17 @@ ChannelAllocator::note_on(const ym2612::Note &note, uint8_t velocity,
   note_to_channel_[note] = channel;
   channel_order_[selected_index] = ++allocation_counter_;
 
+  // A steal overwrites the record rather than releasing it: the chip is
+  // key-offed and keyed on again in the same drain, so the voice that was
+  // there has no release to draw.
+  VoiceActivity voice;
+  voice.sequence = ++voice_counter_;
+  voice.key_on_sample = sample_position;
+  voice.midi_note = note.midi_note();
+  voice.held = true;
+  voice_state_[selected_index] = voice;
+  publish_voice(selected_index, voice);
+
   publish();
   return ChannelClaim{channel, replaced_note};
 }
@@ -112,7 +198,8 @@ ChannelAllocator::active_note(ym2612::ChannelIndex channel) const {
 }
 
 bool ChannelAllocator::note_off(const ym2612::Note &note,
-                                ym2612::Device &device) {
+                                ym2612::Device &device,
+                                uint64_t sample_position) {
   auto it = note_to_channel_.find(note);
   if (it == note_to_channel_.end()) {
     return false;
@@ -127,11 +214,20 @@ bool ChannelAllocator::note_off(const ym2612::Note &note,
   channel_velocity_[channel_idx] = 0;
   note_to_channel_.erase(it);
 
+  // The voice keeps its record: it is releasing, not gone.
+  VoiceActivity &voice = voice_state_[channel_idx];
+  if (voice.valid()) {
+    voice.held = false;
+    voice.key_off_sample = sample_position;
+    publish_voice(channel_idx, voice);
+  }
+
   publish();
   return true;
 }
 
-void ChannelAllocator::release_all(ym2612::Device &device) {
+void ChannelAllocator::release_all(ym2612::Device &device,
+                                   uint64_t sample_position) {
   for (const auto &[note, channel] : note_to_channel_) {
     device.channel(channel).write_key_off();
     auto channel_idx = static_cast<uint8_t>(channel);
@@ -139,6 +235,13 @@ void ChannelAllocator::release_all(ym2612::Device &device) {
     channel_to_note_[channel_idx].reset();
     channel_velocity_[channel_idx] = 0;
     channel_order_[channel_idx] = 0;
+
+    VoiceActivity &voice = voice_state_[channel_idx];
+    if (voice.valid()) {
+      voice.held = false;
+      voice.key_off_sample = sample_position;
+      publish_voice(channel_idx, voice);
+    }
   }
   note_to_channel_.clear();
   allocation_counter_ = 0;

@@ -7,6 +7,7 @@
 #include "ym2612/patch.hpp"
 
 #include "../test_check.hpp"
+#include <atomic>
 #include <cstdint>
 #include <iostream>
 #include <thread>
@@ -184,6 +185,173 @@ void test_midi_overflow_cannot_leave_a_note_stuck() {
   CHECK(engine.notes().published_notes().empty());
 }
 
+// ------------------------------------------- what the envelope graph reads
+
+const VoiceActivity *find_voice(const VoiceActivityFrame &frame,
+                                uint8_t midi_note) {
+  for (const VoiceActivity &voice : frame.voices) {
+    if (voice.valid() && voice.midi_note == midi_note) {
+      return &voice;
+    }
+  }
+  return nullptr;
+}
+
+// The graph needs times, not just "is it sounding": when the key went down,
+// when it came up, and where the chip's clock is now.
+void test_the_voice_record_carries_the_key_times() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+  engine.submit(audio::AudioCommand::apply_patch(
+      make_patch().global, make_patch().channel, make_patch().instrument));
+  render_block(engine, 64);
+  CHECK(engine.rendered_samples() == 64);
+
+  const auto note = ym2612::Note::from_midi_note(60);
+  engine.submit(audio::AudioCommand::note_on(note, 100));
+  render_block(engine, 64);
+  CHECK(engine.rendered_samples() == 128);
+
+  {
+    const VoiceActivityFrame frame = engine.voice_activity();
+    const VoiceActivity *voice = find_voice(frame, 60);
+    CHECK(voice != nullptr);
+    CHECK(voice->held);
+    CHECK(voice->sequence == 1);
+    // Commands are drained before a single frame of their block is rendered,
+    // so the key-on lands at the position that block starts at.
+    CHECK(voice->key_on_sample == 64);
+    CHECK(frame.now_samples == 128);
+    CHECK(frame.sample_rate == kSampleRate);
+  }
+
+  render_block(engine, 256);
+  engine.submit(audio::AudioCommand::note_off(note));
+  render_block(engine, 64);
+
+  {
+    const VoiceActivityFrame frame = engine.voice_activity();
+    // The record OUTLIVES the note-off: the voice is releasing, and that is
+    // what the cursor follows.
+    CHECK(engine.notes().published_notes().empty());
+    const VoiceActivity *voice = find_voice(frame, 60);
+    CHECK(voice != nullptr);
+    CHECK(!voice->held);
+    CHECK(voice->sequence == 1);
+    CHECK(voice->key_on_sample == 64);
+    CHECK(voice->key_off_sample == 384);
+  }
+}
+
+// A stolen channel must read as a new voice, not as the old one carrying on.
+void test_a_steal_starts_a_new_voice() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+  engine.submit(audio::AudioCommand::apply_patch(
+      make_patch().global, make_patch().channel, make_patch().instrument));
+  for (uint8_t i = 0; i < 6; ++i) {
+    engine.submit(audio::AudioCommand::note_on(
+        ym2612::Note::from_midi_note(static_cast<uint8_t>(60 + i)), 100));
+  }
+  render_block(engine, 64);
+
+  const VoiceActivity *stolen = find_voice(engine.voice_activity(), 60);
+  CHECK(stolen != nullptr);
+  const uint64_t stolen_sequence = stolen->sequence;
+
+  render_block(engine, 512);
+  engine.submit(
+      audio::AudioCommand::note_on(ym2612::Note::from_midi_note(72), 100));
+  render_block(engine, 64);
+
+  const VoiceActivityFrame frame = engine.voice_activity();
+  // The oldest note is gone from its channel, replaced rather than released.
+  CHECK(find_voice(frame, 60) == nullptr);
+  const VoiceActivity *fresh = find_voice(frame, 72);
+  CHECK(fresh != nullptr);
+  CHECK(fresh->held);
+  CHECK(fresh->sequence > stolen_sequence);
+  CHECK(fresh->key_on_sample == 576);
+}
+
+// Six channels, six records, and the newest is the largest sequence -- which
+// is the order the graph fades them in.
+void test_every_channel_gets_its_own_record() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+  engine.submit(audio::AudioCommand::apply_patch(
+      make_patch().global, make_patch().channel, make_patch().instrument));
+  uint64_t previous = 0;
+  for (uint8_t i = 0; i < 6; ++i) {
+    engine.submit(audio::AudioCommand::note_on(
+        ym2612::Note::from_midi_note(static_cast<uint8_t>(60 + i)), 100));
+    render_block(engine, 64);
+    const VoiceActivity *voice = find_voice(engine.voice_activity(), 60 + i);
+    CHECK(voice != nullptr);
+    CHECK(voice->sequence > previous);
+    previous = voice->sequence;
+  }
+  int valid = 0;
+  for (const VoiceActivity &voice : engine.voice_activity().voices) {
+    valid += voice.valid() ? 1 : 0;
+  }
+  CHECK(valid == 6);
+}
+
+/**
+ * The seqlock, hammered.
+ *
+ * The audio thread rewrites the records while this thread reads them. Every
+ * key-on plays a note derived from the sequence it will be given, so any
+ * record whose note does not match its own sequence is a torn read -- one
+ * voice's note paired with another's numbers, which is exactly the failure
+ * the generation counter exists to prevent.
+ */
+void test_a_reader_never_sees_half_a_record() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+  engine.submit(audio::AudioCommand::apply_patch(
+      make_patch().global, make_patch().channel, make_patch().instrument));
+  render_block(engine, 64);
+
+  constexpr int kRounds = 4000;
+  std::atomic<bool> done{false};
+  std::thread audio_thread([&engine, &done]() {
+    for (int i = 0; i < kRounds; ++i) {
+      // note = 48 + (sequence - 1) % 24, where sequence is i + 1.
+      const auto note =
+          ym2612::Note::from_midi_note(static_cast<uint8_t>(48 + i % 24));
+      engine.submit(audio::AudioCommand::note_on(note, 100));
+      render_block(engine, 16);
+      engine.submit(audio::AudioCommand::note_off(note));
+      render_block(engine, 16);
+    }
+    done.store(true, std::memory_order_release);
+  });
+
+  uint64_t reads = 0;
+  while (!done.load(std::memory_order_acquire)) {
+    const VoiceActivityFrame frame = engine.voice_activity();
+    for (const VoiceActivity &voice : frame.voices) {
+      if (!voice.valid()) {
+        continue;
+      }
+      const auto expected =
+          static_cast<uint8_t>(48 + (voice.sequence - 1) % 24);
+      CHECK(voice.midi_note == expected);
+      CHECK(voice.key_on_sample <= frame.now_samples);
+      if (!voice.held) {
+        CHECK(voice.key_off_sample >= voice.key_on_sample);
+        CHECK(voice.key_off_sample <= frame.now_samples);
+      }
+      ++reads;
+    }
+  }
+  audio_thread.join();
+  CHECK(reads > 0);
+  std::cout << "seqlock: " << reads << " voice records read while writing\n";
+}
+
 } // namespace
 
 int main() {
@@ -194,6 +362,10 @@ int main() {
   test_voice_limit_and_all_notes_off();
   test_midi_submissions_from_another_thread();
   test_midi_overflow_cannot_leave_a_note_stuck();
+  test_the_voice_record_carries_the_key_times();
+  test_a_steal_starts_a_new_voice();
+  test_every_channel_gets_its_own_record();
+  test_a_reader_never_sees_half_a_record();
 
   std::cout << "All audio command tests passed\n";
   return 0;

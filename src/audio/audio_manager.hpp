@@ -95,6 +95,9 @@ public:
   /// Note state, safe to read from the UI thread.
   const ChannelAllocator &notes() const { return engine_.notes(); }
 
+  /// The voices and the chip's clock, for the envelope graph's live cursor.
+  VoiceActivityFrame voice_activity() const { return engine_.voice_activity(); }
+
   /**
    * Apply patch settings to all channels. Only safe while stopped.
    */

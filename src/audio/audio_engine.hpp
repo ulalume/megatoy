@@ -63,6 +63,19 @@ public:
   /// Note state, safe to read from the UI thread.
   const ChannelAllocator &notes() const { return allocator_; }
 
+  /**
+   * Output frames rendered since initialize(), which is the clock every
+   * key-on and key-off is stamped with. Safe to read from any thread.
+   */
+  uint64_t rendered_samples() const {
+    return rendered_samples_.load(std::memory_order_acquire);
+  }
+
+  /// The voices and the clock, for the envelope graph. Records first, clock
+  /// second, so a note-on that lands between the two can never be timed from
+  /// the future.
+  VoiceActivityFrame voice_activity() const;
+
   ym2612::Device &device() { return device_; }
   const ym2612::Device &device() const { return device_; }
 
@@ -99,6 +112,12 @@ private:
   // one stuck.
   std::atomic<bool> midi_release_recovery_pending_{false};
   ChannelAllocator allocator_;
+  // The chip's own clock. render() advances it once per block, after the
+  // block has been rendered; every command drained at the top of that block
+  // is stamped with the position the block starts at, which is exactly when
+  // its chip writes take effect.
+  std::atomic<uint64_t> rendered_samples_{0};
+  uint64_t command_sample_ = 0;
   // The instrument notes are played with, kept here so a note command does
   // not have to carry one and MIDI never reads the UI's patch.
   ym2612::ChannelInstrument current_instrument_{};
