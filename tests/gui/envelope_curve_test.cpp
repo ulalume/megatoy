@@ -1861,6 +1861,46 @@ void test_a_released_voice_reports_where_its_release_begins() {
   CHECK(near_rel(late.ms, late.release_origin_ms + 5.0, 0.001));
 }
 
+/// A voice draws the road it has travelled, not the road ahead: the ghost
+/// stops where the note has actually got to, and stops growing at key-off. A
+/// loop that has already come round once has been through the whole axis.
+void test_a_voice_draws_only_what_it_has_been_through() {
+  const ym2612::OperatorSettings op = worked_example();
+  const EnvelopeCurve c = build_envelope_curve(op);
+
+  // Partway in, the ghost reaches exactly as far as the note has.
+  const VoiceCursor early = cursor_for_voice(c, 40.0, -1.0, c.span_ms);
+  CHECK(near_rel(early.held_to_ms, 40.0, 0.001));
+
+  // It never runs past the axis.
+  const VoiceCursor beyond =
+      cursor_for_voice(c, c.span_ms * 3.0, -1.0, c.span_ms);
+  CHECK(near_rel(beyond.held_to_ms, c.span_ms, 0.001));
+
+  // Once the key is up it stops growing: the held part is frozen at the
+  // instant of key-off however long the release runs on.
+  const double key_off = 40.0;
+  const VoiceCursor just_off = cursor_for_voice(c, key_off, 0.0, c.span_ms);
+  const VoiceCursor long_off =
+      cursor_for_voice(c, key_off + 500.0, 500.0, c.span_ms);
+  CHECK(near_rel(just_off.held_to_ms, key_off, 0.001));
+  CHECK(near_rel(long_off.held_to_ms, key_off, 0.001));
+
+  // A loop past its first pass has been through all of it.
+  ym2612::OperatorSettings loop = op;
+  loop.ssg_enable = true;
+  loop.ssg_type_envelope_control = 0;
+  loop.sustain_level = 15;
+  loop.decay_rate = 15;
+  const EnvelopeCurve lc = build_envelope_curve(loop);
+  CHECK(lc.held.loop_hz > 0.0);
+  const VoiceCursor round =
+      cursor_for_voice(lc, lc.span_ms * 2.5, -1.0, lc.span_ms);
+  CHECK(near_rel(round.held_to_ms, lc.span_ms, 0.001));
+  // ... and its cursor has still come back round rather than run off.
+  CHECK(round.ms <= lc.span_ms);
+}
+
 int main() {
   test_registers_map_straight_through();
   test_ssg_bits_are_packed_the_way_the_chip_wants_them();
@@ -1921,6 +1961,7 @@ int main() {
   test_a_released_cursor_takes_the_parked_level_with_it();
   test_a_voice_reports_how_long_it_has_been_silent();
   test_a_held_loop_cursor_goes_round();
+  test_a_voice_draws_only_what_it_has_been_through();
   test_a_released_voice_reports_where_its_release_begins();
 
   test_two_notes_sharing_a_key_scale_value_share_a_curve();

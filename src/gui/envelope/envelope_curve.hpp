@@ -349,6 +349,11 @@ struct VoiceCursor {
   /// on the release trace but is drawn from here, so the cursor carries
   /// straight on instead of jumping across the graph. Negative while held.
   double release_origin_ms = -1.0;
+  /// How much of the held trace this voice has actually been through: a note
+  /// draws the road it has travelled, not the road ahead. It only ever grows,
+  /// and stops growing at key-off -- a loop that has already come round once
+  /// has been through all of it, so it keeps the whole thing.
+  double held_to_ms = 0.0;
 };
 
 /**

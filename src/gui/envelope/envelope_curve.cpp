@@ -756,6 +756,10 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
   double silence_ms = 0.0;
   if (!cursor.released) {
     on_trace_ms = std::min(held_ms, park_ms);
+    // How far the note has actually been: measured before the wrap folds a
+    // loop's elapsed time back onto the axis, so a loop past its first pass
+    // has been through the whole of it.
+    cursor.held_to_ms = on_trace_ms;
     silence_ms = curve.held_silence_ms;
   } else {
     const double released_for = std::max(since_key_off_ms, 0.0);
@@ -768,6 +772,9 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
     // entered at the point where it is already at that level.
     cursor.release_from_ms = release_entry_ms(curve, att);
     cursor.release_origin_ms = at_key_off_ms;
+    // The held part stops growing the moment the key comes up, however long
+    // the release runs on after it.
+    cursor.held_to_ms = at_key_off_ms;
     // The release is drawn from where the note actually let go, so the cursor
     // carries on from where it is rather than jumping to wherever that level
     // sits on a release that began at full volume.
@@ -794,8 +801,9 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
   // Still moving when it reaches the right-hand end of the axis: it carries on
   // past it and stops being drawn. Parking it on the edge would say the
   // envelope had come to rest there, which it has not.
-  (void)axis_span_ms;
   cursor.ms = std::max(on_trace_ms, 0.0);
+  cursor.held_to_ms =
+      std::clamp(cursor.held_to_ms, 0.0, std::max(axis_span_ms, 0.0));
   return cursor;
 }
 

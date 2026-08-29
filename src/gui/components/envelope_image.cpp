@@ -58,7 +58,7 @@ constexpr double kFullScale = static_cast<double>(ym2612_eg::kMaxAttenuation);
 /// The wash under the release. It covers one falling edge rather than the
 /// whole shape, so it can be strong enough to read as an area on its own --
 /// this is the alpha the release triangle has always been drawn at.
-constexpr float kFillAlpha = 0.4f;
+constexpr float kFillAlpha = 0.30f;
 /// The warning line is a footnote, not an alert.
 constexpr float kWarningAlpha = 0.6f;
 
@@ -582,9 +582,36 @@ void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
 /// volume would take, which is not the one this voice took -- that is drawn
 /// separately, from where the key actually came up.
 void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
-                      const PlotArea &plot, ImU32 color) {
-  const ImU32 colors[kSegmentCount] = {color, color, color, color};
-  draw_held_line(draw_list, curve, plot, segment_bounds(curve), colors);
+                      const PlotArea &plot, double to_ms, ImU32 color) {
+  const std::vector<ym2612_eg::CurvePoint> &points = curve.held.points;
+  const double limit = std::min(to_ms, plot.span_ms);
+  if (!(limit > 0.0) || points.size() < 2) {
+    return;
+  }
+  const float thickness = ui::scale::px(1.0f);
+  for (std::size_t i = 0; i + 1 < points.size(); ++i) {
+    double ms0 = points[i].ms;
+    if (ms0 >= limit) {
+      return;
+    }
+    double ms1 = points[i + 1].ms;
+    double out1 = points[i + 1].out;
+    if (ms1 > limit) {
+      const double dt = ms1 - ms0;
+      const double t = dt > 0.0 ? (limit - ms0) / dt : 0.0;
+      out1 = points[i].out + (out1 - points[i].out) * t;
+      ms1 = limit;
+    }
+    draw_list->AddLine(plot.at(ms0, points[i].out), plot.at(ms1, out1), color,
+                       thickness);
+  }
+  // A parked voice sits past the end of its own trace: carry the level it
+  // stopped at out to where it has got to.
+  const ym2612_eg::CurvePoint &last = points.back();
+  if (limit > last.ms) {
+    draw_list->AddLine(plot.at(last.ms, last.out), plot.at(limit, last.out),
+                       color, thickness);
+  }
 }
 
 /// The release this voice is actually taking: the drawn release trace from the
@@ -593,13 +620,14 @@ void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
 /// attack and decay, so it reads as this voice rather than as the reference.
 void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
                              const PlotArea &plot, double from_ms,
-                             double origin_ms, ImU32 color) {
+                             double origin_ms, double to_ms, ImU32 color) {
   const std::vector<ym2612_eg::CurvePoint> &points = curve.release.points;
   if (from_ms < 0.0 || origin_ms < 0.0 || points.size() < 2) {
     return;
   }
   // The release keeps its shape and is slid along to where the key came up.
   const double shift = origin_ms - from_ms;
+  const double limit = std::min(to_ms, plot.span_ms);
   const float thickness = ui::scale::px(1.0f);
 
   bool have_previous = false;
@@ -631,18 +659,18 @@ void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
     // to the floor at the right-hand edge.
     const double a_ms = previous_ms + shift;
     double b_ms = ms + shift;
-    if (a_ms >= plot.span_ms) {
+    if (a_ms >= limit) {
       return;
     }
-    if (b_ms > plot.span_ms) {
+    if (b_ms > limit) {
       const double dt = b_ms - a_ms;
-      const double t = dt > 0.0 ? (plot.span_ms - a_ms) / dt : 0.0;
+      const double t = dt > 0.0 ? (limit - a_ms) / dt : 0.0;
       out = previous_out + (out - previous_out) * t;
-      b_ms = plot.span_ms;
+      b_ms = limit;
     }
     draw_list->AddLine(plot.at(a_ms, previous_out), plot.at(b_ms, out), color,
                        thickness);
-    if (b_ms >= plot.span_ms) {
+    if (b_ms >= limit) {
       return;
     }
     previous_ms = ms;
@@ -794,6 +822,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
     float alpha;
     double release_from_ms;
     double release_origin_ms;
+    double held_to_ms;
   };
   DrawnVoice drawn[6];
   int drawn_count = 0;
@@ -817,8 +846,9 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       continue;
     }
     drawn[drawn_count++] =
-        DrawnVoice{voice_curve, cursor.ms, alpha, cursor.release_from_ms,
-                   cursor.release_origin_ms};
+        DrawnVoice{voice_curve,          cursor.ms,
+                   alpha,                 cursor.release_from_ms,
+                   cursor.release_origin_ms, cursor.held_to_ms};
   }
 
   // Ghost curves oldest first, so the newest is the one on top of the others
@@ -831,7 +861,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       continue;
     }
     draw_voice_curve(
-        draw_list, *drawn[i].curve, plot,
+        draw_list, *drawn[i].curve, plot, drawn[i].held_to_ms,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
   // The release each voice is taking, over the ghosts and under the reference
@@ -840,7 +870,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   for (int i = drawn_count - 1; i >= 0; --i) {
     draw_voice_release_line(
         draw_list, *drawn[i].curve, plot, drawn[i].release_from_ms,
-        drawn[i].release_origin_ms,
+        drawn[i].release_origin_ms, drawn[i].ms,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
 
