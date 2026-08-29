@@ -375,6 +375,32 @@ void test_the_cache_recomputes_only_on_a_real_change() {
 
 } // namespace
 
+/// An audio-rate loop must keep its own scale: the release is far longer than
+/// the loop, and letting it set the axis packs the cycles into a solid block.
+void test_a_fast_loop_keeps_its_scale() {
+  ym2612::OperatorSettings op;
+  op.attack_rate = 31;
+  op.decay_rate = 24;
+  op.sustain_level = 15;
+  op.release_rate = 7;
+  op.ssg_enable = true;
+  op.ssg_type_envelope_control = 0;
+
+  const EnvelopeCurve fast = build_envelope_curve(op, 0.0);
+  CHECK(fast.curve.loop_hz > 100.0);
+  // The loop, not the release, decides the width.
+  CHECK(fast.span_ms <= fast.gate_ms * 3.0);
+  // ... and it still gets a readable share of it.
+  CHECK(fast.gate_ms / fast.span_ms > 0.25);
+
+  // A slow loop already fits, so nothing about it changes.
+  ym2612::OperatorSettings slow = op;
+  slow.decay_rate = 15;
+  const EnvelopeCurve wide = build_envelope_curve(slow, 0.0);
+  CHECK(wide.curve.loop_hz < 20.0);
+  CHECK(wide.gate_ms / wide.span_ms > 0.25);
+}
+
 int main() {
   test_registers_map_straight_through();
   test_ssg_bits_are_packed_the_way_the_chip_wants_them();

@@ -42,6 +42,10 @@ constexpr double kSsgMaxGateMs = 5000.0;
 constexpr double kSustainShare = 0.25;
 /// Roughly this many SSG loop periods before the key comes up.
 constexpr double kSsgLoopPeriods = 3.5;
+/// How much of a looping graph the release may claim. Past this the loop the
+/// release comes from stops being readable, so the axis keeps the loop's scale
+/// and the tail runs off the right edge instead.
+constexpr double kSsgSpanBudget = 2.0;
 
 double first_marker_ms(const CurveResult &curve, MarkerKind kind) {
   for (const ym2612_eg::Marker &m : curve.markers) {
@@ -204,11 +208,16 @@ double probe_max_ms(const OperatorParams &op) {
 Gate choose_gate(const CurveResult &probe, const OperatorParams &op) {
   double gate = 0.0;
   double ceiling = kHardMaxGateMs;
+  double floor_ms = kMinGateMs;
 
   const double period = loop_period_ms(probe, op);
   if (period > 0.0) {
     gate = kSsgLoopPeriods * period;
     ceiling = kSsgMaxGateMs;
+    // A loop carries its own time scale. Holding it for kMinGateMs would pack
+    // an audio-rate loop into a solid block of cycles instead of showing its
+    // shape, so the periods are the floor.
+    floor_ms = std::min(kMinGateMs, gate);
   } else {
     const double attack_end = first_marker_ms(probe, MarkerKind::AttackEnd);
     const double decay_end = first_marker_ms(probe, MarkerKind::DecayEnd);
@@ -227,7 +236,7 @@ Gate choose_gate(const CurveResult &probe, const OperatorParams &op) {
                          kHardMaxGateMs);
   }
 
-  gate = std::clamp(gate, kMinGateMs, ceiling);
+  gate = std::clamp(gate, floor_ms, ceiling);
 
   const double release_budget = std::clamp(3.0 * gate, 200.0, 4000.0);
   return Gate{gate, gate + release_budget};
@@ -296,7 +305,14 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
           ? 0.0
           : static_cast<double>(out.curve.points.back().ms);
   out.truncated = out.content_ms >= gate.max_ms * 0.999;
-  out.span_ms = quantize_span_ms(out.content_ms, previous_span_ms);
+
+  // A loop carries its own time scale: a release far longer than the loop
+  // would otherwise widen the axis until the cycles merge into a block.
+  double span_ms = out.content_ms;
+  if (loop_period_ms(probe, request.op) > 0.0 && gate.gate_ms > 0.0) {
+    span_ms = std::min(span_ms, gate.gate_ms * kSsgSpanBudget);
+  }
+  out.span_ms = quantize_span_ms(span_ms, previous_span_ms);
 
   out.attack_end_ms = first_marker_ms(out.curve, MarkerKind::AttackEnd);
   out.decay_end_ms = first_marker_ms(out.curve, MarkerKind::DecayEnd);
