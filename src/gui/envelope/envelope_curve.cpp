@@ -222,9 +222,10 @@ double probe_max_ms(const OperatorParams &op) {
   return ssg_loops(op) ? kSsgProbeMs : kProbeMs;
 }
 
-double release_max_ms(double held_ms) {
-  return std::clamp(kReleaseSpanBudget * held_ms, kMinReleaseMs, kMaxReleaseMs);
-}
+/// The release is simulated on its own terms: sampling stops at silence, so a
+/// generous ceiling costs nothing on a fast one, and tying it to the held
+/// window would let AR and DR change how long a release is drawn.
+double release_max_ms() { return kMaxReleaseMs; }
 
 /**
  * How much of the held envelope to draw, chosen from a run with the key held
@@ -368,7 +369,7 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   release.op.ar = 0;
   release.pitch = pitch;
   release.gate_ms = 0.0;
-  release.max_ms = release_max_ms(out.held_ms);
+  release.max_ms = release_max_ms();
   release.start_att = loudest_attenuation(params);
   out.release = ym2612_eg::sample_curve(release);
   out.release_content_ms =

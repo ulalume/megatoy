@@ -105,7 +105,7 @@ double probe_max_ms(const ym2612_eg::OperatorParams &op);
  * the ordinary release rates still measure their true length and a ceiling
  * because RR = 0 never reaches silence at all.
  */
-double release_max_ms(double held_ms);
+double release_max_ms();
 
 /**
  * The drawn width of the time axis, in ms, quantised to a ladder of round

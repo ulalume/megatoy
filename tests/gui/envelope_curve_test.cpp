@@ -209,11 +209,10 @@ void test_the_held_window_is_bounded_across_a_sweep() {
           const double held_ms = choose_held_ms(probe(op), params);
           CHECK(held_ms >= 50.0);
           CHECK(held_ms <= 10000.0);
-          // The release is simulated for as long as it could be drawn, never
-          // for longer than the 10 s ceiling.
-          const double budget = release_max_ms(held_ms);
-          CHECK(budget >= 4000.0);
-          CHECK(budget <= 10000.0);
+          // The release's budget is its own: nothing about the held envelope
+          // may change how far the release is simulated.
+          CHECK(release_max_ms() >= 4000.0);
+          CHECK(release_max_ms() <= 10000.0);
         }
       }
     }
