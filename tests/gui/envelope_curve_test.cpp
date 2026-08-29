@@ -1136,25 +1136,36 @@ void test_the_release_entry_point_matches_a_real_release() {
   CHECK(worst_periods <= 1.0);
 }
 
-void test_the_cursor_moves_to_the_release_trace_on_key_off() {
+/// The key coming up does not move the cursor. The release is drawn from where
+/// the note actually let go and the cursor carries straight on into it; only
+/// the *shape* comes from the release trace, taken from the point where that
+/// trace is already at the level the key came up on.
+void test_the_cursor_carries_on_into_the_release() {
   const ym2612::OperatorSettings op = worked_example();
   const EnvelopeCurve curve = build_envelope_curve(op);
   const double key_off_ms = 120.0;
   const double att = curve_att_at_ms(curve.held, key_off_ms);
   const double entry = release_entry_ms(curve, att);
-  CHECK(entry > 0.0); // it joins the trace partway along, not at the start
+  CHECK(entry > 0.0); // the trace reaches that level partway along, not at 0
 
-  // The instant the key comes up the cursor is at the entry point ...
+  // The instant the key comes up the cursor has not moved ...
   const VoiceCursor at_key_off =
       cursor_for_voice(curve, key_off_ms, 0.0, curve.span_ms);
   CHECK(at_key_off.released);
-  CHECK(std::fabs(at_key_off.ms - entry) < 1e-9);
-  // ... and from there it advances in real time along the release.
+  CHECK(std::fabs(at_key_off.ms - key_off_ms) < 1e-9);
+  // ... the release is drawn from there, with the trace's shape from `entry`.
+  CHECK(std::fabs(at_key_off.release_origin_ms - key_off_ms) < 1e-9);
+  CHECK(std::fabs(at_key_off.release_from_ms - entry) < 1e-9);
+
+  // From there it advances in real time.
   const VoiceCursor later =
       cursor_for_voice(curve, key_off_ms + 5.0, 5.0, curve.span_ms);
-  CHECK(std::fabs(later.ms - (entry + 5.0)) < 1e-9);
-  // Released at full volume it enters at the very start of the trace.
-  CHECK(cursor_for_voice(curve, 0.0, 0.0, curve.span_ms).ms <= 1e-9);
+  CHECK(std::fabs(later.ms - (key_off_ms + 5.0)) < 1e-9);
+
+  // Let go at full volume, the shape is the whole trace from its start.
+  const VoiceCursor immediate = cursor_for_voice(curve, 0.0, 0.0, curve.span_ms);
+  CHECK(immediate.ms <= 1e-9);
+  CHECK(immediate.release_from_ms <= 1e-9);
 }
 
 void test_a_released_cursor_takes_the_parked_level_with_it() {
@@ -1167,6 +1178,7 @@ void test_a_released_cursor_takes_the_parked_level_with_it() {
   const VoiceCursor soon =
       cursor_for_voice(curve, park + 1.0, 0.0, curve.span_ms);
   const VoiceCursor late = cursor_for_voice(curve, 30000.0, 0.0, curve.span_ms);
+  CHECK(std::fabs(soon.release_from_ms - late.release_from_ms) < 1e-9);
   CHECK(std::fabs(soon.ms - late.ms) < 1e-9);
 }
 
@@ -1842,8 +1854,9 @@ void test_a_released_voice_reports_where_its_release_begins() {
   const VoiceCursor late = cursor_for_voice(c, late_off + 5.0, 5.0, c.span_ms);
   CHECK(late.release_from_ms > early.release_from_ms);
 
-  // And the cursor is that entry point plus however long it has been falling.
-  CHECK(near_rel(late.ms, late.release_from_ms + 5.0, 0.001));
+  // And the cursor is where the key came up plus however long it has been
+  // falling -- the entry point only sets the shape, not the position.
+  CHECK(near_rel(late.ms, late.release_origin_ms + 5.0, 0.001));
 }
 
 int main() {
@@ -1902,7 +1915,7 @@ int main() {
   test_a_cursor_still_moving_stops_at_the_right_edge();
   test_a_parked_cursor_stays_where_the_envelope_stopped();
   test_the_release_entry_point_matches_a_real_release();
-  test_the_cursor_moves_to_the_release_trace_on_key_off();
+  test_the_cursor_carries_on_into_the_release();
   test_a_released_cursor_takes_the_parked_level_with_it();
   test_a_voice_reports_how_long_it_has_been_silent();
 

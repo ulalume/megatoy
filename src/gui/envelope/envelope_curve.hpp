@@ -342,6 +342,11 @@ struct VoiceCursor {
   /// which the drawn release is already at the level the key came up on.
   /// Negative while the key is still down.
   double release_from_ms = -1.0;
+  /// Where on the graph that release is drawn from: the instant the key came
+  /// up, on the held trace's own time axis. The release keeps the shape it has
+  /// on the release trace but is drawn from here, so the cursor carries
+  /// straight on instead of jumping across the graph. Negative while held.
+  double release_origin_ms = -1.0;
 };
 
 /**

@@ -767,8 +767,16 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
     // The release from that level is not a new curve: it is the drawn one,
     // entered at the point where it is already at that level.
     cursor.release_from_ms = release_entry_ms(curve, att);
-    on_trace_ms = cursor.release_from_ms + released_for;
-    silence_ms = curve.release_silence_ms;
+    cursor.release_origin_ms = at_key_off_ms;
+    // The release is drawn from where the note actually let go, so the cursor
+    // carries on from where it is rather than jumping to wherever that level
+    // sits on a release that began at full volume.
+    on_trace_ms = at_key_off_ms + released_for;
+    // Silence is a property of the release, so it moves with it.
+    silence_ms = std::isfinite(curve.release_silence_ms)
+                     ? at_key_off_ms + curve.release_silence_ms -
+                           cursor.release_from_ms
+                     : curve.release_silence_ms;
   }
 
   if (!cursor.released) {

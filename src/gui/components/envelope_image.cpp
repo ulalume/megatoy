@@ -587,11 +587,13 @@ void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
 /// attack and decay, so it reads as this voice rather than as the reference.
 void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
                              const PlotArea &plot, double from_ms,
-                             ImU32 color) {
+                             double origin_ms, ImU32 color) {
   const std::vector<ym2612_eg::CurvePoint> &points = curve.release.points;
-  if (from_ms < 0.0 || points.size() < 2) {
+  if (from_ms < 0.0 || origin_ms < 0.0 || points.size() < 2) {
     return;
   }
+  // The release keeps its shape and is slid along to where the key came up.
+  const double shift = origin_ms - from_ms;
   const float thickness = ui::scale::px(1.0f);
   bool have_previous = false;
   ImVec2 previous;
@@ -610,10 +612,10 @@ void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
         const double u = span > 0.0 ? (from_ms - points[i - 1].ms) / span : 0.0;
         out = points[i - 1].out + (points[i].out - points[i - 1].out) * u;
       }
-      previous = ImVec2(plot.x_of(from_ms), plot.y_of(out));
+      previous = ImVec2(plot.x_of(origin_ms), plot.y_of(out));
       have_previous = true;
     }
-    const ImVec2 next(plot.x_of(ms), plot.y_of(points[i].out));
+    const ImVec2 next(plot.x_of(ms + shift), plot.y_of(points[i].out));
     draw_list->AddLine(previous, next, color, thickness);
     previous = next;
   }
@@ -762,6 +764,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
     double ms;
     float alpha;
     double release_from_ms;
+    double release_origin_ms;
   };
   DrawnVoice drawn[6];
   int drawn_count = 0;
@@ -785,7 +788,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       continue;
     }
     drawn[drawn_count++] =
-        DrawnVoice{voice_curve, cursor.ms, alpha, cursor.release_from_ms};
+        DrawnVoice{voice_curve, cursor.ms, alpha, cursor.release_from_ms,
+                   cursor.release_origin_ms};
   }
 
   // Ghost curves oldest first, so the newest is the one on top of the others
@@ -807,6 +811,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   for (int i = drawn_count - 1; i >= 0; --i) {
     draw_voice_release_line(
         draw_list, *drawn[i].curve, plot, drawn[i].release_from_ms,
+        drawn[i].release_origin_ms,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
 
