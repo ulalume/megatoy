@@ -228,9 +228,9 @@ double release_max_ms(double held_ms) {
  *   example must not swallow the graph -- but never below the attack + decay,
  *   which would misplace the sustain instead of merely shortening it.
  *
- * Cutting the trace here is not a key-off: nothing about the envelope changes
- * at this instant, and whatever it was doing simply carries on to the right
- * edge of the graph.
+ * This is the width the axis is sized from, not the length of the trace:
+ * nothing about the envelope changes at this instant, and the trace itself is
+ * simulated across the whole axis the width turns into.
  */
 double choose_held_ms(const CurveResult &probe, const OperatorParams &op) {
   double held = 0.0;
@@ -324,21 +324,11 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   request.max_ms = probe_max_ms(params);
   const CurveResult probe = ym2612_eg::sample_curve(request);
 
-  // 2. The held trace itself: the same run, cut to the width the probe
-  //    justified. Still no key-off, so SR = 0 holds flat and SR > 0 shows its
-  //    real slow decay rather than a level some invented gate stopped it at.
   out.held_ms = choose_held_ms(probe, params);
-  request.max_ms = out.held_ms;
-  out.held = ym2612_eg::sample_curve(request);
-  out.held_content_ms = out.held.points.empty()
-                            ? 0.0
-                            : static_cast<double>(out.held.points.back().ms);
-  // Held forever, sample_curve() stops the moment the envelope comes to rest,
-  // so a finite park is exactly "the trace ended because there was nothing
-  // left to draw" -- continue it flat rather than along a slope of zero noise.
-  out.held_parked = std::isfinite(out.held.park_ms);
+  const double period_ms = loop_period_ms(probe, params);
+  const bool loops = period_ms > 0.0;
 
-  // 3. The release, on its own: keyed on at full volume and released on sample
+  // 2. The release, on its own: keyed on at full volume and released on sample
   //    zero. gate_ms = 0 routes it through the chip's real key-off rules --
   //    the SSG inversion latch, the 4x increments, the hard cut at 0x200 --
   //    which is why an SSG-EG patch's release is so much shorter than the same
@@ -368,17 +358,41 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
       (out.release.points.empty() ||
        out.release.points.back().out < ym2612_eg::kMaxAttenuation);
 
-  // The axis has to hold both traces -- but neither may crush the other. A
-  // loop keeps its own scale, and a release much longer than the held envelope
-  // is allowed to run off the right edge rather than flatten the part being
-  // edited.
-  const double budget =
-      loop_period_ms(probe, params) > 0.0 ? kSsgSpanBudget : kReleaseSpanBudget;
+  // 3. The axis has to hold both traces -- but neither may crush the other. A
+  //    loop keeps its own scale, and a release much longer than the held
+  //    envelope is allowed to run off the right edge rather than flatten the
+  //    part being edited.
+  const double budget = loops ? kSsgSpanBudget : kReleaseSpanBudget;
   double content = std::max(out.held_ms, out.release_content_ms);
   if (out.held_ms > 0.0) {
     content = std::min(content, out.held_ms * budget);
   }
   out.span_ms = quantize_span_ms(content, previous_span_ms);
+
+  // 4. The held trace itself, simulated across the WHOLE axis rather than only
+  //    as far as the window policy asked for. Still no key-off, so SR = 0
+  //    holds flat and SR > 0 shows its real slow decay rather than a level
+  //    some invented gate stopped it at.
+  //
+  //    A looping patch is the reason this runs to the edge instead of being
+  //    extrapolated there: a sawtooth continued along the slope of its last
+  //    ramp is not a sawtooth. But gate_ms < 0 means more to sample_curve()
+  //    than "never released" -- it also licenses it to stop as soon as there
+  //    is nothing new to see, which for a loop is after five periods, and that
+  //    is exactly the trace that stopped in mid-air. So a measured loop is
+  //    given a key-off just past the end of the window instead: none of it
+  //    falls inside the graph, and no early exit either. Everything else keeps
+  //    the held-forever run, whose early exit is at the park -- where the
+  //    envelope really has come to rest and the flat tail below is exact.
+  request.max_ms = std::max(out.span_ms, out.held_ms);
+  request.gate_ms = loops ? request.max_ms + 1.0 : -1.0;
+  out.held = ym2612_eg::sample_curve(request);
+  out.held_content_ms = out.held.points.empty()
+                            ? 0.0
+                            : static_cast<double>(out.held.points.back().ms);
+  // A finite park is exactly "the trace ended because there was nothing left
+  // to draw" -- continue it flat rather than along a slope of zero noise.
+  out.held_parked = std::isfinite(out.held.park_ms);
 
   out.attack_end_ms = first_marker_ms(out.held, MarkerKind::AttackEnd);
   out.decay_end_ms = first_marker_ms(out.held, MarkerKind::DecayEnd);

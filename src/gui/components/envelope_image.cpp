@@ -196,14 +196,16 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
 /**
  * One more piece of curve past the last simulated point.
  *
- * A trace can stop before the right edge: the held envelope is only simulated
- * for as long as it is worth drawing, and a slow release can outlast its
- * budget. Either way the line must not stop in mid-air.
+ * A trace can stop before the right edge: the held envelope stops the moment
+ * it comes to rest, and a slow release can outlast its budget. Either way the
+ * line must not stop in mid-air.
  *
  * `flat` means the envelope came to rest -- an SR = 0 hold, a frozen attack --
  * so it is continued horizontally, which is exactly what the chip would do.
  * Otherwise it is continued along its final slope; post-attack segments are
- * linear in attenuation, so that is as accurate as the rest of the curve.
+ * linear in attenuation, so that is as accurate as the rest of the curve. A
+ * moving held envelope is simulated all the way to the axis edge, so in
+ * practice that second case is the release's alone.
  */
 bool extrapolated_tail(const std::vector<ym2612_eg::CurvePoint> &points,
                        bool flat, double span_ms, double &end_ms,

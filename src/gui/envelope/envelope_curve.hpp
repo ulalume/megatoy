@@ -72,14 +72,15 @@ bool same_envelope(const ym2612_eg::OperatorParams &lhs,
                    const ym2612_eg::OperatorParams &rhs);
 
 /**
- * How much of the held envelope is worth drawing, in ms, decided from a
+ * How much of the held envelope is worth *seeing*, in ms, decided from a
  * held-forever probe run. See envelope_curve.cpp for the policy; in short: a
  * sustain segment is always visible, a 27-second sustain decay is cut short
  * rather than allowed to swallow the graph, and an SSG loop gets about three
  * and a half periods.
  *
- * Nothing here is a key-off: the trace simply stops being drawn. Whatever the
- * envelope was doing at that instant carries on to the right edge.
+ * This is a scale, not a length: it is what the axis width is chosen from, and
+ * the envelope itself is then drawn across the whole of that axis. Nothing
+ * here is a key-off.
  */
 double choose_held_ms(const ym2612_eg::CurveResult &probe,
                       const ym2612_eg::OperatorParams &op);
@@ -121,15 +122,17 @@ struct EnvelopeCurve {
   ym2612_eg::CurveResult release;
 
   double span_ms = 0.0; ///< quantised width of the time axis
-  double held_ms = 0.0; ///< how much of the held envelope the policy asked for
+  double held_ms = 0.0; ///< the window the axis width was chosen from
   double held_content_ms = 0.0;    ///< where the held polyline actually ends
   double release_content_ms = 0.0; ///< where the release polyline actually ends
 
   /// The held envelope came to rest -- an SR = 0 hold, a frozen attack, a
-  /// sustain that reached silence -- so the trace is continued to the right
-  /// edge flat. Otherwise it ran out of budget while still moving and is
-  /// continued along its final slope, which is exact: every post-attack
-  /// segment is linear in attenuation.
+  /// sustain that reached silence -- so simulating it further would only
+  /// repeat one level, and the trace is continued to the right edge flat.
+  /// Everything else is simulated across the whole axis and needs no
+  /// continuation at all; if one is ever needed anyway it follows the final
+  /// slope, which is exact: every post-attack segment is linear in
+  /// attenuation.
   bool held_parked = false;
   /// The release was still falling when its budget ran out.
   bool release_truncated = false;
@@ -147,9 +150,10 @@ struct EnvelopeCurve {
 
 /**
  * Three passes over the simulator: a held-forever probe to discover park time,
- * loop frequency and warnings; the held trace itself, cut to the width the
- * probe justified; and a release from full volume, which shares only the time
- * axis with the other two.
+ * loop frequency and warnings; a release from full volume, which shares only
+ * the time axis with the other two; and -- once those two have decided how
+ * wide the axis is -- the held trace, simulated across the whole of it so a
+ * loop keeps looping to the right edge.
  */
 EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
                                    double previous_span_ms);

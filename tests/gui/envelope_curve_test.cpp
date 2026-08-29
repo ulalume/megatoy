@@ -302,8 +302,10 @@ void test_the_worked_examples_decay_lands_on_the_real_millisecond_axis() {
   CHECK(curve.attack_end_ms >= 0.0);
   CHECK(curve.attack_end_ms < curve.decay_end_ms);
   CHECK(curve.held_ms > curve.decay_end_ms);
-  CHECK(near_rel(curve.held_content_ms, curve.held_ms, 0.01));
   CHECK(curve.span_ms >= curve.held_ms);
+  // The held trace is simulated across the whole axis, not just the window
+  // the policy asked for, so it ends at the right edge rather than in mid-air.
+  CHECK(near_rel(curve.held_content_ms, curve.span_ms, 0.01));
   CHECK(!curve.held.points.empty());
   CHECK(curve.warning == nullptr);
 
@@ -367,6 +369,58 @@ void test_ssg_eg_makes_the_release_dramatically_shorter() {
   CHECK(ssg_curve.release_content_ms * 4.0 < plain_curve.release_content_ms);
   CHECK(plain_curve.release.points.back().out == ym2612_eg::kMaxAttenuation);
   CHECK(ssg_curve.release.points.back().out == ym2612_eg::kMaxAttenuation);
+}
+
+ym2612::OperatorSettings owner_patch(int ar, int dr, int sl, int sr) {
+  // The three SSG type 4 patches from the report: TL = 0, KS = 0, RR = 0.
+  ym2612::OperatorSettings op;
+  op.attack_rate = static_cast<uint8_t>(ar);
+  op.decay_rate = static_cast<uint8_t>(dr);
+  op.sustain_level = static_cast<uint8_t>(sl);
+  op.sustain_rate = static_cast<uint8_t>(sr);
+  op.release_rate = 0;
+  op.total_level = 0;
+  op.key_scale = 0;
+  op.ssg_enable = true;
+  op.ssg_type_envelope_control = 4;
+  return op;
+}
+
+/// The held trace is simulated across the whole quantised span, so a loop
+/// keeps looping all the way to the right edge instead of being extrapolated
+/// along the slope of its last ramp -- the sawtooth that simply stopped.
+void test_a_loop_keeps_looping_to_the_right_edge() {
+  const ym2612::OperatorSettings patches[] = {
+      owner_patch(14, 18, 9, 14),
+      owner_patch(29, 1, 0, 7),
+      owner_patch(8, 10, 7, 4),
+  };
+  for (const auto &op : patches) {
+    const EnvelopeCurve c = build_envelope_curve(op, 0.0);
+    // A loop a listener could hear, not the sample rate.
+    CHECK(c.held.loop_hz > 0.1);
+    CHECK(c.held.loop_hz < 100.0);
+    // The polyline reaches the edge of the axis on its own.
+    CHECK(near_rel(c.held_content_ms, c.span_ms, 0.01));
+    CHECK(!c.held_parked);
+    // ... and it is still folding when it gets there: the last fold is within
+    // one period of the right edge, so no more than one ramp is unfinished.
+    const double period_ms = 1000.0 / c.held.loop_hz;
+    double last_fold = -1.0;
+    int folds = 0;
+    for (const auto &m : c.held.markers) {
+      if (m.kind == MarkerKind::SsgFold) {
+        last_fold = m.ms;
+        ++folds;
+      }
+    }
+    CHECK(folds >= 3);
+    CHECK(last_fold > c.span_ms - period_ms * 1.05);
+    // No key-off inside the graph, whatever gate the run was asked for.
+    CHECK(!has_marker(c.held, MarkerKind::KeyOff));
+    // The release is a real curve, not the one-sample cut.
+    CHECK(c.release_content_ms > 100.0);
+  }
 }
 
 /// The inverted SSG-EG modes (types 4-7) run the attenuation scale backwards:
@@ -614,6 +668,7 @@ int main() {
   test_the_worked_examples_decay_lands_on_the_real_millisecond_axis();
   test_the_release_starts_at_full_volume_and_reaches_silence();
   test_ssg_eg_makes_the_release_dramatically_shorter();
+  test_a_loop_keeps_looping_to_the_right_edge();
   test_an_inverted_ssg_release_is_as_long_as_the_upright_one();
   test_an_sr0_held_trace_parks_and_stays_flat();
   test_total_level_moves_the_whole_curve_down();
