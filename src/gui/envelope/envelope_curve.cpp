@@ -32,9 +32,16 @@ constexpr double kMinHeldMs = 50.0;
 /// -- SR = 0, DR = 0, AR = 0 -- reach it; the curve below needs a lifetime of
 /// four minutes to arrive here on its own.
 constexpr double kHardMaxHeldMs = 10000.0;
-/// An SSG loop is what this graph exists for, so it is allowed more room than
-/// a plain sustain before the periods start being dropped.
-constexpr double kSsgMaxHeldMs = 5000.0;
+/// An SSG loop is what this graph exists for, so nothing but the widest axis
+/// there is may cost it periods. At 5 s a loop slower than about 1.4 s per
+/// period was already losing them: the axis stopped growing while the period
+/// kept going, so lowering DR drew fewer and fewer cycles.
+constexpr double kSsgMaxHeldMs = kHardMaxHeldMs;
+/// However slow the loop, this much of one period stays on the axis.
+constexpr double kLoopVisiblePeriods = 1.2;
+/// ... but not without end: past this the loop is a slow gesture rather than
+/// an envelope, and the axis stops following it.
+constexpr double kLoopHardMaxMs = 30000.0;
 /// The scale the axis is pulled towards: an envelope that lives this long is
 /// drawn at exactly this width. It is about the length of an ordinary attack
 /// and decay, which is what the graph is usually being read for.
@@ -387,7 +394,14 @@ double choose_held_ms(const CurveResult &probe, const OperatorParams &op) {
     // A loop carries its own time scale. Widening an audio-rate loop to
     // kMinHeldMs would pack it into a solid block of cycles instead of showing
     // its shape, so the periods are the floor.
-    return std::clamp(held, std::min(kMinHeldMs, held), kSsgMaxHeldMs);
+    //
+    // The ceiling gives way for a slow loop rather than the other way round: a
+    // graph of a loop that cannot fit one period of it shows nothing about the
+    // loop, and for these patches the loop is the whole content.
+    const double ceiling =
+        std::min(std::max(kSsgMaxHeldMs, kLoopVisiblePeriods * period),
+                 kLoopHardMaxMs);
+    return std::clamp(held, std::min(kMinHeldMs, held), ceiling);
   }
   return window_for_timeline_ms(held_timeline(op, reference_pitch()));
 }

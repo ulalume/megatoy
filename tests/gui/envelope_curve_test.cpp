@@ -1202,6 +1202,40 @@ void test_the_axis_does_not_jump_between_neighbouring_values() {
   // sweeps in hand.
 }
 
+/// A slow loop must not lose its periods to the ceiling. The window is 3.5
+/// periods wide, but that used to be clamped at 5 s, so a loop slower than
+/// about 1.4 s per period drew fewer and fewer cycles as DR fell -- the axis
+/// stopped growing while the loop kept slowing down.
+void test_a_slow_loop_still_shows_a_period() {
+  const auto loop_at = [](int dr) {
+    ym2612::OperatorSettings op;
+    op.attack_rate = 31;
+    op.decay_rate = static_cast<uint8_t>(dr);
+    op.sustain_level = 15;
+    op.sustain_rate = 0;
+    op.release_rate = 2;
+    op.ssg_enable = true;
+    op.ssg_type_envelope_control = 2; // triangle: two ramps per period
+    return build_envelope_curve(op);
+  };
+
+  double previous = 0.0;
+  for (int dr = 20; dr >= 2; --dr) {
+    const EnvelopeCurve c = loop_at(dr);
+    size_t folds = 0;
+    for (const ym2612_eg::Marker &m : c.held.markers) {
+      if (m.kind == MarkerKind::SsgFold && m.ms <= c.span_ms) {
+        ++folds;
+      }
+    }
+    // Two folds is one whole period of an alternating mode.
+    CHECK(folds >= 2);
+    // A slower loop never gets a narrower axis.
+    CHECK(c.span_ms >= previous * 0.999);
+    previous = c.span_ms;
+  }
+}
+
 int main() {
   test_registers_map_straight_through();
   test_ssg_bits_are_packed_the_way_the_chip_wants_them();
