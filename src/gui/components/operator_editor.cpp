@@ -330,7 +330,8 @@ void render_envelope_sliders(OperatorWidget &widget,
 
 void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                               int slot, UIState::EnvelopeState &envelope_state,
-                              bool space_for_feedback) {
+                              bool space_for_feedback,
+                              const EnvelopeVoices &voices) {
   auto &state = context.operator_edit;
   auto &instrument = patch.instrument;
   auto &op = ym2612::operator_at(instrument, slot);
@@ -383,7 +384,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // left. Only the pixels change: the time axis is unaffected.
   render_envelope_image(
       op, envelope_state,
-      ImVec2(content_width - frame_padding(), vslider_height()));
+      ImVec2(content_width - frame_padding(), vslider_height()), voices);
   render_envelope_sliders(widget, envelope_state);
 
   if (column_layout) {
@@ -454,7 +455,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
 
 void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
-                            bool space_for_feedback) {
+                            bool space_for_feedback,
+                            const EnvelopeVoices &voices) {
   auto &state = context.operator_edit;
   OperatorWidget widget{context, patch.instrument, slot};
 
@@ -480,7 +482,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
              block_min.y + header_height + frame_padding()));
   ImGui::BeginGroup();
   render_operator_contents(context, patch, slot, envelope_state,
-                           space_for_feedback);
+                           space_for_feedback, voices);
   ImGui::EndGroup();
 
   const float content_height =

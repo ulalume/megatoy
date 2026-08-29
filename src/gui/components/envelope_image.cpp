@@ -6,6 +6,8 @@
 #include "gui/ui_scale.hpp"
 #include "ym2612/note.hpp"
 
+#include <array>
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -32,6 +34,15 @@
  * sustain short at an arbitrary time and start the release from a level that
  * fiction produced. The two-shape language is the one megatoy's graph has
  * always used.
+ *
+ * While notes sound, each voice adds two more things and nothing else: its own
+ * curve, in the same two shapes but faint, underneath the reference one; and a
+ * thin vertical cursor at where it has actually got to. The voice's curve is
+ * drawn because the envelope depends on the note -- a played note is generally
+ * not the curve on screen -- and a cursor on the wrong curve would be an
+ * approximation dressed up as a measurement. Where the two curves agree
+ * (whenever the note shares the reference note's key-scale value, which with
+ * KS = 0 is most of the keyboard) nothing extra is drawn at all.
  */
 
 namespace ui {
@@ -39,6 +50,7 @@ namespace {
 
 using ui::envelope::EnvelopeCurve;
 using ui::envelope::EnvelopeCurveCache;
+using ui::envelope::VoiceCurveCache;
 
 /// Attenuation at the bottom of the graph; 0 (full volume) is at the top.
 constexpr double kFullScale = static_cast<double>(ym2612_eg::kMaxAttenuation);
@@ -49,6 +61,54 @@ constexpr double kFullScale = static_cast<double>(ym2612_eg::kMaxAttenuation);
 constexpr float kFillAlpha = 0.4f;
 /// The warning line is a footnote, not an alert.
 constexpr float kWarningAlpha = 0.6f;
+
+/**
+ * How a sounding voice is drawn.
+ *
+ * All four numbers are constants rather than settings: this graph has no
+ * controls of its own, and every one of them is a legibility choice with an
+ * obviously right end of the range rather than a preference.
+ *
+ * The ghost curve sits well below the reference curve's weight so it reads as
+ * context rather than as a second thing to edit; the cursor sits well above it
+ * so it can be found at a glance. The falloff runs six voices from full
+ * strength down to about an eighth, which keeps the newest note obvious in a
+ * chord without making the others invisible. The fade is long enough to read
+ * as a note ending and short enough not to litter the graph.
+ */
+constexpr float kVoiceCurveAlpha = 0.30f;
+constexpr float kVoiceCursorAlpha = 0.85f;
+constexpr float kVoiceRecencyFalloff = 0.65f;
+constexpr double kVoiceFadeMs = 400.0;
+/// Below this a voice is not worth the draw calls.
+constexpr float kVoiceMinAlpha = 0.02f;
+
+/**
+ * How many voice curves the whole editor may simulate in one frame.
+ *
+ * Almost every note-on needs none: its key-scale value is the reference
+ * note's, or one already cached. The exceptions cost what building any curve
+ * costs -- about twelve milliseconds for the slowest envelope the chip can
+ * make, which is the same bill a slider drag on that patch already pays -- and
+ * four operators' worth landing on one frame would be a visible stutter. So
+ * they queue: a voice without a curve yet is simply not drawn, and arrives a
+ * frame or two later, which on a note that has just started is not something
+ * an eye can catch.
+ */
+constexpr int kVoiceBuildsPerFrame = 1;
+
+/// The budget above, refilled once per ImGui frame and shared by all four
+/// operators.
+int &voice_build_budget() {
+  static int frame = -1;
+  static int budget = 0;
+  const int now = ImGui::GetFrameCount();
+  if (now != frame) {
+    frame = now;
+    budget = kVoiceBuildsPerFrame;
+  }
+  return budget;
+}
 
 /// Which parameter owns a stretch of the curve. The slider highlight follows
 /// these, so the boundaries are the curve's own markers rather than anything
@@ -85,6 +145,9 @@ constexpr float kAxisTimeConstantSec = 0.12f;
  */
 struct EnvelopeSlot {
   EnvelopeCurveCache curve;
+  /// The curves of whatever is sounding, keyed on key-scale value rather than
+  /// on the note; see VoiceCurveCache.
+  VoiceCurveCache voices;
   /// 0 until this operator has been drawn once, which is how the first frame
   /// starts at its target instead of growing into it from nothing.
   double drawn_span_ms = 0.0;
@@ -489,6 +552,32 @@ void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
   }
 }
 
+/**
+ * One voice's cursor: a thin vertical rule at where that note has actually got
+ * to on its own envelope.
+ *
+ * A line rather than a dot because the graph is read column by column -- the
+ * question is "which part of the envelope am I hearing", and a rule answers it
+ * against the grid, the segment colours and the level markers at once.
+ */
+void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
+                       ImU32 color) {
+  const float x = plot.x_of(ms);
+  draw_list->AddLine(ImVec2(x, plot.min.y), ImVec2(x, plot.max.y), color,
+                     ui::scale::px(1.0f));
+}
+
+/// The voice's own curve, in the graph's two shapes at a fraction of its
+/// weight. One flat colour, not the four segment colours: this is context, and
+/// lighting up a ghost's decay when the DR slider is hovered would claim the
+/// slider edits it.
+void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
+                      const PlotArea &plot, ImU32 color) {
+  const ImU32 colors[kSegmentCount] = {color, color, color, color};
+  draw_release_area(draw_list, curve, plot, color);
+  draw_held_line(draw_list, curve, plot, segment_bounds(curve), colors);
+}
+
 /// The single warning, bottom left. Wrapped rather than clipped: it is a
 /// little wider than the graph at the smallest UI scale, and a sentence cut
 /// off mid-word reads as a bug.
@@ -509,8 +598,62 @@ void draw_warning(ImDrawList *draw_list, const char *warning,
 
 } // namespace
 
+EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
+  EnvelopeVoices out;
+  const double rate =
+      frame.sample_rate > 0 ? static_cast<double>(frame.sample_rate) : 44100.0;
+  const double ms_per_sample = 1000.0 / rate;
+  // Past this a released voice has nothing left on any graph: the release is
+  // only ever simulated this far, and the fade is over well before then.
+  const double keep_ms = ui::envelope::release_max_ms() + kVoiceFadeMs;
+
+  // The clock is published after the block it belongs to, and every key stamp
+  // is the start of some block already rendered, so `now` is never behind a
+  // stamp. Saturating anyway costs one comparison and keeps the arithmetic
+  // safe across an engine restart, which puts the clock back to zero.
+  const auto elapsed_ms = [&](uint64_t from) {
+    return frame.now_samples > from
+               ? static_cast<double>(frame.now_samples - from) * ms_per_sample
+               : 0.0;
+  };
+
+  // Newest first. `sequence` counts key-ons across the whole allocator, so it
+  // is the recency order -- and a stolen channel arrives as a strictly greater
+  // sequence, which is what makes the steal a new voice rather than the old
+  // one carrying on.
+  std::array<const VoiceActivity *, 6> ordered{};
+  int found = 0;
+  for (const VoiceActivity &voice : frame.voices) {
+    if (voice.valid()) {
+      ordered[found++] = &voice;
+    }
+  }
+  std::sort(ordered.begin(), ordered.begin() + found,
+            [](const VoiceActivity *a, const VoiceActivity *b) {
+              return a->sequence > b->sequence;
+            });
+
+  float recency = 1.0f;
+  for (int i = 0; i < found; ++i) {
+    const VoiceActivity &voice = *ordered[i];
+    EnvelopeVoices::Voice item;
+    item.midi_note = voice.midi_note;
+    item.since_key_on_ms = elapsed_ms(voice.key_on_sample);
+    item.since_key_off_ms =
+        voice.held ? -1.0 : elapsed_ms(voice.key_off_sample);
+    if (item.since_key_off_ms > keep_ms) {
+      continue;
+    }
+    item.recency = recency;
+    recency *= kVoiceRecencyFalloff;
+    out.items[out.count++] = item;
+  }
+  return out;
+}
+
 void render_envelope_image(const ym2612::OperatorSettings &op,
-                           const UIState::EnvelopeState &state, ImVec2 size) {
+                           const UIState::EnvelopeState &state, ImVec2 size,
+                           const EnvelopeVoices &voices) {
   // Before BeginChild, so the ID comes from the operator's stack rather than
   // from the child window.
   EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
@@ -570,9 +713,63 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       color_from_slider_state(state.sustain_rate),
       color_from_slider_state(state.release_rate),
   };
+  // What is sounding, newest first -- which is also the order the one curve a
+  // frame may build is offered in, so the note the user just played is the one
+  // that gets it.
+  struct DrawnVoice {
+    const EnvelopeCurve *curve;
+    double ms;
+    float alpha;
+  };
+  DrawnVoice drawn[6];
+  int drawn_count = 0;
+  for (int i = 0; i < voices.count; ++i) {
+    const EnvelopeVoices::Voice &voice = voices.items[i];
+    const EnvelopeCurve *voice_curve =
+        slot.voices.get(op, ym2612_eg::NotePitch::from_midi(voice.midi_note),
+                        curve, voice_build_budget());
+    if (voice_curve == nullptr) {
+      continue; // its curve is being built next frame
+    }
+    const ui::envelope::VoiceCursor cursor =
+        ui::envelope::cursor_for_voice(*voice_curve, voice.since_key_on_ms,
+                                       voice.since_key_off_ms, plot.span_ms);
+    // A voice that has gone quiet fades out rather than vanishing on the
+    // frame its release ends.
+    const float fade = static_cast<float>(
+        std::clamp(1.0 - cursor.silent_for_ms / kVoiceFadeMs, 0.0, 1.0));
+    const float alpha = voice.recency * fade;
+    if (alpha < kVoiceMinAlpha) {
+      continue;
+    }
+    drawn[drawn_count++] = DrawnVoice{voice_curve, cursor.ms, alpha};
+  }
+
+  // Ghost curves oldest first, so the newest is the one on top of the others
+  // -- and all of them under the curve being edited.
+  const ImU32 ghost_base = ImGui::GetColorU32(ImGuiCol_Text);
+  for (int i = drawn_count - 1; i >= 0; --i) {
+    // Nothing to draw when the note shares the reference note's key-scale
+    // value: its curve IS the one already on screen.
+    if (drawn[i].curve == &curve) {
+      continue;
+    }
+    draw_voice_curve(
+        draw_list, *drawn[i].curve, plot,
+        color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
+  }
+
   draw_release_area(draw_list, curve, plot, colors[kRelease]);
   draw_held_line(draw_list, curve, plot, segment_bounds(curve), colors);
   draw_level_markers(draw_list, curve, state, plot);
+  // Over everything: a cursor under the curve it is measuring would be the one
+  // thing on the graph that had to be hunted for.
+  const ImU32 cursor_base = ImGui::GetColorU32(ImGuiCol_FrameBgActive);
+  for (int i = drawn_count - 1; i >= 0; --i) {
+    draw_voice_cursor(
+        draw_list, plot, drawn[i].ms,
+        color_with_alpha(cursor_base, drawn[i].alpha * kVoiceCursorAlpha));
+  }
   draw_warning(draw_list, curve.warning, plot);
 
   ImGui::EndChild();
