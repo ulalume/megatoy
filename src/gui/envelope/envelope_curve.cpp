@@ -40,6 +40,9 @@ constexpr double kSsgMaxHeldMs = 5000.0;
 /// Share of the held window reserved for the sustain segment, so SR always has
 /// something to colour.
 constexpr double kSustainShare = 0.25;
+/// How far past the decay-based window an envelope that is still dying may
+/// stretch the axis.
+constexpr double kDyingHeldFactor = 2.0;
 /// Roughly this many SSG loop periods are drawn.
 constexpr double kSsgLoopPeriods = 3.5;
 /// How much of a looping graph the release may claim. Past this the loop the
@@ -255,12 +258,22 @@ double choose_held_ms(const CurveResult &probe, const OperatorParams &op) {
     }
 
     const double with_sustain = sustain_start / (1.0 - kSustainShare);
-    held = with_sustain;
-    if (std::isfinite(probe.park_ms) && silent) {
-      held = std::max(held, probe.park_ms * 1.05);
-    }
     ceiling = std::clamp(std::max(kNominalMaxHeldMs, with_sustain), kMinHeldMs,
                          kHardMaxHeldMs);
+    // An envelope that dies is worth following, but only so far: the window
+    // saturates at kDyingHeldFactor times the decay-based one. Saturating
+    // rather than switching keeps the axis a continuous function of the time
+    // to silence -- without it, an envelope that dies a percent beyond the
+    // probe's horizon reads as "still moving" and the axis jumps sixfold.
+    held = with_sustain;
+    const double dying_cap = with_sustain * kDyingHeldFactor;
+    if (std::isfinite(probe.park_ms)) {
+      if (silent) {
+        held = std::clamp(probe.park_ms * 1.05, with_sustain, dying_cap);
+      }
+    } else {
+      held = dying_cap;
+    }
   }
 
   return std::clamp(held, floor_ms, ceiling);

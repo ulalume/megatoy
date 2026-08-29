@@ -114,10 +114,11 @@ void test_a_normal_patch_gets_a_visible_sustain() {
 
   const double held_ms = choose_held_ms(held, to_operator_params(op));
   CHECK(held_ms > decay_end);
-  // A quarter of the held window is sustain, so SR always has something to
-  // highlight.
+  // Sustain always has a readable share of the window, so SR has something to
+  // highlight -- and attack and decay keep enough of it to stay legible.
   const double sustain_share = (held_ms - decay_end) / held_ms;
-  CHECK(near_rel(sustain_share, 0.25, 0.02));
+  CHECK(sustain_share > 0.2);
+  CHECK(sustain_share < 0.7);
   // The 27 s sustain decay of this patch must not set the width.
   CHECK(held_ms <= 2000.0);
 }
@@ -669,6 +670,34 @@ void test_a_slow_release_is_simulated_to_the_end() {
 }
 
 } // namespace
+
+/// The axis must be a continuous function of the parameters. It used to switch
+/// policy at the probe's horizon: an envelope reaching silence a percent past
+/// 3 s counted as "still moving" and the axis jumped sixfold between two
+/// neighbouring sustain levels.
+void test_the_axis_does_not_jump_between_neighbouring_values() {
+  const auto sweep = [](int sl, int sr) {
+    ym2612::OperatorSettings op;
+    op.attack_rate = 4;
+    op.decay_rate = 26;
+    op.sustain_level = static_cast<uint8_t>(sl);
+    op.sustain_rate = static_cast<uint8_t>(sr);
+    op.release_rate = 7;
+    op.key_scale = 3; // the envelope lengths that straddled the old horizon
+    return build_envelope_curve(op, 0.0).span_ms;
+  };
+
+  for (int sr = 1; sr <= 6; ++sr) {
+    double previous = sweep(0, sr);
+    for (int sl = 1; sl <= 15; ++sl) {
+      const double span = sweep(sl, sr);
+      // One rung of the ladder either way; never a policy switch.
+      CHECK(span <= previous * 2.01);
+      CHECK(span >= previous * 0.49);
+      previous = span;
+    }
+  }
+}
 
 int main() {
   test_registers_map_straight_through();
