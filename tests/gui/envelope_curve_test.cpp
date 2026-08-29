@@ -424,62 +424,53 @@ void test_every_phase_present_is_at_least_partly_visible() {
   }
 }
 
-// ------------------------------------------------------- the span quantiser
+// ------------------------------------------------------------------ the axis
 
-void test_a_fresh_span_fits_the_content() {
-  CHECK(quantize_span_ms(0.0, 0.0) == 25.0);
-  CHECK(quantize_span_ms(20.0, 0.0) == 25.0);
-  CHECK(quantize_span_ms(30.0, 0.0) == 50.0);
-  CHECK(quantize_span_ms(300.0, 0.0) == 500.0);
-  // Beyond the ladder the axis stops growing rather than inventing a width.
-  CHECK(quantize_span_ms(1.0e9, 0.0) == 10000.0);
-}
-
-void test_the_span_holds_still_inside_the_hysteresis_band() {
-  const double span = quantize_span_ms(300.0, 0.0); // 500
-  // Content wandering between 40% and 95% of the span leaves it alone.
-  for (double content = 0.41 * span; content < 0.94 * span; content += 1.0) {
-    CHECK(quantize_span_ms(content, span) == span);
+/**
+ * REPLACES the four span-quantiser tests. The axis used to be rounded onto a
+ * ladder of a dozen round widths with hysteresis, so that dragging a slider
+ * could not make it breathe -- and those tests pinned the ladder's rungs, its
+ * two thresholds, its idempotence and how often a full sweep could move it.
+ *
+ * None of that exists any more. The axis is animated at draw time now
+ * (gui/components/envelope_image.cpp), which stops the breathing without also
+ * throwing the answer away: the ladder was turning a two percent change of
+ * content into a thirty percent change of axis, and back. So the span is simply
+ * the content it has to hold, and what is worth asserting is that.
+ */
+void test_the_span_is_the_content_it_has_to_hold() {
+  // The held window is always inside the axis, and so is the release unless the
+  // budget has deliberately let it run off the right edge.
+  const ym2612::OperatorSettings patches[] = {
+      worked_example(),  owner_report_patch(),      adsr(31, 20, 8, 20, 12, 0),
+      adsr(6, 4, 10, 3, 2, 0), adsr(31, 8, 2, 6, 10, 0), adsr(20, 15, 6, 10, 9, 3),
+  };
+  for (const auto &op : patches) {
+    const EnvelopeCurve curve = build_envelope_curve(op);
+    CHECK(curve.span_ms >= curve.held_ms || curve.span_ms == 10000.0);
+    CHECK(curve.span_ms >= curve.release_content_ms ||
+          curve.span_ms >= curve.held_ms * 3.9);
+    // No round numbers to land on: the axis is a real width, not a rung.
+    CHECK(curve.span_ms >= 25.0);
   }
 }
 
-void test_the_span_never_oscillates_across_a_sweep() {
-  // Every content length, at every span it could plausibly be drawn at:
-  // one application must be a fixed point of the next.
-  for (double content = 0.0; content <= 12000.0; content += 3.7) {
-    double span = 0.0;
-    for (int i = 0; i < 8; ++i) {
-      const double next = quantize_span_ms(content, span);
-      if (i > 0) {
-        CHECK(next == span); // settled after the first application
-      }
-      span = next;
-      CHECK(span > 0.0);
-      CHECK(content <= span || span == 10000.0);
-    }
-  }
-}
+/// The curve is a pure function of the operator and the reference note now.
+/// It used to take the span drawn last frame, because the ladder's hysteresis
+/// made the answer depend on where the axis had been.
+void test_the_span_does_not_depend_on_where_the_axis_has_been() {
+  EnvelopeCurveCache first;
+  EnvelopeCurveCache second;
+  const ym2612::OperatorSettings a = worked_example();
+  const ym2612::OperatorSettings b = adsr(6, 4, 10, 3, 2, 0);
 
-void test_a_sweep_up_and_back_down_does_not_flap() {
-  // Walk the content up through the whole range and back, and count how often
-  // the axis changes. A jittering axis would change on nearly every step.
-  double span = 0.0;
-  int changes = 0;
-  const int steps = 2000;
-  for (int i = 0; i <= steps; ++i) {
-    const double content = 5000.0 * static_cast<double>(i) / steps;
-    const double next = quantize_span_ms(content, span);
-    changes += (next != span) ? 1 : 0;
-    span = next;
-  }
-  for (int i = steps; i >= 0; --i) {
-    const double content = 5000.0 * static_cast<double>(i) / steps;
-    const double next = quantize_span_ms(content, span);
-    changes += (next != span) ? 1 : 0;
-    span = next;
-  }
-  // 14 ladder values, walked up once and down once, plus the first fit.
-  CHECK(changes <= 28);
+  // One cache walks a -> b -> a, the other only ever sees a.
+  first.get(a);
+  first.get(b);
+  const double after_a_detour = first.get(a).span_ms;
+  const double straight = second.get(a).span_ms;
+  CHECK(after_a_detour == straight);
+  CHECK(build_envelope_curve(a).span_ms == straight);
 }
 
 void test_the_grid_step_divides_the_span_sensibly() {
@@ -498,7 +489,7 @@ bool has_marker(const CurveResult &curve, MarkerKind kind) {
 }
 
 void test_the_worked_examples_decay_lands_on_the_real_millisecond_axis() {
-  const EnvelopeCurve curve = build_envelope_curve(worked_example(), 0.0);
+  const EnvelopeCurve curve = build_envelope_curve(worked_example());
   // EG_SPEC: the decay of AR=31 TL=0 DR=10 SL=2 ends on tick 5440 = 306.4 ms.
   CHECK(curve.decay_end_ms > 0.0);
   CHECK(near_rel(curve.decay_end_ms, 306.4, 0.02));
@@ -539,7 +530,7 @@ void test_the_worked_examples_decay_lands_on_the_real_millisecond_axis() {
 /// The second trace: a release from full volume, on the same axis but from
 /// t = 0, so it never depends on when a key-off happens.
 void test_the_release_starts_at_full_volume_and_reaches_silence() {
-  const EnvelopeCurve curve = build_envelope_curve(worked_example(), 0.0);
+  const EnvelopeCurve curve = build_envelope_curve(worked_example());
   CHECK(curve.release.points.size() >= 2);
   CHECK(curve.release.points.front().ms == 0.0f);
   CHECK(curve.release.points.front().out == curve.peak_out);
@@ -565,8 +556,8 @@ void test_ssg_eg_makes_the_release_dramatically_shorter() {
   ssg.ssg_enable = true;
   ssg.ssg_type_envelope_control = 0; // repeating saw
 
-  const EnvelopeCurve plain_curve = build_envelope_curve(plain, 0.0);
-  const EnvelopeCurve ssg_curve = build_envelope_curve(ssg, 0.0);
+  const EnvelopeCurve plain_curve = build_envelope_curve(plain);
+  const EnvelopeCurve ssg_curve = build_envelope_curve(ssg);
 
   CHECK(near_rel(plain_curve.release_content_ms, 1815.3, 0.02));
   CHECK(near_rel(ssg_curve.release_content_ms, 229.8, 0.02));
@@ -601,7 +592,7 @@ void test_a_loop_keeps_looping_to_the_right_edge() {
       owner_patch(8, 10, 7, 4),
   };
   for (const auto &op : patches) {
-    const EnvelopeCurve c = build_envelope_curve(op, 0.0);
+    const EnvelopeCurve c = build_envelope_curve(op);
     // A loop a listener could hear, not the sample rate.
     CHECK(c.held.loop_hz > 0.1);
     CHECK(c.held.loop_hz < 100.0);
@@ -647,8 +638,8 @@ void test_an_inverted_ssg_release_is_as_long_as_the_upright_one() {
   CHECK(loudest_attenuation(to_operator_params(inverted)) ==
         ym2612_eg::kSsgFoldAttenuation);
 
-  const EnvelopeCurve up = build_envelope_curve(upright, 0.0);
-  const EnvelopeCurve inv = build_envelope_curve(inverted, 0.0);
+  const EnvelopeCurve up = build_envelope_curve(upright);
+  const EnvelopeCurve inv = build_envelope_curve(inverted);
 
   CHECK(near_rel(up.release_content_ms, 229.8, 0.02));
   CHECK(near_rel(inv.release_content_ms, up.release_content_ms, 0.01));
@@ -672,7 +663,7 @@ void test_an_inverted_ssg_release_is_as_long_as_the_upright_one() {
 void test_an_sr0_held_trace_parks_and_stays_flat() {
   ym2612::OperatorSettings op = worked_example();
   op.sustain_rate = 0;
-  const EnvelopeCurve curve = build_envelope_curve(op, 0.0);
+  const EnvelopeCurve curve = build_envelope_curve(op);
 
   CHECK(curve.held_parked);
   CHECK(!has_marker(curve.held, MarkerKind::KeyOff));
@@ -696,7 +687,7 @@ void test_an_sr0_held_trace_parks_and_stays_flat() {
 void test_total_level_moves_the_whole_curve_down() {
   ym2612::OperatorSettings op = worked_example();
   op.total_level = 32;
-  const EnvelopeCurve curve = build_envelope_curve(op, 0.0);
+  const EnvelopeCurve curve = build_envelope_curve(op);
   CHECK(curve.peak_out == 32 * 8);
   CHECK(curve.sustain_out == 64 + 32 * 8);
   for (const auto &p : curve.held.points) {
@@ -718,7 +709,7 @@ void test_ssg_enabled_curves_fold() {
   op.ssg_enable = true;
   op.ssg_type_envelope_control = 0;
 
-  const EnvelopeCurve curve = build_envelope_curve(op, 0.0);
+  const EnvelopeCurve curve = build_envelope_curve(op);
   int folds = 0;
   for (const auto &m : curve.held.markers) {
     folds += (m.kind == MarkerKind::SsgFold) ? 1 : 0;
@@ -740,19 +731,19 @@ void test_the_only_warning_is_the_non_standard_ssg_attack() {
   slow_attack.release_rate = 7;
   slow_attack.ssg_enable = true;
   slow_attack.ssg_type_envelope_control = 0;
-  const EnvelopeCurve slow = build_envelope_curve(slow_attack, 0.0);
+  const EnvelopeCurve slow = build_envelope_curve(slow_attack);
   CHECK(slow.warning != nullptr);
   CHECK(std::string(slow.warning) == "AR<31: non-standard SSG-EG");
   // The same patch without SSG-EG has nothing wrong with it.
   ym2612::OperatorSettings plain = slow_attack;
   plain.ssg_enable = false;
-  CHECK(build_envelope_curve(plain, 0.0).warning == nullptr);
+  CHECK(build_envelope_curve(plain).warning == nullptr);
 
   // Everything else the simulator flags is left to the shape of the curve:
   // a frozen attack is a flat line at silence ...
   ym2612::OperatorSettings frozen = worked_example();
   frozen.attack_rate = 0;
-  CHECK(build_envelope_curve(frozen, 0.0).warning == nullptr);
+  CHECK(build_envelope_curve(frozen).warning == nullptr);
 
   // ... a loop with no teeth is plainly not looping ...
   ym2612::OperatorSettings never_loops;
@@ -763,7 +754,7 @@ void test_the_only_warning_is_the_non_standard_ssg_attack() {
   never_loops.release_rate = 7;
   never_loops.ssg_enable = true;
   never_loops.ssg_type_envelope_control = 0;
-  const EnvelopeCurve stuck = build_envelope_curve(never_loops, 0.0);
+  const EnvelopeCurve stuck = build_envelope_curve(never_loops);
   CHECK(stuck.warning == nullptr);
 
   // ... and an audio-rate loop is a solid block of them.
@@ -774,11 +765,11 @@ void test_the_only_warning_is_the_non_standard_ssg_attack() {
   audio_rate.release_rate = 7;
   audio_rate.ssg_enable = true;
   audio_rate.ssg_type_envelope_control = 0;
-  const EnvelopeCurve fast = build_envelope_curve(audio_rate, 0.0);
+  const EnvelopeCurve fast = build_envelope_curve(audio_rate);
   CHECK(fast.held.loop_hz > 100.0); // the library still reports it ...
   CHECK(fast.warning == nullptr);   // ... the graph just does not repeat it.
 
-  CHECK(build_envelope_curve(worked_example(), 0.0).warning == nullptr);
+  CHECK(build_envelope_curve(worked_example()).warning == nullptr);
 }
 
 // ----------------------------------------------------------------- cache
@@ -836,9 +827,9 @@ void test_key_scaling_follows_the_reference_note() {
   op.key_scale = 3;
 
   set_reference_midi_note(36); // C2
-  const double low = build_envelope_curve(op, 0.0).decay_end_ms;
+  const double low = build_envelope_curve(op).decay_end_ms;
   set_reference_midi_note(96); // C7
-  const double high = build_envelope_curve(op, 0.0).decay_end_ms;
+  const double high = build_envelope_curve(op).decay_end_ms;
   set_reference_midi_note(kDefaultReferenceMidiNote);
 
   CHECK(low > 0.0);
@@ -852,9 +843,9 @@ void test_key_scaling_follows_the_reference_note() {
   ym2612::OperatorSettings flat = worked_example();
   flat.key_scale = 0;
   set_reference_midi_note(36);
-  const double flat_low = build_envelope_curve(flat, 0.0).decay_end_ms;
+  const double flat_low = build_envelope_curve(flat).decay_end_ms;
   set_reference_midi_note(96);
-  const double flat_high = build_envelope_curve(flat, 0.0).decay_end_ms;
+  const double flat_high = build_envelope_curve(flat).decay_end_ms;
   set_reference_midi_note(kDefaultReferenceMidiNote);
   CHECK(flat_high < flat_low);
   CHECK(flat_high > flat_low * 0.5);
@@ -892,7 +883,7 @@ void test_a_fast_loop_keeps_its_scale() {
   op.ssg_enable = true;
   op.ssg_type_envelope_control = 0;
 
-  const EnvelopeCurve fast = build_envelope_curve(op, 0.0);
+  const EnvelopeCurve fast = build_envelope_curve(op);
   CHECK(fast.held.loop_hz > 100.0);
   // The loop, not the release, decides the width.
   CHECK(fast.release_content_ms > fast.span_ms);
@@ -903,7 +894,7 @@ void test_a_fast_loop_keeps_its_scale() {
   // A slow loop already fits, so nothing about it changes.
   ym2612::OperatorSettings slow = op;
   slow.decay_rate = 15;
-  const EnvelopeCurve wide = build_envelope_curve(slow, 0.0);
+  const EnvelopeCurve wide = build_envelope_curve(slow);
   CHECK(wide.held.loop_hz < 20.0);
   CHECK(wide.held_ms / wide.span_ms > 0.25);
 }
@@ -914,7 +905,7 @@ void test_a_fast_loop_keeps_its_scale() {
 void test_a_very_long_release_does_not_crush_the_held_trace() {
   ym2612::OperatorSettings op = worked_example();
   op.release_rate = 2;
-  const EnvelopeCurve slow = build_envelope_curve(op, 0.0);
+  const EnvelopeCurve slow = build_envelope_curve(op);
   CHECK(slow.release_truncated); // still falling when the budget ran out
   CHECK(slow.release.points.back().out < ym2612_eg::kMaxAttenuation);
   CHECK(slow.held_ms / slow.span_ms > 0.15);
@@ -922,7 +913,7 @@ void test_a_very_long_release_does_not_crush_the_held_trace() {
   // A release that fits is drawn whole, on an axis wide enough for it.
   ym2612::OperatorSettings fits = worked_example();
   fits.release_rate = 6;
-  const EnvelopeCurve normal = build_envelope_curve(fits, 0.0);
+  const EnvelopeCurve normal = build_envelope_curve(fits);
   CHECK(!normal.release_truncated);
   CHECK(normal.span_ms >= normal.release_content_ms);
 }
@@ -940,7 +931,7 @@ void test_a_slow_release_is_simulated_to_the_end() {
   op.ssg_enable = true;
   op.ssg_type_envelope_control = 0;
 
-  const EnvelopeCurve c = build_envelope_curve(op, 0.0);
+  const EnvelopeCurve c = build_envelope_curve(op);
   CHECK(!c.release_truncated);
   CHECK(c.release.points.back().out == ym2612_eg::kMaxAttenuation);
   CHECK(c.release_content_ms > 900.0);
@@ -984,14 +975,24 @@ std::vector<double> span_sweep(const ym2612::OperatorSettings &base,
     case Field::Sr: op.sustain_rate = static_cast<uint8_t>(value); break;
     case Field::Rr: op.release_rate = static_cast<uint8_t>(value); break;
     }
-    spans.push_back(build_envelope_curve(op, 0.0).span_ms);
+    spans.push_back(build_envelope_curve(op).span_ms);
   }
   return spans;
 }
 
+/// Two spans that are the same width.
+///
+/// As SL moves attenuation from one phase to the next, the same total lifetime
+/// is summed in a different order, so an axis that is mathematically unchanged
+/// can differ in the last bits of a double. A pixel is a few tenths of a
+/// percent of the axis; this is fifty million times finer.
+bool same_span(double a, double b) {
+  return std::fabs(a - b) <= std::fabs(b) * 1e-9;
+}
+
 bool moves(const std::vector<double> &spans) {
   for (const double span : spans) {
-    if (span != spans.front()) {
+    if (!same_span(span, spans.front())) {
       return true;
     }
   }
@@ -1034,12 +1035,12 @@ void test_every_rate_moves_the_axis_monotonically() {
     for (int i = 0; i < kSweepBases; ++i) {
       const std::vector<double> spans = span_sweep(sweep_base(i), field);
       for (size_t v = 1; v < spans.size(); ++v) {
-        if (spans[v] > spans[v - 1]) {
+        if (spans[v] > spans[v - 1] && !same_span(spans[v], spans[v - 1])) {
           std::cout << field_name(field) << " widened the axis at " << v
                     << " on base " << i << ": " << spans[v - 1] << " -> "
                     << spans[v] << "\n";
         }
-        CHECK(spans[v] <= spans[v - 1]);
+        CHECK(spans[v] <= spans[v - 1] || same_span(spans[v], spans[v - 1]));
         // ... and it is continuous while it narrows: no neighbouring pair of
         // registers may move the axis more than one rung of the ladder. Value
         // 0 is exempt because "never advances at all" is a discontinuity of
@@ -1079,9 +1080,11 @@ void test_sustain_level_moves_the_axis_without_ever_doubling_back() {
     const std::vector<double> spans = span_sweep(sweep_base(i), Field::Sl);
     bool risen = false;
     for (size_t v = 1; v < spans.size(); ++v) {
-      risen |= spans[v] > spans[v - 1];
+      const bool up = spans[v] > spans[v - 1] && !same_span(spans[v], spans[v - 1]);
+      const bool down = spans[v] < spans[v - 1] && !same_span(spans[v], spans[v - 1]);
+      risen |= up;
       // Once the sustain's start is what sizes the axis, nothing takes it back.
-      CHECK(!(risen && spans[v] < spans[v - 1]));
+      CHECK(!(risen && down));
     }
     moved_somewhere |= moves(spans);
   }
@@ -1112,7 +1115,7 @@ void test_a_very_slow_attack_still_leaves_room_for_the_sustain() {
     op.total_level = 0;
     const auto params = to_operator_params(op);
     const HeldTimeline timeline = held_timeline(params, reference_pitch());
-    const EnvelopeCurve curve = build_envelope_curve(op, 0.0);
+    const EnvelopeCurve curve = build_envelope_curve(op);
 
     // The attack really is that long, and the sustain really does start after
     // the probe that used to size the axis would have given up.
@@ -1158,7 +1161,7 @@ void test_the_axis_does_not_jump_between_neighbouring_values() {
     op.sustain_rate = static_cast<uint8_t>(sr);
     op.release_rate = 7;
     op.key_scale = 3; // the envelope lengths that straddled the old horizon
-    return build_envelope_curve(op, 0.0).span_ms;
+    return build_envelope_curve(op).span_ms;
   };
 
   for (int sr = 1; sr <= 6; ++sr) {
@@ -1203,10 +1206,8 @@ int main() {
   // actually guarding anything.
   test_the_axis_does_not_jump_between_neighbouring_values();
 
-  test_a_fresh_span_fits_the_content();
-  test_the_span_holds_still_inside_the_hysteresis_band();
-  test_the_span_never_oscillates_across_a_sweep();
-  test_a_sweep_up_and_back_down_does_not_flap();
+  test_the_span_is_the_content_it_has_to_hold();
+  test_the_span_does_not_depend_on_where_the_axis_has_been();
   test_the_grid_step_divides_the_span_sensibly();
 
   test_the_worked_examples_decay_lands_on_the_real_millisecond_axis();

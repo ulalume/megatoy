@@ -163,14 +163,6 @@ double probe_max_ms(const ym2612_eg::OperatorParams &op);
  */
 double release_max_ms();
 
-/**
- * The drawn width of the time axis, in ms, quantised to a ladder of round
- * values with hysteresis so that dragging a slider cannot make the axis
- * breathe. `current_span_ms` is the span drawn last frame; 0 asks for a fresh
- * fit.
- */
-double quantize_span_ms(double content_ms, double current_span_ms);
-
 /// The grid/label interval for a given span: a round number, 3-6 divisions.
 double grid_step_ms(double span_ms);
 
@@ -189,7 +181,9 @@ struct EnvelopeCurve {
   /// A release from full volume, starting at t = 0: drawn as a filled area.
   ym2612_eg::CurveResult release;
 
-  double span_ms = 0.0; ///< quantised width of the time axis
+  /// The width of the time axis the curve was simulated for -- the target the
+  /// drawing animates towards, not necessarily the width drawn this frame.
+  double span_ms = 0.0;
   double held_ms = 0.0; ///< the window the axis width was chosen from
   double held_content_ms = 0.0;    ///< where the held polyline actually ends
   double release_content_ms = 0.0; ///< where the release polyline actually ends
@@ -225,9 +219,14 @@ struct EnvelopeCurve {
  *
  * The probe no longer answers how long the held envelope lives; held_lifetime_ms()
  * does, from the registers.
+ *
+ * A pure function of the operator and the reference note. It used to take the
+ * span drawn last frame, because the axis was quantised onto a ladder with
+ * hysteresis and so depended on where it had been. The ladder is gone -- the
+ * axis is animated at draw time now, which does the same job better -- so there
+ * is nothing left to remember.
  */
-EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
-                                   double previous_span_ms);
+EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op);
 
 /**
  * Remembers one operator's curve and rebuilds it only when the registers that

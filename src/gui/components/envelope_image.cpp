@@ -62,14 +62,60 @@ enum SegmentIndex {
 };
 
 /**
- * The curve has to survive between frames -- rebuilding it on every one would
- * run the simulator four times a frame for nothing -- and there is one per
- * operator. operator_editor pushes the slot onto the ID stack, so the widget's
- * own ID separates them and the map never holds more than four entries.
+ * How quickly the axis follows a change of width.
+ *
+ * The axis moving at all is a nuisance: the user changed a rate, not the
+ * zoom, and anything that draws the eye away from the curve is in the way. So
+ * it is quick and it decelerates -- an exponential approach rather than a
+ * fixed-duration tween, which means a small correction takes a couple of
+ * frames while a large one still lands in about a third of a second, and a
+ * change that arrives mid-motion simply bends the path instead of restarting
+ * it. 120 ms is short enough to read as the axis having already moved.
  */
-EnvelopeCurveCache &cache_for(ImGuiID id) {
-  static std::unordered_map<ImGuiID, EnvelopeCurveCache> caches;
-  return caches[id];
+constexpr float kAxisTimeConstantSec = 0.12f;
+
+/**
+ * Everything one operator's graph remembers between frames.
+ *
+ * The curve, because rebuilding it every frame would run the simulator four
+ * times a frame for nothing; and the width the axis was last drawn at, which is
+ * what the animation interpolates from. operator_editor pushes the slot onto
+ * the ID stack, so the widget's own ID separates them and the map never holds
+ * more than four entries.
+ */
+struct EnvelopeSlot {
+  EnvelopeCurveCache curve;
+  /// 0 until this operator has been drawn once, which is how the first frame
+  /// starts at its target instead of growing into it from nothing.
+  double drawn_span_ms = 0.0;
+};
+
+EnvelopeSlot &slot_for(ImGuiID id) {
+  static std::unordered_map<ImGuiID, EnvelopeSlot> slots;
+  return slots[id];
+}
+
+/**
+ * One frame of the axis' approach to `target_ms`.
+ *
+ * `snap_ms` is a pixel's worth of width: past that the remaining motion cannot
+ * be seen, and continuing it would only leave the axis creeping imperceptibly
+ * for another second.
+ */
+double approach_span(double current_ms, double target_ms, float dt_sec,
+                     double snap_ms) {
+  if (!(current_ms > 0.0)) {
+    return target_ms; // first frame: start where we are going
+  }
+  if (std::fabs(target_ms - current_ms) <= snap_ms || !(dt_sec > 0.0f)) {
+    return target_ms;
+  }
+  // Exponential in real time, so the motion is the same whatever the frame
+  // rate -- and a frame the app stalled through lands most of the way there
+  // rather than one frame's worth.
+  const double alpha =
+      1.0 - std::exp(-static_cast<double>(dt_sec) / kAxisTimeConstantSec);
+  return current_ms + (target_ms - current_ms) * alpha;
 }
 
 ImU32 color_from_slider_state(
@@ -126,7 +172,13 @@ SegmentBounds segment_bounds(const EnvelopeCurve &curve) {
 struct PlotArea {
   ImVec2 min;
   ImVec2 max;
+  /// The width being drawn this frame, which during an animation is somewhere
+  /// between the last one and the target.
   double span_ms = 1.0;
+  /// The width it is heading for. Everything that must not churn while the
+  /// axis moves -- the grid interval, which lines carry a label -- is read
+  /// from here rather than from span_ms.
+  double target_ms = 1.0;
 
   float width() const { return std::max(max.x - min.x, 1.0f); }
   float height() const { return std::max(max.y - min.y, 1.0f); }
@@ -165,23 +217,38 @@ ImU32 axis_label_color() {
  *
  * `label_limit_x` is where the text has to stop: the right edge of the plot,
  * less whatever the note label at that end has already claimed.
+ *
+ * The interval, and which lines carry a label, come from the axis' *target*
+ * width rather than the width being drawn this frame. Otherwise every animation
+ * would relabel the axis two or three times on its way -- 0/250/500 becoming
+ * 0/500/1000 becoming 0/1000/2000 -- and the churning text would be the loudest
+ * thing on the screen, which is the exact opposite of what the motion is for.
+ *
+ * How MANY lines there are does follow the drawn width, because they have to
+ * cover it: while the axis is still wider than its target the extra ones slide
+ * off the right-hand end as it closes, which is what a zoom looks like. While
+ * it is narrower, the ones that have not arrived yet are simply not drawn.
  */
 void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
                     float label_baseline, float label_limit_x) {
   const ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
   const ImU32 label_color = axis_label_color();
-  const double step = ui::envelope::grid_step_ms(plot.span_ms);
-  const int lines = static_cast<int>(plot.span_ms / step + 1e-6);
+  const double step = ui::envelope::grid_step_ms(plot.target_ms);
+  const int lines =
+      static_cast<int>(std::max(plot.span_ms, plot.target_ms) / step + 1e-6);
 
   char widest[16];
-  format_ms(widest, step * lines);
+  format_ms(widest, step * static_cast<int>(plot.target_ms / step + 1e-6));
   const float needed = ImGui::CalcTextSize(widest).x + ui::scale::px(6.0f);
-  const float pitch = plot.width() * static_cast<float>(step / plot.span_ms);
+  const float pitch = plot.width() * static_cast<float>(step / plot.target_ms);
   const int label_every =
       std::max(1, static_cast<int>(std::ceil(needed / std::max(pitch, 1.0f))));
 
   for (int i = 0; i <= lines; ++i) {
     const double ms = step * i;
+    if (ms > plot.span_ms) {
+      break; // still off the right edge of the axis as it widens
+    }
     const float x = plot.x_of(ms);
     draw_list->AddLine(ImVec2(x, plot.min.y), ImVec2(x, plot.max.y),
                        grid_color);
@@ -283,18 +350,44 @@ struct EdgeWalk {
     return points->size() - 1 + (has_tail ? 1 : 0);
   }
 
-  /// The edge's endpoints in pixels; returns the ms the edge starts at, which
-  /// is what decides which parameter owns it.
-  double at(size_t i, ImVec2 &a, ImVec2 &b) const {
+  /**
+   * The edge's endpoints in pixels, clipped to the right-hand end of the axis.
+   * `edge_ms` comes back as the ms the edge starts at, which is what decides
+   * which parameter owns it; the return value is false when the edge is
+   * entirely past the edge of the axis and should not be drawn at all.
+   *
+   * The clip matters because a trace regularly outruns the axis: the release is
+   * allowed to run off the right edge by design, and while the axis is animating
+   * inwards the held trace -- simulated for the target width -- is longer than
+   * the width being drawn. Without the clip, x_of()'s clamp folds every one of
+   * those points onto the last column and draws a vertical smear there.
+   */
+  bool at(size_t i, ImVec2 &a, ImVec2 &b, double &edge_ms) const {
     const ym2612_eg::CurvePoint &p0 = (*points)[std::min(i, points->size() - 1)];
-    a = plot->at(p0.ms, p0.out);
+    double ms0 = p0.ms;
+    double out0 = p0.out;
+    double ms1 = tail_ms;
+    double out1 = tail_out;
     if (i + 1 < points->size()) {
       const ym2612_eg::CurvePoint &p1 = (*points)[i + 1];
-      b = plot->at(p1.ms, p1.out);
-    } else {
-      b = plot->at(tail_ms, tail_out);
+      ms1 = p1.ms;
+      out1 = p1.out;
     }
-    return p0.ms;
+    edge_ms = ms0;
+    if (ms0 >= plot->span_ms) {
+      return false;
+    }
+    if (ms1 > plot->span_ms) {
+      // The edge straddles the end of the axis: cut it there rather than
+      // letting it fold back onto the last column.
+      const double dt = ms1 - ms0;
+      const double t = dt > 0.0 ? (plot->span_ms - ms0) / dt : 0.0;
+      out1 = out0 + (out1 - out0) * t;
+      ms1 = plot->span_ms;
+    }
+    a = plot->at(ms0, out0);
+    b = plot->at(ms1, out1);
+    return true;
   }
 };
 
@@ -334,7 +427,10 @@ void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
   for (size_t i = 0; i < edges; ++i) {
     ImVec2 a;
     ImVec2 b;
-    walk.at(i, a, b);
+    double edge_ms = 0.0;
+    if (!walk.at(i, a, b, edge_ms)) {
+      break; // past the right-hand end of the axis
+    }
     if (b.x <= a.x) {
       continue;
     }
@@ -365,7 +461,10 @@ void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
   for (size_t i = 0; i < edges; ++i) {
     ImVec2 a;
     ImVec2 b;
-    const double ms = walk.at(i, a, b);
+    double ms = 0.0;
+    if (!walk.at(i, a, b, ms)) {
+      break; // past the right-hand end of the axis
+    }
     draw_list->AddLine(a, b, colors[bounds.index_at(ms)], thickness);
   }
 }
@@ -414,8 +513,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
                            const UIState::EnvelopeState &state, ImVec2 size) {
   // Before BeginChild, so the ID comes from the operator's stack rather than
   // from the child window.
-  const EnvelopeCurve &curve =
-      cache_for(ImGui::GetID("##envelope_curve")).get(op);
+  EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
+  const EnvelopeCurve &curve = slot.curve.get(op);
 
   ImGui::BeginChild("EnvelopeImage", size, false, ImGuiWindowFlags_NoScrollbar);
 
@@ -434,7 +533,21 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   PlotArea plot;
   plot.min = ImVec2(canvas_min.x + 1.0f, canvas_min.y + label_height + 1.0f);
   plot.max = ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f);
-  plot.span_ms = std::max(curve.span_ms, 1.0);
+  plot.target_ms = std::max(curve.span_ms, 1.0);
+
+  // The axis follows the target rather than jumping to it. The curve is in
+  // milliseconds and was simulated for the target width, so this is purely a
+  // change of scale at draw time -- nothing is recomputed, and the animation
+  // cannot make the graph disagree with the registers.
+  //
+  // A pixel is the resolution the motion is worth having at all: the axis maps
+  // its whole width onto plot.width(), so a difference of target/width in
+  // milliseconds moves the right-hand end of the content by one pixel. Below
+  // that, snap.
+  slot.drawn_span_ms =
+      approach_span(slot.drawn_span_ms, plot.target_ms, ImGui::GetIO().DeltaTime,
+                    plot.target_ms / plot.width());
+  plot.span_ms = std::max(slot.drawn_span_ms, 1.0);
 
   // The note the axis is drawn at, at the far end of the same strip. Now that
   // the reference note is a setting, an axis that does not say which note it

@@ -194,42 +194,11 @@ double attack_ms(int rate, double eg_hz) {
   return static_cast<double>(slots << shift) * 1000.0 / eg_hz;
 }
 
-// ------------------------------------------------------------- span quantiser
+// ------------------------------------------------------------------ the axis
 
-/**
- * Round spans, so the axis labels stay readable and -- more importantly -- so
- * a continuous parameter change lands on one of a handful of widths instead of
- * following the content pixel for pixel.
- */
-constexpr double kSpanLadder[] = {25.0,   50.0,   100.0,  150.0, 250.0,
-                                  500.0,  750.0,  1000.0, 1500.0, 2000.0,
-                                  3000.0, 5000.0, 7500.0, 10000.0};
-/// Grow once the content fills this much of the span ...
-constexpr double kGrowAt = 0.95;
-/// ... and shrink only once it drops below this much of it. The gap between
-/// the two is the hysteresis: a curve that wanders inside it leaves the axis
-/// alone.
-constexpr double kShrinkAt = 0.40;
-
-/// The narrowest ladder value the content fits inside.
-double ladder_fit(double content_ms) {
-  for (const double v : kSpanLadder) {
-    if (content_ms <= kGrowAt * v) {
-      return v;
-    }
-  }
-  return kSpanLadder[std::size(kSpanLadder) - 1];
-}
-
-/// The ladder value a possibly-stale span corresponds to.
-double ladder_snap(double span_ms) {
-  for (const double v : kSpanLadder) {
-    if (span_ms <= v) {
-      return v;
-    }
-  }
-  return kSpanLadder[std::size(kSpanLadder) - 1];
-}
+/// The narrowest axis worth drawing, whatever the content says. A loop fast
+/// enough to want less than this is drawn as a band of cycles either way.
+constexpr double kMinSpanMs = 25.0;
 
 constexpr double kGridSteps[] = {5.0,    10.0,   25.0,   50.0,   100.0, 250.0,
                                  500.0,  1000.0, 2500.0, 5000.0, 10000.0};
@@ -394,21 +363,6 @@ double choose_held_ms(const CurveResult &probe, const OperatorParams &op) {
   return window_for_timeline_ms(held_timeline(op, reference_pitch()));
 }
 
-double quantize_span_ms(double content_ms, double current_span_ms) {
-  const double content = std::max(content_ms, 0.0);
-  if (!(current_span_ms > 0.0)) {
-    return ladder_fit(content);
-  }
-  const double span = ladder_snap(current_span_ms);
-  if (content > kGrowAt * span || content < kShrinkAt * span) {
-    // Both directions land on the same value, which is what keeps a content
-    // length sitting between the two thresholds from oscillating: ladder_fit()
-    // is idempotent, so re-running the test on its own result changes nothing.
-    return ladder_fit(content);
-  }
-  return span;
-}
-
 double grid_step_ms(double span_ms) {
   for (const double step : kGridSteps) {
     if (span_ms <= step * 6.0) {
@@ -431,8 +385,7 @@ const char *warning_line(const CurveResult &curve) {
   return nullptr;
 }
 
-EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
-                                   double previous_span_ms) {
+EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
   EnvelopeCurve out;
 
   const OperatorParams params = to_operator_params(op);
@@ -487,12 +440,19 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   //    loop keeps its own scale, and a release much longer than the held
   //    envelope is allowed to run off the right edge rather than flatten the
   //    part being edited.
+  //
+  //    The width is simply the content it has to hold. It used to be rounded
+  //    onto a ladder of a dozen values with hysteresis, so that a slider drag
+  //    could not make the axis breathe; the drawing animates the axis now,
+  //    which stops the breathing without also throwing away the answer -- the
+  //    ladder was turning a two percent change of content into a thirty
+  //    percent change of axis, and back.
   const double budget = loops ? kSsgSpanBudget : kReleaseSpanBudget;
   double content = std::max(out.held_ms, out.release_content_ms);
   if (out.held_ms > 0.0) {
     content = std::min(content, out.held_ms * budget);
   }
-  out.span_ms = quantize_span_ms(content, previous_span_ms);
+  out.span_ms = std::max(content, kMinSpanMs);
 
   // 4. The held trace itself, simulated across the WHOLE axis rather than only
   //    as far as the window policy asked for. Still no key-off, so SR = 0
@@ -542,7 +502,7 @@ const EnvelopeCurve &EnvelopeCurveCache::get(const ym2612::OperatorSettings &op)
   if (unchanged) {
     return curve_;
   }
-  curve_ = build_envelope_curve(op, curve_.span_ms);
+  curve_ = build_envelope_curve(op);
   params_ = params;
   pitch_ = pitch;
   valid_ = true;
