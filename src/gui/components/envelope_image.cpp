@@ -379,9 +379,9 @@ void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
   }
 }
 
-/// The single warning, bottom left. Wrapped rather than clipped: the longest
-/// of them is a little wider than the graph at the smallest UI scale, and a
-/// sentence cut off mid-word reads as a bug.
+/// The single warning, bottom left. Wrapped rather than clipped: it is a
+/// little wider than the graph at the smallest UI scale, and a sentence cut
+/// off mid-word reads as a bug.
 void draw_warning(ImDrawList *draw_list, const char *warning,
                   const PlotArea &plot) {
   if (warning == nullptr) {

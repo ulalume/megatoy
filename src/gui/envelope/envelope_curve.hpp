@@ -108,11 +108,12 @@ double quantize_span_ms(double content_ms, double current_span_ms);
 double grid_step_ms(double span_ms);
 
 /**
- * The one warning worth showing, or nullptr. Ordered by how badly the patch is
- * misbehaving, because only one line is ever drawn.
+ * The one warning worth showing, or nullptr. Only one line is ever drawn, and
+ * only one patch defect earns it: an SSG-EG mode driven by an attack rate the
+ * hardware convention says should be 31. Everything else the simulator flags
+ * is already visible in the shape of the curve.
  */
-const char *warning_line(const ym2612_eg::CurveResult &curve,
-                         const ym2612_eg::OperatorParams &op);
+const char *warning_line(const ym2612_eg::CurveResult &curve);
 
 /// Everything the graph needs for one operator.
 struct EnvelopeCurve {

@@ -524,13 +524,32 @@ void test_ssg_enabled_curves_fold() {
 
 // -------------------------------------------------------------- warnings
 
-void test_the_warning_line_names_the_worst_problem_only() {
+void test_the_only_warning_is_the_non_standard_ssg_attack() {
+  // An SSG-EG mode expects AR = 31; anything less is the one thing the graph
+  // says out loud, because the curve alone does not explain it.
+  ym2612::OperatorSettings slow_attack;
+  slow_attack.attack_rate = 20;
+  slow_attack.decay_rate = 15;
+  slow_attack.sustain_level = 4;
+  slow_attack.sustain_rate = 8;
+  slow_attack.release_rate = 7;
+  slow_attack.ssg_enable = true;
+  slow_attack.ssg_type_envelope_control = 0;
+  const EnvelopeCurve slow = build_envelope_curve(slow_attack, 0.0);
+  CHECK(slow.warning != nullptr);
+  CHECK(std::string(slow.warning) == "AR<31: non-standard SSG-EG");
+  // The same patch without SSG-EG has nothing wrong with it.
+  ym2612::OperatorSettings plain = slow_attack;
+  plain.ssg_enable = false;
+  CHECK(build_envelope_curve(plain, 0.0).warning == nullptr);
+
+  // Everything else the simulator flags is left to the shape of the curve:
+  // a frozen attack is a flat line at silence ...
   ym2612::OperatorSettings frozen = worked_example();
   frozen.attack_rate = 0;
-  const EnvelopeCurve frozen_curve = build_envelope_curve(frozen, 0.0);
-  CHECK(frozen_curve.warning != nullptr);
-  CHECK(std::string(frozen_curve.warning) == "AR=0: never sounds");
+  CHECK(build_envelope_curve(frozen, 0.0).warning == nullptr);
 
+  // ... a loop with no teeth is plainly not looping ...
   ym2612::OperatorSettings never_loops;
   never_loops.attack_rate = 31;
   never_loops.decay_rate = 15;
@@ -540,15 +559,19 @@ void test_the_warning_line_names_the_worst_problem_only() {
   never_loops.ssg_enable = true;
   never_loops.ssg_type_envelope_control = 0;
   const EnvelopeCurve stuck = build_envelope_curve(never_loops, 0.0);
-  CHECK(stuck.warning != nullptr);
-  CHECK(std::string(stuck.warning) == "never loops (SR=0)");
+  CHECK(stuck.warning == nullptr);
 
-  ym2612::OperatorSettings slow_attack = never_loops;
-  slow_attack.sustain_rate = 8;
-  slow_attack.attack_rate = 20;
-  const EnvelopeCurve slow = build_envelope_curve(slow_attack, 0.0);
-  CHECK(slow.warning != nullptr);
-  CHECK(std::string(slow.warning) == "AR<31: non-standard SSG-EG");
+  // ... and an audio-rate loop is a solid block of them.
+  ym2612::OperatorSettings audio_rate;
+  audio_rate.attack_rate = 31;
+  audio_rate.decay_rate = 24;
+  audio_rate.sustain_level = 15;
+  audio_rate.release_rate = 7;
+  audio_rate.ssg_enable = true;
+  audio_rate.ssg_type_envelope_control = 0;
+  const EnvelopeCurve fast = build_envelope_curve(audio_rate, 0.0);
+  CHECK(fast.held.loop_hz > 100.0); // the library still reports it ...
+  CHECK(fast.warning == nullptr);   // ... the graph just does not repeat it.
 
   CHECK(build_envelope_curve(worked_example(), 0.0).warning == nullptr);
 }
@@ -678,7 +701,7 @@ int main() {
   test_a_very_long_release_does_not_crush_the_held_trace();
   test_a_slow_release_is_simulated_to_the_end();
 
-  test_the_warning_line_names_the_worst_problem_only();
+  test_the_only_warning_is_the_non_standard_ssg_attack();
   test_the_cache_recomputes_only_on_a_real_change();
 
   std::cout << "envelope_curve_test passed\n";

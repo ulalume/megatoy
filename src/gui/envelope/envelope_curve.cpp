@@ -290,19 +290,15 @@ double grid_step_ms(double span_ms) {
   return kGridSteps[std::size(kGridSteps) - 1];
 }
 
-const char *warning_line(const CurveResult &curve, const OperatorParams &op) {
-  // Most broken first: only one line is ever drawn.
-  if (has_warning(curve, CurveWarning::AttackFrozen)) {
-    return "AR=0: never sounds";
-  }
+const char *warning_line(const CurveResult &curve) {
+  // Only one line is ever drawn, and only one defect earns it. The others the
+  // library reports are things the graph already shows -- a frozen attack is a
+  // flat line at silence, a loop that never loops has no teeth, an audio-rate
+  // loop is a solid block of them -- so naming them as well only crowds the
+  // picture. This is a ladder with one rung: putting a line back is a rung,
+  // ordered most broken first, and CurveWarning still carries them all.
   if (has_warning(curve, CurveWarning::SsgArBelow31)) {
     return "AR<31: non-standard SSG-EG";
-  }
-  if (has_warning(curve, CurveWarning::SsgNeverLoops)) {
-    return op.sr == 0 ? "never loops (SR=0)" : "never loops (DR=0)";
-  }
-  if (has_warning(curve, CurveWarning::SsgAudioRate)) {
-    return "audio-rate - adds sidebands";
   }
   return nullptr;
 }
@@ -405,7 +401,7 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
       std::min(ym2612_eg::detail::sustain_attenuation(params.sl) + tl_att,
                static_cast<int>(ym2612_eg::kMaxAttenuation)));
 
-  out.warning = warning_line(probe, params);
+  out.warning = warning_line(probe);
   return out;
 }
 
