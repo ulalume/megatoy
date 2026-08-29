@@ -223,7 +223,21 @@ bool extrapolated_tail(const std::vector<ym2612_eg::CurvePoint> &points,
   if (points.size() < 2) {
     return false;
   }
-  const ym2612_eg::CurvePoint &previous = points[points.size() - 2];
+  // sample_curve() closes every polyline with a point at the end of the
+  // simulated span, which can repeat the level already there -- a final edge
+  // that is both very short and perfectly flat. Extrapolating a whole graph
+  // width from that would draw a flat line across an envelope that is plainly
+  // still moving, so measure the slope from the last point at a different
+  // level instead.
+  size_t base = points.size() - 1;
+  while (base > 0 && points[base - 1].out == last.out) {
+    --base;
+  }
+  if (base == 0) {
+    end_out = last.out; // the whole trace sits at one level
+    return true;
+  }
+  const ym2612_eg::CurvePoint &previous = points[base - 1];
   const double dt = static_cast<double>(last.ms) - previous.ms;
   const double slope =
       dt > 0.0 ? (static_cast<double>(last.out) - previous.out) / dt : 0.0;
