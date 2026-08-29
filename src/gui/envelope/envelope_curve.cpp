@@ -712,6 +712,35 @@ double release_entry_ms(const EnvelopeCurve &curve, double att) {
   return points.back().ms;
 }
 
+/// Fold the elapsed time into the loop the axis draws.
+///
+/// Returns `elapsed_ms` unchanged unless the held trace loops and the cursor
+/// has run past the last whole period on the axis. The first fold anchors the
+/// phase: everything before it is the attack the loop only performs once.
+double wrapped_into_loop_ms(const EnvelopeCurve &curve, double elapsed_ms,
+                            double axis_span_ms) {
+  if (!(curve.held.loop_hz > 0.0) || !(axis_span_ms > 0.0)) {
+    return elapsed_ms;
+  }
+  double first_fold = -1.0;
+  double last_fold = -1.0;
+  for (const ym2612_eg::Marker &m : curve.held.markers) {
+    if (m.kind != MarkerKind::SsgFold || m.ms > axis_span_ms) {
+      continue;
+    }
+    if (first_fold < 0.0) {
+      first_fold = m.ms;
+    }
+    last_fold = m.ms;
+  }
+  // Two folds bound at least one whole period; one bounds none.
+  const double window = last_fold - first_fold;
+  if (first_fold < 0.0 || !(window > 0.0) || elapsed_ms <= last_fold) {
+    return elapsed_ms;
+  }
+  return first_fold + std::fmod(elapsed_ms - first_fold, window);
+}
+
 VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
                              double since_key_off_ms, double axis_span_ms) {
   VoiceCursor cursor;
@@ -739,6 +768,14 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
     // entered at the point where it is already at that level.
     on_trace_ms = release_entry_ms(curve, att) + released_for;
     silence_ms = curve.release_silence_ms;
+  }
+
+  if (!cursor.released) {
+    // A loop never parks -- the note goes round and round for as long as it is
+    // held -- so the cursor goes round with it rather than stopping at the
+    // right-hand edge while the sound carries on. It wraps over the whole
+    // periods the axis holds, so it sweeps the drawn cycles and starts again.
+    on_trace_ms = wrapped_into_loop_ms(curve, on_trace_ms, axis_span_ms);
   }
 
   // Measured before the axis clamp, so a voice whose cursor is parked at the

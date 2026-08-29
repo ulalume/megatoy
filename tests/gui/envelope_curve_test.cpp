@@ -1764,6 +1764,59 @@ void test_a_slow_loop_still_shows_a_period() {
   }
 }
 
+/// A held SSG loop never parks, so its cursor must go round with the sound
+/// rather than stopping at the right-hand edge while the note carries on
+/// looping. It wraps over the whole periods the axis draws.
+void test_a_held_loop_cursor_goes_round() {
+  ym2612::OperatorSettings op;
+  op.attack_rate = 31;
+  op.decay_rate = 15;
+  op.sustain_level = 15;
+  op.sustain_rate = 0;
+  op.release_rate = 7;
+  op.ssg_enable = true;
+  op.ssg_type_envelope_control = 0; // repeating saw
+  const EnvelopeCurve c = build_envelope_curve(op);
+  CHECK(c.held.loop_hz > 0.0);
+  const double period = 1000.0 / c.held.loop_hz;
+
+  double first_fold = -1.0;
+  double last_fold = -1.0;
+  for (const ym2612_eg::Marker &m : c.held.markers) {
+    if (m.kind != MarkerKind::SsgFold || m.ms > c.span_ms) {
+      continue;
+    }
+    if (first_fold < 0.0) {
+      first_fold = m.ms;
+    }
+    last_fold = m.ms;
+  }
+  CHECK(first_fold > 0.0);
+  CHECK(last_fold > first_fold);
+
+  // Inside the drawn cycles the cursor simply tracks elapsed time.
+  const VoiceCursor early = cursor_for_voice(c, first_fold * 0.5, -1.0, c.span_ms);
+  CHECK(near_rel(early.ms, first_fold * 0.5, 0.001));
+
+  // Past them it comes back round instead of sticking at the edge, and it
+  // comes back to the same place one period later.
+  const double beyond = last_fold + period * 2.5;
+  const VoiceCursor wrapped = cursor_for_voice(c, beyond, -1.0, c.span_ms);
+  CHECK(wrapped.ms < last_fold);
+  CHECK(wrapped.ms >= first_fold);
+  const VoiceCursor next =
+      cursor_for_voice(c, beyond + (last_fold - first_fold), -1.0, c.span_ms);
+  CHECK(near_rel(next.ms, wrapped.ms, 0.001));
+
+  // A patch that does not loop still stops at the edge.
+  ym2612::OperatorSettings plain = op;
+  plain.ssg_enable = false;
+  const EnvelopeCurve pc = build_envelope_curve(plain);
+  const VoiceCursor stuck =
+      cursor_for_voice(pc, pc.span_ms * 5.0, -1.0, pc.span_ms);
+  CHECK(near_rel(stuck.ms, pc.span_ms, 0.001));
+}
+
 int main() {
   test_registers_map_straight_through();
   test_ssg_bits_are_packed_the_way_the_chip_wants_them();
