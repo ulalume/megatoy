@@ -9,22 +9,10 @@ namespace ui::envelope {
 namespace {
 
 using ym2612_eg::CurveResult;
-using ym2612_eg::CurveWarning;
 using ym2612_eg::MarkerKind;
 using ym2612_eg::OperatorParams;
 
 // --------------------------------------------------------- held-window policy
-
-/// How far the held-forever probe looks ahead. The probe no longer decides how
-/// wide the axis is -- that is a closed form now, precisely so that a horizon
-/// cannot decide anything -- so this only has to be long enough to measure a
-/// loop and raise the warnings, and short enough that a slider drag can re-run
-/// it four times a frame.
-constexpr double kProbeMs = 3000.0;
-/// A looping SSG patch gets a longer probe: the loop period is what sizes the
-/// graph, and sample_curve() stops after five periods anyway, so this only
-/// costs anything for loops too slow to measure inside the shorter window.
-constexpr double kSsgProbeMs = 12000.0;
 
 /// A held window shorter than this reads as an accident rather than a sustain.
 constexpr double kMinHeldMs = 50.0;
@@ -87,63 +75,43 @@ double first_marker_ms(const CurveResult &curve, MarkerKind kind) {
   return -1.0;
 }
 
-bool has_warning(const CurveResult &curve, CurveWarning w) {
-  return std::find(curve.warnings.begin(), curve.warnings.end(), w) !=
-         curve.warnings.end();
-}
-
 bool ssg_loops(const OperatorParams &op) {
   // Enabled and hold clear: the ramp restarts instead of latching.
   return (op.ssg & 0x08) != 0 && (op.ssg & 0x01) == 0;
 }
 
-/**
- * The visible loop period.
- *
- * sample_curve() only publishes loop_hz once it has seen three folds, which a
- * slow loop cannot manage inside the probe window, so fall back to the fold
- * markers themselves. The alternating modes fold twice per visible period.
- */
-double loop_period_ms(const CurveResult &probe, const OperatorParams &op) {
-  if (!ssg_loops(op)) {
-    return 0.0;
-  }
-  if (probe.loop_hz > 0.0) {
-    return 1000.0 / probe.loop_hz;
-  }
-  const double ramps_per_period = (op.ssg & 0x02) != 0 ? 2.0 : 1.0;
-  double first = -1.0;
-  for (const ym2612_eg::Marker &m : probe.markers) {
-    if (m.kind != MarkerKind::SsgFold) {
-      continue;
-    }
-    if (first < 0.0) {
-      first = m.ms;
-      continue;
-    }
-    // Two folds is a measured ramp; prefer it over the estimate below.
-    return (m.ms - first) * ramps_per_period;
-  }
-  // One fold: the first ramp also carries the attack, which is short enough
-  // next to a loop slow enough to land here.
-  return first > 0.0 ? first * ramps_per_period : 0.0;
+// ------------------------------------------------- the held envelope's clock
+
+/// The key-scale value the chip derives every effective rate from.
+int key_scale_value(const OperatorParams &op, ym2612_eg::NotePitch pitch) {
+  return pitch.keycode() >> (3 - (op.ks & 3));
 }
 
-// ------------------------------------------------- the held envelope's clock
+/// Everything the graph draws is at the Genesis' own clock, which is what
+/// CurveRequest defaults to as well.
+double eg_tick_hz() { return ym2612_eg::eg_rate_hz(ym2612_eg::kNtscClockHz); }
+
+/// One turn of a rate's row of the increment table.
+int row_sum(int rate) {
+  int sum = 0;
+  for (int i = 0; i < 8; ++i) {
+    sum += ym2612_eg::detail::kIncTable[rate][i];
+  }
+  return sum;
+}
+
+/// Rows 0 and 1 are all zero, which is the chip's way of saying this phase
+/// never advances; only R = 0 reaches them.
+bool rate_advances(int rate) { return row_sum(rate) != 0; }
 
 /// The attenuation one EG tick adds, on average, at this effective rate.
 ///
 /// increment_at() indexes kIncTable with three bits of the free-running EG
 /// counter taken from above rate_shift(), so across one turn of those bits each
 /// of the eight entries lands exactly once and their mean is the true gain per
-/// tick -- the shift being how many ticks each entry is held for. Rows 0 and 1
-/// are all zero, which is the chip's way of saying this phase never advances.
+/// tick -- the shift being how many ticks each entry is held for.
 double atten_per_eg_tick(int rate, bool ssg) {
-  int sum = 0;
-  for (int i = 0; i < 8; ++i) {
-    sum += ym2612_eg::detail::kIncTable[rate][i];
-  }
-  const double mean = static_cast<double>(sum) / 8.0;
+  const double mean = static_cast<double>(row_sum(rate)) / 8.0;
   const double per_tick =
       mean / static_cast<double>(1 << ym2612_eg::detail::rate_shift(rate));
   // SSG-EG quadruples every post-attack increment.
@@ -167,23 +135,130 @@ double linear_phase_ms(int rate, int from_att, int to_att, bool ssg,
   return ticks * 1000.0 / eg_hz;
 }
 
-/// How long the attack takes, in ms.
+/**
+ * One walk of the envelope's own recurrence, kept where the chip keeps it: on
+ * the free-running 12-bit counter, which every phase shares.
+ *
+ * A phase does not get its own clock. rate_shift() says how many of the
+ * counter's low bits must be clear before this rate may act, and the three
+ * bits above that choose the table entry -- so a phase inherits whatever phase
+ * of the counter the phase before it left behind, and where a boundary falls
+ * decides which increment lands next.
+ */
+struct EgWalk {
+  int counter = 0;
+  long long ticks = 0;
+
+  /// Advance to the next tick this rate is allowed to act on, and answer with
+  /// the increment it finds there.
+  int next_increment(int rate) {
+    const int shift = ym2612_eg::detail::rate_shift(rate);
+    const int mask = (1 << shift) - 1;
+    const int step = mask == 0 ? 1 : (mask + 1 - (counter & mask));
+    // The chip's counter skips 0 on overflow, making its period 4095 rather
+    // than 4096. That is one tick in four thousand, far below anything the
+    // graph resolves, and modelling it would buy a slip nothing can see.
+    counter = (counter + step) & 0x0FFF;
+    ticks += step;
+    return ym2612_eg::detail::kIncTable[rate][(counter >> shift) & 7];
+  }
+};
+
+/**
+ * How long one SSG-EG ramp takes, in ms: the attack that follows a fold,
+ * then the attenuation climbing back to the fold at 0x200 -- through the decay
+ * rate as far as the sustain level and the sustain rate the rest of the way,
+ * at SSG-EG's quadrupled increments. Infinite when a rate the ramp needs never
+ * advances, because then there is no next fold.
+ *
+ * Walked slot by slot rather than divided like linear_phase_ms(), for two
+ * reasons a division cannot reach:
+ *
+ *   - the decay does not stop *at* the sustain level, it stops at the first
+ *     increment past it, and the sustain then has that much less of the scale
+ *     left to cross. Over a whole lifetime that overshoot is a rounding error,
+ *     which is why held_timeline() may divide; over one loop ramp, where the
+ *     sustain can be sixty attenuation units wide with SR far slower than DR,
+ *     it moves the period by a sixth.
+ *   - where the overshoot falls depends on the counter, and the counter is not
+ *     reset by a fold. So the loop settles into a cycle: each ramp hands the
+ *     next one the counter phase it ended on, and after a ramp or two the same
+ *     lengths come round again -- sometimes one length repeating, sometimes a
+ *     pair alternating a fraction of a percent apart. The first ramps are
+ *     walked and thrown away to reach it, and the rest averaged, which is what
+ *     sample_curve() does with its fold intervals.
+ *
+ * A couple of thousand iterations, against the tens of millions of samples the
+ * same handful of ramps cost to simulate.
+ */
+double ssg_ramp_ms(int ar, int dr, int sr, int sustain_att, double eg_hz) {
+  constexpr int kFold = static_cast<int>(ym2612_eg::kSsgFoldAttenuation);
+  constexpr int kSettlingRamps = 2;
+  constexpr int kMeasuredRamps = 4;
+  // Loose enough that no reachable patch meets it, tight enough that a future
+  // table could not hang a frame.
+  constexpr long long kSlotLimit = 8192;
+  const double forever = std::numeric_limits<double>::infinity();
+  // ssg_step()'s virtual key-on snaps an instant attack straight to 0, exactly
+  // as key_on() does; anything slower resumes from where the fold found it.
+  const bool instant_attack = ar >= 62;
+  if (!instant_attack && !rate_advances(ar)) {
+    return forever;
+  }
+
+  EgWalk walk;
+  int att = kFold;
+  long long settled_ticks = 0;
+  for (int ramp = 0; ramp < kSettlingRamps + kMeasuredRamps; ++ramp) {
+    long long slots = 0;
+    if (instant_attack) {
+      att = 0;
+    } else {
+      while (att > 0) {
+        if (++slots > kSlotLimit) {
+          return forever;
+        }
+        const int inc = walk.next_increment(ar);
+        if (inc != 0) {
+          // Arithmetic shift of a negative value, as the simulator does it.
+          att += (~att * inc) >> 4;
+        }
+      }
+    }
+    while (att < kFold) {
+      // The chip compares against the raw sustain level, not one clamped to
+      // the fold, which is how SL = 15 (0x3E0) spends the whole ramp in decay.
+      const int rate = att < sustain_att ? dr : sr;
+      if (!rate_advances(rate) || ++slots > kSlotLimit) {
+        return forever;
+      }
+      att += 4 * walk.next_increment(rate);
+    }
+    if (ramp == kSettlingRamps - 1) {
+      settled_ticks = walk.ticks;
+    }
+  }
+  return static_cast<double>(walk.ticks - settled_ticks) * 1000.0 /
+         (kMeasuredRamps * eg_hz);
+}
+
+/// How long the attack after a key-on takes, in ms.
 ///
 /// The attack is the one phase that is not linear: it multiplies what is left,
 /// `att += (~att * inc) >> 4`, so there is no closed form and the recurrence is
 /// run instead. It converges from 0x3FF in a couple of hundred table slots
 /// whatever the rate, which is nothing next to the hundreds of thousands of
 /// samples the same stretch costs to simulate.
+///
+/// The attack an SSG-EG fold starts is a different one -- it resumes from
+/// 0x200, and its length depends on where the climb before it left the shared
+/// counter -- so ssg_ramp_ms() walks its own rather than calling this.
 double attack_ms(int rate, double eg_hz) {
   // key_on() snaps these straight to att = 0; eg_step() guards on `rate < 62`.
   if (rate >= 62) {
     return 0.0;
   }
-  int sum = 0;
-  for (int i = 0; i < 8; ++i) {
-    sum += ym2612_eg::detail::kIncTable[rate][i];
-  }
-  if (sum == 0) {
+  if (!rate_advances(rate)) {
     // Rates 0 and 1, i.e. AR = 0: the attack never finishes, so neither does
     // anything after it.
     return std::numeric_limits<double>::infinity();
@@ -268,10 +343,6 @@ bool same_envelope(const OperatorParams &lhs, const OperatorParams &rhs) {
          lhs.ks == rhs.ks && lhs.ssg == rhs.ssg;
 }
 
-double probe_max_ms(const OperatorParams &op) {
-  return ssg_loops(op) ? kSsgProbeMs : kProbeMs;
-}
-
 /// The release is simulated on its own terms: sampling stops at silence, so a
 /// generous ceiling costs nothing on a fast one, and tying it to the held
 /// window would let AR and DR change how long a release is drawn.
@@ -281,11 +352,9 @@ HeldTimeline held_timeline(const OperatorParams &op,
                            ym2612_eg::NotePitch pitch) {
   // The graph is drawn at one note and the chip's rates are keyed to it, so the
   // key-scale value is part of every duration below.
-  const int ksv = pitch.keycode() >> (3 - (op.ks & 3));
+  const int ksv = key_scale_value(op, pitch);
   const bool ssg = (op.ssg & 0x08) != 0;
-  // Everything the graph draws is at the Genesis' own clock, which is what
-  // CurveRequest defaults to as well.
-  const double eg_hz = ym2612_eg::eg_rate_hz(ym2612_eg::kNtscClockHz);
+  const double hz = eg_tick_hz();
 
   // Where the held envelope runs out of scale. Without SSG-EG the chip cuts the
   // output dead the moment the attenuation reaches 0x3F0; with it, both the
@@ -300,9 +369,9 @@ HeldTimeline held_timeline(const OperatorParams &op,
   const int sr = ym2612_eg::detail::effective_rate(op.sr & 0x1F, ksv);
 
   HeldTimeline timeline;
-  timeline.attack_ms = attack_ms(ar, eg_hz);
-  timeline.decay_ms = linear_phase_ms(dr, 0, sustain_att, ssg, eg_hz);
-  timeline.sustain_ms = linear_phase_ms(sr, sustain_att, end_att, ssg, eg_hz);
+  timeline.attack_ms = attack_ms(ar, hz);
+  timeline.decay_ms = linear_phase_ms(dr, 0, sustain_att, ssg, hz);
+  timeline.sustain_ms = linear_phase_ms(sr, sustain_att, end_att, ssg, hz);
   return timeline;
 }
 
@@ -310,6 +379,23 @@ double held_lifetime_ms(const OperatorParams &op, ym2612_eg::NotePitch pitch) {
   // Infinity is contagious, which is right: a phase that never ends means the
   // ones after it never start.
   return held_timeline(op, pitch).lifetime_ms();
+}
+
+double ssg_loop_period_ms(const OperatorParams &op,
+                          ym2612_eg::NotePitch pitch) {
+  if (!ssg_loops(op)) {
+    return 0.0;
+  }
+  const int ksv = key_scale_value(op, pitch);
+  const double ramp =
+      ssg_ramp_ms(ym2612_eg::detail::effective_rate(op.ar & 0x1F, ksv),
+                  ym2612_eg::detail::effective_rate(op.dr & 0x1F, ksv),
+                  ym2612_eg::detail::effective_rate(op.sr & 0x1F, ksv),
+                  ym2612_eg::detail::sustain_attenuation(op.sl), eg_tick_hz());
+  // The alternating modes invert on every fold, so it takes two ramps to get
+  // back to the shape the eye reads as one period.
+  const double ramps_per_period = (op.ssg & 0x02) != 0 ? 2.0 : 1.0;
+  return ramp * ramps_per_period;
 }
 
 namespace {
@@ -370,26 +456,30 @@ double window_for_timeline_ms(const HeldTimeline &timeline) {
 /**
  * How much of the held envelope to draw.
  *
- * An SSG loop is sized from its measured period -- about 3.5 of them, which
- * reads as a loop without turning into a hatch pattern. The period is the one
- * thing here the probe still decides, because a loop's time scale is its own
- * and nothing about the registers predicts it as cheaply.
+ * An SSG loop is sized from its period -- about 3.5 of them, which reads as a
+ * loop without turning into a hatch pattern.
  *
- * Everything else is the envelope's own phase durations, computed rather than
- * observed, and turned into a width by window_for_timeline_ms(). No test for
- * whether the envelope parked, whether it reached silence, or whether a marker
- * exists. The version that asked those questions asked them of a probe that
- * stopped after three seconds, so an envelope slower than the horizon reported
- * no decay at all -- SL stopped mattering, SR stopped mattering, and DR jumped
- * threefold as it crossed. A closed form has no horizon to cross.
+ * Everything else is the envelope's own phase durations, and turned into a
+ * width by window_for_timeline_ms(). No test for whether the envelope parked,
+ * whether it reached silence, or whether a marker exists. The version that
+ * asked those questions asked them of a probe that stopped after three
+ * seconds, so an envelope slower than the horizon reported no decay at all --
+ * SL stopped mattering, SR stopped mattering, and DR jumped threefold as it
+ * crossed. A closed form has no horizon to cross, and the period is one too
+ * now: measuring it left the same discontinuity a little further out, at the
+ * twelve seconds the probe looked ahead for a loop.
  *
  * This is the width the axis is sized from, not the length of the trace:
  * nothing about the envelope changes at this instant, and the trace itself is
  * simulated across the whole axis the width turns into.
  */
-double choose_held_ms(const CurveResult &probe, const OperatorParams &op) {
-  const double period = loop_period_ms(probe, op);
-  if (period > 0.0) {
+double choose_held_ms(const OperatorParams &op) {
+  const double period = ssg_loop_period_ms(op, reference_pitch());
+  // An infinite period is a ramp with a phase that never advances, which is
+  // not a slow loop but no loop: the fold never comes, and what the graph has
+  // to show is the phase that stalled. The policy below is the right one for
+  // it, exactly as it is for a patch with SSG-EG switched off.
+  if (period > 0.0 && std::isfinite(period)) {
     const double held = kSsgLoopPeriods * period;
     // A loop carries its own time scale. Widening an audio-rate loop to
     // kMinHeldMs would pack it into a solid block of cycles instead of showing
@@ -415,14 +505,19 @@ double grid_step_ms(double span_ms) {
   return kGridSteps[std::size(kGridSteps) - 1];
 }
 
-const char *warning_line(const CurveResult &curve) {
+const char *warning_line(const OperatorParams &op) {
   // Only one line is ever drawn, and only one defect earns it. The others the
   // library reports are things the graph already shows -- a frozen attack is a
   // flat line at silence, a loop that never loops has no teeth, an audio-rate
   // loop is a solid block of them -- so naming them as well only crowds the
   // picture. This is a ladder with one rung: putting a line back is a rung,
   // ordered most broken first, and CurveWarning still carries them all.
-  if (has_warning(curve, CurveWarning::SsgArBelow31)) {
+  //
+  // Read from the registers rather than from a run, because that is all this
+  // one ever was: sample_curve() raises SsgArBelow31 on the same two bits,
+  // before it steps a single sample. Asking a simulation for it was the last
+  // thing keeping a whole extra pass over the envelope alive.
+  if ((op.ssg & 0x08) != 0 && op.ar < 31) {
     return "AR<31: non-standard SSG-EG";
   }
   return nullptr;
@@ -434,20 +529,14 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
   const OperatorParams params = to_operator_params(op);
   const ym2612_eg::NotePitch pitch = reference_pitch();
 
-  // 1. Held forever, generously: discovers the loop frequency and the
-  //    warnings. It is no longer asked how long any phase lasts -- a probe can
-  //    only report what it saw before its horizon, and that horizon was the
-  //    axis' whole discontinuity.
-  ym2612_eg::CurveRequest request;
-  request.op = params;
-  request.pitch = pitch;
-  request.gate_ms = -1.0;
-  request.max_ms = probe_max_ms(params);
-  const CurveResult probe = ym2612_eg::sample_curve(request);
-
-  out.held_ms = choose_held_ms(probe, params);
-  const double period_ms = loop_period_ms(probe, params);
-  const bool loops = period_ms > 0.0;
+  // 1. What the axis has to hold, from the registers alone. Nothing is
+  //    simulated to find it: every phase of the held envelope is a closed
+  //    form, and so is an SSG loop's period. A probe used to answer both, and
+  //    could only ever report what it saw before its horizon -- which is
+  //    where the axis jumped.
+  const double period_ms = ssg_loop_period_ms(params, pitch);
+  const bool loops = period_ms > 0.0 && std::isfinite(period_ms);
+  out.held_ms = choose_held_ms(params);
 
   // 2. The release, on its own: keyed on at full volume and released on sample
   //    zero. gate_ms = 0 routes it through the chip's real key-off rules --
@@ -461,7 +550,8 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
   //    sample_curve() calls key_on(), which snaps an instant attack straight
   //    to att = 0 and would throw the start level away, and the release rate
   //    does not depend on AR. The AttackFrozen warning that comes back with it
-  //    is never read: warning_line() is asked about the probe, not this run.
+  //    is never read: warning_line() is asked about the registers, not about
+  //    any run.
   ym2612_eg::CurveRequest release;
   release.op = params;
   release.op.ar = 0;
@@ -507,11 +597,14 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
   //    ramp is not a sawtooth. But gate_ms < 0 means more to sample_curve()
   //    than "never released" -- it also licenses it to stop as soon as there
   //    is nothing new to see, which for a loop is after five periods, and that
-  //    is exactly the trace that stopped in mid-air. So a measured loop is
-  //    given a key-off just past the end of the window instead: none of it
-  //    falls inside the graph, and no early exit either. Everything else keeps
-  //    the held-forever run, whose early exit is at the park -- where the
-  //    envelope really has come to rest and the flat tail below is exact.
+  //    is exactly the trace that stopped in mid-air. So a loop is given a
+  //    key-off just past the end of the window instead: none of it falls
+  //    inside the graph, and no early exit either. Everything else keeps the
+  //    held-forever run, whose early exit is at the park -- where the envelope
+  //    really has come to rest and the flat tail below is exact.
+  ym2612_eg::CurveRequest request;
+  request.op = params;
+  request.pitch = pitch;
   request.max_ms = std::max(out.span_ms, out.held_ms);
   request.gate_ms = loops ? request.max_ms + 1.0 : -1.0;
   out.held = ym2612_eg::sample_curve(request);
@@ -533,7 +626,7 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
       std::min(ym2612_eg::detail::sustain_attenuation(params.sl) + tl_att,
                static_cast<int>(ym2612_eg::kMaxAttenuation)));
 
-  out.warning = warning_line(probe);
+  out.warning = warning_line(params);
   return out;
 }
 

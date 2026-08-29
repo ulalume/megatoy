@@ -113,12 +113,19 @@ void test_only_envelope_registers_count_as_a_change() {
 
 // -------------------------------------------------- the held-window policy
 
-CurveResult probe(const ym2612::OperatorSettings &op, double max_ms = 0.0) {
+/// The tests' own held-forever simulation, and the only horizon left anywhere
+/// in this file: megatoy does not run one any more. It is here to be the thing
+/// the closed forms are checked AGAINST -- where the decay really ends, where
+/// the envelope really parks, how fast the loop really runs -- which is the
+/// one job a simulation is better at than a formula, and the one job it was
+/// never being asked to do while it was also sizing the axis.
+CurveResult simulate_held(const ym2612::OperatorSettings &op,
+                          double max_ms = 12000.0) {
   ym2612_eg::CurveRequest request;
   request.op = to_operator_params(op);
   request.pitch = reference_pitch();
   request.gate_ms = -1.0;
-  request.max_ms = max_ms > 0.0 ? max_ms : probe_max_ms(request.op);
+  request.max_ms = max_ms;
   return ym2612_eg::sample_curve(request);
 }
 
@@ -133,7 +140,7 @@ CurveResult probe(const ym2612::OperatorSettings &op, double max_ms = 0.0) {
 void test_a_normal_patch_gets_a_visible_sustain() {
   const auto op = worked_example();
   const auto params = to_operator_params(op);
-  const CurveResult held = probe(op);
+  const CurveResult held = simulate_held(op);
   const double decay_end = marker_ms(held, MarkerKind::DecayEnd);
   CHECK(decay_end > 0.0);
 
@@ -143,7 +150,7 @@ void test_a_normal_patch_gets_a_visible_sustain() {
   CHECK(lifetime > 20000.0);
   CHECK(lifetime < 35000.0);
 
-  const double held_ms = choose_held_ms(held, params);
+  const double held_ms = choose_held_ms(params);
   CHECK(held_ms > decay_end);
   const double sustain_share = (held_ms - decay_end) / held_ms;
   CHECK(sustain_share > 0.2);
@@ -163,11 +170,11 @@ void test_an_sr0_patch_shows_its_flat_hold() {
   op.sustain_rate = 0; // parks at the sustain level and stays there
   const auto params = to_operator_params(op);
 
-  const CurveResult held = probe(op);
+  const CurveResult held = simulate_held(op);
   CHECK(std::isfinite(held.park_ms));
   // The closed form still tells the truth about the envelope ...
   CHECK(!std::isfinite(held_lifetime_ms(params, reference_pitch())));
-  const double held_ms = choose_held_ms(held, params);
+  const double held_ms = choose_held_ms(params);
   // ... while the axis it is drawn on stays a readable width.
   CHECK(held_ms < 4000.0);
   // The flat part is visible, and the decay before it is not squeezed away.
@@ -179,12 +186,12 @@ void test_an_sr0_patch_shows_its_flat_hold() {
   // SR = 1 dies, but so slowly that it must land beside SR = 0, not a cliff
   // away from it.
   op.sustain_rate = 1;
-  const double sr1 = choose_held_ms(probe(op), to_operator_params(op));
+  const double sr1 = choose_held_ms(to_operator_params(op));
   CHECK(near_rel(sr1, held_ms, 0.05));
 
   // An SR that finishes within the drawable range is narrower.
   op.sustain_rate = 15;
-  CHECK(choose_held_ms(probe(op), to_operator_params(op)) < held_ms);
+  CHECK(choose_held_ms(to_operator_params(op)) < held_ms);
 }
 
 void test_an_ssg_loop_shows_a_few_periods() {
@@ -198,9 +205,9 @@ void test_an_ssg_loop_shows_a_few_periods() {
   op.ssg_enable = true;
   op.ssg_type_envelope_control = 0; // repeating saw
 
-  const CurveResult held = probe(op);
+  const CurveResult held = simulate_held(op);
   CHECK(held.loop_hz > 0.0);
-  const double held_ms = choose_held_ms(held, to_operator_params(op));
+  const double held_ms = choose_held_ms(to_operator_params(op));
   const double period_ms = 1000.0 / held.loop_hz;
   const double periods = held_ms / period_ms;
   CHECK(periods >= 3.0);
@@ -224,7 +231,7 @@ void test_a_slow_attack_ssg_loop_reports_a_musical_rate() {
   op.ssg_enable = true;
   op.ssg_type_envelope_control = 4; // inverted saw
 
-  const CurveResult held = probe(op);
+  const CurveResult held = simulate_held(op);
   // A loop a listener could hear as a tremolo, not 53 kHz.
   CHECK(held.loop_hz > 1.0);
   CHECK(held.loop_hz < 100.0);
@@ -232,7 +239,7 @@ void test_a_slow_attack_ssg_loop_reports_a_musical_rate() {
 
   // ... and the window policy sizes itself from the period rather than from
   // the sample rate.
-  const double held_ms = choose_held_ms(held, to_operator_params(op));
+  const double held_ms = choose_held_ms(to_operator_params(op));
   const double periods = held_ms / (1000.0 / held.loop_hz);
   CHECK(periods >= 3.0);
   CHECK(periods <= 4.0);
@@ -242,8 +249,7 @@ void test_a_frozen_attack_still_produces_a_usable_window() {
   ym2612::OperatorSettings op = worked_example();
   op.attack_rate = 0; // never sounds; parks immediately
 
-  const CurveResult held = probe(op);
-  CHECK(choose_held_ms(held, to_operator_params(op)) >= 50.0);
+  CHECK(choose_held_ms(to_operator_params(op)) >= 50.0);
 }
 
 void test_the_held_window_is_bounded_across_a_sweep() {
@@ -258,7 +264,7 @@ void test_the_held_window_is_bounded_across_a_sweep() {
           op.sustain_rate = static_cast<uint8_t>(sr);
           op.release_rate = 7;
           const auto params = to_operator_params(op);
-          const double held_ms = choose_held_ms(probe(op), params);
+          const double held_ms = choose_held_ms(params);
           CHECK(held_ms >= 50.0);
           CHECK(held_ms <= 10000.0);
           // The release's budget is its own: nothing about the held envelope
@@ -338,6 +344,138 @@ void test_ssg_eg_shortens_the_lifetime() {
   const double ssg_ms = held_lifetime_ms(to_operator_params(ssg), reference_pitch());
   CHECK(ssg_ms < plain_ms * 0.2);
   CHECK(ssg_ms > 0.0);
+}
+
+// ------------------------------------------------- the closed-form loop period
+
+ym2612::OperatorSettings ssg_patch(int type, int ar, int dr, int sl, int sr,
+                                   int rr, int ks) {
+  ym2612::OperatorSettings op = adsr(ar, dr, sl, sr, rr, ks);
+  op.total_level = 0;
+  op.ssg_enable = true;
+  op.ssg_type_envelope_control = static_cast<uint8_t>(type & 0x07);
+  return op;
+}
+
+/**
+ * The claim the loop half of the window policy rests on, and the counterpart of
+ * test_the_lifetime_agrees_with_the_simulator(): the period computed from the
+ * registers is the period the chip actually runs at.
+ *
+ * Checked only where a simulation can answer at all -- sample_curve() needs
+ * three folds before it will publish loop_hz, so a loop slower than a third of
+ * the window here has no measurement to be compared against. That is precisely
+ * the blindness this closed form exists to cure, and it is why the *other* loop
+ * test below sweeps DR into the range no probe could ever have reached.
+ *
+ * Both fold conventions are covered: the alternating modes (types 2, 3, 6, 7)
+ * count two ramps to a period and the rest one, and getting that wrong is a
+ * clean factor of two rather than a few percent.
+ */
+void test_the_loop_period_agrees_with_the_simulator() {
+  constexpr double kMeasurableMs = 12000.0;
+  double worst = 0.0;
+  int compared = 0;
+  for (const int type : {0, 2, 4, 6}) {
+    // AR = 14 is the weak corner of the model and belongs in the grid: below
+    // 31 the fold is followed by a real attack, and that attack's length is
+    // decided by where the climb before it left the shared counter.
+    for (const int ar : {31, 20, 14}) {
+      for (const int dr : {31, 24, 18, 12, 8}) {
+        for (const int sl : {0, 9, 14, 15}) {
+          for (const int sr : {31, 8, 3}) {
+            for (const int ks : {0, 3}) {
+              for (const int note : {48, 72, 84}) {
+                set_reference_midi_note(note);
+                const auto op = ssg_patch(type, ar, dr, sl, sr, 0, ks);
+                const auto params = to_operator_params(op);
+                const double analytic =
+                    ssg_loop_period_ms(params, reference_pitch());
+                CHECK(analytic > 0.0); // every one of these is a looping mode
+                // Three folds, and the alternating modes need two per period.
+                if (!std::isfinite(analytic) ||
+                    analytic * 4.0 > kMeasurableMs) {
+                  continue;
+                }
+                const CurveResult held = simulate_held(op, kMeasurableMs);
+                CHECK(held.loop_hz > 0.0);
+                const double simulated = 1000.0 / held.loop_hz;
+                const double error =
+                    std::fabs(analytic - simulated) / simulated;
+                if (error > worst) {
+                  worst = error;
+                }
+                ++compared;
+                // A few percent. What is left is not a modelling error but the
+                // loop's own shape: a ramp ends on a slot boundary of whichever
+                // rate carried it there, so successive ramps can differ by a
+                // slot, and the two answers average a different number of them.
+                CHECK(error < 0.04);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+  CHECK(compared > 500);
+  std::cout << "loop period: " << compared
+            << " patches cross-checked, worst disagreement " << worst * 100.0
+            << "%\n";
+}
+
+/**
+ * A ramp with a phase that never advances never reaches the fold, so the
+ * envelope never loops again -- which is not a slow loop but no loop, and the
+ * graph must size itself from the phase that stalled instead.
+ *
+ * These are exactly the patches ym2612_eg flags as SsgNeverLoops, and the
+ * closed form arrives at the same three by arithmetic rather than by a rule:
+ * an infinite phase makes the ramp infinite, and only the phases the ramp
+ * actually needs are in the sum. SL = 0 skips the decay outright, so DR = 0
+ * costs nothing there; SL = 15 puts the sustain level above the fold, so SR
+ * never runs and SR = 0 costs nothing.
+ */
+void test_a_ramp_that_never_finishes_is_no_loop_at_all() {
+  const auto period = [](const ym2612::OperatorSettings &op) {
+    return ssg_loop_period_ms(to_operator_params(op), reference_pitch());
+  };
+  CHECK(!std::isfinite(period(ssg_patch(0, 31, 0, 8, 8, 7, 0))));  // DR = 0
+  CHECK(!std::isfinite(period(ssg_patch(0, 31, 15, 8, 0, 7, 0)))); // SR = 0
+  CHECK(!std::isfinite(period(ssg_patch(0, 0, 15, 8, 8, 7, 0))));  // AR = 0
+  CHECK(std::isfinite(period(ssg_patch(0, 31, 0, 0, 8, 7, 0))));   // SL = 0
+  CHECK(std::isfinite(period(ssg_patch(0, 31, 15, 15, 0, 7, 0)))); // SL = 15
+  // A mode that latches instead of folding is not a loop either, and says so
+  // with a plain zero rather than an infinity: nothing is stalled, the shape
+  // simply has no period.
+  CHECK(period(ssg_patch(1, 31, 15, 8, 8, 7, 0)) == 0.0); // hold
+  CHECK(period(adsr(31, 15, 8, 8, 7, 0)) == 0.0);         // SSG-EG off
+
+  // ... and a patch with no loop is drawn by the policy for one, which is the
+  // width its stalled phase asks for and not some fraction of a period.
+  const auto stalled = ssg_patch(0, 31, 15, 8, 0, 7, 0);
+  const auto params = to_operator_params(stalled);
+  CHECK(choose_held_ms(params) ==
+        window_for_timeline_ms(held_timeline(params, reference_pitch())));
+}
+
+/// The warning is two bits and a comparison, not something a run reports.
+void test_the_warning_is_read_off_the_registers() {
+  CHECK(warning_line(to_operator_params(ssg_patch(0, 30, 15, 4, 8, 7, 0))) !=
+        nullptr);
+  CHECK(warning_line(to_operator_params(ssg_patch(0, 31, 15, 4, 8, 7, 0))) ==
+        nullptr);
+  // The same AR without SSG-EG is nobody's business.
+  CHECK(warning_line(to_operator_params(adsr(30, 15, 4, 8, 7, 0))) == nullptr);
+  // Every mode, including the ones that never fold: the convention is about
+  // SSG-EG being on at all, not about whether the shape happens to loop.
+  for (int type = 0; type < 8; ++type) {
+    CHECK(warning_line(to_operator_params(
+              ssg_patch(type, 0, 15, 4, 8, 7, 0))) != nullptr);
+    CHECK(warning_line(to_operator_params(
+              ssg_patch(type, 31, 15, 4, 8, 7, 0))) == nullptr);
+  }
 }
 
 /// The compression term. It has to be smooth (no jumps anywhere), monotone (a
@@ -433,7 +571,7 @@ void test_every_phase_present_is_at_least_partly_visible() {
           ym2612::OperatorSettings op = adsr(ar, dr, sl, 8, 5, ks);
           const auto params = to_operator_params(op);
           const HeldTimeline timeline = held_timeline(params, reference_pitch());
-          const double window = choose_held_ms(probe(op), params);
+          const double window = choose_held_ms(params);
           if (timeline.sustain_start_ms() < 10000.0) {
             CHECK(window > timeline.sustain_start_ms());
           } else {
@@ -1202,12 +1340,25 @@ void test_the_axis_does_not_jump_between_neighbouring_values() {
   // sweeps in hand.
 }
 
-/// A slow loop must not lose its periods to the ceiling. The window is 3.5
-/// periods wide, but that used to be clamped at 5 s, so a loop slower than
-/// about 1.4 s per period drew fewer and fewer cycles as DR fell -- the axis
-/// stopped growing while the loop kept slowing down.
+/**
+ * A slow loop must not lose its periods, whatever it is that would take them.
+ *
+ * EXTENDED to DR = 1, which is where the last of the horizons was. The window
+ * has always been 3.5 periods wide; what kept moving was what could stop it
+ * being that. First the 5 s ceiling, so a loop slower than about 1.4 s per
+ * period drew fewer and fewer cycles as DR fell. Then, once the ceiling gave
+ * way, the measurement itself: the period came from counting the folds a 12 s
+ * probe saw, and one ramp of this patch takes 15 s at DR = 1. The probe saw
+ * none, reported no loop, and the graph fell back to the policy for a patch
+ * that does not loop -- a 10 s axis with not one cycle on it. DR = 2 put a
+ * single fold inside the window and the axis jumped to 23.6 s.
+ *
+ * So the sweep now runs the whole way down, and the two things it asks for are
+ * the two the horizon broke: a slower loop never gets a narrower axis, and one
+ * whole period stays on it at every single DR.
+ */
 void test_a_slow_loop_still_shows_a_period() {
-  const auto loop_at = [](int dr) {
+  const auto patch = [](int dr) {
     ym2612::OperatorSettings op;
     op.attack_rate = 31;
     op.decay_rate = static_cast<uint8_t>(dr);
@@ -1216,20 +1367,28 @@ void test_a_slow_loop_still_shows_a_period() {
     op.release_rate = 2;
     op.ssg_enable = true;
     op.ssg_type_envelope_control = 2; // triangle: two ramps per period
-    return build_envelope_curve(op);
+    return op;
   };
 
   double previous = 0.0;
-  for (int dr = 20; dr >= 2; --dr) {
-    const EnvelopeCurve c = loop_at(dr);
+  for (int dr = 20; dr >= 1; --dr) {
+    const ym2612::OperatorSettings op = patch(dr);
+    const double period =
+        ssg_loop_period_ms(to_operator_params(op), reference_pitch());
+    const EnvelopeCurve c = build_envelope_curve(op);
     size_t folds = 0;
     for (const ym2612_eg::Marker &m : c.held.markers) {
       if (m.kind == MarkerKind::SsgFold && m.ms <= c.span_ms) {
         ++folds;
       }
     }
+    std::cout << "DR " << dr << ": period " << period << " ms, span "
+              << c.span_ms << " ms, " << folds << " folds\n";
     // Two folds is one whole period of an alternating mode.
     CHECK(folds >= 2);
+    // ... and the axis is wide enough to hold one, which is the promise the
+    // fold count above is only the evidence for.
+    CHECK(c.span_ms >= period);
     // A slower loop never gets a narrower axis.
     CHECK(c.span_ms >= previous * 0.999);
     previous = c.span_ms;
@@ -1251,6 +1410,9 @@ int main() {
   test_the_lifetime_agrees_with_the_simulator();
   test_a_rate_of_zero_lasts_forever();
   test_ssg_eg_shortens_the_lifetime();
+  test_the_loop_period_agrees_with_the_simulator();
+  test_a_ramp_that_never_finishes_is_no_loop_at_all();
+  test_the_warning_is_read_off_the_registers();
   test_the_window_curve_is_smooth_monotone_and_sub_linear();
   test_the_window_never_cuts_off_the_phase_being_edited();
   test_every_phase_present_is_at_least_partly_visible();
@@ -1275,6 +1437,10 @@ int main() {
   test_ssg_enabled_curves_fold();
 
   test_a_fast_loop_keeps_its_scale();
+  // Never called until now either, so the ceiling it guards was unguarded --
+  // and the horizon that replaced the ceiling went unnoticed for the same
+  // reason. It sweeps DR to 1 now, which is where that horizon was.
+  test_a_slow_loop_still_shows_a_period();
   test_a_very_long_release_does_not_crush_the_held_trace();
   test_a_slow_release_is_simulated_to_the_end();
 

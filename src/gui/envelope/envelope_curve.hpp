@@ -125,6 +125,35 @@ double held_lifetime_ms(const ym2612_eg::OperatorParams &op,
                         ym2612_eg::NotePitch pitch);
 
 /**
+ * The visible period of an SSG-EG loop at `pitch`, in ms; 0 when the patch is
+ * not a looping mode at all, and infinite when it is one whose ramp never
+ * finishes.
+ *
+ * Closed form, for the same reason the phase durations above are. The period
+ * used to be measured -- a probe was run for twelve seconds and its folds
+ * counted -- and twelve seconds was another horizon for the answer to change
+ * across: a triangle at AR31 SL15 SR0 takes fifteen seconds per ramp at DR = 1,
+ * so the probe saw no fold, reported no loop, and the graph fell back to the
+ * policy for a patch that does not loop. One notch up at DR = 2 a fold landed
+ * inside the window and the axis jumped from ten seconds to twenty-three.
+ *
+ * One ramp is the internal attenuation climbing from 0 to the fold at 0x200 --
+ * through DR as far as the sustain level, then through SR the rest of the way,
+ * all at SSG-EG's quadrupled increments -- plus the attack that follows each
+ * fold. That attack starts from 0x200 rather than from silence, and at the
+ * AR = 31 these modes are documented for it is instant. The alternating modes
+ * (bit 1 of the SSG register) fold twice per visible period.
+ *
+ * Infinity is a phase of the ramp that never advances: DR = 0 below the
+ * sustain level, SR = 0 above it, or AR = 0 after the fold. The envelope then
+ * never folds again, which is not a slow loop but no loop -- exactly the case
+ * the simulator names SsgNeverLoops -- and the graph is sized by the phase
+ * that stalled instead.
+ */
+double ssg_loop_period_ms(const ym2612_eg::OperatorParams &op,
+                          ym2612_eg::NotePitch pitch);
+
+/**
  * How wide a given lifetime alone would ask the axis to be: a single smooth,
  * monotone, sub-linear map. This is the term that keeps a 30-second envelope
  * from swallowing the graph -- but on its own it can compress an envelope so
@@ -149,19 +178,14 @@ double window_for_timeline_ms(const HeldTimeline &timeline);
 
 /**
  * How much of the held envelope is worth *seeing*, in ms. An SSG loop is sized
- * from its measured period -- that is what the graph is about, and the probe is
- * the only thing that knows it. Everything else is held_timeline() put through
- * window_for_timeline_ms().
+ * from ssg_loop_period_ms() -- that is what the graph is about. Everything else
+ * is held_timeline() put through window_for_timeline_ms().
  *
  * This is a scale, not a length: it is what the axis width is chosen from, and
  * the envelope itself is then drawn across the whole of that axis. Nothing
  * here is a key-off.
  */
-double choose_held_ms(const ym2612_eg::CurveResult &probe,
-                      const ym2612_eg::OperatorParams &op);
-
-/// How far ahead the held-forever probe looks for this patch.
-double probe_max_ms(const ym2612_eg::OperatorParams &op);
+double choose_held_ms(const ym2612_eg::OperatorParams &op);
 
 /**
  * How long the release is simulated for: a generous ceiling of its own, so
@@ -180,8 +204,13 @@ double grid_step_ms(double span_ms);
  * only one patch defect earns it: an SSG-EG mode driven by an attack rate the
  * hardware convention says should be 31. Everything else the simulator flags
  * is already visible in the shape of the curve.
+ *
+ * Two bits and a comparison, read straight off the registers -- which is all
+ * the simulator's own SsgArBelow31 ever was. It used to be read back out of a
+ * CurveResult, and that was the last reason a run existed whose points nothing
+ * ever drew.
  */
-const char *warning_line(const ym2612_eg::CurveResult &curve);
+const char *warning_line(const ym2612_eg::OperatorParams &op);
 
 /// Everything the graph needs for one operator.
 struct EnvelopeCurve {
@@ -220,14 +249,17 @@ struct EnvelopeCurve {
 };
 
 /**
- * Three passes over the simulator: a held-forever probe to discover the loop
- * frequency and the warnings; a release from full volume, which shares only the
- * time axis with the other two; and -- once the window policy and the release
- * have decided how wide the axis is -- the held trace, simulated across the
- * whole of it so a loop keeps looping to the right edge.
+ * Two passes over the simulator, and both of them are drawn: a release from
+ * full volume, which shares only the time axis with the other; and -- once the
+ * window policy and the release have decided how wide the axis is -- the held
+ * trace, simulated across the whole of it so a loop keeps looping to the right
+ * edge.
  *
- * The probe no longer answers how long the held envelope lives; held_lifetime_ms()
- * does, from the registers.
+ * There used to be a third, a held-forever probe, and nothing it produced was
+ * ever drawn: the axis was sized from what it saw and the warning read off
+ * what it flagged. Both come from the registers now -- held_timeline() for the
+ * phases, ssg_loop_period_ms() for a loop, warning_line() for the one line --
+ * so the probe had nothing left to answer.
  *
  * A pure function of the operator and the reference note. It used to take the
  * span drawn last frame, because the axis was quantised onto a ladder with
