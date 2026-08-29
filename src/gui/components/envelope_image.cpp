@@ -4,6 +4,7 @@
 #include "common.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/ui_scale.hpp"
+#include "ym2612/note.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -11,6 +12,7 @@
 #include <cstdio>
 #include <imgui.h>
 #include <limits>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -144,6 +146,13 @@ void format_ms(char (&out)[16], double ms) {
   std::snprintf(out, sizeof(out), "%dms", static_cast<int>(ms + 0.5));
 }
 
+/// Everything written along the top strip -- the milliseconds and the note the
+/// axis is drawn at -- is a caption on the axis rather than part of the
+/// picture, so it is all the one subdued text colour.
+ImU32 axis_label_color() {
+  return color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha);
+}
+
 /**
  * The time grid, labelled every nth line.
  *
@@ -153,12 +162,14 @@ void format_ms(char (&out)[16], double ms) {
  * them -- keeps the labels evenly spaced, which reads as an axis; labelling
  * whichever ones happen to fit gives 0, 250, 750 and reads as a mistake. The
  * lines themselves are all drawn.
+ *
+ * `label_limit_x` is where the text has to stop: the right edge of the plot,
+ * less whatever the note label at that end has already claimed.
  */
 void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
-                    float label_baseline) {
+                    float label_baseline, float label_limit_x) {
   const ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
-  const ImU32 label_color =
-      color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha);
+  const ImU32 label_color = axis_label_color();
   const double step = ui::envelope::grid_step_ms(plot.span_ms);
   const int lines = static_cast<int>(plot.span_ms / step + 1e-6);
 
@@ -179,8 +190,8 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
     }
     char label[16];
     format_ms(label, ms);
-    if (x + ImGui::CalcTextSize(label).x > plot.max.x) {
-      continue; // would hang off the right edge
+    if (x + ImGui::CalcTextSize(label).x > label_limit_x) {
+      continue; // would hang off the right edge, or run into the note
     }
     draw_list->AddText(ImVec2(x, label_baseline), label_color, label);
   }
@@ -425,7 +436,20 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   plot.max = ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f);
   plot.span_ms = std::max(curve.span_ms, 1.0);
 
-  draw_time_grid(draw_list, plot, canvas_min.y + 1.0f);
+  // The note the axis is drawn at, at the far end of the same strip. Now that
+  // the reference note is a setting, an axis that does not say which note it
+  // is is anonymous; it is a caption, so it is written exactly as the
+  // milliseconds are and the milliseconds stop short of it.
+  const float label_baseline = canvas_min.y + 1.0f;
+  const std::string note_name =
+      ym2612::Note::from_midi_note(
+          static_cast<uint8_t>(ui::envelope::reference_midi_note()))
+          .name();
+  const float note_x = plot.max.x - ImGui::CalcTextSize(note_name.c_str()).x;
+  draw_list->AddText(ImVec2(note_x, label_baseline), axis_label_color(),
+                     note_name.c_str());
+
+  draw_time_grid(draw_list, plot, label_baseline, note_x - ui::scale::px(6.0f));
 
   const ImU32 colors[kSegmentCount] = {
       color_from_slider_state(state.attack_rate),
