@@ -70,17 +70,18 @@ double first_marker_ms(const CurveResult &curve, MarkerKind kind) {
   return -1.0;
 }
 
+/// The Silence marker as a time, or infinity when the trace never gets there.
+double silence_or_never(const CurveResult &curve) {
+  const double ms = first_marker_ms(curve, MarkerKind::Silence);
+  return ms >= 0.0 ? ms : std::numeric_limits<double>::infinity();
+}
+
 bool ssg_loops(const OperatorParams &op) {
   // Enabled and hold clear: the ramp restarts instead of latching.
   return (op.ssg & 0x08) != 0 && (op.ssg & 0x01) == 0;
 }
 
 // ------------------------------------------------- the held envelope's clock
-
-/// The key-scale value the chip derives every effective rate from.
-int key_scale_value(const OperatorParams &op, ym2612_eg::NotePitch pitch) {
-  return pitch.keycode() >> (3 - (op.ks & 3));
-}
 
 /// Everything the graph draws is at the Genesis' own clock, which is what
 /// CurveRequest defaults to as well.
@@ -291,6 +292,10 @@ int g_reference_midi_note = kDefaultReferenceMidiNote;
 
 } // namespace
 
+int key_scale_value(const OperatorParams &op, ym2612_eg::NotePitch pitch) {
+  return pitch.keycode() >> (3 - (op.ks & 3));
+}
+
 void set_reference_midi_note(int midi_note) {
   g_reference_midi_note =
       std::clamp(midi_note, kMinReferenceMidiNote, kMaxReferenceMidiNote);
@@ -469,7 +474,11 @@ double window_for_timeline_ms(const HeldTimeline &timeline) {
  * simulated across the whole axis the width turns into.
  */
 double choose_held_ms(const OperatorParams &op) {
-  const double period = ssg_loop_period_ms(op, reference_pitch());
+  return choose_held_ms(op, reference_pitch());
+}
+
+double choose_held_ms(const OperatorParams &op, ym2612_eg::NotePitch pitch) {
+  const double period = ssg_loop_period_ms(op, pitch);
   // An infinite period is a ramp with a phase that never advances, which is
   // not a slow loop but no loop: the fold never comes, and what the graph has
   // to show is the phase that stalled. The policy below is the right one for
@@ -488,7 +497,7 @@ double choose_held_ms(const OperatorParams &op) {
                  kLoopHardMaxMs);
     return std::clamp(held, std::min(kMinHeldMs, held), ceiling);
   }
-  return window_for_timeline_ms(held_timeline(op, reference_pitch()));
+  return window_for_timeline_ms(held_timeline(op, pitch));
 }
 
 double grid_step_ms(double span_ms) {
@@ -519,10 +528,15 @@ const char *warning_line(const OperatorParams &op) {
 }
 
 EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
+  return build_envelope_curve(op, reference_pitch());
+}
+
+EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
+                                   ym2612_eg::NotePitch pitch,
+                                   double min_span_ms) {
   EnvelopeCurve out;
 
   const OperatorParams params = to_operator_params(op);
-  const ym2612_eg::NotePitch pitch = reference_pitch();
 
   // 1. What the axis has to hold, from the registers alone. Nothing is
   //    simulated to find it: every phase of the held envelope is a closed
@@ -531,7 +545,7 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
   //    where the axis jumped.
   const double period_ms = ssg_loop_period_ms(params, pitch);
   const bool loops = period_ms > 0.0 && std::isfinite(period_ms);
-  out.held_ms = choose_held_ms(params);
+  out.held_ms = choose_held_ms(params, pitch);
 
   // 2. The release, on its own: keyed on at full volume and released on sample
   //    zero. gate_ms = 0 routes it through the chip's real key-off rules --
@@ -600,7 +614,9 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
   ym2612_eg::CurveRequest request;
   request.op = params;
   request.pitch = pitch;
-  request.max_ms = std::max(out.span_ms, out.held_ms);
+  // min_span_ms is the axis this curve will actually be drawn on, which for
+  // a voice overlay is the reference curve's rather than its own.
+  request.max_ms = std::max({out.span_ms, out.held_ms, min_span_ms});
   request.gate_ms = loops ? request.max_ms + 1.0 : -1.0;
   out.held = ym2612_eg::sample_curve(request);
   out.held_content_ms = out.held.points.empty()
@@ -613,6 +629,12 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
   out.attack_end_ms = first_marker_ms(out.held, MarkerKind::AttackEnd);
   out.decay_end_ms = first_marker_ms(out.held, MarkerKind::DecayEnd);
 
+  // The library only raises Silence once the trace has come to rest, which is
+  // exactly the question a fading cursor asks: is this voice finished, or just
+  // quiet on its way somewhere?
+  out.held_silence_ms = silence_or_never(out.held);
+  out.release_silence_ms = silence_or_never(out.release);
+
   const int tl_att = static_cast<int>(params.tl) * 8;
   out.peak_out = static_cast<uint16_t>(
       std::min(tl_att, static_cast<int>(ym2612_eg::kMaxAttenuation)));
@@ -623,6 +645,174 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op) {
 
   out.warning = warning_line(params);
   return out;
+}
+
+// ------------------------------------------------------- the live cursor
+
+double curve_att_at_ms(const ym2612_eg::CurveResult &curve, double ms) {
+  const auto &points = curve.points;
+  if (points.empty()) {
+    return static_cast<double>(ym2612_eg::kMaxAttenuation);
+  }
+  if (!(ms > points.front().ms)) {
+    return points.front().att;
+  }
+  if (ms >= points.back().ms) {
+    return points.back().att;
+  }
+  // Binary search rather than a walk: an SSG trace reduced to one bucket per
+  // slot carries thousands of points, and this runs once per voice per
+  // operator per frame.
+  std::size_t lo = 0;
+  std::size_t hi = points.size() - 1;
+  while (hi - lo > 1) {
+    const std::size_t mid = lo + (hi - lo) / 2;
+    if (static_cast<double>(points[mid].ms) <= ms) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  const double t0 = points[lo].ms;
+  const double t1 = points[hi].ms;
+  const double dt = t1 - t0;
+  if (!(dt > 0.0)) {
+    return points[hi].att;
+  }
+  const double u = (ms - t0) / dt;
+  return points[lo].att +
+         (static_cast<double>(points[hi].att) - points[lo].att) * u;
+}
+
+double release_entry_ms(const EnvelopeCurve &curve, double att) {
+  const auto &points = curve.release.points;
+  if (points.empty()) {
+    return 0.0;
+  }
+  if (att <= points.front().att) {
+    return points.front().ms;
+  }
+  // A linear scan, because a release trace is a straight ramp in attenuation
+  // and RDP decimates it to a handful of vertices. Interpolating inside the
+  // crossing edge is therefore exact rather than approximate: the polyline IS
+  // the line.
+  for (std::size_t i = 1; i < points.size(); ++i) {
+    const double a0 = points[i - 1].att;
+    const double a1 = points[i].att;
+    if (a1 < att) {
+      continue;
+    }
+    if (a1 <= a0) {
+      return points[i].ms; // a step, not a ramp: it arrives at this instant
+    }
+    const double u = std::clamp((att - a0) / (a1 - a0), 0.0, 1.0);
+    return points[i - 1].ms +
+           (static_cast<double>(points[i].ms) - points[i - 1].ms) * u;
+  }
+  return points.back().ms;
+}
+
+VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
+                             double since_key_off_ms, double axis_span_ms) {
+  VoiceCursor cursor;
+  cursor.released = since_key_off_ms >= 0.0;
+
+  // Where the held trace comes to rest, if it does. Past this instant nothing
+  // about the envelope changes, so neither does the cursor -- an SR = 0 patch
+  // parks at its sustain level and waits for the key to come up.
+  const double park_ms = curve.held.park_ms;
+  const double held_ms = std::max(since_key_on_ms, 0.0);
+
+  double on_trace_ms = 0.0;
+  double silence_ms = 0.0;
+  if (!cursor.released) {
+    on_trace_ms = std::min(held_ms, park_ms);
+    silence_ms = curve.held_silence_ms;
+  } else {
+    const double released_for = std::max(since_key_off_ms, 0.0);
+    // The level the voice actually had when the key came up -- park-clamped
+    // for the same reason as above.
+    const double at_key_off_ms =
+        std::min(std::max(held_ms - released_for, 0.0), park_ms);
+    const double att = curve_att_at_ms(curve.held, at_key_off_ms);
+    // The release from that level is not a new curve: it is the drawn one,
+    // entered at the point where it is already at that level.
+    on_trace_ms = release_entry_ms(curve, att) + released_for;
+    silence_ms = curve.release_silence_ms;
+  }
+
+  // Measured before the axis clamp, so a voice whose cursor is parked at the
+  // right-hand edge still fades out when the envelope beneath it dies.
+  cursor.silent_for_ms =
+      std::isfinite(silence_ms) ? std::max(0.0, on_trace_ms - silence_ms) : 0.0;
+  // Still moving when it reaches the right-hand end of the axis: it stops
+  // there rather than being drawn off the graph.
+  cursor.ms = std::clamp(on_trace_ms, 0.0, std::max(axis_span_ms, 0.0));
+  return cursor;
+}
+
+const EnvelopeCurve *VoiceCurveCache::get(const ym2612::OperatorSettings &op,
+                                          ym2612_eg::NotePitch pitch,
+                                          const EnvelopeCurve &reference,
+                                          int &build_budget) {
+  const ym2612_eg::OperatorParams params = to_operator_params(op);
+  const ym2612_eg::NotePitch ref_pitch = reference_pitch();
+  const bool same_context = valid_ && same_envelope(params, params_) &&
+                            ref_pitch.fnum == reference_pitch_.fnum &&
+                            ref_pitch.block == reference_pitch_.block &&
+                            reference_span_ms_ == reference.span_ms;
+  if (!same_context) {
+    // Everything here was built for registers or an axis that no longer
+    // exist. Dropping the lot costs nothing extra: a register change would
+    // have invalidated every entry anyway.
+    entries_ = {};
+    used_ = 0;
+    params_ = params;
+    reference_pitch_ = ref_pitch;
+    reference_span_ms_ = reference.span_ms;
+    valid_ = true;
+  }
+
+  const int ksv = key_scale_value(params, pitch);
+  // The note reaches the envelope only through ksv, so a voice that shares the
+  // reference note's is drawn by the curve already on screen. With KS = 0 --
+  // what most patches use -- that is a whole two octaves either side of the
+  // reference, which is why a note-on usually costs nothing at all.
+  if (ksv == key_scale_value(params, ref_pitch)) {
+    return &reference;
+  }
+
+  ++clock_;
+  for (std::size_t i = 0; i < used_; ++i) {
+    if (entries_[i].ksv == ksv) {
+      entries_[i].last_used = clock_;
+      return &entries_[i].curve;
+    }
+  }
+
+  if (build_budget <= 0) {
+    return nullptr; // next frame
+  }
+  --build_budget;
+
+  std::size_t slot = used_;
+  if (used_ < kMaxEntries) {
+    ++used_;
+  } else {
+    // Six voices, six entries: this only fires when the sounding notes have
+    // moved on, and then the entry going out is one nothing is playing.
+    slot = 0;
+    for (std::size_t i = 1; i < used_; ++i) {
+      if (entries_[i].last_used < entries_[slot].last_used) {
+        slot = i;
+      }
+    }
+  }
+  entries_[slot].ksv = ksv;
+  entries_[slot].last_used = clock_;
+  entries_[slot].curve = build_envelope_curve(op, pitch, reference.span_ms);
+  ++rebuilds_;
+  return &entries_[slot].curve;
 }
 
 const EnvelopeCurve &EnvelopeCurveCache::get(const ym2612::OperatorSettings &op) {

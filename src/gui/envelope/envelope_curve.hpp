@@ -29,7 +29,10 @@
 
 #include <ym2612_eg/ym2612_eg.hpp>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 
 namespace ui::envelope {
 
@@ -62,6 +65,17 @@ inline constexpr double kLoopHardMaxMs = 20000.0;
 void set_reference_midi_note(int midi_note);
 int reference_midi_note();
 ym2612_eg::NotePitch reference_pitch();
+
+/**
+ * The key-scale value the chip derives every effective rate from --
+ * `keycode >> (3 - KS)`, and the ONLY way the note reaches the envelope.
+ *
+ * Two notes that share a ksv have bit-identical envelopes, which is what
+ * makes VoiceCurveCache's key sound: with KS = 0 the whole keyboard has four
+ * of them.
+ */
+int key_scale_value(const ym2612_eg::OperatorParams &op,
+                    ym2612_eg::NotePitch pitch);
 
 /**
  * megatoy stores the SSG-EG enable bit and the 3-bit shape separately; the
@@ -192,6 +206,8 @@ double window_for_timeline_ms(const HeldTimeline &timeline);
  * here is a key-off.
  */
 double choose_held_ms(const ym2612_eg::OperatorParams &op);
+double choose_held_ms(const ym2612_eg::OperatorParams &op,
+                      ym2612_eg::NotePitch pitch);
 
 /**
  * How long the release is simulated for: a generous ceiling of its own, so
@@ -243,6 +259,13 @@ struct EnvelopeCurve {
   /// The release was still falling when its budget ran out.
   bool release_truncated = false;
 
+  /// The first instant each trace is at or below the hardware mute floor and
+  /// stays there -- the library's own Silence marker, kept here so a live
+  /// cursor does not rescan the markers every frame. Infinite when the trace
+  /// never gets there.
+  double held_silence_ms = std::numeric_limits<double>::infinity();
+  double release_silence_ms = std::numeric_limits<double>::infinity();
+
   // Segment boundaries on the held trace, ms; negative when the segment never
   // happened.
   double attack_end_ms = -1.0;
@@ -274,6 +297,127 @@ struct EnvelopeCurve {
  * is nothing left to remember.
  */
 EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op);
+
+/**
+ * The same curve at an arbitrary note, for a voice that is actually sounding.
+ *
+ * `min_span_ms` is the axis the curve will be DRAWN on -- the reference
+ * curve's, not its own. The held trace is simulated across at least that much
+ * so an overlay never has to be extrapolated onto the part of the axis its own
+ * window policy did not reach; for a loop, extrapolating along a final slope
+ * would draw something that is not a sawtooth at all.
+ */
+EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
+                                   ym2612_eg::NotePitch pitch,
+                                   double min_span_ms = 0.0);
+
+// ------------------------------------------------------- the live cursor
+
+/// The polyline's internal attenuation at `ms`, linearly interpolated and
+/// clamped to the ends. Binary search: the held trace can carry thousands of
+/// points and this runs per voice per operator per frame.
+double curve_att_at_ms(const ym2612_eg::CurveResult &curve, double ms);
+
+/**
+ * Where on the drawn release trace a release from attenuation `att` begins.
+ *
+ * The release is linear in attenuation, so a note let go at level L follows
+ * precisely the trace that is already on screen -- entered later. Finding that
+ * entry point is therefore exact, and there is no second release curve to
+ * build per voice: the first instant the trace reaches `att` IS where the
+ * voice joins it.
+ */
+double release_entry_ms(const EnvelopeCurve &curve, double att);
+
+/// Where a sounding voice is on its own envelope.
+struct VoiceCursor {
+  /// x on the graph's time axis, in ms.
+  double ms = 0.0;
+  /// The voice is past key-off and riding the release trace.
+  bool released = false;
+  /// How long the voice has been inaudible; 0 while it can still be heard.
+  /// The graph fades a voice out over kVoiceFadeMs of this.
+  double silent_for_ms = 0.0;
+};
+
+/**
+ * The cursor for one voice, given how long ago its key went down and (if it
+ * has) come up. `since_key_off_ms` is negative while the key is still held.
+ *
+ * Two rules decide everything:
+ *
+ *   - the cursor advances only while the envelope is CHANGING. An SR = 0 patch
+ *     comes to rest at its sustain level -- the curve's own park -- and the
+ *     cursor stays there until the key is released rather than sliding along a
+ *     flat line. Running off the right-hand end of the axis stops it too.
+ *   - on key-off it moves to the release trace, at the point where that trace
+ *     is at the level the voice actually had, and advances from there.
+ */
+VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
+                             double since_key_off_ms, double axis_span_ms);
+
+/**
+ * The curves of the notes being played, keyed on what actually decides an
+ * envelope's shape.
+ *
+ * An operator's envelope depends on the note ONLY through
+ * `ksv = keycode >> (3 - KS)`, so the key is (registers, ksv) and not the
+ * note: with KS = 0 the whole keyboard has four distinct entries, and a chord
+ * inside one octave shares a single one. Better still, a voice whose ksv
+ * matches the reference note's needs no curve of its own at all -- get()
+ * hands back the reference curve, and a note-on in the common case costs
+ * nothing.
+ *
+ * At most six entries, because at most six voices can sound; the least
+ * recently asked-for is evicted. Entries are held by value in a fixed array,
+ * so a reference handed out stays valid across later get() calls.
+ */
+class VoiceCurveCache {
+public:
+  static constexpr std::size_t kMaxEntries = 6;
+
+  /**
+   * The curve for `op` at `pitch`, drawn on `reference`'s axis.
+   *
+   * Returns `reference` itself when the two share a key-scale value, and the
+   * cached entry when there is one -- neither costs a simulation, which is
+   * why a note-on is usually free. The whole cache is dropped when the
+   * registers or the reference note change, which is exactly when every entry
+   * would have been stale anyway.
+   *
+   * When a curve does have to be built, one is taken out of `build_budget`;
+   * with none left this returns nullptr and the caller leaves that voice for
+   * the next frame. Simulating the slowest envelope the chip can produce --
+   * a ten-second axis at the chip's own sample rate -- takes about twelve
+   * milliseconds, so an arpeggio across four operators could otherwise drop
+   * several frames at once on the very patches whose notes last longest. A
+   * voice that waits a frame or two for its curve is invisible; a stutter is
+   * not.
+   */
+  const EnvelopeCurve *get(const ym2612::OperatorSettings &op,
+                           ym2612_eg::NotePitch pitch,
+                           const EnvelopeCurve &reference, int &build_budget);
+
+  /// Curves actually simulated, for tests.
+  int rebuild_count() const { return rebuilds_; }
+  std::size_t size() const { return used_; }
+
+private:
+  struct Entry {
+    int ksv = -1;
+    uint64_t last_used = 0;
+    EnvelopeCurve curve;
+  };
+
+  ym2612_eg::OperatorParams params_{};
+  ym2612_eg::NotePitch reference_pitch_{};
+  double reference_span_ms_ = 0.0;
+  bool valid_ = false;
+  std::array<Entry, kMaxEntries> entries_{};
+  std::size_t used_ = 0;
+  uint64_t clock_ = 0;
+  int rebuilds_ = 0;
+};
 
 /**
  * Remembers one operator's curve and rebuilds it only when the registers that

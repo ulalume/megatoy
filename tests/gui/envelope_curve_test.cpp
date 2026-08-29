@@ -958,6 +958,367 @@ void test_the_cache_recomputes_only_on_a_real_change() {
 
 /// The note is a setting the app pushes in, and reference_pitch() stays the
 /// one place it is read from.
+// ------------------------------------------------------- the live cursor
+
+/// The release the chip would actually run from `att`, simulated on its own
+/// terms -- the thing release_entry_ms() claims is already on the graph.
+CurveResult simulated_release_from(const ym2612::OperatorSettings &op,
+                                   double att) {
+  ym2612_eg::CurveRequest request;
+  request.op = to_operator_params(op);
+  // Same as the drawn release: AR is irrelevant to a release, and leaving it
+  // high would let key_on() snap the start level away.
+  request.op.ar = 0;
+  request.pitch = reference_pitch();
+  request.gate_ms = 0.0;
+  request.max_ms = release_max_ms();
+  request.start_att = static_cast<uint16_t>(att + 0.5);
+  return ym2612_eg::sample_curve(request);
+}
+
+/// The first time a trace reaches `att`, by the same interpolation the cursor
+/// uses -- so the two sides of the comparison below differ only in which curve
+/// they read.
+double time_at_att(const CurveResult &curve, double att) {
+  const auto &points = curve.points;
+  if (points.empty() || att <= points.front().att) {
+    return 0.0;
+  }
+  for (std::size_t i = 1; i < points.size(); ++i) {
+    const double a0 = points[i - 1].att;
+    const double a1 = points[i].att;
+    if (a1 < att) {
+      continue;
+    }
+    if (a1 <= a0) {
+      return points[i].ms;
+    }
+    const double u = (att - a0) / (a1 - a0);
+    return points[i - 1].ms + (points[i].ms - points[i - 1].ms) * u;
+  }
+  return points.back().ms;
+}
+
+void test_the_cursor_is_where_the_elapsed_time_says() {
+  const EnvelopeCurve curve = build_envelope_curve(worked_example());
+  // Held, still moving: the cursor is simply the elapsed time.
+  for (const double elapsed : {0.0, 1.0, 12.5, 100.0}) {
+    const VoiceCursor cursor =
+        cursor_for_voice(curve, elapsed, -1.0, curve.span_ms);
+    CHECK(!cursor.released);
+    CHECK(std::fabs(cursor.ms - elapsed) < 1e-9);
+    CHECK(cursor.silent_for_ms == 0.0);
+  }
+  // A key that has not been pressed yet cannot put the cursor left of zero.
+  CHECK(cursor_for_voice(curve, -5.0, -1.0, curve.span_ms).ms == 0.0);
+}
+
+void test_a_cursor_still_moving_stops_at_the_right_edge() {
+  ym2612::OperatorSettings op = worked_example();
+  // SR > 0: the held envelope keeps crawling, so nothing but the axis stops
+  // the cursor.
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  CHECK(!curve.held_parked || curve.held.park_ms > curve.span_ms);
+  const VoiceCursor cursor =
+      cursor_for_voice(curve, curve.span_ms * 4.0, -1.0, curve.span_ms);
+  CHECK(std::fabs(cursor.ms - curve.span_ms) < 1e-9);
+}
+
+void test_a_parked_cursor_stays_where_the_envelope_stopped() {
+  ym2612::OperatorSettings op = worked_example();
+  op.sustain_rate = 0; // reaches the sustain level and holds
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  CHECK(curve.held_parked);
+  const double park = curve.held.park_ms;
+  CHECK(park < curve.span_ms); // the axis is wider, so this is a real clamp
+
+  // Before the park the cursor tracks the elapsed time ...
+  CHECK(std::fabs(cursor_for_voice(curve, park * 0.5, -1.0, curve.span_ms).ms -
+                  park * 0.5) < 1e-9);
+  // ... and after it, it does not move again however long the key is held.
+  for (const double elapsed : {park + 1.0, park * 2.0, 60000.0}) {
+    const VoiceCursor cursor =
+        cursor_for_voice(curve, elapsed, -1.0, curve.span_ms);
+    CHECK(std::fabs(cursor.ms - park) < 1e-9);
+  }
+  // Parked at the sustain level, not at silence: nothing to fade out.
+  CHECK(cursor_for_voice(curve, 60000.0, -1.0, curve.span_ms).silent_for_ms ==
+        0.0);
+}
+
+/**
+ * The claim the whole release cursor rests on: a release starting from level L
+ * IS the drawn release-from-full-volume, entered later. If that is true, the
+ * two traces agree everywhere past the entry point.
+ *
+ * They do -- up to the one thing no second simulation could fix either. The
+ * EG's 12-bit counter is free-running and shared by all 24 operators, and the
+ * increment a rate finds depends on where in that counter it lands: the drawn
+ * trace arrives at level L with whatever phase climbing from full volume left
+ * it, and a release the chip really runs arrives with whatever phase the
+ * attack and decay left. So the two can slip by up to one update period of the
+ * release rate -- for RR = 7 that is eight EG ticks -- and that slip is a
+ * property of the hardware, not of drawing one release instead of six.
+ *
+ * Where the rate updates every tick and its table row is uniform, there is no
+ * phase left to disagree about, and the two agree to within a sample.
+ */
+void test_the_release_entry_point_matches_a_real_release() {
+  const double sample_ms =
+      1000.0 / ym2612_eg::sample_rate_hz(ym2612_eg::kNtscClockHz);
+  const double eg_tick_ms =
+      1000.0 / ym2612_eg::eg_rate_hz(ym2612_eg::kNtscClockHz);
+
+  double worst_periods = 0.0;
+  double worst_uniform_samples = 0.0;
+  for (int rr = 0; rr <= 15; ++rr) {
+    ym2612::OperatorSettings op = worked_example();
+    op.release_rate = rr;
+    const EnvelopeCurve curve = build_envelope_curve(op);
+    const auto params = to_operator_params(op);
+    const int rate = ym2612_eg::detail::effective_rate(
+        2 * rr + 1, key_scale_value(params, reference_pitch()));
+    // How long the chip waits between two chances to act at this rate: the
+    // whole of the slip the shared counter can produce.
+    const double update_ms =
+        static_cast<double>(1 << ym2612_eg::detail::rate_shift(rate)) *
+        eg_tick_ms;
+
+    double worst_ms = 0.0;
+    // Key-off from partway down the decay, at the sustain level, and from
+    // deep into the sustain's own crawl.
+    for (const double key_off_ms : {20.0, 40.0, 120.0, 400.0, 1200.0}) {
+      // An exact level, so the only thing left to disagree about is the
+      // counter phase: an interpolated one would put the two traces a
+      // fraction of an attenuation unit apart before either had started.
+      const auto att =
+          static_cast<uint16_t>(curve_att_at_ms(curve.held, key_off_ms) + 0.5);
+      const double entry = release_entry_ms(curve, att);
+      const CurveResult real = simulated_release_from(op, att);
+      if (real.points.size() < 2 || curve.release.points.size() < 2) {
+        continue; // an instant cut has no trajectory to compare
+      }
+      // Only levels both traces actually reached. RR = 0 never gets to
+      // silence at all, so past its budget there is nothing on either side.
+      const double ceiling = std::min<double>(curve.release.points.back().att,
+                                              real.points.back().att);
+      // Compare where each trace reaches a ladder of levels below the one it
+      // started at -- a comparison in TIME, which is what a cursor is placed
+      // by.
+      for (double level = att + 32.0; level <= ceiling; level += 64.0) {
+        const double drawn = release_entry_ms(curve, level) - entry;
+        const double actual = time_at_att(real, level);
+        worst_ms = std::max(worst_ms, std::fabs(drawn - actual));
+      }
+    }
+    // Never worse than the counter phase can account for.
+    CHECK(worst_ms <= update_ms);
+    worst_periods = std::max(worst_periods, worst_ms / update_ms);
+
+    // A rate that acts every tick, on a row whose eight entries are equal,
+    // has no phase to disagree about at all.
+    const bool uniform = ym2612_eg::detail::rate_shift(rate) == 0 &&
+                         ym2612_eg::detail::kIncTable[rate][0] ==
+                             ym2612_eg::detail::kIncTable[rate][1] &&
+                         ym2612_eg::detail::kIncTable[rate][1] ==
+                             ym2612_eg::detail::kIncTable[rate][3];
+    if (uniform) {
+      // One EG tick is three output samples, and the envelope cannot move
+      // more often than that: agreeing to within a tick is agreeing exactly.
+      worst_uniform_samples =
+          std::max(worst_uniform_samples, worst_ms / sample_ms);
+      CHECK(worst_ms <= eg_tick_ms);
+    }
+  }
+  std::cout << "release entry: worst slip " << worst_periods
+            << " of one EG update period; " << worst_uniform_samples
+            << " samples where the counter phase cannot matter\n";
+  CHECK(worst_periods <= 1.0);
+}
+
+void test_the_cursor_moves_to_the_release_trace_on_key_off() {
+  const ym2612::OperatorSettings op = worked_example();
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  const double key_off_ms = 120.0;
+  const double att = curve_att_at_ms(curve.held, key_off_ms);
+  const double entry = release_entry_ms(curve, att);
+  CHECK(entry > 0.0); // it joins the trace partway along, not at the start
+
+  // The instant the key comes up the cursor is at the entry point ...
+  const VoiceCursor at_key_off =
+      cursor_for_voice(curve, key_off_ms, 0.0, curve.span_ms);
+  CHECK(at_key_off.released);
+  CHECK(std::fabs(at_key_off.ms - entry) < 1e-9);
+  // ... and from there it advances in real time along the release.
+  const VoiceCursor later =
+      cursor_for_voice(curve, key_off_ms + 5.0, 5.0, curve.span_ms);
+  CHECK(std::fabs(later.ms - (entry + 5.0)) < 1e-9);
+  // Released at full volume it enters at the very start of the trace.
+  CHECK(cursor_for_voice(curve, 0.0, 0.0, curve.span_ms).ms <= 1e-9);
+}
+
+void test_a_released_cursor_takes_the_parked_level_with_it() {
+  ym2612::OperatorSettings op = worked_example();
+  op.sustain_rate = 0;
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  const double park = curve.held.park_ms;
+  // Held far past the park, then released: the level it releases from is the
+  // parked one, so both key-offs enter the release at the same point.
+  const VoiceCursor soon =
+      cursor_for_voice(curve, park + 1.0, 0.0, curve.span_ms);
+  const VoiceCursor late = cursor_for_voice(curve, 30000.0, 0.0, curve.span_ms);
+  CHECK(std::fabs(soon.ms - late.ms) < 1e-9);
+}
+
+void test_a_voice_reports_how_long_it_has_been_silent() {
+  const ym2612::OperatorSettings op = worked_example();
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  CHECK(std::isfinite(curve.release_silence_ms));
+
+  const double att = curve_att_at_ms(curve.held, 0.0);
+  const double entry = release_entry_ms(curve, att);
+  const double to_silence = curve.release_silence_ms - entry;
+  CHECK(to_silence > 0.0);
+  // Still falling: audible.
+  CHECK(
+      cursor_for_voice(curve, to_silence * 0.5, to_silence * 0.5, curve.span_ms)
+          .silent_for_ms == 0.0);
+  // Past silence, the clock the fade runs on starts.
+  const VoiceCursor gone = cursor_for_voice(curve, to_silence + 100.0,
+                                            to_silence + 100.0, curve.span_ms);
+  CHECK(near_rel(gone.silent_for_ms, 100.0, 0.05));
+}
+
+// --------------------------------------------- the voice curve cache's key
+
+void test_two_notes_sharing_a_key_scale_value_share_a_curve() {
+  ym2612::OperatorSettings op = worked_example();
+  op.key_scale = 0;
+  const auto params = to_operator_params(op);
+
+  // C4 and C5 are blocks 4 and 5, and with KS = 0 the ksv is the block's top
+  // two bits: the same value. C3 is block 3, which is not.
+  const auto c3 = ym2612_eg::NotePitch::from_midi(48);
+  const auto c4 = ym2612_eg::NotePitch::from_midi(60);
+  const auto c5 = ym2612_eg::NotePitch::from_midi(72);
+  CHECK(key_scale_value(params, c4) == key_scale_value(params, c5));
+  CHECK(key_scale_value(params, c3) != key_scale_value(params, c4));
+
+  // A reference note whose own ksv is none of theirs, so nothing is answered
+  // by the shortcut below.
+  set_reference_midi_note(kMinReferenceMidiNote); // C0, block 0
+  const EnvelopeCurve reference = build_envelope_curve(op);
+
+  VoiceCurveCache cache;
+  int budget = 1;
+  const EnvelopeCurve *first = cache.get(op, c4, reference, budget);
+  CHECK(first != nullptr);
+  CHECK(budget == 0); // one simulation, and it was paid for
+  CHECK(cache.rebuild_count() == 1);
+  CHECK(cache.size() == 1);
+  CHECK(first != &reference);
+
+  // Same ksv: the same entry, no second simulation, and no budget spent --
+  // which is what makes a note-on free once the cache is warm.
+  const EnvelopeCurve *second = cache.get(op, c5, reference, budget);
+  CHECK(second == first);
+  CHECK(budget == 0);
+  CHECK(cache.rebuild_count() == 1);
+  CHECK(cache.size() == 1);
+
+  // A different ksv is a different entry -- and with nothing left in the
+  // budget it waits for the next frame rather than simulating now.
+  CHECK(cache.get(op, c3, reference, budget) == nullptr);
+  CHECK(cache.rebuild_count() == 1);
+  budget = 1;
+  const EnvelopeCurve *third = cache.get(op, c3, reference, budget);
+  CHECK(third != nullptr);
+  CHECK(third != first);
+  CHECK(cache.rebuild_count() == 2);
+  CHECK(cache.size() == 2);
+
+  // A note that shares the REFERENCE note's ksv costs nothing at all: the
+  // curve already on screen is its curve.
+  budget = 1;
+  CHECK(cache.get(op, reference_pitch(), reference, budget) == &reference);
+  CHECK(budget == 1);
+  CHECK(cache.rebuild_count() == 2);
+
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+}
+
+void test_key_scaling_splits_what_it_should() {
+  ym2612::OperatorSettings op = worked_example();
+  op.key_scale = 3; // ksv is the whole keycode: every block is its own entry
+  const auto params = to_operator_params(op);
+  const auto c4 = ym2612_eg::NotePitch::from_midi(60);
+  const auto c5 = ym2612_eg::NotePitch::from_midi(72);
+  CHECK(key_scale_value(params, c4) != key_scale_value(params, c5));
+
+  set_reference_midi_note(kMinReferenceMidiNote);
+  const EnvelopeCurve reference = build_envelope_curve(op);
+  VoiceCurveCache cache;
+  int budget = 2;
+  CHECK(cache.get(op, c4, reference, budget) != nullptr);
+  CHECK(cache.get(op, c5, reference, budget) != nullptr);
+  CHECK(cache.rebuild_count() == 2);
+  CHECK(cache.size() == 2);
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+}
+
+void test_the_voice_cache_never_outgrows_the_six_voices() {
+  ym2612::OperatorSettings op = worked_example();
+  op.key_scale = 3;
+  set_reference_midi_note(kMinReferenceMidiNote);
+  const EnvelopeCurve reference = build_envelope_curve(op);
+  VoiceCurveCache cache;
+  for (int midi = 24; midi <= 96; midi += 3) {
+    int budget = 1;
+    cache.get(op, ym2612_eg::NotePitch::from_midi(midi), reference, budget);
+    CHECK(cache.size() <= VoiceCurveCache::kMaxEntries);
+  }
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+}
+
+void test_a_voice_curve_covers_the_axis_it_is_drawn_on() {
+  ym2612::OperatorSettings op = worked_example();
+  op.key_scale = 3; // so a high note's envelope is far shorter than C0's
+  set_reference_midi_note(kMinReferenceMidiNote);
+  const EnvelopeCurve reference = build_envelope_curve(op);
+  VoiceCurveCache cache;
+  int budget = 1;
+  const EnvelopeCurve *voice =
+      cache.get(op, ym2612_eg::NotePitch::from_midi(96), reference, budget);
+  CHECK(voice != nullptr);
+  // Its own window is much narrower, but it was simulated across the axis it
+  // will be drawn on, so the overlay never has to be invented past the end.
+  CHECK(voice->span_ms < reference.span_ms);
+  CHECK(voice->held_content_ms >= reference.span_ms * 0.999 ||
+        voice->held_parked);
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+}
+
+void test_a_register_change_drops_every_voice_curve() {
+  ym2612::OperatorSettings op = worked_example();
+  set_reference_midi_note(kMinReferenceMidiNote);
+  EnvelopeCurve reference = build_envelope_curve(op);
+  VoiceCurveCache cache;
+  const auto c4 = ym2612_eg::NotePitch::from_midi(60);
+  int budget = 1;
+  CHECK(cache.get(op, c4, reference, budget) != nullptr);
+  CHECK(cache.rebuild_count() == 1);
+  CHECK(cache.get(op, c4, reference, budget) != nullptr);
+  CHECK(cache.rebuild_count() == 1);
+
+  op.decay_rate = 12;
+  reference = build_envelope_curve(op);
+  budget = 1;
+  CHECK(cache.get(op, c4, reference, budget) != nullptr);
+  CHECK(cache.rebuild_count() == 2);
+  CHECK(cache.size() == 1);
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+}
+
 void test_the_reference_note_is_a_setting() {
   const auto middle_c = ym2612_eg::NotePitch::from_midi(60);
   CHECK(reference_midi_note() == kDefaultReferenceMidiNote);
@@ -1454,6 +1815,20 @@ int main() {
 
   test_the_only_warning_is_the_non_standard_ssg_attack();
   test_the_cache_recomputes_only_on_a_real_change();
+
+  test_the_cursor_is_where_the_elapsed_time_says();
+  test_a_cursor_still_moving_stops_at_the_right_edge();
+  test_a_parked_cursor_stays_where_the_envelope_stopped();
+  test_the_release_entry_point_matches_a_real_release();
+  test_the_cursor_moves_to_the_release_trace_on_key_off();
+  test_a_released_cursor_takes_the_parked_level_with_it();
+  test_a_voice_reports_how_long_it_has_been_silent();
+
+  test_two_notes_sharing_a_key_scale_value_share_a_curve();
+  test_key_scaling_splits_what_it_should();
+  test_the_voice_cache_never_outgrows_the_six_voices();
+  test_a_voice_curve_covers_the_axis_it_is_drawn_on();
+  test_a_register_change_drops_every_voice_curve();
 
   test_the_reference_note_is_a_setting();
   test_key_scaling_follows_the_reference_note();
