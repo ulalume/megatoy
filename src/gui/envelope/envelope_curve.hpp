@@ -83,11 +83,66 @@ bool same_envelope(const ym2612_eg::OperatorParams &lhs,
                    const ym2612_eg::OperatorParams &rhs);
 
 /**
- * How much of the held envelope is worth *seeing*, in ms, decided from a
- * held-forever probe run. See envelope_curve.cpp for the policy; in short: a
- * sustain segment is always visible, a 27-second sustain decay is cut short
- * rather than allowed to swallow the graph, and an SSG loop gets about three
- * and a half periods.
+ * How long each phase of the held envelope lasts at `pitch`, in ms.
+ *
+ * Closed form rather than measured. The post-attack phases are linear in
+ * attenuation, so their durations are one division each; the attack is
+ * exponential, so its own recurrence is iterated -- a couple of hundred steps,
+ * against the hundreds of thousands of samples the same stretch would cost to
+ * simulate. Nothing here depends on how far a probe happened to look, which is
+ * the whole point: a horizon is a place for the answer to change discontinuously.
+ *
+ * A phase whose effective rate is 0 lasts forever, and says so. SR = 0 really
+ * does hold for ever, and reporting that honestly is what makes it the widest
+ * axis rather than -- as a probe that gave up would have it -- indistinguishable
+ * from SR = 31.
+ */
+struct HeldTimeline {
+  double attack_ms = 0.0;
+  double decay_ms = 0.0;
+  double sustain_ms = 0.0;
+
+  /// Where the sustain begins: the last structural feature the envelope has,
+  /// and so the last instant the axis has to reach to be worth looking at.
+  double sustain_start_ms() const { return attack_ms + decay_ms; }
+  double lifetime_ms() const { return sustain_start_ms() + sustain_ms; }
+};
+
+HeldTimeline held_timeline(const ym2612_eg::OperatorParams &op,
+                           ym2612_eg::NotePitch pitch);
+
+/// The whole course of the held envelope, attack to silence.
+double held_lifetime_ms(const ym2612_eg::OperatorParams &op,
+                        ym2612_eg::NotePitch pitch);
+
+/**
+ * How wide a given lifetime alone would ask the axis to be: a single smooth,
+ * monotone, sub-linear map. This is the term that keeps a 30-second envelope
+ * from swallowing the graph -- but on its own it can compress an envelope so
+ * hard that a phase the user is editing falls off the right edge, which is what
+ * window_for_timeline_ms() is for.
+ */
+double window_for_lifetime_ms(double lifetime_ms);
+
+/**
+ * The axis width the held envelope deserves: the compressed lifetime above, but
+ * never narrower than the sustain's own start plus a readable slice of the
+ * sustain. Clamped to the floor and ceiling in envelope_curve.cpp.
+ *
+ * The floor is why the compression can be as aggressive as it is. Compressing
+ * the lifetime alone will happily draw a 6.4 s axis for a patch whose attack
+ * takes 8.4 s, and then the decay and the sustain are both off the right edge
+ * and the sliders that shape them look dead. Every phase the envelope has must
+ * be at least partly on screen, so the axis reaches past the sustain's start
+ * whatever the lifetime says; the lifetime only ever widens it further.
+ */
+double window_for_timeline_ms(const HeldTimeline &timeline);
+
+/**
+ * How much of the held envelope is worth *seeing*, in ms. An SSG loop is sized
+ * from its measured period -- that is what the graph is about, and the probe is
+ * the only thing that knows it. Everything else is held_timeline() put through
+ * window_for_timeline_ms().
  *
  * This is a scale, not a length: it is what the axis width is chosen from, and
  * the envelope itself is then drawn across the whole of that axis. Nothing
@@ -100,10 +155,11 @@ double choose_held_ms(const ym2612_eg::CurveResult &probe,
 double probe_max_ms(const ym2612_eg::OperatorParams &op);
 
 /**
- * How long the release is simulated for. Bounded by what the axis could show
- * it at anyway (see the span budget in envelope_curve.cpp), with a floor so
- * the ordinary release rates still measure their true length and a ceiling
- * because RR = 0 never reaches silence at all.
+ * How long the release is simulated for: a generous ceiling of its own, so
+ * nothing about the held envelope can change how far the release is measured.
+ * Sampling stops the moment the envelope is at rest, so the ceiling only costs
+ * anything for the release rates that genuinely run for seconds -- and RR = 0,
+ * which never reaches silence at all.
  */
 double release_max_ms();
 
@@ -161,11 +217,14 @@ struct EnvelopeCurve {
 };
 
 /**
- * Three passes over the simulator: a held-forever probe to discover park time,
- * loop frequency and warnings; a release from full volume, which shares only
- * the time axis with the other two; and -- once those two have decided how
- * wide the axis is -- the held trace, simulated across the whole of it so a
- * loop keeps looping to the right edge.
+ * Three passes over the simulator: a held-forever probe to discover the loop
+ * frequency and the warnings; a release from full volume, which shares only the
+ * time axis with the other two; and -- once the window policy and the release
+ * have decided how wide the axis is -- the held trace, simulated across the
+ * whole of it so a loop keeps looping to the right edge.
+ *
+ * The probe no longer answers how long the held envelope lives; held_lifetime_ms()
+ * does, from the registers.
  */
 EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
                                    double previous_span_ms);

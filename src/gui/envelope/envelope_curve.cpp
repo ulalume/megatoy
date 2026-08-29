@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <limits>
 
 namespace ui::envelope {
 namespace {
@@ -14,11 +15,11 @@ using ym2612_eg::OperatorParams;
 
 // --------------------------------------------------------- held-window policy
 
-/// How far the held-forever probe looks ahead. Long enough to catch the
-/// interesting parks (an SR = 0 patch parks the moment its decay ends), short
-/// enough that a slider drag can re-run it four times a frame. A sustain that
-/// is still crawling towards silence after this simply reports no park, which
-/// is the answer the window policy wants anyway.
+/// How far the held-forever probe looks ahead. The probe no longer decides how
+/// wide the axis is -- that is a closed form now, precisely so that a horizon
+/// cannot decide anything -- so this only has to be long enough to measure a
+/// loop and raise the warnings, and short enough that a slider drag can re-run
+/// it four times a frame.
 constexpr double kProbeMs = 3000.0;
 /// A looping SSG patch gets a longer probe: the loop period is what sizes the
 /// graph, and sample_curve() stops after five periods anyway, so this only
@@ -27,22 +28,28 @@ constexpr double kSsgProbeMs = 12000.0;
 
 /// A held window shorter than this reads as an accident rather than a sustain.
 constexpr double kMinHeldMs = 50.0;
-/// Above this the held part stops being informative -- the worked example's
-/// sustain takes 27 s to reach silence, and drawing all of it would leave the
-/// attack and decay a single pixel wide.
-constexpr double kNominalMaxHeldMs = 2000.0;
-/// ... except that the cap must never cut into the attack or the decay, so a
-/// genuinely slow patch may exceed it. This is where even that gives up.
+/// The widest the axis ever gets. Only the envelopes that never finish at all
+/// -- SR = 0, DR = 0, AR = 0 -- reach it; the curve below needs a lifetime of
+/// four minutes to arrive here on its own.
 constexpr double kHardMaxHeldMs = 10000.0;
 /// An SSG loop is what this graph exists for, so it is allowed more room than
 /// a plain sustain before the periods start being dropped.
 constexpr double kSsgMaxHeldMs = 5000.0;
-/// Share of the held window reserved for the sustain segment, so SR always has
-/// something to colour.
+/// The scale the axis is pulled towards: an envelope that lives this long is
+/// drawn at exactly this width. It is about the length of an ordinary attack
+/// and decay, which is what the graph is usually being read for.
+constexpr double kWindowRefMs = 400.0;
+/// ... and how far it is allowed to travel from there. Sub-linear, so a
+/// lifetime ten times longer widens the axis about three times rather than
+/// ten: 0.5 makes the window exactly the geometric mean of the lifetime and
+/// kWindowRefMs. That lands a 300 ms envelope on a 346 ms axis, a 3 s one on
+/// 1.1 s and a 30 s one on 3.5 s -- each still readable, and each still a
+/// visibly different width from its neighbours.
+constexpr double kWindowExponent = 0.5;
+/// The share of the axis kept past the sustain's start, so that the sustain --
+/// and with it the slider that shapes it -- is always partly on screen however
+/// hard the lifetime above is compressed.
 constexpr double kSustainShare = 0.25;
-/// How far past the decay-based window an envelope that is still dying may
-/// stretch the axis.
-constexpr double kDyingHeldFactor = 2.0;
 /// Roughly this many SSG loop periods are drawn.
 constexpr double kSsgLoopPeriods = 3.5;
 /// How much of a looping graph the release may claim. Past this the loop the
@@ -55,14 +62,10 @@ constexpr double kSsgSpanBudget = 2.0;
 /// squeeze the part the user is editing into the left margin. Past this the
 /// release simply runs off the right edge, which still reads as "very long".
 constexpr double kReleaseSpanBudget = 4.0;
-/// The release is never drawn wider than kReleaseSpanBudget * the held window
-/// (that is what the budget above means), so there is nothing to gain from
-/// simulating past it -- but a floor keeps the common release rates measuring
-/// their true length rather than reporting the budget back.
-constexpr double kMinReleaseMs = 4000.0;
-/// ... and a ceiling, because RR = 0 never reaches silence at all. Sampling
-/// stops the moment the envelope is at rest, so this only costs anything for
-/// the handful of release rates that genuinely run for seconds.
+/// How long a release is simulated for. RR = 0 never reaches silence at all,
+/// so there has to be a ceiling; sampling stops the moment the envelope is at
+/// rest, so it only costs anything for the handful of release rates that
+/// genuinely run for seconds.
 constexpr double kMaxReleaseMs = 10000.0;
 
 double first_marker_ms(const CurveResult &curve, MarkerKind kind) {
@@ -116,11 +119,79 @@ double loop_period_ms(const CurveResult &probe, const OperatorParams &op) {
   return first > 0.0 ? first * ramps_per_period : 0.0;
 }
 
-/// Did the envelope come to rest at silence (nothing left to show) rather than
-/// at a sustain level (a flat segment worth drawing)?
-bool parked_silent(const CurveResult &probe) {
-  return !probe.points.empty() &&
-         probe.points.back().out >= ym2612_eg::kSilenceAttenuation;
+// ------------------------------------------------- the held envelope's clock
+
+/// The attenuation one EG tick adds, on average, at this effective rate.
+///
+/// increment_at() indexes kIncTable with three bits of the free-running EG
+/// counter taken from above rate_shift(), so across one turn of those bits each
+/// of the eight entries lands exactly once and their mean is the true gain per
+/// tick -- the shift being how many ticks each entry is held for. Rows 0 and 1
+/// are all zero, which is the chip's way of saying this phase never advances.
+double atten_per_eg_tick(int rate, bool ssg) {
+  int sum = 0;
+  for (int i = 0; i < 8; ++i) {
+    sum += ym2612_eg::detail::kIncTable[rate][i];
+  }
+  const double mean = static_cast<double>(sum) / 8.0;
+  const double per_tick =
+      mean / static_cast<double>(1 << ym2612_eg::detail::rate_shift(rate));
+  // SSG-EG quadruples every post-attack increment.
+  return ssg ? per_tick * 4.0 : per_tick;
+}
+
+/// How long a phase that is linear in attenuation takes to climb from
+/// `from_att` to `to_att`, in ms. Decay and sustain both are: they add a fixed
+/// increment per tick, so the duration is one division rather than a
+/// simulation. A rate that never advances takes forever, and says so.
+double linear_phase_ms(int rate, int from_att, int to_att, bool ssg,
+                       double eg_hz) {
+  if (to_att <= from_att) {
+    return 0.0;
+  }
+  const double per_tick = atten_per_eg_tick(rate, ssg);
+  if (!(per_tick > 0.0)) {
+    return std::numeric_limits<double>::infinity();
+  }
+  const double ticks = static_cast<double>(to_att - from_att) / per_tick;
+  return ticks * 1000.0 / eg_hz;
+}
+
+/// How long the attack takes, in ms.
+///
+/// The attack is the one phase that is not linear: it multiplies what is left,
+/// `att += (~att * inc) >> 4`, so there is no closed form and the recurrence is
+/// run instead. It converges from 0x3FF in a couple of hundred table slots
+/// whatever the rate, which is nothing next to the hundreds of thousands of
+/// samples the same stretch costs to simulate.
+double attack_ms(int rate, double eg_hz) {
+  // key_on() snaps these straight to att = 0; eg_step() guards on `rate < 62`.
+  if (rate >= 62) {
+    return 0.0;
+  }
+  int sum = 0;
+  for (int i = 0; i < 8; ++i) {
+    sum += ym2612_eg::detail::kIncTable[rate][i];
+  }
+  if (sum == 0) {
+    // Rates 0 and 1, i.e. AR = 0: the attack never finishes, so neither does
+    // anything after it.
+    return std::numeric_limits<double>::infinity();
+  }
+  const int shift = ym2612_eg::detail::rate_shift(rate);
+  int att = static_cast<int>(ym2612_eg::kMaxAttenuation);
+  long long slots = 0;
+  // The slowest table row alternates {0, 1}, which needs about 214 slots from
+  // 0x3FF; the bound is only here so a future table could not hang a frame.
+  constexpr long long kSlotLimit = 4096;
+  for (; att > 0 && slots < kSlotLimit; ++slots) {
+    const int inc = ym2612_eg::detail::kIncTable[rate][slots & 7];
+    if (inc != 0) {
+      // Arithmetic shift of a negative value, exactly as the simulator does it.
+      att += (~att * inc) >> 4;
+    }
+  }
+  return static_cast<double>(slots << shift) * 1000.0 / eg_hz;
 }
 
 // ------------------------------------------------------------- span quantiser
@@ -227,70 +298,100 @@ double probe_max_ms(const OperatorParams &op) {
 /// window would let AR and DR change how long a release is drawn.
 double release_max_ms() { return kMaxReleaseMs; }
 
+HeldTimeline held_timeline(const OperatorParams &op,
+                           ym2612_eg::NotePitch pitch) {
+  // The graph is drawn at one note and the chip's rates are keyed to it, so the
+  // key-scale value is part of every duration below.
+  const int ksv = pitch.keycode() >> (3 - (op.ks & 3));
+  const bool ssg = (op.ssg & 0x08) != 0;
+  // Everything the graph draws is at the Genesis' own clock, which is what
+  // CurveRequest defaults to as well.
+  const double eg_hz = ym2612_eg::eg_rate_hz(ym2612_eg::kNtscClockHz);
+
+  // Where the held envelope runs out of scale. Without SSG-EG the chip cuts the
+  // output dead the moment the attenuation reaches 0x3F0; with it, both the
+  // fold and the hold latch happen at 0x200 instead.
+  const int end_att = ssg ? static_cast<int>(ym2612_eg::kSsgFoldAttenuation)
+                          : 0x3F0;
+  const int sustain_att =
+      std::min(ym2612_eg::detail::sustain_attenuation(op.sl), end_att);
+
+  const int ar = ym2612_eg::detail::effective_rate(op.ar & 0x1F, ksv);
+  const int dr = ym2612_eg::detail::effective_rate(op.dr & 0x1F, ksv);
+  const int sr = ym2612_eg::detail::effective_rate(op.sr & 0x1F, ksv);
+
+  HeldTimeline timeline;
+  timeline.attack_ms = attack_ms(ar, eg_hz);
+  timeline.decay_ms = linear_phase_ms(dr, 0, sustain_att, ssg, eg_hz);
+  timeline.sustain_ms = linear_phase_ms(sr, sustain_att, end_att, ssg, eg_hz);
+  return timeline;
+}
+
+double held_lifetime_ms(const OperatorParams &op, ym2612_eg::NotePitch pitch) {
+  // Infinity is contagious, which is right: a phase that never ends means the
+  // ones after it never start.
+  return held_timeline(op, pitch).lifetime_ms();
+}
+
+double window_for_lifetime_ms(double lifetime_ms) {
+  if (!(lifetime_ms > 0.0)) {
+    return kMinHeldMs;
+  }
+  if (!std::isfinite(lifetime_ms)) {
+    return kHardMaxHeldMs;
+  }
+  const double window =
+      kWindowRefMs * std::pow(lifetime_ms / kWindowRefMs, kWindowExponent);
+  return std::clamp(window, kMinHeldMs, kHardMaxHeldMs);
+}
+
+double window_for_timeline_ms(const HeldTimeline &timeline) {
+  // The axis has to reach past the sustain's start whatever the compression
+  // says, or the last phase of the envelope -- and the slider that shapes it --
+  // is simply not on the graph. An 8.4 s attack compressed on its lifetime
+  // alone asks for a 6.4 s axis, which cuts the attack off before it finishes
+  // and takes the decay and the sustain with it.
+  //
+  // The share is of the *window*, so the sustain always owns a quarter of it:
+  // sustain_start / (1 - share) is the width at which that is true. This is the
+  // one guarantee the marker-driven policy did get right; what was wrong was
+  // asking a probe where the sustain started.
+  const double floor_ms = timeline.sustain_start_ms() / (1.0 - kSustainShare);
+  const double compressed = window_for_lifetime_ms(timeline.lifetime_ms());
+  return std::clamp(std::max(compressed, floor_ms), kMinHeldMs,
+                    kHardMaxHeldMs);
+}
+
 /**
- * How much of the held envelope to draw, chosen from a run with the key held
- * forever so the decision can use what the envelope actually does rather than
- * a guess:
+ * How much of the held envelope to draw.
  *
- * - SSG looping: about 3.5 periods, which reads as a loop without turning into
- *   a hatch pattern. Audio-rate loops hit the floor below instead and show
- *   many more periods -- better than a graph that is all tail.
- * - Otherwise: long enough that the sustain owns a quarter of the width, so SR
- *   has something to highlight even when attack and decay are slow.
- * - The sustain starts where the decay ends -- or, for an SR = 0 patch, where
- *   the envelope parks, which is the same instant seen from the other side.
- * - An envelope that parks at *silence* has nothing left to show, so it is
- *   drawn just past that instead of a quarter longer again.
- * - The whole thing is capped at 2 s -- the 27 s sustain of the spec's worked
- *   example must not swallow the graph -- but never below the attack + decay,
- *   which would misplace the sustain instead of merely shortening it.
+ * An SSG loop is sized from its measured period -- about 3.5 of them, which
+ * reads as a loop without turning into a hatch pattern. The period is the one
+ * thing here the probe still decides, because a loop's time scale is its own
+ * and nothing about the registers predicts it as cheaply.
+ *
+ * Everything else is the envelope's own phase durations, computed rather than
+ * observed, and turned into a width by window_for_timeline_ms(). No test for
+ * whether the envelope parked, whether it reached silence, or whether a marker
+ * exists. The version that asked those questions asked them of a probe that
+ * stopped after three seconds, so an envelope slower than the horizon reported
+ * no decay at all -- SL stopped mattering, SR stopped mattering, and DR jumped
+ * threefold as it crossed. A closed form has no horizon to cross.
  *
  * This is the width the axis is sized from, not the length of the trace:
  * nothing about the envelope changes at this instant, and the trace itself is
  * simulated across the whole axis the width turns into.
  */
 double choose_held_ms(const CurveResult &probe, const OperatorParams &op) {
-  double held = 0.0;
-  double ceiling = kHardMaxHeldMs;
-  double floor_ms = kMinHeldMs;
-
   const double period = loop_period_ms(probe, op);
   if (period > 0.0) {
-    held = kSsgLoopPeriods * period;
-    ceiling = kSsgMaxHeldMs;
+    const double held = kSsgLoopPeriods * period;
     // A loop carries its own time scale. Widening an audio-rate loop to
     // kMinHeldMs would pack it into a solid block of cycles instead of showing
     // its shape, so the periods are the floor.
-    floor_ms = std::min(kMinHeldMs, held);
-  } else {
-    const double attack_end = first_marker_ms(probe, MarkerKind::AttackEnd);
-    const double decay_end = first_marker_ms(probe, MarkerKind::DecayEnd);
-    const bool silent = parked_silent(probe);
-    double sustain_start = std::max({decay_end, attack_end, 0.0});
-    if (std::isfinite(probe.park_ms) && !silent) {
-      sustain_start = std::max(sustain_start, probe.park_ms);
-    }
-
-    const double with_sustain = sustain_start / (1.0 - kSustainShare);
-    ceiling = std::clamp(std::max(kNominalMaxHeldMs, with_sustain), kMinHeldMs,
-                         kHardMaxHeldMs);
-    // An envelope that dies is worth following, but only so far: the window
-    // saturates at kDyingHeldFactor times the decay-based one. Saturating
-    // rather than switching keeps the axis a continuous function of the time
-    // to silence -- without it, an envelope that dies a percent beyond the
-    // probe's horizon reads as "still moving" and the axis jumps sixfold.
-    held = with_sustain;
-    const double dying_cap = with_sustain * kDyingHeldFactor;
-    if (std::isfinite(probe.park_ms)) {
-      if (silent) {
-        held = std::clamp(probe.park_ms * 1.05, with_sustain, dying_cap);
-      }
-    } else {
-      held = dying_cap;
-    }
+    return std::clamp(held, std::min(kMinHeldMs, held), kSsgMaxHeldMs);
   }
-
-  return std::clamp(held, floor_ms, ceiling);
+  return window_for_timeline_ms(held_timeline(op, reference_pitch()));
 }
 
 double quantize_span_ms(double content_ms, double current_span_ms) {
@@ -337,9 +438,10 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   const OperatorParams params = to_operator_params(op);
   const ym2612_eg::NotePitch pitch = reference_pitch();
 
-  // 1. Held forever, generously: discovers park time, loop frequency and
-  //    warnings. The probe sees the whole loop and the whole hold, so it stays
-  //    the authority on both even though only part of it is drawn.
+  // 1. Held forever, generously: discovers the loop frequency and the
+  //    warnings. It is no longer asked how long any phase lasts -- a probe can
+  //    only report what it saw before its horizon, and that horizon was the
+  //    axis' whole discontinuity.
   ym2612_eg::CurveRequest request;
   request.op = params;
   request.pitch = pitch;
