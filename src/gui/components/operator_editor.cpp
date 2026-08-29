@@ -377,15 +377,13 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
       &ym2612::OperatorSettings::amplitude_modulation_enable, true);
   ImGui::Spacing();
 
-  // The graph is what the panel is read for, so where there is room it spans
-  // the whole of it and the two columns start underneath. frame_padding()
-  // comes off the right so it clears the border by as much as the contents do
-  // on the left. Only the pixels change: the time axis is unaffected.
-  // The narrow layout keeps the graph and the slider block one width.
+  // The graph is what the panel is read for, so it spans the whole width in
+  // every layout, with the rest starting underneath. frame_padding() comes off
+  // the right so it clears the border by as much as the contents do on the
+  // left. Only the pixels change: the time axis is unaffected.
   render_envelope_image(
       op, envelope_state,
-      column_layout ? ImVec2(content_width - frame_padding(), vslider_height())
-                    : image_size());
+      ImVec2(content_width - frame_padding(), vslider_height()));
   render_envelope_sliders(widget, envelope_state);
 
   if (column_layout) {

@@ -17,7 +17,6 @@ inline ImVec2 vslider_size() {
 inline float hslider_width() {
   return vslider_width() * 6 + ImGui::GetStyle().ItemSpacing.x * 5;
 }
-inline ImVec2 image_size() { return ImVec2(hslider_width(), vslider_height()); }
 
 struct PatchEditorContext;
 
