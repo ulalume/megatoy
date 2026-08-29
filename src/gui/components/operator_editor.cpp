@@ -274,15 +274,21 @@ float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
   return ImGui::GetItemRectMax().x;
 }
 
-void render_envelope(OperatorWidget &widget,
-                     UIState::EnvelopeState &envelope_state) {
-  const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
-
+/**
+ * The six vertical sliders under the graph, labelled.
+ *
+ * Always hslider_width() wide: six 20 px columns and the gaps between them.
+ * The graph above is wider than this in the two-column layout, and the
+ * sliders deliberately do not follow it -- widening them would claim they
+ * share the graph's axis, and a 20 px column is the width these are grabbed
+ * at.
+ */
+void render_envelope_sliders(OperatorWidget &widget,
+                             UIState::EnvelopeState &envelope_state) {
   const ImVec2 slider_size = vslider_size();
   const float label_width = slider_size.x;
 
-  ImGui::BeginGroup(); // ADSR Envelope group
-  render_envelope_image(op, envelope_state, image_size());
+  ImGui::BeginGroup(); // ADSR slider block
 
   ImGui::BeginGroup();
   text_centered("TL", label_width);
@@ -319,7 +325,7 @@ void render_envelope(OperatorWidget &widget,
                   &slider_size, nullptr, &envelope_state.release_rate);
   ImGui::EndGroup();
 
-  ImGui::EndGroup(); // End ADSR Envelope group
+  ImGui::EndGroup(); // End ADSR slider block
 }
 
 void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
@@ -334,11 +340,12 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // full-width slider plus its label, and the gap between the columns is the
   // SameLine/Spacing/SameLine below.
   const ImGuiStyle &style = ImGui::GetStyle();
+  const float content_width = ImGui::GetContentRegionAvail().x;
   const float side_column_width = hslider_width() + style.ItemInnerSpacing.x +
                                   ImGui::CalcTextSize("SSG EG Type").x;
-  const bool column_layout =
-      ImGui::GetContentRegionAvail().x >
+  const float two_column_width =
       hslider_width() + style.ItemSpacing.x * 2.0f + side_column_width;
+  const bool column_layout = content_width > two_column_width;
 
   if (!op.enable) {
     ImGui::BeginDisabled();
@@ -370,7 +377,16 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
       &ym2612::OperatorSettings::amplitude_modulation_enable, true);
   ImGui::Spacing();
 
-  render_envelope(widget, envelope_state);
+  // The graph is what the panel is read for, so where there is room it spans
+  // the whole of it and the two columns start underneath. frame_padding()
+  // comes off the right so it clears the border by as much as the contents do
+  // on the left. Only the pixels change: the time axis is unaffected.
+  // The narrow layout keeps the graph and the slider block one width.
+  render_envelope_image(
+      op, envelope_state,
+      column_layout ? ImVec2(content_width - frame_padding(), vslider_height())
+                    : image_size());
+  render_envelope_sliders(widget, envelope_state);
 
   if (column_layout) {
     ImGui::SameLine();
@@ -404,10 +420,10 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndDisabled();
   }
 
-  if (column_layout) {
-    ImVec2 ssg_gap = ImGui::GetCursorPos();
-    ImGui::SetCursorPosY(ssg_gap.y + ui::scale::px(123.0f));
-  } else {
+  // Nothing to clear in the two-column layout any more: the right column now
+  // starts level with the vertical sliders rather than with the graph, so the
+  // SSG controls sit straight above Key Scale.
+  if (!column_layout) {
     ImGui::Spacing();
   }
 
