@@ -369,6 +369,44 @@ void test_ssg_eg_makes_the_release_dramatically_shorter() {
   CHECK(ssg_curve.release.points.back().out == ym2612_eg::kMaxAttenuation);
 }
 
+/// The inverted SSG-EG modes (types 4-7) run the attenuation scale backwards:
+/// att = 0 is the QUIETEST point of the ramp and 0x200 is full volume. A
+/// release started from 0 is therefore a release from silence, which key-off
+/// cuts dead in a single sample -- the ~1 px sliver the owner reported. The
+/// release has to start from whatever level output() is loudest at, and then
+/// an inverted mode releases at exactly the same speed as its upright twin,
+/// because key-off latches the audible level either way.
+void test_an_inverted_ssg_release_is_as_long_as_the_upright_one() {
+  ym2612::OperatorSettings upright = worked_example();
+  upright.release_rate = 6;
+  upright.ssg_enable = true;
+  upright.ssg_type_envelope_control = 0; // saw, output not inverted
+  ym2612::OperatorSettings inverted = upright;
+  inverted.ssg_type_envelope_control = 4; // the same saw, inverted
+
+  CHECK(loudest_attenuation(to_operator_params(upright)) == 0);
+  CHECK(loudest_attenuation(to_operator_params(inverted)) ==
+        ym2612_eg::kSsgFoldAttenuation);
+
+  const EnvelopeCurve up = build_envelope_curve(upright, 0.0);
+  const EnvelopeCurve inv = build_envelope_curve(inverted, 0.0);
+
+  CHECK(near_rel(up.release_content_ms, 229.8, 0.02));
+  CHECK(near_rel(inv.release_content_ms, up.release_content_ms, 0.01));
+  // Not the one-sample cut: at 53 kHz that would be 0.02 ms.
+  CHECK(inv.release_content_ms > 100.0);
+  // Both start from full volume and both end in silence.
+  CHECK(inv.release.points.front().out == inv.peak_out);
+  CHECK(inv.release.points.back().out == ym2612_eg::kMaxAttenuation);
+  CHECK(!inv.release_truncated);
+  // ... and it still only ever falls.
+  double previous_out = -1.0;
+  for (const auto &p : inv.release.points) {
+    CHECK(p.out >= previous_out);
+    previous_out = p.out;
+  }
+}
+
 /// SR = 0 is the case a chained graph could not tell the truth about: with a
 /// key-off in the picture the hold is cut short, and without one it is simply
 /// flat forever.
@@ -576,6 +614,7 @@ int main() {
   test_the_worked_examples_decay_lands_on_the_real_millisecond_axis();
   test_the_release_starts_at_full_volume_and_reaches_silence();
   test_ssg_eg_makes_the_release_dramatically_shorter();
+  test_an_inverted_ssg_release_is_as_long_as_the_upright_one();
   test_an_sr0_held_trace_parks_and_stays_flat();
   test_total_level_moves_the_whole_curve_down();
   test_ssg_enabled_curves_fold();

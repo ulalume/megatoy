@@ -189,6 +189,13 @@ to_operator_params(const ym2612::OperatorSettings &op) {
   return params;
 }
 
+uint16_t loudest_attenuation(const OperatorParams &op) {
+  // output() inverts while SSG-EG is enabled and J = attack XOR invert is set;
+  // on key-on the invert flag is clear, so the attack bit alone decides.
+  const bool inverted = (op.ssg & 0x08) != 0 && (op.ssg & 0x04) != 0;
+  return inverted ? ym2612_eg::kSsgFoldAttenuation : uint16_t{0};
+}
+
 bool same_envelope(const OperatorParams &lhs, const OperatorParams &rhs) {
   return lhs.ar == rhs.ar && lhs.dr == rhs.dr && lhs.sr == rhs.sr &&
          lhs.rr == rhs.rr && lhs.sl == rhs.sl && lhs.tl == rhs.tl &&
@@ -336,12 +343,21 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   //    the SSG inversion latch, the 4x increments, the hard cut at 0x200 --
   //    which is why an SSG-EG patch's release is so much shorter than the same
   //    patch without it. It shares nothing with the held trace but the axis.
+  //
+  //    "Full volume" is loudest_attenuation(), not 0: with an inverted SSG-EG
+  //    mode 0 is the quiet end of the ramp, and releasing from there is a
+  //    one-sample cut rather than a curve. AR is zeroed for this run alone --
+  //    sample_curve() calls key_on(), which snaps an instant attack straight
+  //    to att = 0 and would throw the start level away, and the release rate
+  //    does not depend on AR. The AttackFrozen warning that comes back with it
+  //    is never read: warning_line() is asked about the probe, not this run.
   ym2612_eg::CurveRequest release;
   release.op = params;
+  release.op.ar = 0;
   release.pitch = pitch;
   release.gate_ms = 0.0;
   release.max_ms = release_max_ms(out.held_ms);
-  release.start_att = 0;
+  release.start_att = loudest_attenuation(params);
   out.release = ym2612_eg::sample_curve(release);
   out.release_content_ms =
       out.release.points.empty()

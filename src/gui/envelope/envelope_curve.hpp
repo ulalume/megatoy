@@ -56,6 +56,18 @@ uint8_t packed_ssg(const ym2612::OperatorSettings &op);
 ym2612_eg::OperatorParams
 to_operator_params(const ym2612::OperatorSettings &op);
 
+/**
+ * The internal attenuation at which this operator is at its LOUDEST -- where
+ * a release has to start from.
+ *
+ * Normally that is 0, the top of the scale. With SSG-EG enabled and the attack
+ * bit set (types 4-7) the output is inverted, `(0x200 - att) & 0x3FF`, so the
+ * scale runs the other way: 0 is the quietest point the ramp ever reaches and
+ * 0x200 is full volume. Starting those patches at 0 releases from silence,
+ * which the chip's key-off rules cut dead in a single sample.
+ */
+uint16_t loudest_attenuation(const ym2612_eg::OperatorParams &op);
+
 bool same_envelope(const ym2612_eg::OperatorParams &lhs,
                    const ym2612_eg::OperatorParams &rhs);
 
