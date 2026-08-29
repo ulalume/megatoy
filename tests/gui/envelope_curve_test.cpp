@@ -180,7 +180,7 @@ void test_the_gate_is_bounded_across_a_sweep() {
           CHECK(gate.gate_ms >= 50.0);
           CHECK(gate.gate_ms <= 10000.0);
           CHECK(gate.max_ms > gate.gate_ms);
-          CHECK(gate.max_ms <= gate.gate_ms + 4000.0);
+          CHECK(gate.max_ms <= gate.gate_ms + 10000.0);
         }
       }
     }
@@ -399,6 +399,25 @@ void test_a_fast_loop_keeps_its_scale() {
   const EnvelopeCurve wide = build_envelope_curve(slow, 0.0);
   CHECK(wide.curve.loop_hz < 20.0);
   CHECK(wide.gate_ms / wide.span_ms > 0.25);
+}
+
+/// A slow release must be drawn to the end. Stopping mid-release leaves a
+/// near-flat extrapolation that reads as "this note never decays".
+void test_a_slow_release_reaches_silence() {
+  ym2612::OperatorSettings op;
+  op.attack_rate = 31;
+  op.decay_rate = 8;
+  op.sustain_rate = 0; // parks in the sustain hold
+  op.sustain_level = 2;
+  op.release_rate = 2; // seconds long, even at SSG-EG's 4x
+  op.ssg_enable = true;
+  op.ssg_type_envelope_control = 0;
+
+  const EnvelopeCurve c = build_envelope_curve(op, 0.0);
+  CHECK(!c.truncated);
+  CHECK(c.curve.points.back().out == ym2612_eg::kMaxAttenuation);
+  CHECK(c.content_ms > 3000.0);
+  CHECK(c.span_ms >= c.content_ms);
 }
 
 int main() {

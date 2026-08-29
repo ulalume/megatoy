@@ -238,7 +238,11 @@ Gate choose_gate(const CurveResult &probe, const OperatorParams &op) {
 
   gate = std::clamp(gate, floor_ms, ceiling);
 
-  const double release_budget = std::clamp(3.0 * gate, 200.0, 4000.0);
+  // Enough budget for the release to actually finish: a slow RR runs for
+  // seconds, and a curve that stops mid-release draws a near-flat line that
+  // reads as "this never decays". Sampling stops as soon as the envelope
+  // reaches silence, so a generous ceiling costs nothing on short releases.
+  const double release_budget = std::clamp(3.0 * gate, 4000.0, 10000.0);
   return Gate{gate, gate + release_budget};
 }
 
