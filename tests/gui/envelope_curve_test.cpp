@@ -154,6 +154,37 @@ void test_an_ssg_loop_shows_a_few_periods() {
   CHECK(periods <= 4.0);
 }
 
+/// The owner's report: an SSG patch with AR < 31 spends its whole attack at
+/// or above the fold threshold. Until ym2612_eg v0.1.1 made the fold event
+/// edge-triggered, every one of those samples counted as a fold, loop_hz came
+/// back as the sample rate and the graph collapsed to a tenth of a
+/// millisecond wide.
+void test_a_slow_attack_ssg_loop_reports_a_musical_rate() {
+  ym2612::OperatorSettings op;
+  op.attack_rate = 14;
+  op.decay_rate = 18;
+  op.sustain_level = 9;
+  op.sustain_rate = 14;
+  op.release_rate = 0;
+  op.total_level = 0;
+  op.key_scale = 0;
+  op.ssg_enable = true;
+  op.ssg_type_envelope_control = 4; // inverted saw
+
+  const CurveResult held = probe(op);
+  // A loop a listener could hear as a tremolo, not 53 kHz.
+  CHECK(held.loop_hz > 1.0);
+  CHECK(held.loop_hz < 100.0);
+  CHECK(near_rel(held.loop_hz, 6.12, 0.02));
+
+  // ... and the window policy sizes itself from the period rather than from
+  // the sample rate.
+  const double held_ms = choose_held_ms(held, to_operator_params(op));
+  const double periods = held_ms / (1000.0 / held.loop_hz);
+  CHECK(periods >= 3.0);
+  CHECK(periods <= 4.0);
+}
+
 void test_a_frozen_attack_still_produces_a_usable_window() {
   ym2612::OperatorSettings op = worked_example();
   op.attack_rate = 0; // never sounds; parks immediately
@@ -532,6 +563,7 @@ int main() {
   test_a_normal_patch_gets_a_visible_sustain();
   test_an_sr0_patch_shows_its_flat_hold();
   test_an_ssg_loop_shows_a_few_periods();
+  test_a_slow_attack_ssg_loop_reports_a_musical_rate();
   test_a_frozen_attack_still_produces_a_usable_window();
   test_the_held_window_is_bounded_across_a_sweep();
 
