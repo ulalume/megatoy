@@ -12,40 +12,55 @@ using ym2612_eg::CurveWarning;
 using ym2612_eg::MarkerKind;
 using ym2612_eg::OperatorParams;
 
-// ---------------------------------------------------------------- gate policy
+// --------------------------------------------------------- held-window policy
 
 /// How far the held-forever probe looks ahead. Long enough to catch the
 /// interesting parks (an SR = 0 patch parks the moment its decay ends), short
 /// enough that a slider drag can re-run it four times a frame. A sustain that
 /// is still crawling towards silence after this simply reports no park, which
-/// is the answer the gate policy wants anyway.
+/// is the answer the window policy wants anyway.
 constexpr double kProbeMs = 3000.0;
 /// A looping SSG patch gets a longer probe: the loop period is what sizes the
 /// graph, and sample_curve() stops after five periods anyway, so this only
 /// costs anything for loops too slow to measure inside the shorter window.
 constexpr double kSsgProbeMs = 12000.0;
 
-/// A held note shorter than this reads as an accident rather than a sustain.
-constexpr double kMinGateMs = 50.0;
+/// A held window shorter than this reads as an accident rather than a sustain.
+constexpr double kMinHeldMs = 50.0;
 /// Above this the held part stops being informative -- the worked example's
 /// sustain takes 27 s to reach silence, and drawing all of it would leave the
 /// attack and decay a single pixel wide.
-constexpr double kNominalMaxGateMs = 2000.0;
+constexpr double kNominalMaxHeldMs = 2000.0;
 /// ... except that the cap must never cut into the attack or the decay, so a
 /// genuinely slow patch may exceed it. This is where even that gives up.
-constexpr double kHardMaxGateMs = 10000.0;
+constexpr double kHardMaxHeldMs = 10000.0;
 /// An SSG loop is what this graph exists for, so it is allowed more room than
 /// a plain sustain before the periods start being dropped.
-constexpr double kSsgMaxGateMs = 5000.0;
-/// Share of the held time reserved for the sustain segment, so SR always has
+constexpr double kSsgMaxHeldMs = 5000.0;
+/// Share of the held window reserved for the sustain segment, so SR always has
 /// something to colour.
 constexpr double kSustainShare = 0.25;
-/// Roughly this many SSG loop periods before the key comes up.
+/// Roughly this many SSG loop periods are drawn.
 constexpr double kSsgLoopPeriods = 3.5;
 /// How much of a looping graph the release may claim. Past this the loop the
-/// release comes from stops being readable, so the axis keeps the loop's scale
-/// and the tail runs off the right edge instead.
+/// release is compared against stops being readable, so the axis keeps the
+/// loop's scale and the release runs off the right edge instead.
 constexpr double kSsgSpanBudget = 2.0;
+/// The same bargain for a plain patch. A release is often far longer than the
+/// held envelope -- RR = 2 takes over ten seconds where the attack and decay
+/// take three hundred milliseconds -- and letting it set the width alone would
+/// squeeze the part the user is editing into the left margin. Past this the
+/// release simply runs off the right edge, which still reads as "very long".
+constexpr double kReleaseSpanBudget = 4.0;
+/// The release is never drawn wider than kReleaseSpanBudget * the held window
+/// (that is what the budget above means), so there is nothing to gain from
+/// simulating past it -- but a floor keeps the common release rates measuring
+/// their true length rather than reporting the budget back.
+constexpr double kMinReleaseMs = 4000.0;
+/// ... and a ceiling, because RR = 0 never reaches silence at all. Sampling
+/// stops the moment the envelope is at rest, so this only costs anything for
+/// the handful of release rates that genuinely run for seconds.
+constexpr double kMaxReleaseMs = 10000.0;
 
 double first_marker_ms(const CurveResult &curve, MarkerKind kind) {
   for (const ym2612_eg::Marker &m : curve.markers) {
@@ -184,40 +199,45 @@ double probe_max_ms(const OperatorParams &op) {
   return ssg_loops(op) ? kSsgProbeMs : kProbeMs;
 }
 
+double release_max_ms(double held_ms) {
+  return std::clamp(kReleaseSpanBudget * held_ms, kMinReleaseMs, kMaxReleaseMs);
+}
+
 /**
- * The gate is chosen from a run with the key held forever, so the decision can
- * use what the envelope actually does rather than a guess:
+ * How much of the held envelope to draw, chosen from a run with the key held
+ * forever so the decision can use what the envelope actually does rather than
+ * a guess:
  *
  * - SSG looping: about 3.5 periods, which reads as a loop without turning into
  *   a hatch pattern. Audio-rate loops hit the floor below instead and show
- *   many more periods -- better than a graph that is all release.
- * - Otherwise: long enough that the sustain owns a quarter of the held time,
- *   so SR has something to highlight even when attack and decay are slow.
+ *   many more periods -- better than a graph that is all tail.
+ * - Otherwise: long enough that the sustain owns a quarter of the width, so SR
+ *   has something to highlight even when attack and decay are slow.
  * - The sustain starts where the decay ends -- or, for an SR = 0 patch, where
  *   the envelope parks, which is the same instant seen from the other side.
  * - An envelope that parks at *silence* has nothing left to show, so it is
- *   held just past that instead of a quarter longer again.
+ *   drawn just past that instead of a quarter longer again.
  * - The whole thing is capped at 2 s -- the 27 s sustain of the spec's worked
  *   example must not swallow the graph -- but never below the attack + decay,
  *   which would misplace the sustain instead of merely shortening it.
  *
- * The release budget is generous but bounded; sample_curve() stops as soon as
- * the envelope is at rest, so the budget only costs anything for the patches
- * that genuinely release slowly, and those get drawn truncated at the edge.
+ * Cutting the trace here is not a key-off: nothing about the envelope changes
+ * at this instant, and whatever it was doing simply carries on to the right
+ * edge of the graph.
  */
-Gate choose_gate(const CurveResult &probe, const OperatorParams &op) {
-  double gate = 0.0;
-  double ceiling = kHardMaxGateMs;
-  double floor_ms = kMinGateMs;
+double choose_held_ms(const CurveResult &probe, const OperatorParams &op) {
+  double held = 0.0;
+  double ceiling = kHardMaxHeldMs;
+  double floor_ms = kMinHeldMs;
 
   const double period = loop_period_ms(probe, op);
   if (period > 0.0) {
-    gate = kSsgLoopPeriods * period;
-    ceiling = kSsgMaxGateMs;
-    // A loop carries its own time scale. Holding it for kMinGateMs would pack
-    // an audio-rate loop into a solid block of cycles instead of showing its
-    // shape, so the periods are the floor.
-    floor_ms = std::min(kMinGateMs, gate);
+    held = kSsgLoopPeriods * period;
+    ceiling = kSsgMaxHeldMs;
+    // A loop carries its own time scale. Widening an audio-rate loop to
+    // kMinHeldMs would pack it into a solid block of cycles instead of showing
+    // its shape, so the periods are the floor.
+    floor_ms = std::min(kMinHeldMs, held);
   } else {
     const double attack_end = first_marker_ms(probe, MarkerKind::AttackEnd);
     const double decay_end = first_marker_ms(probe, MarkerKind::DecayEnd);
@@ -228,22 +248,15 @@ Gate choose_gate(const CurveResult &probe, const OperatorParams &op) {
     }
 
     const double with_sustain = sustain_start / (1.0 - kSustainShare);
-    gate = with_sustain;
+    held = with_sustain;
     if (std::isfinite(probe.park_ms) && silent) {
-      gate = std::max(gate, probe.park_ms * 1.05);
+      held = std::max(held, probe.park_ms * 1.05);
     }
-    ceiling = std::clamp(std::max(kNominalMaxGateMs, with_sustain), kMinGateMs,
-                         kHardMaxGateMs);
+    ceiling = std::clamp(std::max(kNominalMaxHeldMs, with_sustain), kMinHeldMs,
+                         kHardMaxHeldMs);
   }
 
-  gate = std::clamp(gate, floor_ms, ceiling);
-
-  // Enough budget for the release to actually finish: a slow RR runs for
-  // seconds, and a curve that stops mid-release draws a near-flat line that
-  // reads as "this never decays". Sampling stops as soon as the envelope
-  // reaches silence, so a generous ceiling costs nothing on short releases.
-  const double release_budget = std::clamp(3.0 * gate, 4000.0, 10000.0);
-  return Gate{gate, gate + release_budget};
+  return std::clamp(held, floor_ms, ceiling);
 }
 
 double quantize_span_ms(double content_ms, double current_span_ms) {
@@ -291,48 +304,78 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
                                    double previous_span_ms) {
   EnvelopeCurve out;
 
+  const OperatorParams params = to_operator_params(op);
+  const ym2612_eg::NotePitch pitch = reference_pitch();
+
+  // 1. Held forever, generously: discovers park time, loop frequency and
+  //    warnings. The probe sees the whole loop and the whole hold, so it stays
+  //    the authority on both even though only part of it is drawn.
   ym2612_eg::CurveRequest request;
-  request.op = to_operator_params(op);
-  request.pitch = reference_pitch();
-  request.gate_ms = -1.0; // held forever: discover park / loop / warnings
-  request.max_ms = probe_max_ms(request.op);
+  request.op = params;
+  request.pitch = pitch;
+  request.gate_ms = -1.0;
+  request.max_ms = probe_max_ms(params);
   const CurveResult probe = ym2612_eg::sample_curve(request);
 
-  const Gate gate = choose_gate(probe, request.op);
-  request.gate_ms = gate.gate_ms;
-  request.max_ms = gate.max_ms;
-  out.curve = ym2612_eg::sample_curve(request);
-  out.gate_ms = gate.gate_ms;
+  // 2. The held trace itself: the same run, cut to the width the probe
+  //    justified. Still no key-off, so SR = 0 holds flat and SR > 0 shows its
+  //    real slow decay rather than a level some invented gate stopped it at.
+  out.held_ms = choose_held_ms(probe, params);
+  request.max_ms = out.held_ms;
+  out.held = ym2612_eg::sample_curve(request);
+  out.held_content_ms = out.held.points.empty()
+                            ? 0.0
+                            : static_cast<double>(out.held.points.back().ms);
+  // Held forever, sample_curve() stops the moment the envelope comes to rest,
+  // so a finite park is exactly "the trace ended because there was nothing
+  // left to draw" -- continue it flat rather than along a slope of zero noise.
+  out.held_parked = std::isfinite(out.held.park_ms);
 
-  out.content_ms =
-      out.curve.points.empty()
+  // 3. The release, on its own: keyed on at full volume and released on sample
+  //    zero. gate_ms = 0 routes it through the chip's real key-off rules --
+  //    the SSG inversion latch, the 4x increments, the hard cut at 0x200 --
+  //    which is why an SSG-EG patch's release is so much shorter than the same
+  //    patch without it. It shares nothing with the held trace but the axis.
+  ym2612_eg::CurveRequest release;
+  release.op = params;
+  release.pitch = pitch;
+  release.gate_ms = 0.0;
+  release.max_ms = release_max_ms(out.held_ms);
+  release.start_att = 0;
+  out.release = ym2612_eg::sample_curve(release);
+  out.release_content_ms =
+      out.release.points.empty()
           ? 0.0
-          : static_cast<double>(out.curve.points.back().ms);
-  out.truncated = out.content_ms >= gate.max_ms * 0.999;
+          : static_cast<double>(out.release.points.back().ms);
+  out.release_truncated =
+      out.release_content_ms >= release.max_ms * 0.999 &&
+      (out.release.points.empty() ||
+       out.release.points.back().out < ym2612_eg::kMaxAttenuation);
 
-  // A loop carries its own time scale: a release far longer than the loop
-  // would otherwise widen the axis until the cycles merge into a block.
-  double span_ms = out.content_ms;
-  if (loop_period_ms(probe, request.op) > 0.0 && gate.gate_ms > 0.0) {
-    span_ms = std::min(span_ms, gate.gate_ms * kSsgSpanBudget);
+  // The axis has to hold both traces -- but neither may crush the other. A
+  // loop keeps its own scale, and a release much longer than the held envelope
+  // is allowed to run off the right edge rather than flatten the part being
+  // edited.
+  const double budget =
+      loop_period_ms(probe, params) > 0.0 ? kSsgSpanBudget : kReleaseSpanBudget;
+  double content = std::max(out.held_ms, out.release_content_ms);
+  if (out.held_ms > 0.0) {
+    content = std::min(content, out.held_ms * budget);
   }
-  out.span_ms = quantize_span_ms(span_ms, previous_span_ms);
+  out.span_ms = quantize_span_ms(content, previous_span_ms);
 
-  out.attack_end_ms = first_marker_ms(out.curve, MarkerKind::AttackEnd);
-  out.decay_end_ms = first_marker_ms(out.curve, MarkerKind::DecayEnd);
-  out.key_off_ms = first_marker_ms(out.curve, MarkerKind::KeyOff);
+  out.attack_end_ms = first_marker_ms(out.held, MarkerKind::AttackEnd);
+  out.decay_end_ms = first_marker_ms(out.held, MarkerKind::DecayEnd);
 
-  const int tl_att = static_cast<int>(request.op.tl) * 8;
+  const int tl_att = static_cast<int>(params.tl) * 8;
   out.peak_out = static_cast<uint16_t>(
       std::min(tl_att, static_cast<int>(ym2612_eg::kMaxAttenuation)));
   // The level the decay aims at, in the same output units as the curve.
   out.sustain_out = static_cast<uint16_t>(
-      std::min(ym2612_eg::detail::sustain_attenuation(request.op.sl) + tl_att,
+      std::min(ym2612_eg::detail::sustain_attenuation(params.sl) + tl_att,
                static_cast<int>(ym2612_eg::kMaxAttenuation)));
 
-  // The probe saw the whole loop and the whole hold, so it is the authority on
-  // warnings; a short gate can hide a loop from the second pass.
-  out.warning = warning_line(probe, request.op);
+  out.warning = warning_line(probe, params);
   return out;
 }
 

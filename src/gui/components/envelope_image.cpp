@@ -12,15 +12,24 @@
 #include <imgui.h>
 #include <limits>
 #include <unordered_map>
+#include <vector>
 
 /**
- * The envelope graph.
+ * The envelope graph: two independent traces on one elapsed-time axis.
  *
  * Everything drawn here comes from ym2612_eg by way of gui/envelope: the
- * polyline is the chip's own envelope, the x axis is real milliseconds and the
- * y axis is real attenuation. This file decides nothing about the shape -- it
- * only turns the curve into pixels, colours the segment the user is dragging,
+ * polylines are the chip's own envelope, the x axis is real milliseconds and
+ * the y axis is real attenuation. This file decides nothing about the shapes --
+ * it only turns them into pixels, colours the segment the user is dragging,
  * and prints the one warning the policy layer picked.
+ *
+ * The held envelope (attack, decay, sustain, key never released) is a LINE;
+ * the release, which starts from full volume at x = 0, is a translucent FILLED
+ * AREA. They start from different events and are deliberately not chained:
+ * chaining them would mean inventing a key-off instant, which would cut the
+ * sustain short at an arbitrary time and start the release from a level that
+ * fiction produced. The two-shape language is the one megatoy's graph has
+ * always used.
  */
 
 namespace ui {
@@ -32,10 +41,10 @@ using ui::envelope::EnvelopeCurveCache;
 /// Attenuation at the bottom of the graph; 0 (full volume) is at the top.
 constexpr double kFullScale = static_cast<double>(ym2612_eg::kMaxAttenuation);
 
-/// The wash under the curve. The old graph filled its release triangle at
-/// 0.4; the fill now follows the whole shape, so it is lighter -- at 0.4 a
-/// full-width fill reads as a slab rather than as shading.
-constexpr float kFillAlpha = 0.25f;
+/// The wash under the release. It covers one falling edge rather than the
+/// whole shape, so it can be strong enough to read as an area on its own --
+/// this is the alpha the release triangle has always been drawn at.
+constexpr float kFillAlpha = 0.4f;
 /// The warning line is a footnote, not an alert.
 constexpr float kWarningAlpha = 0.6f;
 
@@ -76,17 +85,18 @@ ImU32 color_from_slider_state(
 }
 
 /**
- * The instants the segments change hands.
+ * The instants the held line changes hands.
  *
  * A marker is negative when the segment never happened, and then the segment
- * before it simply runs on: an AR = 0 patch is attack all the way to key-off,
- * and a DR = 0 patch decays until key-off without ever reaching sustain. Each
- * boundary is therefore pinned between the one before it and key-off.
+ * before it simply runs on: an AR = 0 patch is attack forever, and a DR = 0
+ * patch decays without ever reaching sustain. Each boundary is therefore
+ * pinned to the one before it. There is no key-off on this line, so the
+ * sustain owns everything past the decay -- including the stretch continued
+ * out to the right edge.
  */
 struct SegmentBounds {
   double attack_end = 0.0;
   double decay_end = 0.0;
-  double key_off = 0.0;
 
   int index_at(double ms) const {
     if (ms < attack_end) {
@@ -95,23 +105,18 @@ struct SegmentBounds {
     if (ms < decay_end) {
       return kDecay;
     }
-    if (ms < key_off) {
-      return kSustain;
-    }
-    return kRelease;
+    return kSustain;
   }
 };
 
 SegmentBounds segment_bounds(const EnvelopeCurve &curve) {
   constexpr double kNever = std::numeric_limits<double>::infinity();
   SegmentBounds bounds;
-  bounds.key_off = curve.key_off_ms >= 0.0 ? curve.key_off_ms : kNever;
   bounds.attack_end =
-      std::min(curve.attack_end_ms >= 0.0 ? curve.attack_end_ms : kNever,
-               bounds.key_off);
+      curve.attack_end_ms >= 0.0 ? curve.attack_end_ms : kNever;
   bounds.decay_end =
-      std::clamp(curve.decay_end_ms >= 0.0 ? curve.decay_end_ms : kNever,
-                 bounds.attack_end, bounds.key_off);
+      std::max(curve.decay_end_ms >= 0.0 ? curve.decay_end_ms : kNever,
+               bounds.attack_end);
   return bounds;
 }
 
@@ -191,91 +196,150 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
 /**
  * One more piece of curve past the last simulated point.
  *
- * A slow release can outlast the simulation budget, which would leave the line
- * stopping in mid-air. Post-attack segments are linear in attenuation, so
- * continuing the final slope to the right edge -- or to silence, whichever
- * comes first -- is as accurate as the rest of the curve.
+ * A trace can stop before the right edge: the held envelope is only simulated
+ * for as long as it is worth drawing, and a slow release can outlast its
+ * budget. Either way the line must not stop in mid-air.
+ *
+ * `flat` means the envelope came to rest -- an SR = 0 hold, a frozen attack --
+ * so it is continued horizontally, which is exactly what the chip would do.
+ * Otherwise it is continued along its final slope; post-attack segments are
+ * linear in attenuation, so that is as accurate as the rest of the curve.
  */
-bool extrapolated_tail(const EnvelopeCurve &curve, double span_ms,
-                       double &end_ms, double &end_out) {
-  const auto &points = curve.curve.points;
-  if (!curve.truncated || points.size() < 2) {
+bool extrapolated_tail(const std::vector<ym2612_eg::CurvePoint> &points,
+                       bool flat, double span_ms, double &end_ms,
+                       double &end_out) {
+  if (points.empty()) {
     return false;
   }
   const ym2612_eg::CurvePoint &last = points.back();
-  const ym2612_eg::CurvePoint &previous = points[points.size() - 2];
   if (last.ms >= span_ms) {
     return false;
   }
+  end_ms = span_ms;
+  if (flat) {
+    end_out = last.out;
+    return true;
+  }
+  if (points.size() < 2) {
+    return false;
+  }
+  const ym2612_eg::CurvePoint &previous = points[points.size() - 2];
   const double dt = static_cast<double>(last.ms) - previous.ms;
   const double slope =
       dt > 0.0 ? (static_cast<double>(last.out) - previous.out) / dt : 0.0;
-
-  end_ms = span_ms;
   if (slope > 0.0) {
     end_ms = std::min(end_ms, last.ms + (kFullScale - last.out) / slope);
+  } else if (slope < 0.0) {
+    end_ms = std::min(end_ms, last.ms + (0.0 - last.out) / slope);
   }
   end_out = std::clamp(last.out + slope * (end_ms - last.ms), 0.0, kFullScale);
   return end_ms > last.ms;
 }
 
 /**
- * The curve itself: a translucent wash under each segment, then the line on
- * top of it.
+ * Walks a polyline plus its extrapolated tail as a sequence of edges.
  *
- * The fill is one quad per polyline edge rather than a polygon per segment,
- * because a decayed-then-released shape is not convex and AddConvexPolyFilled
- * would fold it inside out. Anti-aliased fill is switched off for the run so
- * the quads meet without leaving seams between them.
+ * `edges` is one past the last real point when there is a tail; edge i runs
+ * from point i to point i + 1, or from the last point to the tail.
  */
-void draw_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
-                const PlotArea &plot, const SegmentBounds &bounds,
-                const ImU32 (&colors)[kSegmentCount]) {
-  const auto &points = curve.curve.points;
+struct EdgeWalk {
+  const std::vector<ym2612_eg::CurvePoint> *points = nullptr;
+  const PlotArea *plot = nullptr;
+  bool has_tail = false;
+  double tail_ms = 0.0;
+  double tail_out = 0.0;
+
+  size_t count() const {
+    if (points->size() < 2) {
+      return points->size() == 1 && has_tail ? 1 : 0;
+    }
+    return points->size() - 1 + (has_tail ? 1 : 0);
+  }
+
+  /// The edge's endpoints in pixels; returns the ms the edge starts at, which
+  /// is what decides which parameter owns it.
+  double at(size_t i, ImVec2 &a, ImVec2 &b) const {
+    const ym2612_eg::CurvePoint &p0 = (*points)[std::min(i, points->size() - 1)];
+    a = plot->at(p0.ms, p0.out);
+    if (i + 1 < points->size()) {
+      const ym2612_eg::CurvePoint &p1 = (*points)[i + 1];
+      b = plot->at(p1.ms, p1.out);
+    } else {
+      b = plot->at(tail_ms, tail_out);
+    }
+    return p0.ms;
+  }
+};
+
+EdgeWalk edge_walk(const std::vector<ym2612_eg::CurvePoint> &points,
+                   const PlotArea &plot, bool flat) {
+  EdgeWalk walk;
+  walk.points = &points;
+  walk.plot = &plot;
+  walk.has_tail =
+      extrapolated_tail(points, flat, plot.span_ms, walk.tail_ms, walk.tail_out);
+  return walk;
+}
+
+/**
+ * The release: a translucent area from x = 0 down to the floor.
+ *
+ * It answers "if the note were let go at full volume, how fast does it fall?",
+ * which is a property of RR (and of the SSG-EG key-off rules) alone -- so it is
+ * drawn from the left edge rather than hung off a key-off that never happened.
+ *
+ * The fill is one quad per polyline edge rather than a polygon, because an
+ * SSG-EG release is not convex and AddConvexPolyFilled would fold it inside
+ * out. Anti-aliased fill is switched off for the run so the quads meet without
+ * leaving seams between them.
+ */
+void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
+                       const PlotArea &plot, ImU32 color) {
+  const auto &points = curve.release.points;
   if (points.size() < 2) {
     return;
   }
-
-  double tail_ms = 0.0;
-  double tail_out = 0.0;
-  const bool has_tail =
-      extrapolated_tail(curve, plot.span_ms, tail_ms, tail_out);
-  const size_t edges = points.size() - 1 + (has_tail ? 1 : 0);
-
-  // Each edge as (start, end, colour); the tail is the one past the end.
-  auto edge_at = [&](size_t i, ImVec2 &a, ImVec2 &b) {
-    const ym2612_eg::CurvePoint &p0 = points[std::min(i, points.size() - 1)];
-    a = plot.at(p0.ms, p0.out);
-    if (i + 1 < points.size()) {
-      const ym2612_eg::CurvePoint &p1 = points[i + 1];
-      b = plot.at(p1.ms, p1.out);
-    } else {
-      b = plot.at(tail_ms, tail_out);
-    }
-    return colors[bounds.index_at(p0.ms)];
-  };
-
+  const EdgeWalk walk = edge_walk(points, plot, !curve.release_truncated);
+  const ImU32 fill = color_with_alpha(color, kFillAlpha);
   const ImDrawListFlags saved_flags = draw_list->Flags;
   draw_list->Flags &= ~ImDrawListFlags_AntiAliasedFill;
+  const size_t edges = walk.count();
   for (size_t i = 0; i < edges; ++i) {
     ImVec2 a;
     ImVec2 b;
-    const ImU32 color = edge_at(i, a, b);
+    walk.at(i, a, b);
     if (b.x <= a.x) {
       continue;
     }
     draw_list->AddQuadFilled(a, b, ImVec2(b.x, plot.max.y),
-                             ImVec2(a.x, plot.max.y),
-                             color_with_alpha(color, kFillAlpha));
+                             ImVec2(a.x, plot.max.y), fill);
   }
   draw_list->Flags = saved_flags;
+}
 
+/**
+ * The held envelope: a line, no fill, with the key never released.
+ *
+ * Each edge is coloured by the parameter that owns the instant it starts at,
+ * so AR, DR and SR light up their own stretch. The tail past the last
+ * simulated point belongs to whatever was happening there -- the sustain,
+ * unless the patch never got that far.
+ */
+void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
+                    const PlotArea &plot, const SegmentBounds &bounds,
+                    const ImU32 (&colors)[kSegmentCount]) {
+  const auto &points = curve.held.points;
+  if (points.empty()) {
+    return;
+  }
+  const EdgeWalk walk = edge_walk(points, plot, curve.held_parked);
   const float thickness = ui::scale::px(1.0f);
+  const size_t edges = walk.count();
   for (size_t i = 0; i < edges; ++i) {
     ImVec2 a;
     ImVec2 b;
-    const ImU32 color = edge_at(i, a, b);
-    draw_list->AddLine(a, b, color, thickness);
+    const double ms = walk.at(i, a, b);
+    draw_list->AddLine(a, b, colors[bounds.index_at(ms)], thickness);
   }
 }
 
@@ -353,7 +417,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       color_from_slider_state(state.sustain_rate),
       color_from_slider_state(state.release_rate),
   };
-  draw_curve(draw_list, curve, plot, segment_bounds(curve), colors);
+  draw_release_area(draw_list, curve, plot, colors[kRelease]);
+  draw_held_line(draw_list, curve, plot, segment_bounds(curve), colors);
   draw_level_markers(draw_list, curve, state, plot);
   draw_warning(draw_list, curve.warning, plot);
 
