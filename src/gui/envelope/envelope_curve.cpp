@@ -263,7 +263,7 @@ const char *warning_line(const CurveResult &curve, const OperatorParams &op) {
     return "AR=0: never sounds";
   }
   if (has_warning(curve, CurveWarning::SsgArBelow31)) {
-    return "AR<31: unintended SSG behavior";
+    return "AR<31: non-standard SSG-EG";
   }
   if (has_warning(curve, CurveWarning::SsgNeverLoops)) {
     return op.sr == 0 ? "never loops (SR=0)" : "never loops (DR=0)";

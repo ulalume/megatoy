@@ -345,7 +345,7 @@ void test_the_warning_line_names_the_worst_problem_only() {
   slow_attack.attack_rate = 20;
   const EnvelopeCurve slow = build_envelope_curve(slow_attack, 0.0);
   CHECK(slow.warning != nullptr);
-  CHECK(std::string(slow.warning) == "AR<31: unintended SSG behavior");
+  CHECK(std::string(slow.warning) == "AR<31: non-standard SSG-EG");
 
   CHECK(build_envelope_curve(worked_example(), 0.0).warning == nullptr);
 }
