@@ -46,6 +46,9 @@ constexpr double kWindowRefMs = 400.0;
 /// 1.1 s and a 30 s one on 3.5 s -- each still readable, and each still a
 /// visibly different width from its neighbours.
 constexpr double kWindowExponent = 0.5;
+/// The longest life the compression models. Beyond it every envelope is "far
+/// longer than the axis" and the floor decides the width instead.
+constexpr double kMaxModelledLifeMs = 6400.0;
 /// The share of the axis kept past the sustain's start, so that the sustain --
 /// and with it the slider that shapes it -- is always partly on screen however
 /// hard the lifetime above is compressed.
@@ -302,12 +305,36 @@ double held_lifetime_ms(const OperatorParams &op, ym2612_eg::NotePitch pitch) {
   return held_timeline(op, pitch).lifetime_ms();
 }
 
+namespace {
+double capped_at(double phase_ms, double cap_ms) {
+  return phase_ms < cap_ms ? phase_ms : cap_ms;
+}
+} // namespace
+
+double HeldTimeline::drawable_sustain_start_ms() const {
+  // Capped at the ceiling rather than at kMaxModelledLifeMs: this figure is
+  // what keeps a phase on the graph, so shortening it below what the axis
+  // could actually have shown would hide the very phase being edited. A phase
+  // that never ends saturates here too, which is why "no decay" and "a decay
+  // measured in minutes" both take the widest axis -- they draw the same flat
+  // line either way.
+  return capped_at(attack_ms, kHardMaxHeldMs) +
+         capped_at(decay_ms, kHardMaxHeldMs);
+}
+
+double HeldTimeline::drawable_lifetime_ms() const {
+  // The lifetime only widens the axis, so it saturates sooner: past a few
+  // seconds "how long until silence" stops telling a reader anything the shape
+  // does not, and letting it run to the ceiling buries a 300 ms decay under ten
+  // seconds of flat line.
+  return capped_at(attack_ms, kMaxModelledLifeMs) +
+         capped_at(decay_ms, kMaxModelledLifeMs) +
+         capped_at(sustain_ms, kMaxModelledLifeMs);
+}
+
 double window_for_lifetime_ms(double lifetime_ms) {
   if (!(lifetime_ms > 0.0)) {
     return kMinHeldMs;
-  }
-  if (!std::isfinite(lifetime_ms)) {
-    return kHardMaxHeldMs;
   }
   const double window =
       kWindowRefMs * std::pow(lifetime_ms / kWindowRefMs, kWindowExponent);
@@ -325,8 +352,10 @@ double window_for_timeline_ms(const HeldTimeline &timeline) {
   // sustain_start / (1 - share) is the width at which that is true. This is the
   // one guarantee the marker-driven policy did get right; what was wrong was
   // asking a probe where the sustain started.
-  const double floor_ms = timeline.sustain_start_ms() / (1.0 - kSustainShare);
-  const double compressed = window_for_lifetime_ms(timeline.lifetime_ms());
+  const double floor_ms =
+      timeline.drawable_sustain_start_ms() / (1.0 - kSustainShare);
+  const double compressed =
+      window_for_lifetime_ms(timeline.drawable_lifetime_ms());
   return std::clamp(std::max(compressed, floor_ms), kMinHeldMs,
                     kHardMaxHeldMs);
 }

@@ -104,8 +104,17 @@ struct HeldTimeline {
 
   /// Where the sustain begins: the last structural feature the envelope has,
   /// and so the last instant the axis has to reach to be worth looking at.
+  /// Infinite when a phase before it never ends.
   double sustain_start_ms() const { return attack_ms + decay_ms; }
   double lifetime_ms() const { return sustain_start_ms() + sustain_ms; }
+
+  /// The same two, with each phase saturated at the longest one an axis can
+  /// usefully hold. This is a drawing policy, not a fact about the envelope:
+  /// "never decays" and "decays over a minute" look the same on any axis, and
+  /// saturating rather than special-casing infinity keeps them next to each
+  /// other instead of a cliff apart.
+  double drawable_sustain_start_ms() const;
+  double drawable_lifetime_ms() const;
 };
 
 HeldTimeline held_timeline(const ym2612_eg::OperatorParams &op,

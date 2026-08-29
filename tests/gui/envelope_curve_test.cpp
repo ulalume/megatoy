@@ -152,11 +152,12 @@ void test_a_normal_patch_gets_a_visible_sustain() {
   CHECK(held_ms <= 4000.0);
 }
 
-/// REWRITTEN. SR = 0 used to be sized from where the probe watched the
-/// envelope park, which put it under the 2 s cap. On the chip it is a hold that
-/// never ends, so it now takes the widest axis there is -- and every SR above
-/// it takes a narrower one. That ordering is the whole point: the old policy
-/// could not tell SR = 0 from SR = 31.
+/// SR = 0 is a hold that never ends, so the envelope's life really is
+/// infinite -- but "holds forever" and "takes a minute and a half" look the
+/// same on any axis a screen can hold, so the drawing policy saturates them
+/// together rather than sending one to the ceiling and leaving the other in
+/// the seconds. What must survive is that the flat part is visible, that the
+/// decay before it keeps a readable share, and that a faster SR is narrower.
 void test_an_sr0_patch_shows_its_flat_hold() {
   ym2612::OperatorSettings op = worked_example();
   op.sustain_rate = 0; // parks at the sustain level and stays there
@@ -164,14 +165,25 @@ void test_an_sr0_patch_shows_its_flat_hold() {
 
   const CurveResult held = probe(op);
   CHECK(std::isfinite(held.park_ms));
+  // The closed form still tells the truth about the envelope ...
   CHECK(!std::isfinite(held_lifetime_ms(params, reference_pitch())));
   const double held_ms = choose_held_ms(held, params);
-  CHECK(held_ms == 10000.0);
-  // The flat part is most of the axis, which is what SR = 0 sounds like.
+  // ... while the axis it is drawn on stays a readable width.
+  CHECK(held_ms < 4000.0);
+  // The flat part is visible, and the decay before it is not squeezed away.
   CHECK(held_ms > held.park_ms * 1.2);
+  // ~19% here: the axis is a little wider than this patch alone needs, which
+  // is the price of SR = 0 sitting beside SR = 1 instead of jumping.
+  CHECK(held.park_ms / held_ms > 0.15);
 
-  // Any SR that does finish is narrower, however slowly it finishes.
+  // SR = 1 dies, but so slowly that it must land beside SR = 0, not a cliff
+  // away from it.
   op.sustain_rate = 1;
+  const double sr1 = choose_held_ms(probe(op), to_operator_params(op));
+  CHECK(near_rel(sr1, held_ms, 0.05));
+
+  // An SR that finishes within the drawable range is narrower.
+  op.sustain_rate = 15;
   CHECK(choose_held_ms(probe(op), to_operator_params(op)) < held_ms);
 }
 
@@ -388,7 +400,12 @@ void test_the_window_never_cuts_off_the_phase_being_edited() {
   modest.decay_ms = 200.0;
   modest.sustain_ms = 10.0;
   CHECK(near_rel(window_for_timeline_ms(modest), 400.0, 0.001));
-  CHECK(window_for_timeline_ms(timeline) == 10000.0);
+  // The 8.4 s attack still gets an axis that reaches past where the sustain
+  // begins, and stays inside the ceiling. Phases are saturated for drawing, so
+  // this promise only holds as far as the ceiling does -- an attack longer than
+  // that cannot be shown whatever the policy says.
+  CHECK(window_for_timeline_ms(timeline) > timeline.sustain_start_ms());
+  CHECK(window_for_timeline_ms(timeline) <= 10000.0);
 
   // The floor only ever raises: a long-lived envelope with a short attack and
   // decay is still sized by its lifetime.
@@ -397,7 +414,11 @@ void test_the_window_never_cuts_off_the_phase_being_edited() {
   long_lived.decay_ms = 20.0;
   long_lived.sustain_ms = 30000.0;
   CHECK(near_rel(window_for_timeline_ms(long_lived),
-                 window_for_lifetime_ms(long_lived.lifetime_ms()), 0.001));
+                 window_for_lifetime_ms(long_lived.drawable_lifetime_ms()),
+                 0.001));
+  // 30 s of sustain is past what an axis can hold, so it is drawn as the
+  // longest life the policy models rather than as itself.
+  CHECK(long_lived.drawable_lifetime_ms() < long_lived.lifetime_ms());
 }
 
 /// Whatever the patch, the instant the sustain begins is inside the axis --
