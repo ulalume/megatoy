@@ -221,6 +221,36 @@ void test_velocity_sensitivity_preference_round_trip(
   }
 }
 
+void test_envelope_reference_note_preference_round_trip(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "envelope-reference-note-config";
+  std::filesystem::remove_all(config);
+  std::filesystem::create_directories(config);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    auto ui = preferences.ui_preferences();
+    CHECK(ui.envelope_reference_midi_note == 60); // middle C
+    ui.envelope_reference_midi_note = 72;         // C5
+    preferences.set_ui_preferences(ui);
+  }
+
+  nlohmann::json stored;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> stored;
+  }
+  CHECK(stored.at("ui").at("envelope_reference_midi_note").get<int>() == 72);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().envelope_reference_midi_note == 72);
+  }
+}
+
 void test_chip_type_preference_round_trip(const std::filesystem::path &root) {
   NativeFileSystem fs;
   const auto config = root / "chip-type-preference-config";
@@ -1060,6 +1090,7 @@ int main() {
       migration_root);
   test_velocity_sensitivity_preference_round_trip(migration_root);
   test_chip_type_preference_round_trip(migration_root);
+  test_envelope_reference_note_preference_round_trip(migration_root);
   test_last_patch_preference_round_trip(migration_root);
   test_legacy_data_directory_migration();
   test_legacy_metadata_migration(migration_root);

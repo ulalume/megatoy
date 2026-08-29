@@ -163,10 +163,23 @@ double ladder_snap(double span_ms) {
 constexpr double kGridSteps[] = {5.0,    10.0,   25.0,   50.0,   100.0, 250.0,
                                  500.0,  1000.0, 2500.0, 5000.0, 10000.0};
 
+/// The reference note, and the only mutable state in this file. The app writes
+/// it whenever the preference changes; every curve built afterwards is drawn
+/// at it, and EnvelopeCurveCache notices because it remembers the pitch it
+/// last built at.
+int g_reference_midi_note = kDefaultReferenceMidiNote;
+
 } // namespace
 
+void set_reference_midi_note(int midi_note) {
+  g_reference_midi_note =
+      std::clamp(midi_note, kMinReferenceMidiNote, kMaxReferenceMidiNote);
+}
+
+int reference_midi_note() { return g_reference_midi_note; }
+
 ym2612_eg::NotePitch reference_pitch() {
-  return ym2612_eg::NotePitch::from_midi(kReferenceMidiNote);
+  return ym2612_eg::NotePitch::from_midi(g_reference_midi_note);
 }
 
 uint8_t packed_ssg(const ym2612::OperatorSettings &op) {

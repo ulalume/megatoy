@@ -600,6 +600,82 @@ void test_the_cache_recomputes_only_on_a_real_change() {
   CHECK(cache.rebuild_count() == 2);
 }
 
+// -------------------------------------------------------- reference note
+
+/// The note is a setting the app pushes in, and reference_pitch() stays the
+/// one place it is read from.
+void test_the_reference_note_is_a_setting() {
+  const auto middle_c = ym2612_eg::NotePitch::from_midi(60);
+  CHECK(reference_midi_note() == kDefaultReferenceMidiNote);
+  CHECK(reference_pitch().fnum == middle_c.fnum);
+  CHECK(reference_pitch().block == middle_c.block);
+
+  set_reference_midi_note(72); // C5
+  CHECK(reference_midi_note() == 72);
+  CHECK(reference_pitch().block == 5);
+  CHECK(reference_pitch().fnum == ym2612_eg::NotePitch::from_midi(72).fnum);
+
+  // The preference is a plain integer on disk, so it is clamped rather than
+  // trusted.
+  set_reference_midi_note(-1);
+  CHECK(reference_midi_note() == kMinReferenceMidiNote);
+  set_reference_midi_note(1000);
+  CHECK(reference_midi_note() == kMaxReferenceMidiNote);
+
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+}
+
+/// Key scaling is the whole reason the note is worth choosing: the same
+/// registers decay far faster high up the keyboard.
+void test_key_scaling_follows_the_reference_note() {
+  ym2612::OperatorSettings op = worked_example();
+  op.key_scale = 3;
+
+  set_reference_midi_note(36); // C2
+  const double low = build_envelope_curve(op, 0.0).decay_end_ms;
+  set_reference_midi_note(96); // C7
+  const double high = build_envelope_curve(op, 0.0).decay_end_ms;
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+
+  CHECK(low > 0.0);
+  CHECK(high > 0.0);
+  CHECK(high < low * 0.5);
+
+  // ... while at KS = 0 -- what most patches use -- five octaves move the
+  // decay by less than a factor of two. That is the "barely depends on pitch"
+  // the single reference note rests on: the rate still picks up keycode >> 3,
+  // so it is not nothing, but it is not the eightfold swing above either.
+  ym2612::OperatorSettings flat = worked_example();
+  flat.key_scale = 0;
+  set_reference_midi_note(36);
+  const double flat_low = build_envelope_curve(flat, 0.0).decay_end_ms;
+  set_reference_midi_note(96);
+  const double flat_high = build_envelope_curve(flat, 0.0).decay_end_ms;
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+  CHECK(flat_high < flat_low);
+  CHECK(flat_high > flat_low * 0.5);
+}
+
+/// The cache header promises this: the note is part of what a cached curve
+/// was built at, so moving it invalidates every operator's curve.
+void test_the_cache_rebuilds_when_the_reference_note_changes() {
+  EnvelopeCurveCache cache;
+  ym2612::OperatorSettings op = worked_example();
+  op.key_scale = 3;
+
+  cache.get(op);
+  cache.get(op);
+  CHECK(cache.rebuild_count() == 1);
+
+  set_reference_midi_note(84); // C6
+  cache.get(op);
+  cache.get(op);
+  CHECK(cache.rebuild_count() == 2);
+
+  set_reference_midi_note(kDefaultReferenceMidiNote);
+  cache.get(op);
+  CHECK(cache.rebuild_count() == 3);
+}
 
 /// An audio-rate loop must keep its own scale: the release is far longer than
 /// the loop, and letting it set the axis packs the cycles into a solid block.
@@ -732,6 +808,10 @@ int main() {
 
   test_the_only_warning_is_the_non_standard_ssg_attack();
   test_the_cache_recomputes_only_on_a_real_change();
+
+  test_the_reference_note_is_a_setting();
+  test_key_scaling_follows_the_reference_note();
+  test_the_cache_rebuilds_when_the_reference_note_changes();
 
   std::cout << "envelope_curve_test passed\n";
   return 0;

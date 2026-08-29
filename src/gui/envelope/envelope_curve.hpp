@@ -38,12 +38,23 @@ namespace ui::envelope {
  *
  * The graph shows a shape, not a performance: with KS = 0 -- what most patches
  * use -- the curve barely depends on pitch, and a graph that followed the
- * keyboard would rescale itself under the user's hands while they edit.
+ * keyboard would rescale itself under the user's hands while they edit. So it
+ * is a setting the user changes deliberately, not something the playing moves.
  *
- * This is the ONLY place the note is decided. Wiring it to a preference (or to
- * the last played note) later means changing reference_pitch(), nothing else.
+ * This is still the ONLY place the note is decided: everything downstream asks
+ * reference_pitch(). The app pushes the preference in through
+ * set_reference_midi_note(), which is what keeps ImGui and the preference
+ * headers out of this file -- the policy is unit-tested without either.
  */
-inline constexpr int kReferenceMidiNote = 60; // middle C
+inline constexpr int kDefaultReferenceMidiNote = 60; // middle C
+/// C0 to B7: megatoy's own note range, one F-num block each. Above B7 the
+/// chip has no block left and every note folds onto the same pitch.
+inline constexpr int kMinReferenceMidiNote = 12;  // C0
+inline constexpr int kMaxReferenceMidiNote = 107; // B7
+
+/// Clamped into [kMinReferenceMidiNote, kMaxReferenceMidiNote].
+void set_reference_midi_note(int midi_note);
+int reference_midi_note();
 ym2612_eg::NotePitch reference_pitch();
 
 /**

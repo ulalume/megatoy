@@ -191,6 +191,10 @@ public:
           data.ui_preferences.multi_operator_edit_absolute =
               ui["multi_operator_edit_absolute"].get<bool>();
         }
+        if (ui.contains("envelope_reference_midi_note")) {
+          data.ui_preferences.envelope_reference_midi_note =
+              ui["envelope_reference_midi_note"].get<int>();
+        }
         if (ui.contains("midi_keyboard_scale")) {
           data.ui_preferences.midi_keyboard_scale =
               ui["midi_keyboard_scale"].get<int>();
@@ -279,6 +283,8 @@ public:
           data.ui_preferences.steal_oldest_note_when_full;
       ui["multi_operator_edit_absolute"] =
           data.ui_preferences.multi_operator_edit_absolute;
+      ui["envelope_reference_midi_note"] =
+          data.ui_preferences.envelope_reference_midi_note;
       ui["patch_sort_column"] = data.ui_preferences.patch_sort_column;
       ui["patch_sort_order"] = data.ui_preferences.patch_sort_order;
       ui["midi_keyboard_scale"] = data.ui_preferences.midi_keyboard_scale;
