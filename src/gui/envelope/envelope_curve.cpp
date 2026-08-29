@@ -25,11 +25,6 @@ constexpr double kHardMaxHeldMs = 10000.0;
 /// period was already losing them: the axis stopped growing while the period
 /// kept going, so lowering DR drew fewer and fewer cycles.
 constexpr double kSsgMaxHeldMs = kHardMaxHeldMs;
-/// However slow the loop, this much of one period stays on the axis.
-constexpr double kLoopVisiblePeriods = 1.2;
-/// ... but not without end: past this the loop is a slow gesture rather than
-/// an envelope, and the axis stops following it.
-constexpr double kLoopHardMaxMs = 30000.0;
 /// The scale the axis is pulled towards: an envelope that lives this long is
 /// drawn at exactly this width. It is about the length of an ordinary attack
 /// and decay, which is what the graph is usually being read for.

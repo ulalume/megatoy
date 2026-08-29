@@ -52,6 +52,12 @@ inline constexpr int kDefaultReferenceMidiNote = 60; // middle C
 inline constexpr int kMinReferenceMidiNote = 12;  // C0
 inline constexpr int kMaxReferenceMidiNote = 107; // B7
 
+/// However slow an SSG loop is, this much of one period stays on the axis --
+/// up to kLoopHardMaxMs, past which the loop is a slow gesture rather than an
+/// envelope and the axis stops following it.
+inline constexpr double kLoopVisiblePeriods = 1.2;
+inline constexpr double kLoopHardMaxMs = 20000.0;
+
 /// Clamped into [kMinReferenceMidiNote, kMaxReferenceMidiNote].
 void set_reference_midi_note(int midi_note);
 int reference_midi_note();

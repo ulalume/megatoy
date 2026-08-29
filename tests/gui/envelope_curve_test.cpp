@@ -1384,11 +1384,19 @@ void test_a_slow_loop_still_shows_a_period() {
     }
     std::cout << "DR " << dr << ": period " << period << " ms, span "
               << c.span_ms << " ms, " << folds << " folds\n";
-    // Two folds is one whole period of an alternating mode.
-    CHECK(folds >= 2);
+    // Two folds is one whole period of an alternating mode. A loop slower than
+    // the ceiling cannot have one -- there is no axis long enough -- so what is
+    // promised there is the widest axis there is, and the ramp on it.
+    if (period * kLoopVisiblePeriods <= kLoopHardMaxMs) {
+      CHECK(folds >= 2);
+    } else {
+      CHECK(near_rel(c.span_ms, kLoopHardMaxMs, 0.001));
+      CHECK(folds >= 1);
+    }
     // ... and the axis is wide enough to hold one, which is the promise the
     // fold count above is only the evidence for.
-    CHECK(c.span_ms >= period);
+    // The axis holds a whole period, unless no axis could.
+    CHECK(c.span_ms >= std::min(period, kLoopHardMaxMs));
     // A slower loop never gets a narrower axis.
     CHECK(c.span_ms >= previous * 0.999);
     previous = c.span_ms;
