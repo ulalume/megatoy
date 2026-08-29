@@ -791,9 +791,11 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
   // right-hand edge still fades out when the envelope beneath it dies.
   cursor.silent_for_ms =
       std::isfinite(silence_ms) ? std::max(0.0, on_trace_ms - silence_ms) : 0.0;
-  // Still moving when it reaches the right-hand end of the axis: it stops
-  // there rather than being drawn off the graph.
-  cursor.ms = std::clamp(on_trace_ms, 0.0, std::max(axis_span_ms, 0.0));
+  // Still moving when it reaches the right-hand end of the axis: it carries on
+  // past it and stops being drawn. Parking it on the edge would say the
+  // envelope had come to rest there, which it has not.
+  (void)axis_span_ms;
+  cursor.ms = std::max(on_trace_ms, 0.0);
   return cursor;
 }
 

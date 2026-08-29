@@ -1013,15 +1013,16 @@ void test_the_cursor_is_where_the_elapsed_time_says() {
   CHECK(cursor_for_voice(curve, -5.0, -1.0, curve.span_ms).ms == 0.0);
 }
 
-void test_a_cursor_still_moving_stops_at_the_right_edge() {
+void test_a_cursor_still_moving_leaves_the_graph() {
   ym2612::OperatorSettings op = worked_example();
   // SR > 0: the held envelope keeps crawling, so nothing but the axis stops
-  // the cursor.
+  // the cursor -- and the axis does not stop it, it just stops drawing it.
+  // A cursor parked on the edge would say the envelope had come to rest there.
   const EnvelopeCurve curve = build_envelope_curve(op);
   CHECK(!curve.held_parked || curve.held.park_ms > curve.span_ms);
   const VoiceCursor cursor =
       cursor_for_voice(curve, curve.span_ms * 4.0, -1.0, curve.span_ms);
-  CHECK(std::fabs(cursor.ms - curve.span_ms) < 1e-9);
+  CHECK(cursor.ms > curve.span_ms);
 }
 
 void test_a_parked_cursor_stays_where_the_envelope_stopped() {
@@ -1912,7 +1913,7 @@ int main() {
   test_the_cache_recomputes_only_on_a_real_change();
 
   test_the_cursor_is_where_the_elapsed_time_says();
-  test_a_cursor_still_moving_stops_at_the_right_edge();
+  test_a_cursor_still_moving_leaves_the_graph();
   test_a_parked_cursor_stays_where_the_envelope_stopped();
   test_the_release_entry_point_matches_a_real_release();
   test_the_cursor_carries_on_into_the_release();

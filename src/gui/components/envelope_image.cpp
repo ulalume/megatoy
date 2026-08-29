@@ -562,6 +562,12 @@ void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
  */
 void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
                        ImU32 color) {
+  // A voice still moving when it reaches the end of the axis leaves the graph
+  // rather than parking on its edge: a cursor sitting on the border reads as
+  // "the envelope stopped here", which is the one thing it does not mean.
+  if (ms < 0.0 || ms > plot.span_ms) {
+    return;
+  }
   const float x = plot.x_of(ms);
   draw_list->AddLine(ImVec2(x, plot.min.y), ImVec2(x, plot.max.y), color,
                      ui::scale::px(1.0f));
@@ -595,10 +601,13 @@ void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
   // The release keeps its shape and is slid along to where the key came up.
   const double shift = origin_ms - from_ms;
   const float thickness = ui::scale::px(1.0f);
+
   bool have_previous = false;
-  ImVec2 previous;
+  double previous_ms = 0.0;
+  double previous_out = 0.0;
   for (std::size_t i = 0; i < points.size(); ++i) {
-    const double ms = points[i].ms;
+    double ms = static_cast<double>(points[i].ms);
+    double out = points[i].out;
     if (ms <= from_ms) {
       continue;
     }
@@ -606,18 +615,38 @@ void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
       // Start exactly where the key came up, between the two points that
       // straddle it, so the line begins on the trace rather than at whichever
       // vertex happens to follow.
-      double out = points[i].out;
+      double start_out = out;
       if (i > 0) {
         const double span = ms - points[i - 1].ms;
         const double u = span > 0.0 ? (from_ms - points[i - 1].ms) / span : 0.0;
-        out = points[i - 1].out + (points[i].out - points[i - 1].out) * u;
+        start_out = points[i - 1].out + (out - points[i - 1].out) * u;
       }
-      previous = ImVec2(plot.x_of(origin_ms), plot.y_of(out));
+      previous_ms = from_ms;
+      previous_out = start_out;
       have_previous = true;
     }
-    const ImVec2 next(plot.x_of(ms + shift), plot.y_of(points[i].out));
-    draw_list->AddLine(previous, next, color, thickness);
-    previous = next;
+
+    // Cut the segment at the end of the axis rather than letting x_of()'s
+    // clamp fold it onto the last column -- that draws a vertical smear down
+    // to the floor at the right-hand edge.
+    const double a_ms = previous_ms + shift;
+    double b_ms = ms + shift;
+    if (a_ms >= plot.span_ms) {
+      return;
+    }
+    if (b_ms > plot.span_ms) {
+      const double dt = b_ms - a_ms;
+      const double t = dt > 0.0 ? (plot.span_ms - a_ms) / dt : 0.0;
+      out = previous_out + (out - previous_out) * t;
+      b_ms = plot.span_ms;
+    }
+    draw_list->AddLine(plot.at(a_ms, previous_out), plot.at(b_ms, out), color,
+                       thickness);
+    if (b_ms >= plot.span_ms) {
+      return;
+    }
+    previous_ms = ms;
+    previous_out = points[i].out;
   }
 }
 

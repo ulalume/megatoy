@@ -331,7 +331,9 @@ double release_entry_ms(const EnvelopeCurve &curve, double att);
 
 /// Where a sounding voice is on its own envelope.
 struct VoiceCursor {
-  /// x on the graph's time axis, in ms.
+  /// x on the graph's time axis, in ms. Past the end of the axis for a voice
+  /// that has outrun it -- such a cursor is not drawn rather than being pinned
+  /// to the edge.
   double ms = 0.0;
   /// The voice is past key-off and riding the release trace.
   bool released = false;
