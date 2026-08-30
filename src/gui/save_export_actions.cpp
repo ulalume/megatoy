@@ -90,12 +90,7 @@ void render_save_export_popups(patches::PatchSession &session,
   std::optional<std::string> selected_extension;
   if (ImGui::BeginPopup("Save As...")) {
     for (const auto &format : session.save_formats()) {
-      std::string label =
-          format.label.empty() ? format.extension : format.label;
-      if (!format.extension.empty()) {
-        label += " (" + format.extension + ")";
-      }
-      if (ImGui::MenuItem(label.c_str())) {
+      if (ImGui::MenuItem(format.display_name().c_str())) {
         selected_extension = format.extension;
       }
     }

@@ -32,6 +32,15 @@ struct SaveFormatInfo {
   std::string extension;
   std::string label;
   bool is_text = false;
+
+  /**
+   * How this format is named wherever the UI offers a choice of formats:
+   * extension first, e.g. ".gin (megatoy)".
+   *
+   * The only place that spelling is built. Every format picker calls this so
+   * they cannot drift apart.
+   */
+  std::string display_name() const;
 };
 
 class PatchRegistry {
