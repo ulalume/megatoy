@@ -50,15 +50,6 @@ constexpr double kReleaseSpanBudget = 4.0;
 /// genuinely run for seconds.
 constexpr double kMaxReleaseMs = 10000.0;
 
-double first_marker_ms(const CurveResult &curve, MarkerKind kind) {
-  for (const ym2612_eg::Marker &m : curve.markers) {
-    if (m.kind == kind) {
-      return m.ms;
-    }
-  }
-  return -1.0;
-}
-
 /// The Silence marker as a time, or infinity when the trace never gets there.
 double silence_or_never(const CurveResult &curve) {
   const double ms = first_marker_ms(curve, MarkerKind::Silence);
@@ -110,6 +101,15 @@ void set_reference_midi_note(int midi_note) {
 }
 
 int reference_midi_note() { return g_reference_midi_note; }
+
+double first_marker_ms(const CurveResult &curve, MarkerKind kind) {
+  for (const ym2612_eg::Marker &m : curve.markers) {
+    if (m.kind == kind) {
+      return m.ms;
+    }
+  }
+  return -1.0;
+}
 
 ym2612_eg::NotePitch reference_pitch() {
   return ym2612_eg::NotePitch::from_midi(g_reference_midi_note);
@@ -424,8 +424,8 @@ double curve_att_at_ms(const ym2612_eg::CurveResult &curve, double ms) {
          (static_cast<double>(points[hi].att) - points[lo].att) * u;
 }
 
-double release_entry_ms(const EnvelopeCurve &curve, double att) {
-  const auto &points = curve.release.points;
+double release_entry_ms(const CurveResult &release, double att) {
+  const auto &points = release.points;
   if (points.empty()) {
     return 0.0;
   }
@@ -511,7 +511,7 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
     const double att = curve_att_at_ms(curve.held, at_key_off_ms);
     // The release from that level is not a new curve: it is the drawn one,
     // entered at the point where it is already at that level.
-    cursor.release_from_ms = release_entry_ms(curve, att);
+    cursor.release_from_ms = release_entry_ms(curve.release, att);
     cursor.release_origin_ms = at_key_off_ms;
     // The held part stops growing the moment the key comes up, however long
     // the release runs on after it.
