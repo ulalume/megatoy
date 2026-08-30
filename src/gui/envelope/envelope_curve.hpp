@@ -37,6 +37,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <vector>
 
 namespace ui::envelope {
 
@@ -206,6 +207,13 @@ struct EnvelopeCurve {
   // happened.
   double attack_end_ms = -1.0;
   double decay_end_ms = -1.0;
+
+  /// Every instant the held trace folds, in order -- an SSG-EG loop's teeth.
+  /// Lifted out of the markers because a live cursor needs the first and last
+  /// fold inside the axis on every voice of every operator of every frame, and
+  /// a loop dense enough to saturate the library's marker ceiling carries four
+  /// thousand of them.
+  std::vector<float> ssg_folds;
 
   uint16_t peak_out = 0;    ///< output attenuation at full volume (TL * 8)
   uint16_t sustain_out = 0; ///< output attenuation the decay aims at (SL + TL)
