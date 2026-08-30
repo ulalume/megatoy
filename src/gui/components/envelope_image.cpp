@@ -335,133 +335,123 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
 }
 
 /**
- * One more piece of curve past the last simulated point.
+ * One trace turned into the polyline that is actually drawn.
  *
- * A trace can stop before the right edge: the held envelope stops the moment
- * it comes to rest, and a slow release can outlast its budget. Either way the
- * line must not stop in mid-air.
+ * Every drawer needs the same three things of a trace, and each of them used
+ * to spell them out again:
  *
- * `flat` means the envelope came to rest -- an SR = 0 hold, a frozen attack --
- * so it is continued horizontally, which is exactly what the chip would do.
- * Otherwise it is continued along its final slope; post-attack segments are
- * linear in attenuation, so that is as accurate as the rest of the curve. A
- * moving held envelope is simulated all the way to the axis edge, so in
- * practice that second case is the release's alone.
+ *   - enter it at `from_ms`, because the release a voice is taking joins the
+ *     drawn release partway along, at the level the key came up on;
+ *   - stop at `limit_ms`, because a trace regularly outruns what may be drawn
+ *     -- the release runs off the right edge by design, a voice draws only the
+ *     road it has travelled, and while the axis animates inwards the held
+ *     trace is longer than the width being drawn;
+ *   - cut the edge that straddles either end there. That one is not tidiness:
+ *     x_of() clamps, so an uncut edge folds every point past the limit onto
+ *     the last column and draws a vertical smear down it.
+ *
+ * `shift_ms` slides the whole thing along the axis, which is what lets a
+ * voice's release keep the drawn release's shape while starting from where the
+ * key actually came up.
+ *
+ * The path is continued past the trace's last point along `slope` -- the
+ * curve's own, measured when it was built -- so a line never stops in mid-air.
+ * Zero continues it flat, which is what an envelope at rest does.
  */
-bool extrapolated_tail(const std::vector<ym2612_eg::CurvePoint> &points,
-                       bool flat, double span_ms, double &end_ms,
-                       double &end_out) {
-  if (points.empty()) {
-    return false;
-  }
-  const ym2612_eg::CurvePoint &last = points.back();
-  if (last.ms >= span_ms) {
-    return false;
-  }
-  end_ms = span_ms;
-  if (flat) {
-    end_out = last.out;
-    return true;
-  }
-  if (points.size() < 2) {
-    return false;
-  }
-  // sample_curve() closes every polyline with a point at the end of the
-  // simulated span, which can repeat the level already there -- a final edge
-  // that is both very short and perfectly flat. Extrapolating a whole graph
-  // width from that would draw a flat line across an envelope that is plainly
-  // still moving, so measure the slope from the last point at a different
-  // level instead.
-  size_t base = points.size() - 1;
-  while (base > 0 && points[base - 1].out == last.out) {
-    --base;
-  }
-  if (base == 0) {
-    end_out = last.out; // the whole trace sits at one level
-    return true;
-  }
-  const ym2612_eg::CurvePoint &previous = points[base - 1];
-  const double dt = static_cast<double>(last.ms) - previous.ms;
-  const double slope =
-      dt > 0.0 ? (static_cast<double>(last.out) - previous.out) / dt : 0.0;
-  if (slope > 0.0) {
-    end_ms = std::min(end_ms, last.ms + (kFullScale - last.out) / slope);
-  } else if (slope < 0.0) {
-    end_ms = std::min(end_ms, last.ms + (0.0 - last.out) / slope);
-  }
-  end_out = std::clamp(last.out + slope * (end_ms - last.ms), 0.0, kFullScale);
-  return end_ms > last.ms;
-}
+struct TracePath {
+  /// The polyline in pixels.
+  std::vector<ImVec2> pixels;
+  /// Where on the trace each vertex sits, so a drawer can ask which parameter
+  /// owns the edge that starts there. Same length as `pixels`.
+  std::vector<double> at_ms;
 
-/**
- * Walks a polyline plus its extrapolated tail as a sequence of edges.
- *
- * `edges` is one past the last real point when there is a tail; edge i runs
- * from point i to point i + 1, or from the last point to the tail.
- */
-struct EdgeWalk {
-  const std::vector<ym2612_eg::CurvePoint> *points = nullptr;
-  const PlotArea *plot = nullptr;
-  bool has_tail = false;
-  double tail_ms = 0.0;
-  double tail_out = 0.0;
-
-  size_t count() const {
-    if (points->size() < 2) {
-      return points->size() == 1 && has_tail ? 1 : 0;
-    }
-    return points->size() - 1 + (has_tail ? 1 : 0);
-  }
-
-  /**
-   * The edge's endpoints in pixels, clipped to the right-hand end of the axis.
-   * `edge_ms` comes back as the ms the edge starts at, which is what decides
-   * which parameter owns it; the return value is false when the edge is
-   * entirely past the edge of the axis and should not be drawn at all.
-   *
-   * The clip matters because a trace regularly outruns the axis: the release is
-   * allowed to run off the right edge by design, and while the axis is animating
-   * inwards the held trace -- simulated for the target width -- is longer than
-   * the width being drawn. Without the clip, x_of()'s clamp folds every one of
-   * those points onto the last column and draws a vertical smear there.
-   */
-  bool at(size_t i, ImVec2 &a, ImVec2 &b, double &edge_ms) const {
-    const ym2612_eg::CurvePoint &p0 = (*points)[std::min(i, points->size() - 1)];
-    double ms0 = p0.ms;
-    double out0 = p0.out;
-    double ms1 = tail_ms;
-    double out1 = tail_out;
-    if (i + 1 < points->size()) {
-      const ym2612_eg::CurvePoint &p1 = (*points)[i + 1];
-      ms1 = p1.ms;
-      out1 = p1.out;
-    }
-    edge_ms = ms0;
-    if (ms0 >= plot->span_ms) {
-      return false;
-    }
-    if (ms1 > plot->span_ms) {
-      // The edge straddles the end of the axis: cut it there rather than
-      // letting it fold back onto the last column.
-      const double dt = ms1 - ms0;
-      const double t = dt > 0.0 ? (plot->span_ms - ms0) / dt : 0.0;
-      out1 = out0 + (out1 - out0) * t;
-      ms1 = plot->span_ms;
-    }
-    a = plot->at(ms0, out0);
-    b = plot->at(ms1, out1);
-    return true;
-  }
+  size_t edges() const { return pixels.size() < 2 ? 0 : pixels.size() - 1; }
 };
 
-EdgeWalk edge_walk(const std::vector<ym2612_eg::CurvePoint> &points,
-                   const PlotArea &plot, bool flat) {
-  EdgeWalk walk;
-  walk.points = &points;
-  walk.plot = &plot;
-  walk.has_tail =
-      extrapolated_tail(points, flat, plot.span_ms, walk.tail_ms, walk.tail_out);
-  return walk;
+void build_trace_path(TracePath &path,
+                      const std::vector<ym2612_eg::CurvePoint> &points,
+                      const PlotArea &plot, double slope, double from_ms,
+                      double limit_ms, double shift_ms) {
+  path.pixels.clear();
+  path.at_ms.clear();
+  if (points.empty()) {
+    return;
+  }
+  // Everything below is in the trace's own time; the shift is applied once, on
+  // the way to pixels.
+  const double limit = std::min(limit_ms, plot.span_ms) - shift_ms;
+  if (!(limit > from_ms)) {
+    return;
+  }
+
+  // The tail: one more piece of curve past the last simulated point, cut short
+  // if the slope would carry it off the top or the bottom of the plot.
+  const ym2612_eg::CurvePoint &last = points.back();
+  double tail_ms = limit;
+  double tail_out = last.out;
+  bool has_tail = last.ms < limit;
+  if (has_tail && slope > 0.0) {
+    tail_ms = std::min(tail_ms, last.ms + (kFullScale - last.out) / slope);
+  } else if (has_tail && slope < 0.0) {
+    tail_ms = std::min(tail_ms, last.ms + (0.0 - last.out) / slope);
+  }
+  if (has_tail) {
+    tail_out =
+        std::clamp(last.out + slope * (tail_ms - last.ms), 0.0, kFullScale);
+    has_tail = tail_ms > last.ms;
+  }
+
+  const size_t edges = points.size() - 1 + (has_tail ? 1 : 0);
+  path.pixels.reserve(edges + 1);
+  path.at_ms.reserve(edges + 1);
+
+  for (size_t i = 0; i < edges; ++i) {
+    double ms0 = points[std::min(i, points.size() - 1)].ms;
+    double out0 = points[std::min(i, points.size() - 1)].out;
+    double ms1 = tail_ms;
+    double out1 = tail_out;
+    if (i + 1 < points.size()) {
+      ms1 = points[i + 1].ms;
+      out1 = points[i + 1].out;
+    }
+    if (ms1 <= from_ms) {
+      continue; // still before the point the trace is entered at
+    }
+    if (ms0 >= limit) {
+      break; // past the end of what may be drawn
+    }
+    if (ms0 < from_ms) {
+      // Start exactly where the trace is entered, between the two points that
+      // straddle it, rather than at whichever vertex happens to follow.
+      const double dt = ms1 - ms0;
+      const double t = dt > 0.0 ? (from_ms - ms0) / dt : 0.0;
+      out0 = out0 + (out1 - out0) * t;
+      ms0 = from_ms;
+    }
+    if (ms1 > limit) {
+      const double dt = ms1 - ms0;
+      const double t = dt > 0.0 ? (limit - ms0) / dt : 0.0;
+      out1 = out0 + (out1 - out0) * t;
+      ms1 = limit;
+    }
+    if (path.pixels.empty()) {
+      path.pixels.push_back(plot.at(ms0 + shift_ms, out0));
+      path.at_ms.push_back(ms0);
+    }
+    path.pixels.push_back(plot.at(ms1 + shift_ms, out1));
+    path.at_ms.push_back(ms1);
+    if (ms1 >= limit) {
+      break;
+    }
+  }
+}
+
+/// The scratch the paths are built into. One graph is drawn at a time, so a
+/// single buffer serves all four drawers and the allocation happens once for
+/// the life of the process rather than once per curve per frame.
+TracePath &trace_scratch() {
+  static TracePath path;
+  return path;
 }
 
 /**
@@ -482,18 +472,16 @@ void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
   if (points.size() < 2) {
     return;
   }
-  const EdgeWalk walk = edge_walk(points, plot, !curve.release_truncated);
+  TracePath &path = trace_scratch();
+  build_trace_path(path, points, plot, curve.release_tail_slope, 0.0,
+                   plot.span_ms, 0.0);
   const ImU32 fill = color_with_alpha(color, kFillAlpha);
   const ImDrawListFlags saved_flags = draw_list->Flags;
   draw_list->Flags &= ~ImDrawListFlags_AntiAliasedFill;
-  const size_t edges = walk.count();
+  const size_t edges = path.edges();
   for (size_t i = 0; i < edges; ++i) {
-    ImVec2 a;
-    ImVec2 b;
-    double edge_ms = 0.0;
-    if (!walk.at(i, a, b, edge_ms)) {
-      break; // past the right-hand end of the axis
-    }
+    const ImVec2 &a = path.pixels[i];
+    const ImVec2 &b = path.pixels[i + 1];
     if (b.x <= a.x) {
       continue;
     }
@@ -518,17 +506,14 @@ void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
   if (points.empty()) {
     return;
   }
-  const EdgeWalk walk = edge_walk(points, plot, curve.held_parked);
+  TracePath &path = trace_scratch();
+  build_trace_path(path, points, plot, curve.held_tail_slope, 0.0, plot.span_ms,
+                   0.0);
   const float thickness = ui::scale::px(1.0f);
-  const size_t edges = walk.count();
+  const size_t edges = path.edges();
   for (size_t i = 0; i < edges; ++i) {
-    ImVec2 a;
-    ImVec2 b;
-    double ms = 0.0;
-    if (!walk.at(i, a, b, ms)) {
-      break; // past the right-hand end of the axis
-    }
-    draw_list->AddLine(a, b, colors[bounds.index_at(ms)], thickness);
+    draw_list->AddLine(path.pixels[i], path.pixels[i + 1],
+                       colors[bounds.index_at(path.at_ms[i])], thickness);
   }
 }
 
@@ -584,33 +569,15 @@ void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
 void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
                       const PlotArea &plot, double to_ms, ImU32 color) {
   const std::vector<ym2612_eg::CurvePoint> &points = curve.held.points;
-  const double limit = std::min(to_ms, plot.span_ms);
-  if (!(limit > 0.0) || points.size() < 2) {
+  if (points.size() < 2) {
     return;
   }
+  TracePath &path = trace_scratch();
+  build_trace_path(path, points, plot, curve.held_tail_slope, 0.0, to_ms, 0.0);
   const float thickness = ui::scale::px(1.0f);
-  for (std::size_t i = 0; i + 1 < points.size(); ++i) {
-    double ms0 = points[i].ms;
-    if (ms0 >= limit) {
-      return;
-    }
-    double ms1 = points[i + 1].ms;
-    double out1 = points[i + 1].out;
-    if (ms1 > limit) {
-      const double dt = ms1 - ms0;
-      const double t = dt > 0.0 ? (limit - ms0) / dt : 0.0;
-      out1 = points[i].out + (out1 - points[i].out) * t;
-      ms1 = limit;
-    }
-    draw_list->AddLine(plot.at(ms0, points[i].out), plot.at(ms1, out1), color,
-                       thickness);
-  }
-  // A parked voice sits past the end of its own trace: carry the level it
-  // stopped at out to where it has got to.
-  const ym2612_eg::CurvePoint &last = points.back();
-  if (limit > last.ms) {
-    draw_list->AddLine(plot.at(last.ms, last.out), plot.at(limit, last.out),
-                       color, thickness);
+  const size_t edges = path.edges();
+  for (size_t i = 0; i < edges; ++i) {
+    draw_list->AddLine(path.pixels[i], path.pixels[i + 1], color, thickness);
   }
 }
 
@@ -625,56 +592,14 @@ void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
   if (from_ms < 0.0 || origin_ms < 0.0 || points.size() < 2) {
     return;
   }
+  TracePath &path = trace_scratch();
   // The release keeps its shape and is slid along to where the key came up.
-  const double shift = origin_ms - from_ms;
-  const double limit = std::min(to_ms, plot.span_ms);
+  build_trace_path(path, points, plot, curve.release_tail_slope, from_ms, to_ms,
+                   origin_ms - from_ms);
   const float thickness = ui::scale::px(1.0f);
-
-  bool have_previous = false;
-  double previous_ms = 0.0;
-  double previous_out = 0.0;
-  for (std::size_t i = 0; i < points.size(); ++i) {
-    double ms = static_cast<double>(points[i].ms);
-    double out = points[i].out;
-    if (ms <= from_ms) {
-      continue;
-    }
-    if (!have_previous) {
-      // Start exactly where the key came up, between the two points that
-      // straddle it, so the line begins on the trace rather than at whichever
-      // vertex happens to follow.
-      double start_out = out;
-      if (i > 0) {
-        const double span = ms - points[i - 1].ms;
-        const double u = span > 0.0 ? (from_ms - points[i - 1].ms) / span : 0.0;
-        start_out = points[i - 1].out + (out - points[i - 1].out) * u;
-      }
-      previous_ms = from_ms;
-      previous_out = start_out;
-      have_previous = true;
-    }
-
-    // Cut the segment at the end of the axis rather than letting x_of()'s
-    // clamp fold it onto the last column -- that draws a vertical smear down
-    // to the floor at the right-hand edge.
-    const double a_ms = previous_ms + shift;
-    double b_ms = ms + shift;
-    if (a_ms >= limit) {
-      return;
-    }
-    if (b_ms > limit) {
-      const double dt = b_ms - a_ms;
-      const double t = dt > 0.0 ? (limit - a_ms) / dt : 0.0;
-      out = previous_out + (out - previous_out) * t;
-      b_ms = limit;
-    }
-    draw_list->AddLine(plot.at(a_ms, previous_out), plot.at(b_ms, out), color,
-                       thickness);
-    if (b_ms >= limit) {
-      return;
-    }
-    previous_ms = ms;
-    previous_out = points[i].out;
+  const size_t edges = path.edges();
+  for (size_t i = 0; i < edges; ++i) {
+    draw_list->AddLine(path.pixels[i], path.pixels[i + 1], color, thickness);
   }
 }
 

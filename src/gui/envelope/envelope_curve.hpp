@@ -181,14 +181,19 @@ struct EnvelopeCurve {
 
   /// The held envelope came to rest -- an SR = 0 hold, a frozen attack, a
   /// sustain that reached silence -- so simulating it further would only
-  /// repeat one level, and the trace is continued to the right edge flat.
-  /// Everything else is simulated across the whole axis and needs no
-  /// continuation at all; if one is ever needed anyway it follows the final
-  /// slope, which is exact: every post-attack segment is linear in
-  /// attenuation.
+  /// repeat one level.
   bool held_parked = false;
   /// The release was still falling when its budget ran out.
   bool release_truncated = false;
+
+  /// The slope, in attenuation units per ms, a trace that stops before the
+  /// right-hand edge is continued along -- zero when it came to rest, which
+  /// continues it flat. A slope is exact rather than a guess: every
+  /// post-attack segment is linear in attenuation. It is a property of the
+  /// curve, so it is measured once here rather than by scanning back from the
+  /// last vertex every frame.
+  double held_tail_slope = 0.0;
+  double release_tail_slope = 0.0;
 
   /// The first instant each trace is at or below the hardware mute floor and
   /// stays there -- the library's own Silence marker, kept here so a live
