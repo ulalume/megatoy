@@ -394,6 +394,13 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   out.attack_end_ms = first_marker_ms(out.held, MarkerKind::AttackEnd);
   out.decay_end_ms = first_marker_ms(out.held, MarkerKind::DecayEnd);
 
+  // The markers come back sorted by time, so the folds do too.
+  for (const ym2612_eg::Marker &m : out.held.markers) {
+    if (m.kind == MarkerKind::SsgFold) {
+      out.ssg_folds.push_back(m.ms);
+    }
+  }
+
   // The library only raises Silence once the trace has come to rest, which is
   // exactly the question a fading cursor asks: is this voice finished, or just
   // quiet on its way somewhere?
@@ -487,23 +494,24 @@ double release_entry_ms(const EnvelopeCurve &curve, double att) {
 /// phase: everything before it is the attack the loop only performs once.
 double wrapped_into_loop_ms(const EnvelopeCurve &curve, double elapsed_ms,
                             double axis_span_ms) {
-  if (!(curve.held.loop_hz > 0.0) || !(axis_span_ms > 0.0)) {
+  if (!(curve.held.loop_hz > 0.0) || !(axis_span_ms > 0.0) ||
+      curve.ssg_folds.empty()) {
     return elapsed_ms;
   }
-  double first_fold = -1.0;
-  double last_fold = -1.0;
-  for (const ym2612_eg::Marker &m : curve.held.markers) {
-    if (m.kind != MarkerKind::SsgFold || m.ms > axis_span_ms) {
-      continue;
-    }
-    if (first_fold < 0.0) {
-      first_fold = m.ms;
-    }
-    last_fold = m.ms;
+  // The folds are in order, so the last one on the axis is a search rather
+  // than a sweep of every marker the curve carries.
+  const auto past_edge =
+      std::upper_bound(curve.ssg_folds.begin(), curve.ssg_folds.end(),
+                       axis_span_ms,
+                       [](double edge, float fold) { return edge < fold; });
+  if (past_edge == curve.ssg_folds.begin()) {
+    return elapsed_ms; // not even the first fold is on the axis
   }
+  const double first_fold = curve.ssg_folds.front();
+  const double last_fold = *(past_edge - 1);
   // Two folds bound at least one whole period; one bounds none.
   const double window = last_fold - first_fold;
-  if (first_fold < 0.0 || !(window > 0.0) || elapsed_ms <= last_fold) {
+  if (!(window > 0.0) || elapsed_ms <= last_fold) {
     return elapsed_ms;
   }
   return first_fold + std::fmod(elapsed_ms - first_fold, window);
