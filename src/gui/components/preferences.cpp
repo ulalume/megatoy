@@ -1,10 +1,12 @@
 #include "preferences.hpp"
+#include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
+#include "ym2612/note.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -465,6 +467,28 @@ void render_patches_tab(PreferencesContext &context) {
       context.sync_workspace();
     }
   }
+
+  // After the folders rather than before them: Sources is what the tab is
+  // named for, and pushing the list down for one slider would bury it.
+  ImGui::SeparatorText("Editor");
+
+  auto &ui_prefs = context.ui_prefs;
+  int reference_note = std::clamp(ui_prefs.envelope_reference_midi_note,
+                                  ui::envelope::kMinReferenceMidiNote,
+                                  ui::envelope::kMaxReferenceMidiNote);
+  // A slider over MIDI numbers showing the note it lands on, the same way the
+  // keyboard's octave slider shows the range it covers.
+  const std::string note_name =
+      ym2612::Note::from_midi_note(static_cast<uint8_t>(reference_note)).name();
+  if (ImGui::SliderInt("Envelope reference note", &reference_note,
+                       ui::envelope::kMinReferenceMidiNote,
+                       ui::envelope::kMaxReferenceMidiNote,
+                       note_name.c_str())) {
+    ui_prefs.envelope_reference_midi_note = reference_note;
+  }
+  ImGui::TextWrapped(
+      "The note the operator envelope graphs are drawn at. Only key scaling "
+      "makes an envelope depend on pitch.");
 }
 
 void render_sound_tab(PreferencesContext &context) {

@@ -90,7 +90,7 @@ bool PatchSession::is_modified() const {
 }
 void PatchSession::mark_as_clean() { original_patch_ = current_patch_; }
 
-void PatchSession::initialize_patch_defaults() {
+PatchSession::DefaultPatch PatchSession::default_patch_source() const {
   const auto &paths = directories_.paths();
   const auto init_patch_path = paths.builtin_presets_root / "init.dmp";
   auto &vfs = directories_.file_system();
@@ -98,28 +98,26 @@ void PatchSession::initialize_patch_defaults() {
   if (!paths.builtin_presets_root.empty() && vfs.exists(init_patch_path)) {
     auto load_result = formats::load_patch_from_file(init_patch_path);
     if (load_result.status == formats::PatchLoadStatus::Success) {
-      set_current_patch_path(init_patch_path, RememberPatchPath::No);
-      current_patch_ = std::move(load_result.patches[0]);
-      set_file_identity(init_patch_path);
-      mark_as_clean();
-      return;
+      return {std::move(load_result.patches[0]), init_patch_path};
     }
   }
-  current_patch_.name.clear();
-  current_patch_.global = {
+
+  DefaultPatch fallback;
+  fallback.patch.name.clear();
+  fallback.patch.global = {
       .dac_enable = false,
       .lfo_enable = false,
       .lfo_frequency = 0,
   };
 
-  current_patch_.channel = {
+  fallback.patch.channel = {
       .left_speaker = true,
       .right_speaker = true,
       .amplitude_modulation_sensitivity = 0,
       .frequency_modulation_sensitivity = 0,
   };
 
-  current_patch_.instrument = {
+  fallback.patch.instrument = {
       .feedback = 7,
       .algorithm = 3,
       .operators =
@@ -130,7 +128,23 @@ void PatchSession::initialize_patch_defaults() {
               {31, 0, 0, 5, 0, 12, 0, 1, 4, 0, false, false},
           },
   };
-  set_current_patch_path({}, RememberPatchPath::No);
+  return fallback;
+}
+
+ym2612::Patch PatchSession::default_patch() const {
+  return default_patch_source().patch;
+}
+
+void PatchSession::initialize_patch_defaults() {
+  auto starting_point = default_patch_source();
+  current_patch_ = std::move(starting_point.patch);
+  if (starting_point.source.empty()) {
+    set_current_patch_path({}, RememberPatchPath::No);
+    mark_as_clean();
+    return;
+  }
+  set_current_patch_path(starting_point.source, RememberPatchPath::No);
+  set_file_identity(starting_point.source);
   mark_as_clean();
 }
 
@@ -390,6 +404,49 @@ PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
   return SaveResult::success(selected);
 }
 
+bool PatchSession::can_create_patch_in(
+    const std::filesystem::path &folder) const {
+  const auto *owner = preferences_.workspace().owner_of(folder);
+  // writable is only ever set on a folder that is also available.
+  return owner != nullptr && owner->writable;
+}
+
+SaveResult PatchSession::create_patch_in(const std::filesystem::path &folder,
+                                         const std::string &stem,
+                                         std::string_view extension) {
+  if (!can_create_patch_in(folder)) {
+    return SaveResult::error("Cannot write into \"" +
+                             folder.filename().string() + "\".");
+  }
+  if (const auto problem = new_patch_name_error(stem, extension, folder);
+      !problem.empty()) {
+    return SaveResult::error(problem);
+  }
+
+  const auto target = append_extension_if_missing(folder / stem, extension);
+  auto patch = default_patch();
+  // The filename is the patch's name, the same rule Save As follows.
+  patch.name = target.stem().string();
+  if (!patches::write_patch(patch, target)) {
+    return SaveResult::error("Failed to write " + target.string());
+  }
+
+  repository_->refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::request_storage_persist();
+#endif
+
+  // Selecting it is the browser's own path, so a container format lands on
+  // the instrument inside it just as a click would. If the refreshed tree
+  // does not have it, the file still exists -- open it directly rather than
+  // leave the editor on the previous patch.
+  const auto relative = repository_->to_relative_path(target);
+  if (relative.is_absolute() || !restore_patch(relative)) {
+    set_current_patch(patch, target);
+  }
+  return SaveResult::success(target);
+}
+
 std::optional<SaveFormatInfo>
 PatchSession::find_save_format(const std::string &extension) const {
   auto formats = formats::PatchRegistry::instance().save_formats();
@@ -439,6 +496,10 @@ std::array<bool, 6> PatchSession::active_channels() const {
 
 const std::vector<ym2612::Note> PatchSession::active_notes() const {
   return audio_.notes().published_notes();
+}
+
+VoiceActivityFrame PatchSession::voice_activity() const {
+  return audio_.voice_activity();
 }
 
 PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {

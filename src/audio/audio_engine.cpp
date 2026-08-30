@@ -39,6 +39,8 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
   mix_buffer_.reserve(kReservedMixFrames * 2);
   scope_buffer_.clear();
   midi_release_recovery_pending_.store(false, std::memory_order_relaxed);
+  rendered_samples_.store(0, std::memory_order_release);
+  command_sample_ = 0;
   dc_x_[0] = dc_x_[1] = 0.0f;
   dc_y_[0] = dc_y_[1] = 0.0f;
   bend_semitones_ = 0.0f;
@@ -75,10 +77,18 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   }
 
   // Notes land here rather than in the UI frame loop, so their timing follows
-  // the audio buffer instead of the render rate.
+  // the audio buffer instead of the render rate. Every command drained below
+  // writes the chip before a single frame of this block is rendered, so they
+  // all take effect at the position the block starts at.
+  const uint64_t block_start =
+      rendered_samples_.load(std::memory_order_relaxed);
+  command_sample_ = block_start;
   drain_commands();
 
   device_.render(frames, mix_buffer_.data());
+  // Published after the block, so a reader can never see a clock that is
+  // ahead of the audio it has heard.
+  rendered_samples_.store(block_start + frames, std::memory_order_release);
 
   // The YM2612's DAC is discontinuous around zero and ymfm reproduces that
   // faithfully, so even an idle chip emits a constant offset (about 500 LSB
@@ -99,6 +109,14 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   }
 
   return frames * frame_size_;
+}
+
+VoiceActivityFrame AudioEngine::voice_activity() const {
+  VoiceActivityFrame frame;
+  frame.voices = allocator_.published_voices();
+  frame.now_samples = rendered_samples();
+  frame.sample_rate = sample_rate_;
+  return frame;
 }
 
 void AudioEngine::remove_dc(float *interleaved, uint32_t frames) {
@@ -256,7 +274,8 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
     const bool steal = steal_oldest_.load(std::memory_order_relaxed);
     const uint8_t velocity = audio::performance::effective_velocity(
         use_velocity_.load(std::memory_order_relaxed), command.velocity);
-    auto claim = allocator_.note_on(command.note, velocity, steal);
+    auto claim =
+        allocator_.note_on(command.note, velocity, steal, command_sample_);
     if (!claim) {
       break;
     }
@@ -286,11 +305,11 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
   }
 
   case Type::NoteOff:
-    allocator_.note_off(command.note, device_);
+    allocator_.note_off(command.note, device_, command_sample_);
     break;
 
   case Type::AllNotesOff:
-    allocator_.release_all(device_);
+    allocator_.release_all(device_, command_sample_);
     break;
 
   case Type::PitchBend:

@@ -46,4 +46,16 @@ inline std::string sanitize_filename(const std::string &input) {
 std::filesystem::path append_extension_if_missing(std::filesystem::path path,
                                                   std::string_view extension);
 
+/**
+ * Why `stem` cannot name a new patch file with `extension` inside `folder`,
+ * or an empty string when it can.
+ *
+ * The rules the rename prompt already applies -- a name is needed, and one
+ * the filesystem will take -- plus the collision the chosen extension
+ * decides: the same stem is free in one format and taken in another.
+ */
+std::string new_patch_name_error(const std::string &stem,
+                                 std::string_view extension,
+                                 const std::filesystem::path &folder);
+
 } // namespace patches

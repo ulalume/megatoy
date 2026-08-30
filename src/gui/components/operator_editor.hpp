@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_state.hpp"
+#include "gui/components/envelope_image.hpp"
 #include "gui/ui_scale.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/types.hpp"
@@ -17,7 +18,6 @@ inline ImVec2 vslider_size() {
 inline float hslider_width() {
   return vslider_width() * 6 + ImGui::GetStyle().ItemSpacing.x * 5;
 }
-inline ImVec2 image_size() { return ImVec2(hslider_width(), vslider_height()); }
 
 struct PatchEditorContext;
 
@@ -31,5 +31,6 @@ struct PatchEditorContext;
  */
 void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
-                            bool space_for_feedback);
+                            bool space_for_feedback,
+                            const EnvelopeVoices &voices);
 } // namespace ui

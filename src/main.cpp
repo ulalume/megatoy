@@ -6,6 +6,7 @@
 #include "audio/audio_command.hpp"
 #include "core/status.hpp"
 #include "drop_actions.hpp"
+#include "gui/envelope/envelope_curve.hpp"
 #include "gui/ui_renderer.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
@@ -91,6 +92,12 @@ bool run_frame(RuntimeContext &runtime) {
 
   services.gui_manager.begin_frame();
   services.history.handle_shortcuts(*runtime.app_context);
+  // The envelope graphs are drawn at this note. Pushed in before the frame
+  // rather than compared against the saved preferences after it, because the
+  // frame that changes the setting is the last one an idle app draws: read
+  // afterwards, the graph would keep the old note until something else moved.
+  ui::envelope::set_reference_midi_note(
+      app_state.ui_state().prefs.envelope_reference_midi_note);
   ui::render_all(*runtime.app_context);
   const auto &saved_prefs = services.preference_manager.ui_preferences();
   const auto &current_prefs = app_state.ui_state().prefs;

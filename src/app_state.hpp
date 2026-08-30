@@ -1,5 +1,6 @@
 #pragma once
 
+#include "formats/patch_registry.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/save_export_state.hpp"
 #include "input_state.hpp"
@@ -141,6 +142,45 @@ struct UIState {
       validator = {};
     }
   } text_prompt_state;
+
+  /**
+   * The "New Patch" prompt: a name and the format to write it in.
+   *
+   * Its own state rather than TextPromptState's, whose single control is the
+   * text field. The formats are captured when the prompt is requested, from
+   * the one list of writable formats the registry keeps.
+   */
+  struct NewPatchPromptState {
+    bool requested = false;
+    std::filesystem::path folder;
+    std::string name;
+    std::string extension;
+    std::vector<formats::SaveFormatInfo> formats;
+    std::function<void(const std::string &name, const std::string &extension)>
+        on_confirm;
+
+    void request(std::filesystem::path target_folder,
+                 std::vector<formats::SaveFormatInfo> save_formats,
+                 std::function<void(const std::string &, const std::string &)>
+                     confirm_action) {
+      requested = true;
+      folder = std::move(target_folder);
+      name.clear();
+      formats = std::move(save_formats);
+      extension = formats.empty() ? std::string{} : formats.front().extension;
+      on_confirm = std::move(confirm_action);
+    }
+
+    void clear() {
+      requested = false;
+      folder.clear();
+      name.clear();
+      extension.clear();
+      formats.clear();
+      on_confirm = {};
+    }
+  } new_patch_prompt_state;
+
   ui::SaveExportState save_export_state;
 };
 

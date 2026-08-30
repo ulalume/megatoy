@@ -39,6 +39,12 @@ struct UIPreferences {
    * and the SSG envelope type are always absolute.
    */
   bool multi_operator_edit_absolute = false;
+  /**
+   * The MIDI note every envelope graph is drawn at. The graph shows a shape
+   * rather than a performance, so the note is a setting: 60 is middle C, and
+   * ui::envelope clamps it to C0..B7.
+   */
+  int envelope_reference_midi_note = 60;
   std::string patch_search_query;
 
   // Patch selector view settings
@@ -79,6 +85,8 @@ struct UIPreferences {
            lhs.steal_oldest_note_when_full == rhs.steal_oldest_note_when_full &&
            lhs.multi_operator_edit_absolute ==
                rhs.multi_operator_edit_absolute &&
+           lhs.envelope_reference_midi_note ==
+               rhs.envelope_reference_midi_note &&
            lhs.use_pitch_bend == rhs.use_pitch_bend &&
            lhs.use_mod_wheel == rhs.use_mod_wheel &&
            lhs.patch_sort_column == rhs.patch_sort_column &&

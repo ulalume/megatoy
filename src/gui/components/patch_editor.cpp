@@ -224,9 +224,13 @@ void render_operator_section(PatchEditorContext &context,
   // reports what it needed and the tallest wins the next frame.
   context.operator_edit.pending_frame_height = 0.0f;
   context.operator_edit.click_claimed = false;
+  // Read once, so all four graphs draw the same instant -- and so the audio
+  // thread's publication is sampled once a frame rather than four times.
+  const EnvelopeVoices voices =
+      collect_envelope_voices(context.session.voice_activity());
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_states[slot],
-                           space_for_feedbacks[slot]);
+                           space_for_feedbacks[slot], voices);
 
     ImGui::Spacing();
     ImGui::NextColumn();
