@@ -4,28 +4,21 @@
  * One operator's registers turned into two drawable, millisecond-accurate
  * traces.
  *
- * The shapes come from ym2612_eg, a sample-accurate simulator of the chip's
- * envelope generator, and so do the numbers behind them: it answers how long
- * each phase takes and how fast an SSG loop runs, in closed form, without
- * anything here having to know what an increment table is. Everything in this
- * file is the policy around those answers -- which note to draw at, how much
- * of the held envelope is worth showing, how wide the time axis should be,
- * where a sounding voice's cursor sits, and which single warning is worth a
- * line of text.
+ * The shapes come from ym2612_eg, and so do the numbers behind them: how long
+ * each phase takes and how fast an SSG loop runs, in closed form. This file is
+ * the policy around those answers -- which note to draw at, how wide the time
+ * axis should be, where a sounding voice's cursor sits, and which single
+ * warning is worth a line of text.
  *
- * The graph draws two *independent* traces on one elapsed-time axis, because
- * chaining them would mean inventing a key-off instant, and a made-up key-off
- * makes both halves wrong at once: it cuts the sustain short at an arbitrary
- * time and then starts the release from whatever level that fiction produced.
- * So:
+ * The two traces are independent, on one elapsed-time axis. Chaining them
+ * would mean inventing a key-off instant, which cuts the sustain short at an
+ * arbitrary time and then starts the release from whatever level that fiction
+ * produced. So the held envelope is simulated with the key never released,
+ * which is the only way SR reads truthfully (SR = 0 holds flat, SR > 0
+ * crawls), and the release is simulated on its own from full volume.
  *
- *   - the held envelope is simulated with the key never released, which is the
- *     only way SR reads truthfully (SR = 0 holds flat, SR > 0 crawls);
- *   - the release is simulated on its own, from full volume, and answers "if
- *     the note were let go now, how fast does it fall?".
- *
- * Deliberately free of ImGui so the policy can be unit-tested on its own
- * (tests/gui/envelope_curve_test.cpp). The drawing lives in
+ * Free of ImGui so the policy can be unit-tested on its own
+ * (tests/gui/envelope_curve_test.cpp); the drawing lives in
  * gui/components/envelope_image.cpp.
  */
 
@@ -42,17 +35,13 @@
 namespace ui::envelope {
 
 /**
- * The single reference note every envelope graph is drawn at.
+ * The single reference note every envelope graph is drawn at, and the only
+ * place the note is decided: everything downstream asks reference_pitch(),
+ * and the app pushes the preference in through set_reference_midi_note().
  *
- * The graph shows a shape, not a performance: with KS = 0 -- what most patches
- * use -- the curve barely depends on pitch, and a graph that followed the
- * keyboard would rescale itself under the user's hands while they edit. So it
- * is a setting the user changes deliberately, not something the playing moves.
- *
- * This is still the ONLY place the note is decided: everything downstream asks
- * reference_pitch(). The app pushes the preference in through
- * set_reference_midi_note(), which is what keeps ImGui and the preference
- * headers out of this file -- the policy is unit-tested without either.
+ * A setting the user changes deliberately rather than something the playing
+ * moves: the graph shows a shape, not a performance, and one that followed the
+ * keyboard would rescale itself under the user's hands while they edit.
  */
 inline constexpr int kDefaultReferenceMidiNote = 60; // middle C
 /// C0 to B7: megatoy's own note range, one F-num block each. Above B7 the
@@ -61,25 +50,17 @@ inline constexpr int kMinReferenceMidiNote = 12;  // C0
 inline constexpr int kMaxReferenceMidiNote = 107; // B7
 
 /**
- * How wide the time axis may get, in ms. The one home for the question, so
- * that nothing states it a second time with a second value.
+ * How wide the time axis may get, in ms. The one home for the question.
  *
- * kMinSpanMs is the narrowest axis worth drawing whatever the content says: a
- * loop fast enough to want less is a band of cycles either way. kMinHeldMs is
- * the narrowest held window; anything shorter reads as an accident rather
- * than a sustain.
+ * kMinSpanMs is the narrowest axis worth drawing whatever the content says; a
+ * held window narrower than kMinHeldMs reads as an accident rather than a
+ * sustain. kMaxHeldMs is the widest an ordinary envelope ever gets -- only the
+ * ones that never finish at all reach it, since the compression needs a
+ * lifetime of four minutes to arrive there on its own.
  *
- * kMaxHeldMs is the widest an ordinary envelope ever gets. Only the ones that
- * never finish at all -- SR = 0, DR = 0, AR = 0 -- reach it; the compression
- * in window_for_lifetime_ms() needs a lifetime of four minutes to arrive
- * there on its own.
- *
- * A loop is the one thing allowed past that, because a graph of a loop that
- * cannot fit a single period of it shows nothing about the loop, and for
- * those patches the loop is the whole content. However slow it is,
- * kLoopVisiblePeriods of one period stays on the axis -- up to kLoopMaxAxisMs,
- * past which the loop is a slow gesture rather than an envelope and the axis
- * stops following it.
+ * A loop is the one thing allowed past that ceiling, because a graph of a loop
+ * that cannot fit one period shows nothing about the loop. kLoopVisiblePeriods
+ * of a period stays on the axis however slow it is, up to kLoopMaxAxisMs.
  */
 inline constexpr double kMinSpanMs = 25.0;
 inline constexpr double kMinHeldMs = 50.0;
@@ -102,72 +83,71 @@ uint8_t packed_ssg(const ym2612::OperatorSettings &op);
 ym2612_eg::OperatorParams
 to_operator_params(const ym2612::OperatorSettings &op);
 
+/// Whether two register sets draw the same curve. Every field of the envelope,
+/// so the caches rebuild on a change of any of them and on nothing else --
+/// multiple, detune and the rest do not shape an envelope.
 bool same_envelope(const ym2612_eg::OperatorParams &lhs,
                    const ym2612_eg::OperatorParams &rhs);
 
 /**
- * The phase durations of ym2612_eg::phase_durations(), saturated at the
- * longest phase an axis can usefully hold.
+ * ym2612_eg::phase_durations(), saturated at the longest phase an axis can
+ * usefully hold. A drawing policy, not a fact about the envelope: "never
+ * decays" and "decays over a minute" look the same on any axis, and saturating
+ * keeps them beside each other instead of a cliff apart.
  *
- * This is a drawing policy, not a fact about the envelope: "never decays" and
- * "decays over a minute" look the same on any axis, and saturating rather
- * than special-casing infinity keeps them next to each other instead of a
- * cliff apart.
- *
- * The two saturate at different lengths on purpose. The sustain's start is
- * what keeps a phase ON the graph, so shortening it below what the axis could
- * actually have shown would hide the very phase being edited; the lifetime
- * only ever widens the axis, so it saturates sooner -- past a few seconds
- * "how long until silence" stops telling a reader anything the shape does
- * not, and letting it run to the ceiling buries a 300 ms decay under ten
- * seconds of flat line.
+ * They saturate at different lengths. The sustain's start is what keeps a
+ * phase on the graph, so it saturates at the ceiling itself; the lifetime only
+ * ever widens the axis, so it saturates at kMaxModelledLifeMs, past which
+ * "how long until silence" would only bury a 300 ms decay under ten seconds of
+ * flat line.
  */
 double drawable_sustain_start_ms(const ym2612_eg::PhaseDurations &phases);
 double drawable_lifetime_ms(const ym2612_eg::PhaseDurations &phases);
 
 /**
- * How wide a given lifetime alone would ask the axis to be: a single smooth,
- * monotone, sub-linear map. This is the term that keeps a 30-second envelope
- * from swallowing the graph -- but on its own it can compress an envelope so
- * hard that a phase the user is editing falls off the right edge, which is what
- * window_for_timeline_ms() is for.
+ * How wide a given lifetime alone would ask the axis to be: one smooth,
+ * monotone, sub-linear map. The term that keeps a 30-second envelope from
+ * swallowing the graph -- and, on its own, the one that can compress a phase
+ * off the right edge, which window_for_timeline_ms() is there to stop.
  */
 double window_for_lifetime_ms(double lifetime_ms);
 
 /**
- * The axis width the held envelope deserves: the compressed lifetime above, but
- * never narrower than the sustain's own start plus a readable slice of the
- * sustain. Clamped to the floor and ceiling in envelope_curve.cpp.
+ * The axis width the held envelope deserves: the compressed lifetime above,
+ * but never narrower than the sustain's own start plus a readable slice of the
+ * sustain, and never wider than kMaxHeldMs.
  *
  * The floor is why the compression can be as aggressive as it is. Compressing
- * the lifetime alone will happily draw a 6.4 s axis for a patch whose attack
- * takes 8.4 s, and then the decay and the sustain are both off the right edge
- * and the sliders that shape them look dead. Every phase the envelope has must
- * be at least partly on screen, so the axis reaches past the sustain's start
- * whatever the lifetime says; the lifetime only ever widens it further.
+ * the lifetime alone hands a patch whose attack takes 8.4 s a 6.4 s axis, and
+ * then the decay and the sustain are both off the right edge and the sliders
+ * that shape them look dead.
+ *
+ * It is a floor up to the ceiling and no further. kSustainShare of the axis is
+ * kept for the sustain, so the floor is sustain_start / (1 - share), which
+ * passes kMaxHeldMs once the attack and decay together run past about 7.5 s.
+ * Beyond that the ceiling wins and the sustain really is off the right edge:
+ * an envelope whose first two phases outlast the widest axis there is cannot
+ * be shown whole.
  */
 double window_for_timeline_ms(const ym2612_eg::PhaseDurations &phases);
 
 /**
- * How much of the held envelope is worth *seeing*, in ms. An SSG loop is sized
- * from ym2612_eg::ssg_loop_period_ms() -- that is what the graph is about.
- * Everything else is ym2612_eg::phase_durations() put through
+ * How much of the held envelope is worth seeing, in ms: an SSG loop from
+ * ssg_loop_period_ms(), everything else from phase_durations() through
  * window_for_timeline_ms().
  *
- * This is a scale, not a length: it is what the axis width is chosen from, and
- * the envelope itself is then drawn across the whole of that axis. Nothing
- * here is a key-off.
+ * A scale, not a length. The axis width is chosen from it and the envelope is
+ * then drawn across the whole of that axis; nothing here is a key-off.
  */
 double choose_held_ms(const ym2612_eg::OperatorParams &op);
 double choose_held_ms(const ym2612_eg::OperatorParams &op,
                       ym2612_eg::NotePitch pitch);
 
 /**
- * How long the release is simulated for: a generous ceiling of its own, so
- * nothing about the held envelope can change how far the release is measured.
- * Sampling stops the moment the envelope is at rest, so the ceiling only costs
- * anything for the release rates that genuinely run for seconds -- and RR = 0,
- * which never reaches silence at all.
+ * How long the release is simulated for: a ceiling of its own, so nothing
+ * about the held envelope can change how far the release is measured. Sampling
+ * stops the moment the envelope is at rest, so it only costs anything for the
+ * rates that genuinely run for seconds -- and RR = 0, which never rests.
  */
 double release_max_ms();
 
@@ -175,15 +155,11 @@ double release_max_ms();
 double grid_step_ms(double span_ms);
 
 /**
- * The one warning worth showing, or nullptr. Only one line is ever drawn, and
- * only one patch defect earns it: an SSG-EG mode driven by an attack rate the
- * hardware convention says should be 31. Everything else the simulator flags
- * is already visible in the shape of the curve.
- *
- * Two bits and a comparison, read straight off the registers -- which is all
- * the simulator's own SsgArBelow31 ever was. It used to be read back out of a
- * CurveResult, and that was the last reason a run existed whose points nothing
- * ever drew.
+ * The one warning worth showing, or nullptr. Only one patch defect earns a
+ * line: an SSG-EG mode driven by an attack rate the hardware convention says
+ * should be 31. Everything else the simulator flags is already visible in the
+ * shape of the curve. Two bits and a comparison off the registers, which is
+ * all the simulator's own SsgArBelow31 is.
  */
 const char *warning_line(const ym2612_eg::OperatorParams &op);
 
@@ -198,8 +174,9 @@ struct EnvelopeCurve {
   /// drawing animates towards, not necessarily the width drawn this frame.
   double span_ms = 0.0;
   double held_ms = 0.0; ///< the window the axis width was chosen from
-  double held_content_ms = 0.0;    ///< where the held polyline actually ends
-  double release_content_ms = 0.0; ///< where the release polyline actually ends
+  /// Where the release polyline actually ends, which is where it reached
+  /// silence unless its budget ran out first; the axis is sized from it.
+  double release_content_ms = 0.0;
 
   /// The held envelope came to rest -- an SR = 0 hold, a frozen attack, a
   /// sustain that reached silence -- so simulating it further would only
@@ -218,7 +195,7 @@ struct EnvelopeCurve {
   double release_tail_slope = 0.0;
 
   /// The first instant each trace is at or below the hardware mute floor and
-  /// stays there -- the library's own Silence marker, kept here so a live
+  /// stays there -- the library's own Silence marker, lifted out so a live
   /// cursor does not rescan the markers every frame. Infinite when the trace
   /// never gets there.
   double held_silence_ms = std::numeric_limits<double>::infinity();
@@ -249,17 +226,12 @@ struct EnvelopeCurve {
  * trace, simulated across the whole of it so a loop keeps looping to the right
  * edge.
  *
- * There used to be a third, a held-forever probe, and nothing it produced was
- * ever drawn: the axis was sized from what it saw and the warning read off
- * what it flagged. Both come from the registers now -- the library's
- * phase_durations() for the phases, its ssg_loop_period_ms() for a loop,
- * warning_line() for the one line -- so the probe had nothing left to answer.
+ * Nothing else is simulated. How long each phase takes, how fast a loop runs
+ * and which warning the patch earns are all closed forms over the registers:
+ * phase_durations(), ssg_loop_period_ms(), warning_line().
  *
- * A pure function of the operator and the reference note. It used to take the
- * span drawn last frame, because the axis was quantised onto a ladder with
- * hysteresis and so depended on where it had been. The ladder is gone -- the
- * axis is animated at draw time now, which does the same job better -- so there
- * is nothing left to remember.
+ * A pure function of the operator and the reference note. The axis moving
+ * smoothly is the drawing's job, not this one's.
  */
 EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op);
 
@@ -267,10 +239,10 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op);
  * The same curve at an arbitrary note, for a voice that is actually sounding.
  *
  * `min_span_ms` is the axis the curve will be DRAWN on -- the reference
- * curve's, not its own. The held trace is simulated across at least that much
- * so an overlay never has to be extrapolated onto the part of the axis its own
- * window policy did not reach; for a loop, extrapolating along a final slope
- * would draw something that is not a sawtooth at all.
+ * curve's, not its own -- and the held trace is simulated across at least that
+ * much. Otherwise an overlay would have to be extrapolated onto the part of
+ * the axis its own window policy did not reach, and a sawtooth continued along
+ * the slope of its last ramp is not a sawtooth.
  */
 EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
                                    ym2612_eg::NotePitch pitch,
@@ -327,27 +299,19 @@ struct VoiceCursor {
  *
  * Two rules decide everything:
  *
- *   - the cursor advances only while the envelope is CHANGING. An SR = 0 patch
- *     comes to rest at its sustain level -- the curve's own park -- and the
- *     cursor stays there until the key is released rather than sliding along a
- *     flat line. Running off the right-hand end of the axis stops it too.
+ *   - the cursor advances only while the envelope is CHANGING, so an SR = 0
+ *     patch's cursor waits at the park rather than sliding along a flat line;
  *   - on key-off it moves to the release trace, at the point where that trace
- *     is at the level the voice actually had, and advances from there.
+ *     is already at the level the voice actually had, and advances from there.
  */
 VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
                              double since_key_off_ms, double axis_span_ms);
 
 /**
- * The curves of the notes being played, keyed on what actually decides an
- * envelope's shape.
- *
- * An operator's envelope depends on the note ONLY through
- * `ksv = keycode >> (3 - KS)`, so the key is (registers, ksv) and not the
- * note: with KS = 0 the whole keyboard has four distinct entries, and a chord
- * inside one octave shares a single one. Better still, a voice whose ksv
- * matches the reference note's needs no curve of its own at all -- get()
- * hands back the reference curve, and a note-on in the common case costs
- * nothing.
+ * The curves of the notes being played, keyed on (registers, ksv) rather than
+ * on the note: an operator's envelope depends on the note ONLY through
+ * `ksv = keycode >> (3 - KS)`, so with KS = 0 the whole keyboard has four
+ * distinct entries and a chord inside one octave shares a single one.
  *
  * At most six entries, because at most six voices can sound; the least
  * recently asked-for is evicted. Entries are held by value in a fixed array,
@@ -363,23 +327,22 @@ public:
    * Returns `reference` itself when the two share a key-scale value, and the
    * cached entry when there is one -- neither costs a simulation, which is
    * why a note-on is usually free. The whole cache is dropped when the
-   * registers or the reference note change, which is exactly when every entry
-   * would have been stale anyway.
+   * registers or the reference note change, because every entry would have
+   * been stale anyway.
    *
    * When a curve does have to be built, one is taken out of `build_budget`;
    * with none left this returns nullptr and the caller leaves that voice for
-   * the next frame. Simulating the slowest envelope the chip can produce --
-   * a ten-second axis at the chip's own sample rate -- takes about twelve
-   * milliseconds, so an arpeggio across four operators could otherwise drop
-   * several frames at once on the very patches whose notes last longest. A
-   * voice that waits a frame or two for its curve is invisible; a stutter is
-   * not.
+   * the next frame. Simulating the slowest envelope the chip can produce takes
+   * about twelve milliseconds, so an arpeggio across four operators would
+   * otherwise drop several frames at once. A voice that waits a frame or two
+   * for its curve is invisible; a stutter is not.
    */
   const EnvelopeCurve *get(const ym2612::OperatorSettings &op,
                            ym2612_eg::NotePitch pitch,
                            const EnvelopeCurve &reference, int &build_budget);
 
-  /// Curves actually simulated, for tests.
+  /// Curves actually simulated, and entries held. Only the tests read these,
+  /// and only they can: whether a cache caches is not visible in its answers.
   int rebuild_count() const { return rebuilds_; }
   std::size_t size() const { return used_; }
 
@@ -409,7 +372,7 @@ class EnvelopeCurveCache {
 public:
   const EnvelopeCurve &get(const ym2612::OperatorSettings &op);
 
-  /// Rebuild count, for tests.
+  /// Curves actually simulated. Only the tests read it; see VoiceCurveCache.
   int rebuild_count() const { return rebuilds_; }
 
 private:
