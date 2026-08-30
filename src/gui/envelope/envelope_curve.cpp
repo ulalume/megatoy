@@ -15,33 +15,12 @@ using ym2612_eg::OperatorParams;
 
 // --------------------------------------------------------- held-window policy
 
-/// The scale the axis is pulled towards: an envelope that lives this long is
-/// drawn at exactly this width. It is about the length of an ordinary attack
-/// and decay, which is what the graph is usually being read for.
-constexpr double kWindowRefMs = 400.0;
-/// ... and how far it is allowed to travel from there. Sub-linear, so a
-/// lifetime ten times longer widens the axis about three times rather than
-/// ten: 0.5 makes the window exactly the geometric mean of the lifetime and
-/// kWindowRefMs. That lands a 300 ms envelope on a 346 ms axis, a 3 s one on
-/// 1.1 s and a 30 s one on 3.5 s -- each still readable, and each still a
-/// visibly different width from its neighbours.
-constexpr double kWindowExponent = 0.65;
-/// The share of the axis kept past the sustain's start, so that the sustain --
-/// and with it the slider that shapes it -- is always partly on screen however
-/// hard the lifetime above is compressed.
-constexpr double kSustainShare = 0.25;
 /// Roughly this many SSG loop periods are drawn.
 constexpr double kSsgLoopPeriods = 3.5;
 /// How much of a looping graph the release may claim. Past this the loop the
 /// release is compared against stops being readable, so the axis keeps the
 /// loop's scale and the release runs off the right edge instead.
 constexpr double kSsgSpanBudget = 2.0;
-/// The same bargain for a plain patch. A release is often far longer than the
-/// held envelope -- RR = 2 takes over ten seconds where the attack and decay
-/// take three hundred milliseconds -- and letting it set the width alone would
-/// squeeze the part the user is editing into the left margin. Past this the
-/// release simply runs off the right edge, which still reads as "very long".
-constexpr double kReleaseSpanBudget = 4.0;
 /// How long a release is simulated for. RR = 0 never reaches silence at all,
 /// so there has to be a ceiling; sampling stops the moment the envelope is at
 /// rest, so it only costs anything for the handful of release rates that
@@ -147,51 +126,26 @@ bool same_envelope(const OperatorParams &lhs, const OperatorParams &rhs) {
 /// window would let AR and DR change how long a release is drawn.
 double release_max_ms() { return kMaxReleaseMs; }
 
-double drawable_sustain_start_ms(const ym2612_eg::PhaseDurations &phases) {
-  // Capped at the ceiling: this figure is
-  // what keeps a phase on the graph, so shortening it below what the axis
-  // could actually have shown would hide the very phase being edited. A phase
-  // that never ends saturates here too, which is why "no decay" and "a decay
-  // measured in minutes" both take the widest axis -- they draw the same flat
-  // line either way.
-  return std::min(phases.attack_ms, kMaxHeldMs) +
-         std::min(phases.decay_ms, kMaxHeldMs);
-}
 
-double drawable_lifetime_ms(const ym2612_eg::PhaseDurations &phases) {
-  return phases.lifetime_ms();
-}
 
-double window_for_lifetime_ms(double lifetime_ms) {
-  if (!(lifetime_ms > 0.0)) {
-    return kMinHeldMs;
-  }
-  const double window =
-      kWindowRefMs * std::pow(lifetime_ms / kWindowRefMs, kWindowExponent);
-  return std::clamp(window, kMinHeldMs, kMaxHeldMs);
-}
 
 double window_for_timeline_ms(const ym2612_eg::PhaseDurations &phases) {
-  // The axis has to reach past the sustain's start whatever the compression
-  // says, or the last phase of the envelope -- and the slider that shapes it --
-  // is simply not on the graph. An 8.4 s attack compressed on its lifetime
-  // alone asks for a 6.4 s axis, which cuts the attack off before it finishes
-  // and takes the decay and the sustain with it.
-  //
-  // The share is of the *window*, so the sustain always owns a quarter of it:
-  // sustain_start / (1 - share) is the width at which that is true. This is the
-  // one guarantee the marker-driven policy did get right; what was wrong was
-  // asking a probe where the sustain started.
+  const double sustain_start = phases.attack_ms + phases.decay_ms;
+  // A sustain that never ends draws a flat line, and a flat line says the same
+  // thing at any width. It gets a fixed share of the graph rather than a share
+  // of the axis it would otherwise decide -- which is why this case is a rule
+  // of its own rather than a limit on the one below.
+  const double whole = std::isfinite(phases.sustain_ms)
+                           ? sustain_start + phases.sustain_ms
+                           : sustain_start / (1.0 - kFlatHoldShare);
+  // The ceiling never cuts the attack and decay: they are the shape being read,
+  // and an envelope whose attack alone outlasts the ceiling would otherwise be
+  // drawn without its own beginning. kMaxSpanMs is where that concession runs
+  // out -- a phase that never advances at all lasts forever, and forever is not
+  // a width -- so the floor is itself bounded by the widest axis there is.
   const double floor_ms =
-      drawable_sustain_start_ms(phases) / (1.0 - kSustainShare);
-  // A sustain widens the axis until kSustainSpanMaxMs, past which one that
-  // never ends and one that merely takes a minute are held side by side --
-  // neither is a thing an axis can show, and letting them through buries the
-  // attack under a flat line.
-  const double compressed =
-      std::min(window_for_lifetime_ms(drawable_lifetime_ms(phases)),
-               kSustainSpanMaxMs);
-  return std::clamp(std::max(compressed, floor_ms), kMinHeldMs, kMaxHeldMs);
+      std::clamp(sustain_start, kMinHeldMs, kMaxSpanMs);
+  return std::clamp(whole, floor_ms, kMaxSpanMs);
 }
 
 /**
@@ -317,10 +271,13 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   //    The width is simply the content it has to hold, at full precision: a
   //    slider drag does not make the axis breathe because the drawing animates
   //    towards it, not because the answer has been rounded off.
-  const double budget = loops ? kSsgSpanBudget : kReleaseSpanBudget;
+  // A loop keeps its own scale -- its release is beside the point next to the
+  // cycles. Everything else takes the longer of the two: a release is as much
+  // the envelope as the sustain is, and cutting it short to protect the held
+  // part would answer "how long does this note ring" with a shrug.
   double content = std::max(out.held_ms, out.release_content_ms);
-  if (out.held_ms > 0.0) {
-    content = std::min(content, out.held_ms * budget);
+  if (loops && out.held_ms > 0.0) {
+    content = std::min(content, out.held_ms * kSsgSpanBudget);
   }
   out.span_ms = std::max(content, kMinSpanMs);
 

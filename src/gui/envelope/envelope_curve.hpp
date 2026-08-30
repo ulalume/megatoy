@@ -52,24 +52,23 @@ inline constexpr int kMaxReferenceMidiNote = 107; // B7
 /**
  * How wide the time axis may get, in ms. The one home for the question.
  *
- * kMinSpanMs is the narrowest axis worth drawing whatever the content says; a
- * held window narrower than kMinHeldMs reads as an accident rather than a
- * sustain. kMaxHeldMs is the widest an ordinary envelope ever gets -- only the
- * ones that never finish at all reach it, since the compression needs a
- * lifetime of four minutes to arrive there on its own.
+ * kMinSpanMs is the narrowest axis worth drawing whatever the content says.
+ * kMaxHeldMs is the widest an envelope that finishes is drawn at; kMinHeldMs
+ * is the narrowest a loop is, since a loop carries its own time scale and an
+ * audio-rate one widened to it would be a solid block of cycles.
  *
- * A loop is the one thing allowed past that ceiling, because a graph of a loop
+ * A loop is the one thing allowed past the ceiling, because a graph of a loop
  * that cannot fit one period shows nothing about the loop. kLoopVisiblePeriods
  * of a period stays on the axis however slow it is, up to kLoopMaxAxisMs.
  */
 inline constexpr double kMinSpanMs = 25.0;
 inline constexpr double kMinHeldMs = 50.0;
 inline constexpr double kMaxHeldMs = 10000.0;
-/// The widest a sustain may push the axis. Absolute, not a multiple of what
-/// the attack and decay need: SL moves that base itself, so a proportional
-/// bound would widen the axis as SL rose and narrow it again once the bound
-/// stopped binding -- a hump in the middle of a slider's travel.
-inline constexpr double kSustainSpanMaxMs = 4000.0;
+/// A sustain that never ends is a flat line; this much of the graph is enough
+/// to say so.
+inline constexpr double kFlatHoldShare = 0.05;
+/// Nothing is drawn wider than this, not even an attack that outlasts it.
+inline constexpr double kMaxSpanMs = 20000.0;
 
 inline constexpr double kLoopVisiblePeriods = 1.2;
 inline constexpr double kLoopMaxAxisMs = 20000.0;
@@ -99,45 +98,22 @@ double first_marker_ms(const ym2612_eg::CurveResult &curve,
 bool same_envelope(const ym2612_eg::OperatorParams &lhs,
                    const ym2612_eg::OperatorParams &rhs);
 
-/**
- * ym2612_eg::phase_durations(), saturated at the longest phase an axis can
- * usefully hold. A drawing policy, not a fact about the envelope: "never
- * decays" and "decays over a minute" look the same on any axis, and saturating
- * keeps them beside each other instead of a cliff apart.
- *
- * They saturate at different lengths. The sustain's start is what keeps a
- * phase on the graph, so it saturates at the ceiling itself; the lifetime only
- * ever widens the axis, so it saturates at kMaxModelledLifeMs, past which
- * "how long until silence" would only bury a 300 ms decay under ten seconds of
- * flat line.
- */
-double drawable_sustain_start_ms(const ym2612_eg::PhaseDurations &phases);
-double drawable_lifetime_ms(const ym2612_eg::PhaseDurations &phases);
+
 
 /**
- * How wide a given lifetime alone would ask the axis to be: one smooth,
- * monotone, sub-linear map. The term that keeps a 30-second envelope from
- * swallowing the graph -- and, on its own, the one that can compress a phase
- * off the right edge, which window_for_timeline_ms() is there to stop.
- */
-double window_for_lifetime_ms(double lifetime_ms);
-
-/**
- * The axis width the held envelope deserves: the compressed lifetime above,
- * but never narrower than the sustain's own start plus a readable slice of the
- * sustain, and never wider than kMaxHeldMs.
+ * The axis width the held envelope deserves: the end of its sustain.
  *
- * The floor is why the compression can be as aggressive as it is. Compressing
- * the lifetime alone hands a patch whose attack takes 8.4 s a 6.4 s axis, and
- * then the decay and the sustain are both off the right edge and the sliders
- * that shape them look dead.
+ * An envelope that finishes is drawn whole, to the last millisecond -- the
+ * axis is the envelope's own length and nothing else. Two things bend it.
  *
- * It is a floor up to the ceiling and no further. kSustainShare of the axis is
- * kept for the sustain, so the floor is sustain_start / (1 - share), which
- * passes kMaxHeldMs once the attack and decay together run past about 7.5 s.
- * Beyond that the ceiling wins and the sustain really is off the right edge:
- * an envelope whose first two phases outlast the widest axis there is cannot
- * be shown whole.
+ * A sustain that never ends has no length to give. It draws a flat line, and a
+ * flat line says the same thing at any width, so it takes kFlatHoldShare of
+ * the graph and the attack and decay own the rest.
+ *
+ * kMaxHeldMs is the widest an envelope that does finish is drawn at; past it
+ * the far end of the sustain is off the right edge. The attack and the decay
+ * are never cut by it, though -- they are the shape being read -- so the width
+ * is floored at the instant the sustain begins, and only kMaxSpanMs stops that.
  */
 double window_for_timeline_ms(const ym2612_eg::PhaseDurations &phases);
 
