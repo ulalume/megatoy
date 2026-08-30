@@ -325,22 +325,23 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
                     float label_baseline, float label_limit_x) {
   const ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
   const ImU32 label_color = axis_label_color();
-  const double step = ui::envelope::grid_step_ms(plot.target_ms);
-  const int lines =
-      static_cast<int>(std::max(plot.span_ms, plot.target_ms) / step + 1e-6);
+  // Everything here comes from the width being drawn, not the one being
+  // animated towards. Reading the step off the target puts a 900 ms axis's
+  // ticks on a 20 s one while the two are still apart: eighty lines, and the
+  // labels for them piled on top of each other.
+  const double drawn_ms = std::max(plot.span_ms, 1.0);
+  const double step = ui::envelope::grid_step_ms(drawn_ms);
+  const int lines = static_cast<int>(drawn_ms / step + 1e-6);
 
   char widest[16];
-  format_ms(widest, step * static_cast<int>(plot.target_ms / step + 1e-6));
+  format_ms(widest, step * static_cast<int>(drawn_ms / step + 1e-6));
   const float needed = ImGui::CalcTextSize(widest).x + ui::scale::px(6.0f);
-  const float pitch = plot.width() * static_cast<float>(step / plot.target_ms);
+  const float pitch = plot.width() * static_cast<float>(step / drawn_ms);
   const int label_every =
       std::max(1, static_cast<int>(std::ceil(needed / std::max(pitch, 1.0f))));
 
   for (int i = 0; i <= lines; ++i) {
     const double ms = step * i;
-    if (ms > plot.span_ms) {
-      break; // still off the right edge of the axis as it widens
-    }
     const float x = plot.x_of(ms);
     draw_list->AddLine(ImVec2(x, plot.min.y), ImVec2(x, plot.max.y),
                        grid_color);
