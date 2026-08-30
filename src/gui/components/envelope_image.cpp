@@ -808,6 +808,14 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   // While a slider is being dragged the registers move under the cache every
   // frame, so a curve simulated now is dropped before it is ever drawn twice.
   // The budget is worth more once the value settles.
+  //
+  // This and EnvelopeCurveCache's own rebuild throttle spend on opposite
+  // frames by construction, so neither can starve the other: the throttle only
+  // has anything to do while the registers are moving, and that is exactly
+  // when this budget is zero. They meet on one frame -- the one where a drag
+  // ends, which settles the reference curve and hands the voices their budget
+  // back at the same time -- and that frame paid for both before there was a
+  // throttle at all.
   int nothing_to_spend = 0;
   int &build_budget = envelope_slider_active(state) ? nothing_to_spend
                                                     : voice_build_budget();

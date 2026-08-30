@@ -371,14 +371,102 @@ private:
   int rebuilds_ = 0;
 };
 
+// ------------------------------------------------- how often to rebuild
+
+/**
+ * How much of a frame one operator's graph may spend rebuilding its curve,
+ * and the frame that budget is per.
+ *
+ * A rebuild costs whatever the patch costs to simulate, and the patches are
+ * not close to each other. Over a sweep of 18 900 of them the median curve
+ * takes 0.7 ms and the slowest fifteen, and the two populations are separated
+ * by an obvious valley: 288 patches land between 1.5 and 2.0 ms against 3 991
+ * below 0.1 ms and 2 577 between 3.5 and 4.0. An ordinary ADSR patch measures
+ * 0.9-1.1 ms and an SSG-EG one 4.0 ms, one on each side of it.
+ *
+ * The budget is that valley, so the common case is not throttled at all -- it
+ * would have to become half again as slow before it were. Four operators can
+ * be dragged at once, so four rebuilds can land on one frame: the budget is
+ * per operator, and four of them is 6 ms of a 16.7 ms frame. That is the
+ * ceiling the whole graph is held to while a value is moving, and an ordinary
+ * patch -- 3.6 ms a frame for four operators -- is already inside it.
+ */
+inline constexpr double kRebuildBudgetMs = 1.5;
+inline constexpr double kRebuildBudgetPeriodMs = 1000.0 / 60.0;
+/**
+ * ... and the longest the graph may lag the registers however expensive the
+ * curve is. 13.5 ms of work is where the budget's own spacing reaches this,
+ * and only a handful of patches in the sweep cost that much: below it the
+ * ceiling never binds at all, and above it the graph would stop looking slow
+ * and start looking frozen.
+ */
+inline constexpr double kMaxRebuildDeferMs = 150.0;
+
+/**
+ * Whether a rebuild is allowed to happen yet, from what the last one cost.
+ *
+ * A rebuild that fits the budget is simply done every frame -- the interval it
+ * earns is shorter than a frame, so the test never refuses one. An expensive
+ * one is spaced out in proportion to what it costs, which is the whole policy:
+ * a curve that takes k times the budget waits k frames, so every patch spends
+ * the same share of the machine however slow it is to simulate. Nothing here
+ * knows about ImGui, or about a frame; it is told the time and what the work
+ * cost, and answers when the next one may run.
+ */
+class RebuildThrottle {
+public:
+  /// How long a rebuild costing `cost_ms` earns itself before the next one.
+  static double interval_for_ms(double cost_ms);
+
+  /// Whether a rebuild may run at `now_ms`. True until one has been recorded:
+  /// the first curve is never deferred, because there is nothing to draw
+  /// instead of it.
+  bool may_rebuild(double now_ms) const;
+
+  /// One rebuild, at `now_ms`, that took `cost_ms`.
+  void note_rebuild(double now_ms, double cost_ms);
+
+  double last_cost_ms() const { return last_cost_ms_; }
+  double interval_ms() const { return interval_for_ms(last_cost_ms_); }
+
+private:
+  double last_rebuild_ms_ = 0.0;
+  double last_cost_ms_ = 0.0;
+  bool ever_ = false;
+};
+
+/// A monotonic clock in milliseconds -- what the throttle runs on unless a
+/// test hands it another one. Deliberately not ImGui's: this file is free of
+/// it, and the throttle measures work rather than frames.
+double steady_now_ms();
+
 /**
  * Remembers one operator's curve and rebuilds it only when the registers that
  * shape it (or the reference note) actually change -- the same
  * compare-then-recompute pattern PatchSession uses for audio settings.
+ *
+ * A drag changes them every frame, though, and then the compare says "rebuild"
+ * every frame too. For an ordinary patch that is what should happen and what
+ * still does. For the expensive ones it is not affordable, so a rebuild the
+ * throttle has not licensed yet is skipped and last frame's curve drawn again
+ * -- exactly what the graph already shows between frames, and what the cursors
+ * and the voice ghosts are already drawn against.
+ *
+ * The one thing that must never be deferred is the value the drag ends on. So
+ * a request the cache saw on the previous frame as well is built whatever the
+ * throttle says: a value that has stopped moving is the user's answer, and it
+ * is on screen exactly one frame later.
  */
 class EnvelopeCurveCache {
 public:
   const EnvelopeCurve &get(const ym2612::OperatorSettings &op);
+
+  /// The clock the throttle runs on. Only the tests replace it, and they have
+  /// to: a rebuild's cost is the difference between a read taken when the
+  /// cache is asked and one taken immediately afterwards, so a fake clock is
+  /// the only way to say what a rebuild costs.
+  using Clock = double (*)();
+  void set_clock(Clock clock) { now_ms_ = clock; }
 
   /// Curves actually simulated. Only the tests read it; see VoiceCurveCache.
   int rebuild_count() const { return rebuilds_; }
@@ -386,9 +474,16 @@ public:
 private:
   ym2612_eg::OperatorParams params_{};
   ym2612_eg::NotePitch pitch_{};
+  /// What the previous frame asked for, which is not always what was built:
+  /// a request that repeats is a value that has settled.
+  ym2612_eg::OperatorParams requested_{};
+  ym2612_eg::NotePitch requested_pitch_{};
+  bool requested_valid_ = false;
   EnvelopeCurve curve_;
   bool valid_ = false;
   int rebuilds_ = 0;
+  RebuildThrottle throttle_;
+  Clock now_ms_ = &steady_now_ms;
 };
 
 } // namespace ui::envelope

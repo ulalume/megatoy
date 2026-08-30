@@ -48,6 +48,52 @@ bool near_rel(double value, double expected, double tolerance) {
   return std::fabs(value - expected) <= std::fabs(expected) * tolerance;
 }
 
+// ------------------------------------------------------------- fake clocks
+
+/**
+ * A clock the test drives, frame by frame.
+ *
+ * EnvelopeCurveCache reads its clock once when the request has moved off the
+ * curve it holds, and once more the moment a rebuild finishes, so the gap
+ * between those two reads IS what the rebuild cost. `cost_ms` is that gap: the
+ * clock hands out `now_ms` and then steps itself on by it. Nothing else steps
+ * it, so a test sets `now_ms` at the top of every frame and the stray step
+ * from a frame that did not rebuild is simply overwritten.
+ */
+struct FakeClock {
+  double now_ms = 0.0;
+  double cost_ms = 0.0;
+};
+FakeClock g_clock;
+double fake_now_ms() {
+  const double t = g_clock.now_ms;
+  g_clock.now_ms += g_clock.cost_ms;
+  return t;
+}
+
+/**
+ * A clock that leaps a whole second every time it is read, so the throttle
+ * never has cause to defer.
+ *
+ * The tests that use it are asking what the cache NOTICES -- which registers
+ * count as a change, which do not -- and were written before there was
+ * anything to decide about when to act on one. A second is past every interval
+ * the throttle can ask for, kMaxRebuildDeferMs included.
+ */
+double g_leaping_ms = 0.0;
+double leaping_clock() {
+  g_leaping_ms += 1000.0;
+  return g_leaping_ms;
+}
+
+/// One frame at 60 fps, which is what a drag advances the clock by.
+constexpr double kFrameMs = 1000.0 / 60.0;
+
+/// What an ordinary ADSR patch measures ...
+constexpr double kCheapBuildMs = 1.0;
+/// ... and what an SSG-EG one does.
+constexpr double kExpensiveBuildMs = 4.0;
+
 /// Where a trace's polyline actually ends.
 double content_ms(const CurveResult &curve) {
   return curve.points.empty() ? 0.0
@@ -453,6 +499,9 @@ void test_the_span_is_the_content_it_has_to_hold() {
 void test_the_span_does_not_depend_on_where_the_axis_has_been() {
   EnvelopeCurveCache first;
   EnvelopeCurveCache second;
+  // The detour has to actually happen, so nothing may be throttled away.
+  first.set_clock(&leaping_clock);
+  second.set_clock(&leaping_clock);
   const ym2612::OperatorSettings a = worked_example();
   const ym2612::OperatorSettings b = adsr(6, 4, 10, 3, 2, 0);
 
@@ -758,6 +807,8 @@ void test_the_only_warning_is_the_non_standard_ssg_attack() {
 
 void test_the_cache_recomputes_only_on_a_real_change() {
   EnvelopeCurveCache cache;
+  // Which registers count as a change, not when the change is acted on.
+  cache.set_clock(&leaping_clock);
   ym2612::OperatorSettings op = worked_example();
 
   const double first_span = cache.get(op).span_ms;
@@ -775,6 +826,150 @@ void test_the_cache_recomputes_only_on_a_real_change() {
   op.decay_rate = 12;
   cache.get(op);
   CHECK(cache.rebuild_count() == 2);
+}
+
+// -------------------------------------------------------- rebuild throttle
+
+/// Everything about a drawn curve that a register change can move.
+bool same_drawn_curve(const EnvelopeCurve &lhs, const EnvelopeCurve &rhs) {
+  return lhs.span_ms == rhs.span_ms && lhs.held_ms == rhs.held_ms &&
+         lhs.peak_out == rhs.peak_out && lhs.sustain_out == rhs.sustain_out &&
+         lhs.held.points.size() == rhs.held.points.size() &&
+         lhs.release.points.size() == rhs.release.points.size();
+}
+
+/// The patch the whole throttle exists for: an SSG-EG loop, about 3.5 ms.
+ym2612::OperatorSettings expensive_patch() {
+  return ssg_patch(4, 14, 18, 9, 14, 0, 0);
+}
+
+void test_the_throttle_spaces_a_rebuild_by_what_it_cost() {
+  // The budget is per frame, so a rebuild that fits it earns exactly one
+  // frame's wait -- which is to say none, because a frame will have passed
+  // before the question is asked again.
+  CHECK(near_rel(RebuildThrottle::interval_for_ms(kRebuildBudgetMs),
+                 kRebuildBudgetPeriodMs, 1e-9));
+  CHECK(RebuildThrottle::interval_for_ms(kCheapBuildMs) < kFrameMs);
+  CHECK(RebuildThrottle::interval_for_ms(kExpensiveBuildMs) > kFrameMs);
+
+  // Monotone in the cost, up to the ceiling past which a graph stops looking
+  // slow and starts looking broken.
+  double previous = 0.0;
+  for (double cost = 0.0; cost < 20.0; cost += 0.05) {
+    const double interval = RebuildThrottle::interval_for_ms(cost);
+    CHECK(interval >= previous);
+    CHECK(interval <= kMaxRebuildDeferMs);
+    previous = interval;
+  }
+  CHECK(RebuildThrottle::interval_for_ms(1000.0) == kMaxRebuildDeferMs);
+
+  RebuildThrottle throttle;
+  // Nothing has been built, so there is nothing to draw instead: never defer.
+  CHECK(throttle.may_rebuild(0.0));
+
+  throttle.note_rebuild(100.0, kExpensiveBuildMs);
+  const double interval = RebuildThrottle::interval_for_ms(kExpensiveBuildMs);
+  CHECK(throttle.interval_ms() == interval);
+  CHECK(!throttle.may_rebuild(100.0));
+  CHECK(!throttle.may_rebuild(100.0 + interval - 0.001));
+  CHECK(throttle.may_rebuild(100.0 + interval + 0.001));
+
+  // A rebuild too quick to measure earns no wait at all.
+  throttle.note_rebuild(200.0, 0.0);
+  CHECK(throttle.may_rebuild(200.0));
+}
+
+/// The common case, and the one the throttle must not touch: an ordinary patch
+/// is cheap enough to simulate every frame, so a drag on one still does.
+void test_a_cheap_curve_is_rebuilt_every_frame() {
+  EnvelopeCurveCache cache;
+  cache.set_clock(&fake_now_ms);
+  g_clock.now_ms = 0.0;
+  g_clock.cost_ms = kCheapBuildMs;
+
+  ym2612::OperatorSettings op = worked_example();
+  for (int frame = 0; frame < 60; ++frame) {
+    g_clock.now_ms = frame * kFrameMs;
+    op.total_level = static_cast<uint8_t>(frame);
+    cache.get(op);
+  }
+  CHECK(cache.rebuild_count() == 60);
+}
+
+/// The case it exists for: a rebuild worth two and a third frames of budget is
+/// spaced three frames apart, and the two frames in between draw the curve
+/// that is already there.
+void test_an_expensive_curve_is_deferred_while_the_value_moves() {
+  EnvelopeCurveCache cache;
+  cache.set_clock(&fake_now_ms);
+  g_clock.now_ms = 0.0;
+  g_clock.cost_ms = kExpensiveBuildMs;
+
+  const double interval = RebuildThrottle::interval_for_ms(kExpensiveBuildMs);
+  CHECK(interval > 2.0 * kFrameMs && interval < 3.0 * kFrameMs);
+
+  ym2612::OperatorSettings op = expensive_patch();
+  uint16_t drawn_peak = 0;
+  for (int frame = 0; frame < 60; ++frame) {
+    g_clock.now_ms = frame * kFrameMs;
+    op.total_level = static_cast<uint8_t>(frame);
+    drawn_peak = cache.get(op).peak_out;
+  }
+  CHECK(cache.rebuild_count() == 20); // frames 0, 3, 6 ... 57
+  // The last frame of the drag is still drawing frame 57's curve, which is
+  // what "deferred" means: total_level lands in the output attenuation.
+  CHECK(drawn_peak == 57 * 8);
+
+  // ... and the moment the value stops moving, the real one arrives.
+  g_clock.now_ms = 60 * kFrameMs;
+  CHECK(cache.get(op).peak_out == 59 * 8);
+  CHECK(cache.rebuild_count() == 21);
+}
+
+/// Whatever the throttle did during a drag, the value the drag ENDS on is
+/// simulated for real -- one frame later, whichever frame it ends on.
+void test_a_settled_patch_always_converges_on_the_exact_curve() {
+  for (int frames = 1; frames <= 24; ++frames) {
+    EnvelopeCurveCache cache;
+    cache.set_clock(&fake_now_ms);
+    g_clock.now_ms = 0.0;
+    g_clock.cost_ms = kExpensiveBuildMs;
+
+    ym2612::OperatorSettings op = worked_example();
+    for (int frame = 0; frame < frames; ++frame) {
+      g_clock.now_ms = frame * kFrameMs;
+      op.total_level = static_cast<uint8_t>(frame * 3);
+      cache.get(op);
+    }
+    // The mouse comes up. One sixtieth of a second later the graph is exact,
+    // whether or not this value was ever one the throttle let through.
+    g_clock.now_ms = frames * kFrameMs;
+    CHECK(same_drawn_curve(cache.get(op), build_envelope_curve(op)));
+    // And it stays exact without simulating anything again.
+    const int settled = cache.rebuild_count();
+    cache.get(op);
+    CHECK(cache.rebuild_count() == settled);
+  }
+}
+
+/// Nothing changed for the frames the user is not editing: no rebuild, and not
+/// even a look at the clock.
+void test_a_still_patch_costs_the_cache_nothing() {
+  EnvelopeCurveCache cache;
+  cache.set_clock(&fake_now_ms);
+  g_clock.now_ms = 0.0;
+  g_clock.cost_ms = kExpensiveBuildMs;
+
+  const ym2612::OperatorSettings op = expensive_patch();
+  const double first_span = cache.get(op).span_ms;
+  CHECK(cache.rebuild_count() == 1);
+  const double clock_after_the_build = g_clock.now_ms;
+
+  for (int frame = 0; frame < 120; ++frame) {
+    CHECK(cache.get(op).span_ms == first_span);
+  }
+  CHECK(cache.rebuild_count() == 1);
+  CHECK(g_clock.now_ms == clock_after_the_build);
 }
 
 // -------------------------------------------------------- reference note
@@ -1188,6 +1383,7 @@ void test_key_scaling_follows_the_reference_note() {
 /// was built at, so moving it invalidates every operator's curve.
 void test_the_cache_rebuilds_when_the_reference_note_changes() {
   EnvelopeCurveCache cache;
+  cache.set_clock(&leaping_clock);
   ym2612::OperatorSettings op = worked_example();
   op.key_scale = 3;
 
@@ -1720,6 +1916,11 @@ int main() {
 
   test_the_only_warning_is_the_non_standard_ssg_attack();
   test_the_cache_recomputes_only_on_a_real_change();
+  test_the_throttle_spaces_a_rebuild_by_what_it_cost();
+  test_a_cheap_curve_is_rebuilt_every_frame();
+  test_an_expensive_curve_is_deferred_while_the_value_moves();
+  test_a_settled_patch_always_converges_on_the_exact_curve();
+  test_a_still_patch_costs_the_cache_nothing();
 
   test_the_cursor_is_where_the_elapsed_time_says();
   test_a_cursor_still_moving_leaves_the_graph();
