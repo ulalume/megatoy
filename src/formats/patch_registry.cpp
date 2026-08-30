@@ -9,6 +9,16 @@
 
 namespace formats {
 
+std::string SaveFormatInfo::display_name() const {
+  if (extension.empty()) {
+    return label;
+  }
+  if (label.empty()) {
+    return extension;
+  }
+  return extension + " (" + label + ")";
+}
+
 PatchRegistry &PatchRegistry::instance() {
   static PatchRegistry registry;
   return registry;

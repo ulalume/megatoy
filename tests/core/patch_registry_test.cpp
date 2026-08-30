@@ -27,6 +27,17 @@ int main() {
     CHECK(formats[i].extension == expected_order[i]);
   }
   CHECK(formats.front().label == "megatoy");
+
+  // Formats are named extension-first everywhere they are offered.
+  CHECK(formats[0].display_name() == ".gin (megatoy)");
+  CHECK(formats[1].display_name() == ".dmp (DefleMask Preset)");
+  CHECK(formats[2].display_name() == ".fui (Furnace Instrument)");
+  // A format with only one of the two halves still reads sensibly.
+  const formats::SaveFormatInfo unlabelled{".gin", "", false};
+  const formats::SaveFormatInfo extensionless{"", "megatoy", false};
+  CHECK(unlabelled.display_name() == ".gin");
+  CHECK(extensionless.display_name() == "megatoy");
+
   std::cout << "patch_registry_test passed\n";
   return 0;
 }
