@@ -14,17 +14,6 @@ using ym2612_eg::OperatorParams;
 
 // --------------------------------------------------------- held-window policy
 
-/// A held window shorter than this reads as an accident rather than a sustain.
-constexpr double kMinHeldMs = 50.0;
-/// The widest the axis ever gets. Only the envelopes that never finish at all
-/// -- SR = 0, DR = 0, AR = 0 -- reach it; the curve below needs a lifetime of
-/// four minutes to arrive here on its own.
-constexpr double kHardMaxHeldMs = 10000.0;
-/// An SSG loop is what this graph exists for, so nothing but the widest axis
-/// there is may cost it periods. At 5 s a loop slower than about 1.4 s per
-/// period was already losing them: the axis stopped growing while the period
-/// kept going, so lowering DR drew fewer and fewer cycles.
-constexpr double kSsgMaxHeldMs = kHardMaxHeldMs;
 /// The scale the axis is pulled towards: an envelope that lives this long is
 /// drawn at exactly this width. It is about the length of an ordinary attack
 /// and decay, which is what the graph is usually being read for.
@@ -104,10 +93,6 @@ double tail_slope(const CurveResult &curve, bool at_rest) {
 
 // ------------------------------------------------------------------ the axis
 
-/// The narrowest axis worth drawing, whatever the content says. A loop fast
-/// enough to want less than this is drawn as a band of cycles either way.
-constexpr double kMinSpanMs = 25.0;
-
 constexpr double kGridSteps[] = {5.0,    10.0,   25.0,   50.0,   100.0, 250.0,
                                  500.0,  1000.0, 2500.0, 5000.0, 10000.0};
 
@@ -164,12 +149,6 @@ bool same_envelope(const OperatorParams &lhs, const OperatorParams &rhs) {
 /// window would let AR and DR change how long a release is drawn.
 double release_max_ms() { return kMaxReleaseMs; }
 
-namespace {
-double capped_at(double phase_ms, double cap_ms) {
-  return phase_ms < cap_ms ? phase_ms : cap_ms;
-}
-} // namespace
-
 double drawable_sustain_start_ms(const ym2612_eg::PhaseDurations &phases) {
   // Capped at the ceiling rather than at kMaxModelledLifeMs: this figure is
   // what keeps a phase on the graph, so shortening it below what the axis
@@ -177,8 +156,8 @@ double drawable_sustain_start_ms(const ym2612_eg::PhaseDurations &phases) {
   // that never ends saturates here too, which is why "no decay" and "a decay
   // measured in minutes" both take the widest axis -- they draw the same flat
   // line either way.
-  return capped_at(phases.attack_ms, kHardMaxHeldMs) +
-         capped_at(phases.decay_ms, kHardMaxHeldMs);
+  return std::min(phases.attack_ms, kMaxHeldMs) +
+         std::min(phases.decay_ms, kMaxHeldMs);
 }
 
 double drawable_lifetime_ms(const ym2612_eg::PhaseDurations &phases) {
@@ -186,9 +165,9 @@ double drawable_lifetime_ms(const ym2612_eg::PhaseDurations &phases) {
   // seconds "how long until silence" stops telling a reader anything the shape
   // does not, and letting it run to the ceiling buries a 300 ms decay under ten
   // seconds of flat line.
-  return capped_at(phases.attack_ms, kMaxModelledLifeMs) +
-         capped_at(phases.decay_ms, kMaxModelledLifeMs) +
-         capped_at(phases.sustain_ms, kMaxModelledLifeMs);
+  return std::min(phases.attack_ms, kMaxModelledLifeMs) +
+         std::min(phases.decay_ms, kMaxModelledLifeMs) +
+         std::min(phases.sustain_ms, kMaxModelledLifeMs);
 }
 
 double window_for_lifetime_ms(double lifetime_ms) {
@@ -197,7 +176,7 @@ double window_for_lifetime_ms(double lifetime_ms) {
   }
   const double window =
       kWindowRefMs * std::pow(lifetime_ms / kWindowRefMs, kWindowExponent);
-  return std::clamp(window, kMinHeldMs, kHardMaxHeldMs);
+  return std::clamp(window, kMinHeldMs, kMaxHeldMs);
 }
 
 double window_for_timeline_ms(const ym2612_eg::PhaseDurations &phases) {
@@ -213,9 +192,10 @@ double window_for_timeline_ms(const ym2612_eg::PhaseDurations &phases) {
   // asking a probe where the sustain started.
   const double floor_ms =
       drawable_sustain_start_ms(phases) / (1.0 - kSustainShare);
+  // No floor of its own: window_for_lifetime_ms() never returns less than
+  // kMinHeldMs, and the sustain floor only ever raises.
   const double compressed = window_for_lifetime_ms(drawable_lifetime_ms(phases));
-  return std::clamp(std::max(compressed, floor_ms), kMinHeldMs,
-                    kHardMaxHeldMs);
+  return std::min(std::max(compressed, floor_ms), kMaxHeldMs);
 }
 
 /**
@@ -258,8 +238,8 @@ double choose_held_ms(const OperatorParams &op, ym2612_eg::NotePitch pitch) {
     // graph of a loop that cannot fit one period of it shows nothing about the
     // loop, and for these patches the loop is the whole content.
     const double ceiling =
-        std::min(std::max(kSsgMaxHeldMs, kLoopVisiblePeriods * period),
-                 kLoopHardMaxMs);
+        std::min(std::max(kMaxHeldMs, kLoopVisiblePeriods * period),
+                 kLoopMaxAxisMs);
     return std::clamp(held, std::min(kMinHeldMs, held), ceiling);
   }
   return window_for_timeline_ms(ym2612_eg::phase_durations(op, pitch));

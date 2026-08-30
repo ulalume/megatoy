@@ -251,7 +251,7 @@ void test_a_frozen_attack_still_produces_a_usable_window() {
   ym2612::OperatorSettings op = worked_example();
   op.attack_rate = 0; // never sounds; parks immediately
 
-  CHECK(choose_held_ms(to_operator_params(op)) >= 50.0);
+  CHECK(choose_held_ms(to_operator_params(op)) >= kMinHeldMs);
 }
 
 void test_the_held_window_is_bounded_across_a_sweep() {
@@ -267,8 +267,8 @@ void test_the_held_window_is_bounded_across_a_sweep() {
           op.release_rate = 7;
           const auto params = to_operator_params(op);
           const double held_ms = choose_held_ms(params);
-          CHECK(held_ms >= 50.0);
-          CHECK(held_ms <= 10000.0);
+          CHECK(held_ms >= kMinHeldMs);
+          CHECK(held_ms <= kMaxHeldMs);
           // The release's budget is its own: nothing about the held envelope
           // may change how far the release is simulated.
           CHECK(release_max_ms() >= 4000.0);
@@ -362,8 +362,8 @@ void test_the_window_curve_is_smooth_monotone_and_sub_linear() {
   for (double lifetime = 1.0; lifetime <= 1.0e6; lifetime *= 1.01) {
     const double window = window_for_lifetime_ms(lifetime);
     CHECK(window >= previous);
-    CHECK(window >= 50.0);
-    CHECK(window <= 10000.0);
+    CHECK(window >= kMinHeldMs);
+    CHECK(window <= kMaxHeldMs);
     // Smooth: a percent of lifetime can never be more than a percent of axis.
     CHECK(window <= previous * 1.01 || previous == 0.0);
     previous = window;
@@ -373,8 +373,8 @@ void test_the_window_curve_is_smooth_monotone_and_sub_linear() {
   CHECK(window_for_lifetime_ms(30000.0) < window_for_lifetime_ms(3000.0) * 5.0);
   // An envelope that never ends takes the ceiling, and only it does.
   const double forever = std::numeric_limits<double>::infinity();
-  CHECK(window_for_lifetime_ms(forever) == 10000.0);
-  CHECK(window_for_lifetime_ms(0.0) == 50.0);
+  CHECK(window_for_lifetime_ms(forever) == kMaxHeldMs);
+  CHECK(window_for_lifetime_ms(0.0) == kMinHeldMs);
 }
 
 /**
@@ -410,7 +410,7 @@ void test_the_window_never_cuts_off_the_phase_being_edited() {
   // this promise only holds as far as the ceiling does -- an attack longer than
   // that cannot be shown whatever the policy says.
   CHECK(window_for_timeline_ms(timeline) > timeline.sustain_start_ms());
-  CHECK(window_for_timeline_ms(timeline) <= 10000.0);
+  CHECK(window_for_timeline_ms(timeline) <= kMaxHeldMs);
 
   // The floor only ever raises: a long-lived envelope with a short attack and
   // decay is still sized by its lifetime.
@@ -440,10 +440,10 @@ void test_every_phase_present_is_at_least_partly_visible() {
           const ym2612_eg::PhaseDurations timeline =
               ym2612_eg::phase_durations(params, reference_pitch());
           const double window = choose_held_ms(params);
-          if (timeline.sustain_start_ms() < 10000.0) {
+          if (timeline.sustain_start_ms() < kMaxHeldMs) {
             CHECK(window > timeline.sustain_start_ms());
           } else {
-            CHECK(window == 10000.0);
+            CHECK(window == kMaxHeldMs);
           }
         }
       }
@@ -474,11 +474,11 @@ void test_the_span_is_the_content_it_has_to_hold() {
   };
   for (const auto &op : patches) {
     const EnvelopeCurve curve = build_envelope_curve(op);
-    CHECK(curve.span_ms >= curve.held_ms || curve.span_ms == 10000.0);
+    CHECK(curve.span_ms >= curve.held_ms || curve.span_ms == kMaxHeldMs);
     CHECK(curve.span_ms >= curve.release_content_ms ||
           curve.span_ms >= curve.held_ms * 3.9);
     // No round numbers to land on: the axis is a real width, not a rung.
-    CHECK(curve.span_ms >= 25.0);
+    CHECK(curve.span_ms >= kMinSpanMs);
   }
 }
 
@@ -501,9 +501,13 @@ void test_the_span_does_not_depend_on_where_the_axis_has_been() {
 }
 
 void test_the_grid_step_divides_the_span_sensibly() {
-  for (double span = 25.0; span <= 10000.0; span += 5.0) {
+  // Every width the policy can hand it, including the wider axis a slow loop
+  // is allowed.
+  for (double span = kMinSpanMs; span <= kLoopMaxAxisMs; span += 5.0) {
     const double step = grid_step_ms(span);
     CHECK(step > 0.0);
+    // 10000 is the top of the grid ladder, not the axis limit it happens to
+    // share a value with: past it the divisions simply get coarser.
     CHECK(span / step <= 6.0 || step == 10000.0);
     CHECK(span / step >= 1.0);
   }
@@ -1631,16 +1635,16 @@ void test_a_slow_loop_still_shows_a_period() {
     // Two folds is one whole period of an alternating mode. A loop slower than
     // the ceiling cannot have one -- there is no axis long enough -- so what is
     // promised there is the widest axis there is, and the ramp on it.
-    if (period * kLoopVisiblePeriods <= kLoopHardMaxMs) {
+    if (period * kLoopVisiblePeriods <= kLoopMaxAxisMs) {
       CHECK(folds >= 2);
     } else {
-      CHECK(near_rel(c.span_ms, kLoopHardMaxMs, 0.001));
+      CHECK(near_rel(c.span_ms, kLoopMaxAxisMs, 0.001));
       CHECK(folds >= 1);
     }
     // ... and the axis is wide enough to hold one, which is the promise the
     // fold count above is only the evidence for.
     // The axis holds a whole period, unless no axis could.
-    CHECK(c.span_ms >= std::min(period, kLoopHardMaxMs));
+    CHECK(c.span_ms >= std::min(period, kLoopMaxAxisMs));
     // A slower loop never gets a narrower axis.
     CHECK(c.span_ms >= previous * 0.999);
     previous = c.span_ms;

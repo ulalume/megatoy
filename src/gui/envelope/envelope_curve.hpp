@@ -60,11 +60,32 @@ inline constexpr int kDefaultReferenceMidiNote = 60; // middle C
 inline constexpr int kMinReferenceMidiNote = 12;  // C0
 inline constexpr int kMaxReferenceMidiNote = 107; // B7
 
-/// However slow an SSG loop is, this much of one period stays on the axis --
-/// up to kLoopHardMaxMs, past which the loop is a slow gesture rather than an
-/// envelope and the axis stops following it.
+/**
+ * How wide the time axis may get, in ms. The one home for the question, so
+ * that nothing states it a second time with a second value.
+ *
+ * kMinSpanMs is the narrowest axis worth drawing whatever the content says: a
+ * loop fast enough to want less is a band of cycles either way. kMinHeldMs is
+ * the narrowest held window; anything shorter reads as an accident rather
+ * than a sustain.
+ *
+ * kMaxHeldMs is the widest an ordinary envelope ever gets. Only the ones that
+ * never finish at all -- SR = 0, DR = 0, AR = 0 -- reach it; the compression
+ * in window_for_lifetime_ms() needs a lifetime of four minutes to arrive
+ * there on its own.
+ *
+ * A loop is the one thing allowed past that, because a graph of a loop that
+ * cannot fit a single period of it shows nothing about the loop, and for
+ * those patches the loop is the whole content. However slow it is,
+ * kLoopVisiblePeriods of one period stays on the axis -- up to kLoopMaxAxisMs,
+ * past which the loop is a slow gesture rather than an envelope and the axis
+ * stops following it.
+ */
+inline constexpr double kMinSpanMs = 25.0;
+inline constexpr double kMinHeldMs = 50.0;
+inline constexpr double kMaxHeldMs = 10000.0;
 inline constexpr double kLoopVisiblePeriods = 1.2;
-inline constexpr double kLoopHardMaxMs = 20000.0;
+inline constexpr double kLoopMaxAxisMs = 20000.0;
 
 /// Clamped into [kMinReferenceMidiNote, kMaxReferenceMidiNote].
 void set_reference_midi_note(int midi_note);
