@@ -1089,7 +1089,7 @@ void test_the_release_entry_point_matches_a_real_release() {
       // counter phase: an interpolated one would put the two traces a
       // fraction of an attenuation unit apart before either had started.
       const auto att =
-          static_cast<uint16_t>(curve_att_at_ms(curve.held, key_off_ms) + 0.5);
+          static_cast<uint16_t>(curve_out_at_ms(curve.held, key_off_ms) + 0.5);
       const double entry = release_entry_ms(curve.release, att);
       const CurveResult real = simulated_release_from(op, att);
       if (real.points.size() < 2 || curve.release.points.size() < 2) {
@@ -1141,7 +1141,7 @@ void test_the_cursor_carries_on_into_the_release() {
   const ym2612::OperatorSettings op = worked_example();
   const EnvelopeCurve curve = build_envelope_curve(op);
   const double key_off_ms = 120.0;
-  const double att = curve_att_at_ms(curve.held, key_off_ms);
+  const double att = curve_out_at_ms(curve.held, key_off_ms);
   const double entry = release_entry_ms(curve.release, att);
   CHECK(entry > 0.0); // the trace reaches that level partway along, not at 0
 
@@ -1184,7 +1184,7 @@ void test_a_voice_reports_how_long_it_has_been_silent() {
   const EnvelopeCurve curve = build_envelope_curve(op);
   CHECK(std::isfinite(curve.release_silence_ms));
 
-  const double att = curve_att_at_ms(curve.held, 0.0);
+  const double att = curve_out_at_ms(curve.held, 0.0);
   const double entry = release_entry_ms(curve.release, att);
   const double to_silence = curve.release_silence_ms - entry;
   CHECK(to_silence > 0.0);
@@ -1872,6 +1872,37 @@ void test_a_voice_draws_only_what_it_has_been_through() {
   CHECK(round.ms <= lc.span_ms);
 }
 
+/// A release starts from the level the ear was on. On key-off an inverted
+/// SSG-EG mode latches the audible level into the attenuation, so the internal
+/// number and the heard one are different things -- matching the internal one
+/// entered the trace half a scale away and drew the release from full volume
+/// whatever the note was doing.
+void test_a_release_picks_up_at_the_level_that_was_sounding() {
+  for (int type = 0; type < 8; ++type) {
+    ym2612::OperatorSettings op;
+    op.attack_rate = 31;
+    op.decay_rate = 14;
+    op.sustain_level = 15;
+    op.sustain_rate = 0;
+    op.release_rate = 7;
+    op.ssg_enable = true;
+    op.ssg_type_envelope_control = static_cast<uint8_t>(type);
+    const EnvelopeCurve c = build_envelope_curve(op);
+
+    double worst = 0.0;
+    for (int i = 1; i < 200; ++i) {
+      const double t = c.span_ms * i / 200.0;
+      const VoiceCursor cursor = cursor_for_voice(c, t, 0.0, c.span_ms);
+      const double sounding = curve_out_at_ms(c.held, t);
+      const double picked_up =
+          curve_out_at_ms(c.release, cursor.release_from_ms);
+      worst = std::max(worst, std::abs(sounding - picked_up));
+    }
+    // One attenuation unit is 0.094 dB; the traces are decimated, not exact.
+    CHECK(worst <= 1.0);
+  }
+}
+
 int main() {
   test_registers_map_straight_through();
   test_ssg_bits_are_packed_the_way_the_chip_wants_them();
@@ -1928,6 +1959,7 @@ int main() {
   test_a_parked_cursor_stays_where_the_envelope_stopped();
   test_the_release_entry_point_matches_a_real_release();
   test_the_cursor_carries_on_into_the_release();
+  test_a_release_picks_up_at_the_level_that_was_sounding();
   test_a_released_cursor_takes_the_parked_level_with_it();
   test_a_voice_reports_how_long_it_has_been_silent();
   test_a_held_loop_cursor_goes_round();
