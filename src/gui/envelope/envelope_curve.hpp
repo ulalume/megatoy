@@ -257,7 +257,7 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
 /// The polyline's internal attenuation at `ms`, linearly interpolated and
 /// clamped to the ends. Binary search: the held trace can carry thousands of
 /// points and this runs per voice per operator per frame.
-double curve_att_at_ms(const ym2612_eg::CurveResult &curve, double ms);
+double curve_out_at_ms(const ym2612_eg::CurveResult &curve, double ms);
 
 /**
  * Where on a release trace a release from attenuation `att` begins.
@@ -272,7 +272,7 @@ double curve_att_at_ms(const ym2612_eg::CurveResult &curve, double ms);
  * question of a release the simulator really ran, and compare the two answers
  * without a second copy of the interpolation to disagree with.
  */
-double release_entry_ms(const ym2612_eg::CurveResult &release, double att);
+double release_entry_ms(const ym2612_eg::CurveResult &release, double out);
 
 /// Where a sounding voice is on its own envelope.
 struct VoiceCursor {

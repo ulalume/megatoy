@@ -389,16 +389,16 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
 
 // ------------------------------------------------------- the live cursor
 
-double curve_att_at_ms(const ym2612_eg::CurveResult &curve, double ms) {
+double curve_out_at_ms(const ym2612_eg::CurveResult &curve, double ms) {
   const auto &points = curve.points;
   if (points.empty()) {
     return static_cast<double>(ym2612_eg::kMaxAttenuation);
   }
   if (!(ms > points.front().ms)) {
-    return points.front().att;
+    return points.front().out;
   }
   if (ms >= points.back().ms) {
-    return points.back().att;
+    return points.back().out;
   }
   // Binary search rather than a walk: an SSG trace reduced to one bucket per
   // slot carries thousands of points, and this runs once per voice per
@@ -417,19 +417,19 @@ double curve_att_at_ms(const ym2612_eg::CurveResult &curve, double ms) {
   const double t1 = points[hi].ms;
   const double dt = t1 - t0;
   if (!(dt > 0.0)) {
-    return points[hi].att;
+    return points[hi].out;
   }
   const double u = (ms - t0) / dt;
-  return points[lo].att +
-         (static_cast<double>(points[hi].att) - points[lo].att) * u;
+  return points[lo].out +
+         (static_cast<double>(points[hi].out) - points[lo].out) * u;
 }
 
-double release_entry_ms(const CurveResult &release, double att) {
+double release_entry_ms(const CurveResult &release, double out) {
   const auto &points = release.points;
   if (points.empty()) {
     return 0.0;
   }
-  if (att <= points.front().att) {
+  if (out <= points.front().out) {
     return points.front().ms;
   }
   // A linear scan, because a release trace is a straight ramp in attenuation
@@ -437,15 +437,15 @@ double release_entry_ms(const CurveResult &release, double att) {
   // crossing edge is therefore exact rather than approximate: the polyline IS
   // the line.
   for (std::size_t i = 1; i < points.size(); ++i) {
-    const double a0 = points[i - 1].att;
-    const double a1 = points[i].att;
-    if (a1 < att) {
+    const double a0 = points[i - 1].out;
+    const double a1 = points[i].out;
+    if (a1 < out) {
       continue;
     }
     if (a1 <= a0) {
       return points[i].ms; // a step, not a ramp: it arrives at this instant
     }
-    const double u = std::clamp((att - a0) / (a1 - a0), 0.0, 1.0);
+    const double u = std::clamp((out - a0) / (a1 - a0), 0.0, 1.0);
     return points[i - 1].ms +
            (static_cast<double>(points[i].ms) - points[i - 1].ms) * u;
   }
@@ -508,10 +508,15 @@ VoiceCursor cursor_for_voice(const EnvelopeCurve &curve, double since_key_on_ms,
     // for the same reason as above.
     const double at_key_off_ms =
         std::min(std::max(held_ms - released_for, 0.0), park_ms);
-    const double att = curve_att_at_ms(curve.held, at_key_off_ms);
+    // The AUDIBLE level, not the internal one: on key-off an inverted SSG-EG
+    // mode latches what was being heard into the attenuation, so a release
+    // continues from the level the ear was on. Matching the internal value
+    // would enter the trace wherever that number happens to sit -- which for
+    // an inverted mode is somewhere else entirely.
+    const double out = curve_out_at_ms(curve.held, at_key_off_ms);
     // The release from that level is not a new curve: it is the drawn one,
     // entered at the point where it is already at that level.
-    cursor.release_from_ms = release_entry_ms(curve.release, att);
+    cursor.release_from_ms = release_entry_ms(curve.release, out);
     cursor.release_origin_ms = at_key_off_ms;
     // The held part stops growing the moment the key comes up, however long
     // the release runs on after it.
