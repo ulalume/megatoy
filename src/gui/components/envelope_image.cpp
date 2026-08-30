@@ -214,18 +214,14 @@ double approach_span(double current_ms, double target_ms, float dt_sec,
   return current_ms + (target_ms - current_ms) * alpha;
 }
 
+/// Hovering a slider and dragging it light the same stretch the same way: the
+/// question the highlight answers is "which part of the curve is this", and
+/// the answer does not change once the mouse goes down.
 ImU32 color_from_slider_state(
     const UIState::EnvelopeState::SliderState &state) {
-  switch (state) {
-  case UIState::EnvelopeState::SliderState::None:
-    return ImGui::GetColorU32(ImGuiCol_Text);
-  case UIState::EnvelopeState::SliderState::Hover:
-    return ImGui::GetColorU32(ImGuiCol_FrameBgActive);
-  case UIState::EnvelopeState::SliderState::Active:
-    return ImGui::GetColorU32(ImGuiCol_FrameBgActive);
-  }
-  // Default case to prevent warning
-  return ImGui::GetColorU32(ImGuiCol_FrameBg);
+  return state == UIState::EnvelopeState::SliderState::None
+             ? ImGui::GetColorU32(ImGuiCol_Text)
+             : ImGui::GetColorU32(ImGuiCol_FrameBgActive);
 }
 
 /**
@@ -806,11 +802,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   // that gets it.
   struct DrawnVoice {
     const EnvelopeCurve *curve;
-    double ms;
+    ui::envelope::VoiceCursor cursor;
     float alpha;
-    double release_from_ms;
-    double release_origin_ms;
-    double held_to_ms;
   };
   // While a slider is being dragged the registers move under the cache every
   // frame, so a curve simulated now is dropped before it is ever drawn twice.
@@ -848,10 +841,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       }
       continue;
     }
-    drawn[drawn_count++] =
-        DrawnVoice{voice_curve,          cursor.ms,
-                   alpha,                 cursor.release_from_ms,
-                   cursor.release_origin_ms, cursor.held_to_ms};
+    drawn[drawn_count++] = DrawnVoice{voice_curve, cursor, alpha};
   }
 
   // Ghost curves oldest first, so the newest is the one on top of the others
@@ -864,7 +854,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       continue;
     }
     draw_voice_curve(
-        draw_list, *drawn[i].curve, plot, drawn[i].held_to_ms,
+        draw_list, *drawn[i].curve, plot, drawn[i].cursor.held_to_ms,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
   // The release each voice is taking, over the ghosts and under the reference
@@ -872,8 +862,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   // is the one part of a note the reference curve cannot stand in for.
   for (int i = drawn_count - 1; i >= 0; --i) {
     draw_voice_release_line(
-        draw_list, *drawn[i].curve, plot, drawn[i].release_from_ms,
-        drawn[i].release_origin_ms, drawn[i].ms,
+        draw_list, *drawn[i].curve, plot, drawn[i].cursor.release_from_ms,
+        drawn[i].cursor.release_origin_ms, drawn[i].cursor.ms,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
 
@@ -885,7 +875,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   const ImU32 cursor_base = ImGui::GetColorU32(ImGuiCol_FrameBgActive);
   for (int i = drawn_count - 1; i >= 0; --i) {
     draw_voice_cursor(
-        draw_list, plot, drawn[i].ms,
+        draw_list, plot, drawn[i].cursor.ms,
         color_with_alpha(cursor_base, drawn[i].alpha * kVoiceCursorAlpha));
   }
   draw_warning(draw_list, curve.warning, plot);

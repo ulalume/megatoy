@@ -202,17 +202,12 @@ double window_for_timeline_ms(const ym2612_eg::PhaseDurations &phases) {
  * How much of the held envelope to draw.
  *
  * An SSG loop is sized from its period -- about 3.5 of them, which reads as a
- * loop without turning into a hatch pattern.
+ * loop without turning into a hatch pattern. Everything else is the envelope's
+ * own phase durations put through window_for_timeline_ms().
  *
- * Everything else is the envelope's own phase durations, and turned into a
- * width by window_for_timeline_ms(). No test for whether the envelope parked,
- * whether it reached silence, or whether a marker exists. The version that
- * asked those questions asked them of a probe that stopped after three
- * seconds, so an envelope slower than the horizon reported no decay at all --
- * SL stopped mattering, SR stopped mattering, and DR jumped threefold as it
- * crossed. A closed form has no horizon to cross, and the period is one too
- * now: measuring it left the same discontinuity a little further out, at the
- * twelve seconds the probe looked ahead for a loop.
+ * Both are closed forms over the registers, and that is the point: the width
+ * is a continuous function of every rate, with no horizon for a slow envelope
+ * to cross and no marker that has to have been seen for SL or SR to matter.
  *
  * This is the width the axis is sized from, not the length of the trace:
  * nothing about the envelope changes at this instant, and the trace itself is
@@ -260,12 +255,10 @@ const char *warning_line(const OperatorParams &op) {
   // flat line at silence, a loop that never loops has no teeth, an audio-rate
   // loop is a solid block of them -- so naming them as well only crowds the
   // picture. This is a ladder with one rung: putting a line back is a rung,
-  // ordered most broken first, and CurveWarning still carries them all.
+  // ordered most broken first, and CurveWarning carries them all.
   //
-  // Read from the registers rather than from a run, because that is all this
-  // one ever was: sample_curve() raises SsgArBelow31 on the same two bits,
-  // before it steps a single sample. Asking a simulation for it was the last
-  // thing keeping a whole extra pass over the envelope alive.
+  // Read from the registers rather than from a run: sample_curve() raises
+  // SsgArBelow31 on the same two bits, before it steps a single sample.
   if ((op.ssg & 0x08) != 0 && op.ar < 31) {
     return "AR<31: non-standard SSG-EG";
   }
@@ -285,9 +278,7 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
 
   // 1. What the axis has to hold, from the registers alone. Nothing is
   //    simulated to find it: the library answers every phase of the held
-  //    envelope in closed form, and an SSG loop's period with it. A probe
-  //    used to answer both, and could only ever report what it saw before its
-  //    horizon -- which is where the axis jumped.
+  //    envelope in closed form, and an SSG loop's period with it.
   const double period_ms = ym2612_eg::ssg_loop_period_ms(params, pitch);
   const bool loops = period_ms > 0.0 && std::isfinite(period_ms);
   out.held_ms = choose_held_ms(params, pitch);
@@ -298,14 +289,14 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   //    which is why an SSG-EG patch's release is so much shorter than the same
   //    patch without it. It shares nothing with the held trace but the axis.
   //
-  //    "Full volume" is the library's loudest_attenuation(), not 0: with an inverted SSG-EG
-  //    mode 0 is the quiet end of the ramp, and releasing from there is a
-  //    one-sample cut rather than a curve. AR is zeroed for this run alone --
-  //    sample_curve() calls key_on(), which snaps an instant attack straight
-  //    to att = 0 and would throw the start level away, and the release rate
-  //    does not depend on AR. The AttackFrozen warning that comes back with it
-  //    is never read: warning_line() is asked about the registers, not about
-  //    any run.
+  //    "Full volume" is the library's loudest_attenuation(), not 0: with an
+  //    inverted SSG-EG mode 0 is the quiet end of the ramp, and releasing from
+  //    there is a one-sample cut rather than a curve. AR is zeroed for this run
+  //    alone -- sample_curve() calls key_on(), which snaps an instant attack
+  //    straight to att = 0 and would throw the start level away, and the
+  //    release rate does not depend on AR. The AttackFrozen warning that comes
+  //    back with it is never read: warning_line() is asked about the registers,
+  //    not about any run.
   ym2612_eg::CurveRequest release;
   release.op = params;
   release.op.ar = 0;
@@ -328,12 +319,9 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   //    envelope is allowed to run off the right edge rather than flatten the
   //    part being edited.
   //
-  //    The width is simply the content it has to hold. It used to be rounded
-  //    onto a ladder of a dozen values with hysteresis, so that a slider drag
-  //    could not make the axis breathe; the drawing animates the axis now,
-  //    which stops the breathing without also throwing away the answer -- the
-  //    ladder was turning a two percent change of content into a thirty
-  //    percent change of axis, and back.
+  //    The width is simply the content it has to hold, at full precision: a
+  //    slider drag does not make the axis breathe because the drawing animates
+  //    towards it, not because the answer has been rounded off.
   const double budget = loops ? kSsgSpanBudget : kReleaseSpanBudget;
   double content = std::max(out.held_ms, out.release_content_ms);
   if (out.held_ms > 0.0) {
@@ -350,12 +338,12 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   //    extrapolated there: a sawtooth continued along the slope of its last
   //    ramp is not a sawtooth. But gate_ms < 0 means more to sample_curve()
   //    than "never released" -- it also licenses it to stop as soon as there
-  //    is nothing new to see, which for a loop is after five periods, and that
-  //    is exactly the trace that stopped in mid-air. So a loop is given a
-  //    key-off just past the end of the window instead: none of it falls
-  //    inside the graph, and no early exit either. Everything else keeps the
-  //    held-forever run, whose early exit is at the park -- where the envelope
-  //    really has come to rest and the flat tail below is exact.
+  //    is nothing new to see, which for a loop is after five periods, leaving
+  //    the trace in mid-air. So a loop is given a key-off just past the end of
+  //    the window instead: none of it falls inside the graph, and no early exit
+  //    either. Everything else keeps the held-forever run, whose early exit is
+  //    at the park -- where the envelope really has come to rest and the flat
+  //    tail below is exact.
   ym2612_eg::CurveRequest request;
   request.op = params;
   request.pitch = pitch;
@@ -364,9 +352,6 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   request.max_ms = std::max({out.span_ms, out.held_ms, min_span_ms});
   request.gate_ms = loops ? request.max_ms + 1.0 : -1.0;
   out.held = ym2612_eg::sample_curve(request);
-  out.held_content_ms = out.held.points.empty()
-                            ? 0.0
-                            : static_cast<double>(out.held.points.back().ms);
   // A finite park is exactly "the trace ended because there was nothing left
   // to draw" -- continue it flat rather than along a slope of zero noise.
   out.held_parked = std::isfinite(out.held.park_ms);
@@ -382,8 +367,8 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   }
 
   // The library only raises Silence once the trace has come to rest, which is
-  // exactly the question a fading cursor asks: is this voice finished, or just
-  // quiet on its way somewhere?
+  // the question a fading cursor asks: is this voice finished, or just quiet on
+  // its way somewhere?
   out.held_silence_ms = silence_or_never(out.held);
   out.release_silence_ms = silence_or_never(out.release);
 
@@ -575,8 +560,7 @@ const EnvelopeCurve *VoiceCurveCache::get(const ym2612::OperatorSettings &op,
                             reference_span_ms_ == reference.span_ms;
   if (!same_context) {
     // Everything here was built for registers or an axis that no longer
-    // exist. Dropping the lot costs nothing extra: a register change would
-    // have invalidated every entry anyway.
+    // exist, so the lot goes.
     entries_ = {};
     used_ = 0;
     params_ = params;

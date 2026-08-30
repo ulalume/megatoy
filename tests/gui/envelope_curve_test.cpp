@@ -53,6 +53,12 @@ bool near_rel(double value, double expected, double tolerance) {
   return std::fabs(value - expected) <= std::fabs(expected) * tolerance;
 }
 
+/// Where a trace's polyline actually ends.
+double content_ms(const CurveResult &curve) {
+  return curve.points.empty() ? 0.0
+                              : static_cast<double>(curve.points.back().ms);
+}
+
 // ------------------------------------------------------- params conversion
 
 void test_registers_map_straight_through() {
@@ -532,7 +538,7 @@ void test_the_worked_examples_decay_lands_on_the_real_millisecond_axis() {
   CHECK(curve.span_ms >= curve.held_ms);
   // The held trace is simulated across the whole axis, not just the window
   // the policy asked for, so it ends at the right edge rather than in mid-air.
-  CHECK(near_rel(curve.held_content_ms, curve.span_ms, 0.01));
+  CHECK(near_rel(content_ms(curve.held), curve.span_ms, 0.01));
   CHECK(!curve.held.points.empty());
   CHECK(curve.warning == nullptr);
 
@@ -628,7 +634,7 @@ void test_a_loop_keeps_looping_to_the_right_edge() {
     CHECK(c.held.loop_hz > 0.1);
     CHECK(c.held.loop_hz < 100.0);
     // The polyline reaches the edge of the axis on its own.
-    CHECK(near_rel(c.held_content_ms, c.span_ms, 0.01));
+    CHECK(near_rel(content_ms(c.held), c.span_ms, 0.01));
     CHECK(!c.held_parked);
     // ... and it is still folding when it gets there: the last fold is within
     // one period of the right edge, so no more than one ramp is unfinished.
@@ -1178,7 +1184,7 @@ void test_a_voice_curve_covers_the_axis_it_is_drawn_on() {
   // Its own window is much narrower, but it was simulated across the axis it
   // will be drawn on, so the overlay never has to be invented past the end.
   CHECK(voice->span_ms < reference.span_ms);
-  CHECK(voice->held_content_ms >= reference.span_ms * 0.999 ||
+  CHECK(content_ms(voice->held) >= reference.span_ms * 0.999 ||
         voice->held_parked);
   set_reference_midi_note(kDefaultReferenceMidiNote);
 }
