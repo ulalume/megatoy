@@ -25,10 +25,7 @@ constexpr double kWindowRefMs = 400.0;
 /// kWindowRefMs. That lands a 300 ms envelope on a 346 ms axis, a 3 s one on
 /// 1.1 s and a 30 s one on 3.5 s -- each still readable, and each still a
 /// visibly different width from its neighbours.
-constexpr double kWindowExponent = 0.5;
-/// The longest life the compression models. Beyond it every envelope is "far
-/// longer than the axis" and the floor decides the width instead.
-constexpr double kMaxModelledLifeMs = 6400.0;
+constexpr double kWindowExponent = 0.65;
 /// The share of the axis kept past the sustain's start, so that the sustain --
 /// and with it the slider that shapes it -- is always partly on screen however
 /// hard the lifetime above is compressed.
@@ -151,7 +148,7 @@ bool same_envelope(const OperatorParams &lhs, const OperatorParams &rhs) {
 double release_max_ms() { return kMaxReleaseMs; }
 
 double drawable_sustain_start_ms(const ym2612_eg::PhaseDurations &phases) {
-  // Capped at the ceiling rather than at kMaxModelledLifeMs: this figure is
+  // Capped at the ceiling: this figure is
   // what keeps a phase on the graph, so shortening it below what the axis
   // could actually have shown would hide the very phase being edited. A phase
   // that never ends saturates here too, which is why "no decay" and "a decay
@@ -162,13 +159,7 @@ double drawable_sustain_start_ms(const ym2612_eg::PhaseDurations &phases) {
 }
 
 double drawable_lifetime_ms(const ym2612_eg::PhaseDurations &phases) {
-  // The lifetime only widens the axis, so it saturates sooner: past a few
-  // seconds "how long until silence" stops telling a reader anything the shape
-  // does not, and letting it run to the ceiling buries a 300 ms decay under ten
-  // seconds of flat line.
-  return std::min(phases.attack_ms, kMaxModelledLifeMs) +
-         std::min(phases.decay_ms, kMaxModelledLifeMs) +
-         std::min(phases.sustain_ms, kMaxModelledLifeMs);
+  return phases.lifetime_ms();
 }
 
 double window_for_lifetime_ms(double lifetime_ms) {
@@ -193,10 +184,14 @@ double window_for_timeline_ms(const ym2612_eg::PhaseDurations &phases) {
   // asking a probe where the sustain started.
   const double floor_ms =
       drawable_sustain_start_ms(phases) / (1.0 - kSustainShare);
-  // No floor of its own: window_for_lifetime_ms() never returns less than
-  // kMinHeldMs, and the sustain floor only ever raises.
-  const double compressed = window_for_lifetime_ms(drawable_lifetime_ms(phases));
-  return std::min(std::max(compressed, floor_ms), kMaxHeldMs);
+  // A sustain widens the axis until kSustainSpanMaxMs, past which one that
+  // never ends and one that merely takes a minute are held side by side --
+  // neither is a thing an axis can show, and letting them through buries the
+  // attack under a flat line.
+  const double compressed =
+      std::min(window_for_lifetime_ms(drawable_lifetime_ms(phases)),
+               kSustainSpanMaxMs);
+  return std::clamp(std::max(compressed, floor_ms), kMinHeldMs, kMaxHeldMs);
 }
 
 /**
