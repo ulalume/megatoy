@@ -83,6 +83,10 @@ uint8_t packed_ssg(const ym2612::OperatorSettings &op);
 ym2612_eg::OperatorParams
 to_operator_params(const ym2612::OperatorSettings &op);
 
+/// The first marker of `kind` on a trace, in ms, or negative when it has none.
+double first_marker_ms(const ym2612_eg::CurveResult &curve,
+                       ym2612_eg::MarkerKind kind);
+
 /// Whether two register sets draw the same curve. Every field of the envelope,
 /// so the caches rebuild on a change of any of them and on nothing else --
 /// multiple, detune and the rest do not shape an envelope.
@@ -256,15 +260,19 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
 double curve_att_at_ms(const ym2612_eg::CurveResult &curve, double ms);
 
 /**
- * Where on the drawn release trace a release from attenuation `att` begins.
+ * Where on a release trace a release from attenuation `att` begins.
  *
  * The release is linear in attenuation, so a note let go at level L follows
  * precisely the trace that is already on screen -- entered later. Finding that
  * entry point is therefore exact, and there is no second release curve to
  * build per voice: the first instant the trace reaches `att` IS where the
  * voice joins it.
+ *
+ * Takes the trace rather than the whole curve so the tests can ask the same
+ * question of a release the simulator really ran, and compare the two answers
+ * without a second copy of the interpolation to disagree with.
  */
-double release_entry_ms(const EnvelopeCurve &curve, double att);
+double release_entry_ms(const ym2612_eg::CurveResult &release, double att);
 
 /// Where a sounding voice is on its own envelope.
 struct VoiceCursor {

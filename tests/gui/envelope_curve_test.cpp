@@ -13,40 +13,35 @@ using namespace ui::envelope;
 using ym2612_eg::CurveResult;
 using ym2612_eg::MarkerKind;
 
-ym2612::OperatorSettings worked_example() {
-  // EG_SPEC's worked example: AR=31 TL=0 DR=10 SL=2 SR=5 RR=7, KS=0.
+ym2612::OperatorSettings adsr(int ar, int dr, int sl, int sr, int rr, int ks) {
   ym2612::OperatorSettings op;
-  op.attack_rate = 31;
-  op.total_level = 0;
-  op.decay_rate = 10;
-  op.sustain_level = 2;
-  op.sustain_rate = 5;
-  op.release_rate = 7;
-  op.key_scale = 0;
+  op.attack_rate = static_cast<uint8_t>(ar);
+  op.decay_rate = static_cast<uint8_t>(dr);
+  op.sustain_level = static_cast<uint8_t>(sl);
+  op.sustain_rate = static_cast<uint8_t>(sr);
+  op.release_rate = static_cast<uint8_t>(rr);
+  op.key_scale = static_cast<uint8_t>(ks);
   return op;
 }
+
+ym2612::OperatorSettings ssg_patch(int type, int ar, int dr, int sl, int sr,
+                                   int rr, int ks) {
+  ym2612::OperatorSettings op = adsr(ar, dr, sl, sr, rr, ks);
+  op.total_level = 0;
+  op.ssg_enable = true;
+  op.ssg_type_envelope_control = static_cast<uint8_t>(type & 0x07);
+  return op;
+}
+
+/// EG_SPEC's worked example: AR=31 TL=0 DR=10 SL=2 SR=5 RR=7, KS=0.
+ym2612::OperatorSettings worked_example() { return adsr(31, 10, 2, 5, 7, 0); }
 
 /// The patch the owner's sweep report was measured on: slow enough that every
-/// phase of it outlived the probe that used to size the axis.
+/// one of its phases runs for seconds.
 ym2612::OperatorSettings owner_report_patch() {
-  ym2612::OperatorSettings op;
+  ym2612::OperatorSettings op = adsr(11, 3, 4, 2, 4, 0);
   op.total_level = 24;
-  op.attack_rate = 11;
-  op.decay_rate = 3;
-  op.sustain_level = 4;
-  op.sustain_rate = 2;
-  op.release_rate = 4;
-  op.key_scale = 0;
   return op;
-}
-
-double marker_ms(const CurveResult &curve, MarkerKind kind) {
-  for (const ym2612_eg::Marker &m : curve.markers) {
-    if (m.kind == kind) {
-      return m.ms;
-    }
-  }
-  return -1.0;
 }
 
 bool near_rel(double value, double expected, double tolerance) {
@@ -119,12 +114,10 @@ void test_only_envelope_registers_count_as_a_change() {
 
 // -------------------------------------------------- the held-window policy
 
-/// The tests' own held-forever simulation, and the only horizon left anywhere
-/// in this file: megatoy does not run one any more. It is here to be the thing
-/// the closed forms are checked AGAINST -- where the decay really ends, where
-/// the envelope really parks, how fast the loop really runs -- which is the
-/// one job a simulation is better at than a formula, and the one job it was
-/// never being asked to do while it was also sizing the axis.
+/// The tests' own held-forever simulation, and the only horizon anywhere in
+/// this file: megatoy runs none. It is here to be the thing the closed forms
+/// are checked AGAINST -- where the decay really ends, where the envelope
+/// really parks, how fast the loop really runs.
 CurveResult simulate_held(const ym2612::OperatorSettings &op,
                           double max_ms = 12000.0) {
   ym2612_eg::CurveRequest request;
@@ -135,23 +128,18 @@ CurveResult simulate_held(const ym2612::OperatorSettings &op,
   return ym2612_eg::sample_curve(request);
 }
 
-/// REWRITTEN for the closed-form window. This used to assert the old policy
-/// directly -- that the sustain owned between a fifth and seven tenths of the
-/// width, and that the whole thing stopped at the 2 s nominal cap. Both were
-/// artefacts of sizing the axis from the probe's markers, and neither exists
-/// any more: the window is now one smooth function of the envelope's whole
-/// lifetime. What the assertions were really *for* survives -- the decay lands
+/// Three things at once, on the patch EG_SPEC works through: the decay lands
 /// inside the window, the sustain gets a readable share of what is left, and
 /// the 27 s this envelope takes to die is compressed hard rather than drawn.
 void test_a_normal_patch_gets_a_visible_sustain() {
   const auto op = worked_example();
   const auto params = to_operator_params(op);
   const CurveResult held = simulate_held(op);
-  const double decay_end = marker_ms(held, MarkerKind::DecayEnd);
+  const double decay_end = first_marker_ms(held, MarkerKind::DecayEnd);
   CHECK(decay_end > 0.0);
 
-  // EG_SPEC's worked example takes 27 s to reach silence. The 3 s probe never
-  // saw that; the closed form does not have to.
+  // EG_SPEC's worked example takes 27 s to reach silence, which the closed
+  // form answers without simulating any of it.
   const double lifetime =
       ym2612_eg::phase_durations(params, reference_pitch()).lifetime_ms();
   CHECK(lifetime > 20000.0);
@@ -168,10 +156,10 @@ void test_a_normal_patch_gets_a_visible_sustain() {
 
 /// SR = 0 is a hold that never ends, so the envelope's life really is
 /// infinite -- but "holds forever" and "takes a minute and a half" look the
-/// same on any axis a screen can hold, so the drawing policy saturates them
-/// together rather than sending one to the ceiling and leaving the other in
-/// the seconds. What must survive is that the flat part is visible, that the
-/// decay before it keeps a readable share, and that a faster SR is narrower.
+/// same on any axis a screen can hold, so the policy saturates them together
+/// rather than sending one to the ceiling and leaving the other in the
+/// seconds. What must hold is that the flat part is visible, that the decay
+/// before it keeps a readable share, and that a faster SR is narrower.
 void test_an_sr0_patch_shows_its_flat_hold() {
   ym2612::OperatorSettings op = worked_example();
   op.sustain_rate = 0; // parks at the sustain level and stays there
@@ -283,28 +271,6 @@ void test_the_held_window_is_bounded_across_a_sweep() {
       }
     }
   }
-}
-
-// ----------------------------------------------------- the patches under test
-
-ym2612::OperatorSettings adsr(int ar, int dr, int sl, int sr, int rr, int ks) {
-  ym2612::OperatorSettings op;
-  op.attack_rate = static_cast<uint8_t>(ar);
-  op.decay_rate = static_cast<uint8_t>(dr);
-  op.sustain_level = static_cast<uint8_t>(sl);
-  op.sustain_rate = static_cast<uint8_t>(sr);
-  op.release_rate = static_cast<uint8_t>(rr);
-  op.key_scale = static_cast<uint8_t>(ks);
-  return op;
-}
-
-ym2612::OperatorSettings ssg_patch(int type, int ar, int dr, int sl, int sr,
-                                   int rr, int ks) {
-  ym2612::OperatorSettings op = adsr(ar, dr, sl, sr, rr, ks);
-  op.total_level = 0;
-  op.ssg_enable = true;
-  op.ssg_type_envelope_control = static_cast<uint8_t>(type & 0x07);
-  return op;
 }
 
 // -------------------------------------------------------- the width policy
@@ -460,16 +426,10 @@ void test_every_phase_present_is_at_least_partly_visible() {
 // ------------------------------------------------------------------ the axis
 
 /**
- * REPLACES the four span-quantiser tests. The axis used to be rounded onto a
- * ladder of a dozen round widths with hysteresis, so that dragging a slider
- * could not make it breathe -- and those tests pinned the ladder's rungs, its
- * two thresholds, its idempotence and how often a full sweep could move it.
- *
- * None of that exists any more. The axis is animated at draw time now
- * (gui/components/envelope_image.cpp), which stops the breathing without also
- * throwing the answer away: the ladder was turning a two percent change of
- * content into a thirty percent change of axis, and back. So the span is simply
- * the content it has to hold, and what is worth asserting is that.
+ * The span is simply the content it has to hold, at full precision. Dragging a
+ * slider does not make the axis breathe because the drawing animates towards
+ * the new width (gui/components/envelope_image.cpp), not because the answer
+ * has been rounded onto a ladder of round numbers.
  */
 void test_the_span_is_the_content_it_has_to_hold() {
   // The held window is always inside the axis, and so is the release unless the
@@ -488,9 +448,8 @@ void test_the_span_is_the_content_it_has_to_hold() {
   }
 }
 
-/// The curve is a pure function of the operator and the reference note now.
-/// It used to take the span drawn last frame, because the ladder's hysteresis
-/// made the answer depend on where the axis had been.
+/// The curve is a pure function of the operator and the reference note: the
+/// axis it is drawn on does not depend on where the axis has been.
 void test_the_span_does_not_depend_on_where_the_axis_has_been() {
   EnvelopeCurveCache first;
   EnvelopeCurveCache second;
@@ -522,7 +481,7 @@ void test_the_grid_step_divides_the_span_sensibly() {
 // ------------------------------------------------------ end-to-end geometry
 
 bool has_marker(const CurveResult &curve, MarkerKind kind) {
-  return marker_ms(curve, kind) >= 0.0;
+  return first_marker_ms(curve, kind) >= 0.0;
 }
 
 void test_the_worked_examples_decay_lands_on_the_real_millisecond_axis() {
@@ -604,29 +563,15 @@ void test_ssg_eg_makes_the_release_dramatically_shorter() {
   CHECK(ssg_curve.release.points.back().out == ym2612_eg::kMaxAttenuation);
 }
 
-ym2612::OperatorSettings owner_patch(int ar, int dr, int sl, int sr) {
-  // The three SSG type 4 patches from the report: TL = 0, KS = 0, RR = 0.
-  ym2612::OperatorSettings op;
-  op.attack_rate = static_cast<uint8_t>(ar);
-  op.decay_rate = static_cast<uint8_t>(dr);
-  op.sustain_level = static_cast<uint8_t>(sl);
-  op.sustain_rate = static_cast<uint8_t>(sr);
-  op.release_rate = 0;
-  op.total_level = 0;
-  op.key_scale = 0;
-  op.ssg_enable = true;
-  op.ssg_type_envelope_control = 4;
-  return op;
-}
-
-/// The held trace is simulated across the whole quantised span, so a loop
-/// keeps looping all the way to the right edge instead of being extrapolated
-/// along the slope of its last ramp -- the sawtooth that simply stopped.
+/// The held trace is simulated across the whole span, so a loop keeps looping
+/// all the way to the right edge instead of being extrapolated along the slope
+/// of its last ramp, which would not be a sawtooth at all.
 void test_a_loop_keeps_looping_to_the_right_edge() {
+  // The three SSG type 4 patches from the owner's report.
   const ym2612::OperatorSettings patches[] = {
-      owner_patch(14, 18, 9, 14),
-      owner_patch(29, 1, 0, 7),
-      owner_patch(8, 10, 7, 4),
+      ssg_patch(4, 14, 18, 9, 14, 0, 0),
+      ssg_patch(4, 29, 1, 0, 7, 0, 0),
+      ssg_patch(4, 8, 10, 7, 4, 0, 0),
   };
   for (const auto &op : patches) {
     const EnvelopeCurve c = build_envelope_curve(op);
@@ -854,29 +799,6 @@ CurveResult simulated_release_from(const ym2612::OperatorSettings &op,
   return ym2612_eg::sample_curve(request);
 }
 
-/// The first time a trace reaches `att`, by the same interpolation the cursor
-/// uses -- so the two sides of the comparison below differ only in which curve
-/// they read.
-double time_at_att(const CurveResult &curve, double att) {
-  const auto &points = curve.points;
-  if (points.empty() || att <= points.front().att) {
-    return 0.0;
-  }
-  for (std::size_t i = 1; i < points.size(); ++i) {
-    const double a0 = points[i - 1].att;
-    const double a1 = points[i].att;
-    if (a1 < att) {
-      continue;
-    }
-    if (a1 <= a0) {
-      return points[i].ms;
-    }
-    const double u = (att - a0) / (a1 - a0);
-    return points[i - 1].ms + (points[i].ms - points[i - 1].ms) * u;
-  }
-  return points.back().ms;
-}
-
 void test_the_cursor_is_where_the_elapsed_time_says() {
   const EnvelopeCurve curve = build_envelope_curve(worked_example());
   // Held, still moving: the cursor is simply the elapsed time.
@@ -972,7 +894,7 @@ void test_the_release_entry_point_matches_a_real_release() {
       // fraction of an attenuation unit apart before either had started.
       const auto att =
           static_cast<uint16_t>(curve_att_at_ms(curve.held, key_off_ms) + 0.5);
-      const double entry = release_entry_ms(curve, att);
+      const double entry = release_entry_ms(curve.release, att);
       const CurveResult real = simulated_release_from(op, att);
       if (real.points.size() < 2 || curve.release.points.size() < 2) {
         continue; // an instant cut has no trajectory to compare
@@ -985,8 +907,8 @@ void test_the_release_entry_point_matches_a_real_release() {
       // started at -- a comparison in TIME, which is what a cursor is placed
       // by.
       for (double level = att + 32.0; level <= ceiling; level += 64.0) {
-        const double drawn = release_entry_ms(curve, level) - entry;
-        const double actual = time_at_att(real, level);
+        const double drawn = release_entry_ms(curve.release, level) - entry;
+        const double actual = release_entry_ms(real, level);
         worst_ms = std::max(worst_ms, std::fabs(drawn - actual));
       }
     }
@@ -1024,7 +946,7 @@ void test_the_cursor_carries_on_into_the_release() {
   const EnvelopeCurve curve = build_envelope_curve(op);
   const double key_off_ms = 120.0;
   const double att = curve_att_at_ms(curve.held, key_off_ms);
-  const double entry = release_entry_ms(curve, att);
+  const double entry = release_entry_ms(curve.release, att);
   CHECK(entry > 0.0); // the trace reaches that level partway along, not at 0
 
   // The instant the key comes up the cursor has not moved ...
@@ -1067,7 +989,7 @@ void test_a_voice_reports_how_long_it_has_been_silent() {
   CHECK(std::isfinite(curve.release_silence_ms));
 
   const double att = curve_att_at_ms(curve.held, 0.0);
-  const double entry = release_entry_ms(curve, att);
+  const double entry = release_entry_ms(curve.release, att);
   const double to_silence = curve.release_silence_ms - entry;
   CHECK(to_silence > 0.0);
   // Still falling: audible.
@@ -1371,9 +1293,7 @@ int field_top(Field field) {
 }
 
 /// Every span the axis takes as one register is swept across its whole range,
-/// with the rest of the patch held still. Each build starts from a fresh fit
-/// (previous span 0) so the quantiser's hysteresis cannot make the answer
-/// depend on the order the sweep happened to run in.
+/// with the rest of the patch held still.
 std::vector<double> span_sweep(const ym2612::OperatorSettings &base,
                                Field field) {
   std::vector<double> spans;
@@ -1397,13 +1317,11 @@ std::vector<double> span_sweep(const ym2612::OperatorSettings &base,
 /// is summed in a different order, so an axis that is mathematically unchanged
 /// can differ in the last bits of a double. A pixel is a few tenths of a
 /// percent of the axis; this is fifty million times finer.
-bool same_span(double a, double b) {
-  return std::fabs(a - b) <= std::fabs(b) * 1e-9;
-}
+constexpr double kSameSpan = 1e-9;
 
 bool moves(const std::vector<double> &spans) {
   for (const double span : spans) {
-    if (!same_span(span, spans.front())) {
+    if (!near_rel(span, spans.front(), kSameSpan)) {
       return true;
     }
   }
@@ -1411,8 +1329,7 @@ bool moves(const std::vector<double> &spans) {
 }
 
 /// The base patches the sweeps run over: the owner's report, EG_SPEC's worked
-/// example, one fast patch, one keyed hard by KS, and two slow enough that
-/// every phase outlives the old 3 s probe.
+/// example, one fast patch, one keyed hard by KS, and two slow ones.
 const ym2612::OperatorSettings &sweep_base(int i) {
   static const ym2612::OperatorSettings bases[] = {
       owner_report_patch(),      worked_example(),
@@ -1424,21 +1341,13 @@ const ym2612::OperatorSettings &sweep_base(int i) {
 constexpr int kSweepBases = 6;
 
 /**
- * The bug this test exists for, in the owner's own measurements: sweeping one
- * register at a time left SL and SR with no effect on the axis *at all*, and
- * made DR jump threefold in the middle of its range. Every one of those faults
- * was the same fault -- the window policy read the probe's markers, and the
- * probe stopped at 3 s, so an envelope slower than the horizon reported no
- * decay and no park and the policy concluded there was nothing to show.
+ * Every rate moves the axis, and moves it one way only: a faster rate never
+ * widens it, a slower one never narrows it. Each register is swept alone
+ * across its whole range, over base patches slow enough that every phase runs
+ * for seconds, and "no effect at all" fails as loudly as a jump does.
  *
- * So: sweep each register alone across its whole range, over base patches slow
- * enough that the old horizon would have swallowed them, and require the axis
- * to be monotone in every one of them.
- *
- * The rates are one-directional: a faster rate never widens the axis, a slower
- * one never narrows it. SL is monotone as well but its *direction* is a
- * property of the patch rather than of SL, and deliberately so -- see the test
- * below.
+ * SL is monotone too, but its *direction* is a property of the patch rather
+ * than of SL, deliberately -- see the test below.
  */
 void test_every_rate_moves_the_axis_monotonically() {
   for (const Field field : {Field::Ar, Field::Dr, Field::Sr, Field::Rr}) {
@@ -1446,16 +1355,16 @@ void test_every_rate_moves_the_axis_monotonically() {
     for (int i = 0; i < kSweepBases; ++i) {
       const std::vector<double> spans = span_sweep(sweep_base(i), field);
       for (size_t v = 1; v < spans.size(); ++v) {
-        if (spans[v] > spans[v - 1] && !same_span(spans[v], spans[v - 1])) {
+        if (spans[v] > spans[v - 1] && !near_rel(spans[v], spans[v - 1], kSameSpan)) {
           std::cout << field_name(field) << " widened the axis at " << v
                     << " on base " << i << ": " << spans[v - 1] << " -> "
                     << spans[v] << "\n";
         }
-        CHECK(spans[v] <= spans[v - 1] || same_span(spans[v], spans[v - 1]));
+        CHECK(spans[v] <= spans[v - 1] || near_rel(spans[v], spans[v - 1], kSameSpan));
         // ... and it is continuous while it narrows: no neighbouring pair of
-        // registers may move the axis more than one rung of the ladder. Value
-        // 0 is exempt because "never advances at all" is a discontinuity of
-        // the hardware, not of the policy.
+        // registers may halve the axis. Value 0 is exempt, because "never
+        // advances at all" is a discontinuity of the hardware, not of the
+        // policy.
         if (v >= 2) {
           CHECK(spans[v] >= spans[v - 1] * 0.49);
         }
@@ -1491,8 +1400,8 @@ void test_sustain_level_moves_the_axis_without_ever_doubling_back() {
     const std::vector<double> spans = span_sweep(sweep_base(i), Field::Sl);
     bool risen = false;
     for (size_t v = 1; v < spans.size(); ++v) {
-      const bool up = spans[v] > spans[v - 1] && !same_span(spans[v], spans[v - 1]);
-      const bool down = spans[v] < spans[v - 1] && !same_span(spans[v], spans[v - 1]);
+      const bool up = spans[v] > spans[v - 1] && !near_rel(spans[v], spans[v - 1], kSameSpan);
+      const bool down = spans[v] < spans[v - 1] && !near_rel(spans[v], spans[v - 1], kSameSpan);
       risen |= up;
       // Once the sustain's start is what sizes the axis, nothing takes it back.
       CHECK(!(risen && down));
@@ -1529,8 +1438,7 @@ void test_a_very_slow_attack_still_leaves_room_for_the_sustain() {
         ym2612_eg::phase_durations(params, reference_pitch());
     const EnvelopeCurve curve = build_envelope_curve(op);
 
-    // The attack really is that long, and the sustain really does start after
-    // the probe that used to size the axis would have given up.
+    // The attack really is that long, and the sustain starts seconds in.
     CHECK(near_rel(timeline.attack_ms, 8360.0, 0.02));
     CHECK(timeline.sustain_start_ms() > 3000.0);
     // ... and the axis reaches past it, for every SR.
@@ -1552,18 +1460,13 @@ void test_a_very_slow_attack_still_leaves_room_for_the_sustain() {
 
 } // namespace
 
-/// The axis must be a continuous function of the parameters. It used to switch
-/// policy at the probe's horizon: an envelope reaching silence a percent past
-/// 3 s counted as "still moving" and the axis jumped sixfold between two
-/// neighbouring sustain levels.
+/// The axis is a continuous function of the parameters: no neighbouring pair
+/// of sustain levels may move it more than a factor of two either way.
 ///
-/// REWRITTEN, and wired into main() -- it was never called before, so the
-/// guarantee it names was never actually checked, and its bound was in fact
-/// wrong: SL = 15 is a discontinuity of the *chip*, not of the policy.
+/// SL = 15 is exempt, because it is a discontinuity of the *chip*:
 /// sustain_attenuation() steps by 32 for every SL up to 14 and then jumps
-/// straight to 0x3E0, so SL 14 -> 15 hands the whole rest of the scale to the
-/// decay in one move. The axis follows, as it should; the smoothness claim is
-/// about the fifteen steps either side of it.
+/// straight to 0x3E0, handing the whole rest of the scale to the decay in one
+/// move. The axis follows, as it should.
 void test_the_axis_does_not_jump_between_neighbouring_values() {
   const auto sweep = [](int sl, int sr) {
     ym2612::OperatorSettings op;
@@ -1572,7 +1475,7 @@ void test_the_axis_does_not_jump_between_neighbouring_values() {
     op.sustain_level = static_cast<uint8_t>(sl);
     op.sustain_rate = static_cast<uint8_t>(sr);
     op.release_rate = 7;
-    op.key_scale = 3; // the envelope lengths that straddled the old horizon
+    op.key_scale = 3; // envelopes several seconds long
     return build_envelope_curve(op).span_ms;
   };
 
@@ -1580,7 +1483,7 @@ void test_the_axis_does_not_jump_between_neighbouring_values() {
     double previous = sweep(0, sr);
     for (int sl = 1; sl <= 14; ++sl) {
       const double span = sweep(sl, sr);
-      // One rung of the ladder either way; never a policy switch.
+      // A factor of two either way; never a policy switch.
       CHECK(span <= previous * 2.01);
       CHECK(span >= previous * 0.49);
       previous = span;
@@ -1596,19 +1499,10 @@ void test_the_axis_does_not_jump_between_neighbouring_values() {
 /**
  * A slow loop must not lose its periods, whatever it is that would take them.
  *
- * EXTENDED to DR = 1, which is where the last of the horizons was. The window
- * has always been 3.5 periods wide; what kept moving was what could stop it
- * being that. First the 5 s ceiling, so a loop slower than about 1.4 s per
- * period drew fewer and fewer cycles as DR fell. Then, once the ceiling gave
- * way, the measurement itself: the period came from counting the folds a 12 s
- * probe saw, and one ramp of this patch takes 15 s at DR = 1. The probe saw
- * none, reported no loop, and the graph fell back to the policy for a patch
- * that does not loop -- a 10 s axis with not one cycle on it. DR = 2 put a
- * single fold inside the window and the axis jumped to 23.6 s.
- *
- * So the sweep now runs the whole way down, and the two things it asks for are
- * the two the horizon broke: a slower loop never gets a narrower axis, and one
- * whole period stays on it at every single DR.
+ * The sweep runs DR the whole way down to 1, where one ramp of this patch
+ * takes fifteen seconds, and asks for two things at every step: a slower loop
+ * never gets a narrower axis, and one whole period stays on it -- unless no
+ * axis could hold one, and then the widest there is, with a ramp on it.
  */
 void test_a_slow_loop_still_shows_a_period() {
   const auto patch = [](int dr) {
@@ -1794,8 +1688,8 @@ int main() {
   test_the_held_window_is_bounded_across_a_sweep();
 
   // The closed forms themselves -- the phase durations and the loop period --
-  // live in ym2612_eg now, and so do the sweeps that cross-check them against
-  // the simulator. What is left here is the policy built on top of them.
+  // live in ym2612_eg, along with the sweeps that cross-check them against the
+  // simulator. What is here is the policy built on top of them.
   test_a_loop_that_never_folds_is_sized_like_a_plain_patch();
   test_the_warning_is_read_off_the_registers();
   test_the_window_curve_is_smooth_monotone_and_sub_linear();
@@ -1804,8 +1698,6 @@ int main() {
   test_every_rate_moves_the_axis_monotonically();
   test_sustain_level_moves_the_axis_without_ever_doubling_back();
   test_a_very_slow_attack_still_leaves_room_for_the_sustain();
-  // Never called until now, so the axis-continuity guard it names was not
-  // actually guarding anything.
   test_the_axis_does_not_jump_between_neighbouring_values();
 
   test_the_span_is_the_content_it_has_to_hold();
@@ -1822,9 +1714,6 @@ int main() {
   test_ssg_enabled_curves_fold();
 
   test_a_fast_loop_keeps_its_scale();
-  // Never called until now either, so the ceiling it guards was unguarded --
-  // and the horizon that replaced the ceiling went unnoticed for the same
-  // reason. It sweeps DR to 1 now, which is where that horizon was.
   test_a_slow_loop_still_shows_a_period();
   test_a_very_long_release_does_not_crush_the_held_trace();
   test_a_slow_release_is_simulated_to_the_end();
