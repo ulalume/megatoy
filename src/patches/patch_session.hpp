@@ -82,6 +82,12 @@ public:
 
   // Initialization and workspace management
   void initialize_patch_defaults();
+  /**
+   * The patch a new one starts from: the built-in presets' init.dmp when it
+   * is there, otherwise megatoy's own defaults. The same patch a fresh launch
+   * opens.
+   */
+  ym2612::Patch default_patch() const;
   /// Rebuild the repository if the workspace folder list has changed.
   void sync_workspace();
 
@@ -112,6 +118,18 @@ public:
   SaveResult
   save_current_patch_as_forced(std::string_view preferred_extension = {},
                                std::string_view filename_stem = {});
+  /// True when a new patch may be written straight into `folder`.
+  bool can_create_patch_in(const std::filesystem::path &folder) const;
+  /**
+   * Write default_patch() into `folder` as `stem` + `extension`, then open it.
+   *
+   * On success the repository has been refreshed and the new file is the
+   * current patch and the browser's selection, exactly as if the user had
+   * clicked it there.
+   */
+  SaveResult create_patch_in(const std::filesystem::path &folder,
+                             const std::string &stem,
+                             std::string_view extension);
   bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
   std::optional<SaveFormatInfo>
   find_save_format(const std::string &extension) const;
@@ -155,6 +173,14 @@ public:
   const char *save_label_for(bool is_user_patch) const;
 
 private:
+  /// default_patch() together with the file it came from, empty when the
+  /// built-in defaults were used.
+  struct DefaultPatch {
+    ym2612::Patch patch;
+    std::filesystem::path source;
+  };
+  DefaultPatch default_patch_source() const;
+
   SaveResult save_current_patch_as_impl(std::string_view preferred_extension,
                                         std::string_view filename_stem,
                                         bool overwrite);

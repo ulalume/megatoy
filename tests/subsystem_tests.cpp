@@ -1050,6 +1050,66 @@ void test_patch_snapshot_roundtrip(TestEnvironment &env) {
   CHECK(env.session.current_patch().name == before.patch.name);
 }
 
+void test_create_patch_in_folder(TestEnvironment &env) {
+  auto &session = env.session;
+  const auto defaults = session.default_patch();
+
+  CHECK(session.can_create_patch_in(env.patches_folder));
+  // Only a folder the workspace owns and may be written to.
+  CHECK(!session.can_create_patch_in(env.root));
+  CHECK(session.create_patch_in(env.root, "nowhere", ".gin").is_error());
+
+  const auto created = session.create_patch_in(env.patches_folder,
+                                               "brand new", ".gin");
+  CHECK(created.is_success());
+  CHECK(created.path == env.patches_folder / "brand new.gin");
+  CHECK(std::filesystem::exists(created.path));
+
+  // What was written is the patch a fresh launch opens, named for its file.
+  CHECK(session.current_patch().name == "brand new");
+  CHECK(session.current_patch().global == defaults.global);
+  CHECK(session.current_patch().channel == defaults.channel);
+  CHECK(session.current_patch().instrument == defaults.instrument);
+
+  // And it is open and selected exactly as a click in the browser leaves it.
+  const auto relative =
+      session.repository().to_relative_path(created.path).generic_string();
+  CHECK(session.current_patch_path() == relative);
+  CHECK(session.current_patch_selection_path() == relative);
+  CHECK(!session.is_modified());
+  CHECK(find_patch_entry(session.repository().tree(), created.path) !=
+        nullptr);
+
+  // The name is taken in the format that claimed it, and free in any other.
+  CHECK(session.create_patch_in(env.patches_folder, "brand new", ".gin")
+            .is_error());
+  CHECK(session.create_patch_in(env.patches_folder, "brand new", ".dmp")
+            .is_success());
+
+  // Names the filesystem would not take are refused before anything is
+  // written, and nothing is left behind.
+  CHECK(session.create_patch_in(env.patches_folder, "", ".gin").is_error());
+  CHECK(session.create_patch_in(env.patches_folder, "bad/name", ".gin")
+            .is_error());
+  CHECK(!std::filesystem::exists(env.patches_folder / "bad"));
+
+  // A folder nested inside a workspace folder is writable too.
+  const auto nested = env.patches_folder / "nested";
+  std::filesystem::create_directories(nested);
+  session.repository().refresh();
+  CHECK(session.can_create_patch_in(nested));
+  const auto in_nested = session.create_patch_in(nested, "deep", ".gin");
+  CHECK(in_nested.is_success());
+  CHECK(in_nested.path == nested / "deep.gin");
+  CHECK(session.current_patch_selection_path() ==
+        session.repository().to_relative_path(in_nested.path).generic_string());
+
+  std::filesystem::remove(env.patches_folder / "brand new.gin");
+  std::filesystem::remove(env.patches_folder / "brand new.dmp");
+  std::filesystem::remove_all(nested);
+  session.repository().refresh();
+}
+
 void test_note_allocation(TestEnvironment &env) {
   PreferenceManager::UIPreferences prefs{};
   prefs.use_velocity = true;
@@ -1117,6 +1177,7 @@ int main() {
   test_workspace_root_rename_follows_the_preference(env);
   test_restore_last_patch(env);
   test_missing_last_patch_falls_back_silently(env);
+  test_create_patch_in_folder(env);
 
   std::cout << "All subsystem tests passed\n";
   std::filesystem::remove_all(migration_root);

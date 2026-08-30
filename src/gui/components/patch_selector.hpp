@@ -33,6 +33,9 @@ struct PatchSelectorContext {
   std::function<void(const std::filesystem::path &)> remove_folder;
   std::function<void(const patches::PatchEntry &)> rename_patch;
   std::function<void(const patches::PatchEntry &)> delete_patch;
+  /// Ask for a new patch in this folder. Only offered on a folder the
+  /// session says it can write into.
+  std::function<void(const std::filesystem::path &)> create_patch_in;
   std::optional<std::filesystem::path> pending_remove_folder;
   std::optional<PendingMenuAction> pending_menu_action;
 

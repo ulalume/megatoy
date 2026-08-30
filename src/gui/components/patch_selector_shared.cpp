@@ -61,6 +61,13 @@ void entry_context_menu(PatchSelectorContext &context,
       !entry.is_directory &&
       entry.relative_path == context.session.current_patch_selection_path();
 
+  const bool can_create_patch =
+      entry.is_directory && context.create_patch_in &&
+      context.session.can_create_patch_in(entry.full_path);
+  if (can_create_patch && ImGui::MenuItem("New Patch...")) {
+    context.create_patch_in(entry.full_path);
+  }
+
   if (!entry.is_directory && !is_current && context.safe_load_patch) {
     if (ImGui::MenuItem("Open")) {
       context.safe_load_patch(entry);
@@ -88,7 +95,7 @@ void entry_context_menu(PatchSelectorContext &context,
     }
   }
 
-  if ((!entry.is_directory && !is_current) || is_current ||
+  if (can_create_patch || (!entry.is_directory && !is_current) || is_current ||
       context.download_entry) {
     ImGui::Separator();
   }
