@@ -174,69 +174,141 @@ CurveResult simulate_held(const ym2612::OperatorSettings &op,
   return ym2612_eg::sample_curve(request);
 }
 
-/// Three things at once, on the patch EG_SPEC works through: the decay lands
-/// inside the window, the sustain gets a readable share of what is left, and
-/// the 27 s this envelope takes to die is compressed hard rather than drawn.
-void test_a_normal_patch_gets_a_visible_sustain() {
-  const auto op = worked_example();
+/// The whole rule, on a patch that ends: the axis is the envelope's own length,
+/// so a sustain that finishes is drawn to its last millisecond. This is what
+/// the compression it replaced could not do -- it handed this patch a 630 ms
+/// axis for a 1.5 s envelope and left half the sustain off the right edge.
+void test_the_axis_reaches_the_end_of_the_sustain() {
+  // The owner's patch, whose whole life is 1.5 s.
+  ym2612::OperatorSettings op = adsr(8, 28, 4, 15, 11, 0);
+  op.total_level = 7;
   const auto params = to_operator_params(op);
+  const ym2612_eg::PhaseDurations timeline =
+      ym2612_eg::phase_durations(params, reference_pitch());
+  CHECK(timeline.lifetime_ms() < kMaxSpanMs);
+  // Not approximately the lifetime, and not a compressed version of it: the
+  // lifetime itself, to the last bit of the double.
+  CHECK(choose_held_ms(params) == timeline.lifetime_ms());
+
+  // The trace agrees with the closed form: the decay really does end inside
+  // the axis, and the sustain really does run out at the right-hand edge.
   const CurveResult held = simulate_held(op);
   const double decay_end = first_marker_ms(held, MarkerKind::DecayEnd);
   CHECK(decay_end > 0.0);
+  CHECK(near_rel(decay_end, timeline.sustain_start_ms(), 0.02));
+  CHECK(decay_end < choose_held_ms(params));
+  // The whole sustain is on it: the envelope comes to rest at the right-hand
+  // edge rather than somewhere off past it.
+  CHECK(std::isfinite(held.park_ms));
+  CHECK(near_rel(held.park_ms, choose_held_ms(params), 0.02));
 
-  // EG_SPEC's worked example takes 27 s to reach silence, which the closed
-  // form answers without simulating any of it.
-  const double lifetime =
-      ym2612_eg::phase_durations(params, reference_pitch()).lifetime_ms();
-  CHECK(lifetime > 20000.0);
-  CHECK(lifetime < 35000.0);
-
-  const double held_ms = choose_held_ms(params);
-  CHECK(held_ms > decay_end);
-  const double sustain_share = (held_ms - decay_end) / held_ms;
-  CHECK(sustain_share > 0.2);
-  // Sub-linear, and hard: a fifth of the life at most.
-  CHECK(held_ms < lifetime * 0.2);
-  CHECK(held_ms <= 4000.0);
+  // ... and that is not one patch's luck. Wherever the envelope ends inside
+  // the ceiling, the axis is exactly where it ends -- 327 300 of the register
+  // combinations swept below, without a single millisecond of daylight.
+  for (int ar = 0; ar <= 31; ar += 3) {
+    for (int dr = 1; dr <= 31; dr += 3) {
+      for (int sl = 0; sl <= 15; sl += 3) {
+        for (int sr = 1; sr <= 31; sr += 3) {
+          const auto swept = to_operator_params(adsr(ar, dr, sl, sr, 7, 0));
+          const ym2612_eg::PhaseDurations phases =
+              ym2612_eg::phase_durations(swept, reference_pitch());
+          // Between the floor a graph needs to be legible at all and the
+          // ceiling, the axis IS the envelope: no compression, no share, no
+          // rounding.
+          if (phases.lifetime_ms() >= kMinHeldMs &&
+              phases.lifetime_ms() <= kMaxSpanMs) {
+            CHECK(choose_held_ms(swept) == phases.lifetime_ms());
+          }
+        }
+      }
+    }
+  }
 }
 
-/// SR = 0 is a hold that never ends, so the envelope's life really is
-/// infinite -- but "holds forever" and "takes a minute and a half" look the
-/// same on any axis a screen can hold, so the policy saturates them together
-/// rather than sending one to the ceiling and leaving the other in the
-/// seconds. What must hold is that the flat part is visible, that the decay
-/// before it keeps a readable share, and that a faster SR is narrower.
-void test_an_sr0_patch_shows_its_flat_hold() {
+/// The one thing that stops it. An envelope with seconds of sustain left to
+/// run cannot be drawn whole on any axis a screen can hold, so the ceiling
+/// takes it -- and takes the sustain's tail, never the shape before it.
+void test_an_envelope_longer_than_the_ceiling_is_cut_at_the_ceiling() {
+  const auto params = to_operator_params(worked_example());
+  // EG_SPEC's worked example takes 27 s to reach silence, which the closed
+  // form answers without simulating any of it.
+  const ym2612_eg::PhaseDurations timeline =
+      ym2612_eg::phase_durations(params, reference_pitch());
+  CHECK(timeline.lifetime_ms() > 20000.0);
+  CHECK(timeline.lifetime_ms() < 35000.0);
+  CHECK(choose_held_ms(params) == kMaxSpanMs);
+
+  // The attack and the decay are the shape being read, and they are wholly
+  // inside it: it is the far end of the sustain that is off the graph.
+  CHECK(timeline.sustain_start_ms() < kMaxSpanMs);
+  CHECK(first_marker_ms(simulate_held(worked_example()), MarkerKind::DecayEnd) <
+        kMaxHeldMs);
+}
+
+/// SR = 0 is a hold that never ends, so the envelope has no length to be the
+/// axis. It draws a flat line, and a flat line says the same thing at any
+/// width, so it takes a fixed kFlatHoldShare of the graph and the attack and
+/// decay own everything else. A rule of its own, and this is the whole of it.
+void test_a_hold_that_never_ends_takes_a_fixed_share() {
   ym2612::OperatorSettings op = worked_example();
   op.sustain_rate = 0; // parks at the sustain level and stays there
   const auto params = to_operator_params(op);
 
   const CurveResult held = simulate_held(op);
   CHECK(std::isfinite(held.park_ms));
-  // The closed form still tells the truth about the envelope ...
-  CHECK(!std::isfinite(
-      ym2612_eg::phase_durations(params, reference_pitch()).lifetime_ms()));
+  // The closed form tells the truth about the envelope: it never ends.
+  const ym2612_eg::PhaseDurations timeline =
+      ym2612_eg::phase_durations(params, reference_pitch());
+  CHECK(!std::isfinite(timeline.sustain_ms));
+  CHECK(!std::isfinite(timeline.lifetime_ms()));
+
+  // The share is exact, not a bound: the shape owns 1 - kFlatHoldShare of the
+  // axis and the flat line owns the rest.
   const double held_ms = choose_held_ms(params);
-  // ... while the axis it is drawn on stays a readable width: a hold that
-  // never ends takes the widest a sustain may claim, and no more.
-  CHECK(held_ms <= kSustainSpanMaxMs * 1.001);
-  // The flat part is visible, and the decay before it is not squeezed away.
-  CHECK(held_ms > held.park_ms * 1.2);
-  // ~7.5% here: a hold that never ends takes the whole of what a sustain may
-  // claim, which is the price of SR = 0 sitting beside SR = 1 rather than a
-  // jump away from it. The decay is still on the graph, which is the point.
-  CHECK(held.park_ms / held_ms > 0.05);
+  CHECK(near_rel(timeline.sustain_start_ms() / held_ms, 1.0 - kFlatHoldShare,
+                 1e-12));
+  // The trace agrees: it parks where the closed form says the shape ends.
+  CHECK(near_rel(held.park_ms, timeline.sustain_start_ms(), 0.02));
   CHECK(held.park_ms < held_ms);
 
-  // SR = 1 dies, but so slowly that it must land beside SR = 0, not a cliff
-  // away from it.
-  op.sustain_rate = 1;
-  const double sr1 = choose_held_ms(to_operator_params(op));
-  CHECK(near_rel(sr1, held_ms, 0.05));
+  // ... whatever the attack and decay are, because it is a share of them.
+  for (int ar = 1; ar <= 31; ar += 2) {
+    for (int dr = 2; dr <= 31; dr += 3) {
+      const auto swept = to_operator_params(adsr(ar, dr, 4, 0, 7, 0));
+      const double start =
+          ym2612_eg::phase_durations(swept, reference_pitch()).sustain_start_ms();
+      // Between the floor a graph needs to be legible and the ceiling. Past
+      // the ceiling the flat line is what gives way -- an attack and decay
+      // that outlast the axis get all of it and no hold -- and below the floor
+      // the minimum width wins instead.
+      const double asked = start / (1.0 - kFlatHoldShare);
+      if (asked >= kMinHeldMs && asked <= kMaxSpanMs) {
+        CHECK(near_rel(start / choose_held_ms(swept), 1.0 - kFlatHoldShare,
+                       1e-12));
+      }
+    }
+  }
 
-  // An SR that finishes within the drawable range is narrower.
+  // The price of the rule, stated rather than hidden: SR = 0 and SR = 1 are
+  // not neighbours on the axis. SR = 1 is a sustain that really does end --
+  // after 109 s, so the ceiling takes it -- and the axis jumps thirtyfold for
+  // one register step. The old policy held the two side by side by refusing to
+  // draw either honestly; this one draws a flat line as a flat line.
+  op.sustain_rate = 1;
+  CHECK(!std::isfinite(timeline.sustain_ms));
+  CHECK(std::isfinite(
+      ym2612_eg::phase_durations(to_operator_params(op), reference_pitch())
+          .sustain_ms));
+  CHECK(choose_held_ms(to_operator_params(op)) == kMaxSpanMs);
+  CHECK(choose_held_ms(to_operator_params(op)) > held_ms * 10.0);
+
+  // Past the ceiling every sustain is the same width, and below it a faster
+  // one is narrower -- which is the ordinary rule, back again.
   op.sustain_rate = 15;
-  CHECK(choose_held_ms(to_operator_params(op)) < held_ms);
+  const double sr15 = choose_held_ms(to_operator_params(op));
+  CHECK(sr15 < kMaxSpanMs);
+  op.sustain_rate = 20;
+  CHECK(choose_held_ms(to_operator_params(op)) < sr15);
 }
 
 void test_an_ssg_loop_shows_a_few_periods() {
@@ -290,35 +362,17 @@ void test_a_slow_attack_ssg_loop_reports_a_musical_rate() {
   CHECK(periods <= 4.0);
 }
 
-void test_a_frozen_attack_still_produces_a_usable_window() {
-  ym2612::OperatorSettings op = worked_example();
-  op.attack_rate = 0; // never sounds; parks immediately
-
-  CHECK(choose_held_ms(to_operator_params(op)) >= kMinHeldMs);
-}
-
-void test_the_held_window_is_bounded_across_a_sweep() {
-  for (int ar = 0; ar <= 31; ar += 7) {
-    for (int dr = 0; dr <= 31; dr += 7) {
-      for (int sl = 0; sl <= 15; sl += 5) {
-        for (int sr = 0; sr <= 31; sr += 11) {
-          ym2612::OperatorSettings op;
-          op.attack_rate = static_cast<uint8_t>(ar);
-          op.decay_rate = static_cast<uint8_t>(dr);
-          op.sustain_level = static_cast<uint8_t>(sl);
-          op.sustain_rate = static_cast<uint8_t>(sr);
-          op.release_rate = 7;
-          const auto params = to_operator_params(op);
-          const double held_ms = choose_held_ms(params);
-          CHECK(held_ms >= kMinHeldMs);
-          CHECK(held_ms <= kMaxHeldMs);
-          // The release's budget is its own: nothing about the held envelope
-          // may change how far the release is simulated.
-          CHECK(release_max_ms() >= 4000.0);
-          CHECK(release_max_ms() <= 10000.0);
-        }
-      }
-    }
+/// The release's budget is its own: nothing about the held envelope may change
+/// how far the release is simulated, or AR and DR would decide how long a
+/// release is drawn.
+void test_the_release_budget_is_its_own() {
+  CHECK(release_max_ms() >= 4000.0);
+  CHECK(release_max_ms() <= 10000.0);
+  const double budget = release_max_ms();
+  for (const ym2612::OperatorSettings &op :
+       {adsr(31, 31, 0, 31, 7, 0), adsr(1, 1, 15, 1, 7, 0), worked_example()}) {
+    (void)choose_held_ms(to_operator_params(op));
+    CHECK(release_max_ms() == budget);
   }
 }
 
@@ -367,101 +421,114 @@ void test_only_a_non_standard_ssg_attack_earns_a_line() {
   }
 }
 
-/// The compression term. It has to be smooth (no jumps anywhere), monotone (a
-/// longer envelope never gets a narrower axis) and sub-linear (a ten-times
-/// longer envelope must not get a ten-times wider one, or a slow patch
-/// swallows the graph).
-void test_the_window_curve_is_smooth_monotone_and_sub_linear() {
-  // The three points kWindowRefMs and kWindowExponent were tuned on: a
-  // ten-times longer envelope earns roughly four times the axis, not ten.
-  CHECK(window_for_lifetime_ms(300.0) >= 300.0);
-  CHECK(window_for_lifetime_ms(300.0) <= 400.0);
-  CHECK(window_for_lifetime_ms(3000.0) >= 1200.0);
-  CHECK(window_for_lifetime_ms(3000.0) <= 1900.0);
-  CHECK(window_for_lifetime_ms(30000.0) >= 5000.0);
-  CHECK(window_for_lifetime_ms(30000.0) <= 9000.0);
-
-  double previous = 0.0;
-  for (double lifetime = 1.0; lifetime <= 1.0e6; lifetime *= 1.01) {
-    const double window = window_for_lifetime_ms(lifetime);
-    CHECK(window >= previous);
-    CHECK(window >= kMinHeldMs);
-    CHECK(window <= kMaxHeldMs);
-    // Smooth: a percent of lifetime can never be more than a percent of axis.
-    CHECK(window <= previous * 1.01 || previous == 0.0);
-    previous = window;
-  }
-  // Ten times the life, nowhere near ten times the axis.
-  CHECK(window_for_lifetime_ms(30000.0) > window_for_lifetime_ms(3000.0));
-  CHECK(window_for_lifetime_ms(30000.0) < window_for_lifetime_ms(3000.0) * 5.0);
-  // An envelope that never ends takes the ceiling, and only it does.
-  const double forever = std::numeric_limits<double>::infinity();
-  CHECK(window_for_lifetime_ms(forever) == kMaxHeldMs);
-  CHECK(window_for_lifetime_ms(0.0) == kMinHeldMs);
-}
-
 /**
- * The floor under the compression, and why it has to be there.
+ * The attack and the decay are never cut, and the ceiling is no exception.
  *
- * Compressing the lifetime alone will happily hand a patch whose attack takes
- * 8.4 s a 6.4 s axis. The attack then does not finish inside the graph, so the
- * decay and the sustain are not on it at all, and the sliders that shape them
- * look dead. So the axis always reaches past where the sustain begins, and the
- * lifetime only ever widens it further.
+ * They are the shape being read -- an envelope drawn without its own beginning
+ * says nothing about the registers that made it -- so the width is floored at
+ * the instant the sustain starts, above every ceiling but the last. AR = 1 is
+ * the case that motivates it: its attack alone runs 8.4 s.
  */
-void test_the_window_never_cuts_off_the_phase_being_edited() {
+void test_the_attack_and_decay_are_never_cut() {
   ym2612_eg::PhaseDurations timeline;
   timeline.attack_ms = 8360.0;
   timeline.decay_ms = 460.0;
   timeline.sustain_ms = 200.0;
-  // On its own the compression asks for far less than the attack.
-  CHECK(window_for_lifetime_ms(timeline.lifetime_ms()) <
-        timeline.sustain_start_ms());
-  // The window does not.
-  const double window = window_for_timeline_ms(timeline);
-  CHECK(window > timeline.sustain_start_ms());
+  // The whole envelope fits under the ceiling, so the whole envelope is drawn.
+  CHECK(window_for_timeline_ms(timeline) == timeline.lifetime_ms());
 
-  // A quarter of the axis is kept for the sustain, so SR always has somewhere
-  // to be -- up to the ceiling, which still wins.
-  ym2612_eg::PhaseDurations modest;
-  modest.attack_ms = 100.0;
-  modest.decay_ms = 200.0;
-  modest.sustain_ms = 10.0;
-  CHECK(near_rel(window_for_timeline_ms(modest), 400.0, 0.001));
-  // The 8.4 s attack still gets an axis that reaches past where the sustain
-  // begins, and stays inside the ceiling. Phases are saturated for drawing, so
-  // this promise only holds as far as the ceiling does -- an attack longer than
-  // that cannot be shown whatever the policy says.
-  CHECK(window_for_timeline_ms(timeline) > timeline.sustain_start_ms());
-  CHECK(window_for_timeline_ms(timeline) <= kMaxHeldMs);
+  // Now give it a sustain no axis could hold. The ceiling takes the sustain
+  // and stops there: the attack and decay stay whole.
+  ym2612_eg::PhaseDurations spilling = timeline;
+  spilling.sustain_ms = 60000.0;
+  CHECK(window_for_timeline_ms(spilling) > spilling.sustain_start_ms());
+  CHECK(window_for_timeline_ms(spilling) == kMaxSpanMs);
 
-  // A long-lived envelope with a short attack and decay is sized by its
-  // lifetime, up to what a sustain is allowed to claim. Without that bound the
-  // attack and decay -- 25 ms of a 30 s note -- would be a smear at the origin.
-  ym2612_eg::PhaseDurations long_lived;
-  long_lived.attack_ms = 5.0;
-  long_lived.decay_ms = 20.0;
-  long_lived.sustain_ms = 30000.0;
-  const double asked =
-      window_for_lifetime_ms(drawable_lifetime_ms(long_lived));
-  CHECK(window_for_timeline_ms(long_lived) < asked);
-  CHECK(near_rel(window_for_timeline_ms(long_lived), kSustainSpanMaxMs, 0.001));
-  // It still grows with the lifetime while it can.
-  ym2612_eg::PhaseDurations shorter = long_lived;
-  shorter.sustain_ms = 900.0;
-  CHECK(window_for_timeline_ms(shorter) < window_for_timeline_ms(long_lived));
-  // A hold that never ends asks for an infinite axis and is given the same
-  // bound as a merely long one, so the two sit beside each other.
-  ym2612_eg::PhaseDurations endless = long_lived;
-  endless.sustain_ms = std::numeric_limits<double>::infinity();
-  CHECK(near_rel(window_for_timeline_ms(endless),
-                 window_for_timeline_ms(long_lived), 0.001));
+  // And when the attack and decay ALONE outlast the ceiling, the ceiling is
+  // what gives way rather than the shape.
+  // An attack and decay that fit under the ceiling keep their sustain too.
+  ym2612_eg::PhaseDurations enormous;
+  enormous.attack_ms = 12000.0;
+  enormous.decay_ms = 3000.0;
+  enormous.sustain_ms = 500.0;
+  CHECK(enormous.sustain_start_ms() < kMaxSpanMs);
+  CHECK(window_for_timeline_ms(enormous) == enormous.lifetime_ms());
+
+  // Past the ceiling there is nothing left to give: the axis is the widest
+  // there is, and the attack runs off the end of it.
+  ym2612_eg::PhaseDurations beyond = enormous;
+  beyond.attack_ms = 30000.0;
+  CHECK(beyond.sustain_start_ms() > kMaxSpanMs);
+  CHECK(window_for_timeline_ms(beyond) == kMaxSpanMs);
+  CHECK(window_for_timeline_ms(enormous) > kMaxHeldMs);
+
+  // The real registers behind that: AR = 1 at the reference note.
+  const auto slow = to_operator_params(adsr(1, 12, 6, 4, 5, 0));
+  const ym2612_eg::PhaseDurations real =
+      ym2612_eg::phase_durations(slow, reference_pitch());
+  CHECK(near_rel(real.attack_ms, 8360.0, 0.02));
+  CHECK(choose_held_ms(slow) > real.sustain_start_ms());
+}
+
+/**
+ * ... and kMaxSpanMs is where that concession runs out.
+ *
+ * A rate of 0 never advances, so its phase lasts forever and the sum of the
+ * phases before the sustain can be infinite -- which is not a width. Every
+ * patch the chip can be given has to come back with an axis a graph can be
+ * drawn on, so the floor is bounded too.
+ */
+void test_every_patch_has_a_finite_axis() {
+  ym2612_eg::PhaseDurations frozen_attack;
+  frozen_attack.attack_ms = std::numeric_limits<double>::infinity();
+  frozen_attack.decay_ms = 100.0;
+  frozen_attack.sustain_ms = 100.0;
+  CHECK(window_for_timeline_ms(frozen_attack) == kMaxSpanMs);
+
+  // AR = 0 and DR = 0 are the registers that produce it, and both are a click
+  // away in the editor.
+  for (const ym2612::OperatorSettings &op :
+       {adsr(0, 10, 4, 5, 7, 0), adsr(31, 0, 4, 5, 7, 0)}) {
+    const auto params = to_operator_params(op);
+    CHECK(!std::isfinite(
+        ym2612_eg::phase_durations(params, reference_pitch()).sustain_start_ms()));
+    CHECK(choose_held_ms(params) == kMaxSpanMs);
+    const EnvelopeCurve curve = build_envelope_curve(op);
+    CHECK(std::isfinite(curve.span_ms));
+    CHECK(curve.span_ms <= kMaxSpanMs);
+  }
+
+  // Nothing anywhere in the register space escapes it -- not a phase that
+  // never advances, and not one that merely takes two minutes.
+  for (int ar = 0; ar <= 31; ar += 3) {
+    for (int dr = 0; dr <= 31; dr += 3) {
+      for (int sl = 0; sl <= 15; sl += 3) {
+        for (int sr = 0; sr <= 31; sr += 3) {
+          const double window = choose_held_ms(to_operator_params(
+              adsr(ar, dr, sl, sr, 7, 0)));
+          CHECK(std::isfinite(window));
+          CHECK(window >= 0.0);
+          CHECK(window <= kMaxSpanMs);
+        }
+      }
+    }
+  }
+
+  // An envelope with no attack, no decay and a hold that never ends has no
+  // length at all. The width it asks for is a floor, not nothing, so there is
+  // always a graph to draw on.
+  const auto instant = to_operator_params(adsr(31, 0, 0, 0, 7, 0));
+  CHECK(choose_held_ms(instant) == kMinHeldMs);
+  const EnvelopeCurve curve = build_envelope_curve(adsr(31, 0, 0, 0, 7, 0));
+  CHECK(curve.held_ms == kMinHeldMs);
+  CHECK(curve.span_ms >= kMinSpanMs);
 }
 
 /// Whatever the patch, the instant the sustain begins is inside the axis --
 /// which is to say every phase the envelope actually has is at least partly
-/// drawn. The only exception is an envelope whose attack and decay alone
-/// outlast the widest axis there is, and then the ceiling is what stops it.
+/// drawn. The two ends where it can only just be reached: an attack and decay
+/// that fill the ceiling on their own leave no room for any sustain, and ones
+/// that outlast kMaxSpanMs are cut there because nothing is drawn wider.
 void test_every_phase_present_is_at_least_partly_visible() {
   for (int ar = 0; ar <= 31; ar += 3) {
     for (int dr = 0; dr <= 31; dr += 5) {
@@ -471,11 +538,16 @@ void test_every_phase_present_is_at_least_partly_visible() {
           const auto params = to_operator_params(op);
           const ym2612_eg::PhaseDurations timeline =
               ym2612_eg::phase_durations(params, reference_pitch());
+          const double start = timeline.sustain_start_ms();
           const double window = choose_held_ms(params);
-          if (timeline.sustain_start_ms() < kMaxHeldMs) {
-            CHECK(window > timeline.sustain_start_ms());
+          if (start >= kMaxSpanMs) {
+            CHECK(window == kMaxSpanMs);
+          } else if (start > 0.0 && start < kMaxHeldMs) {
+            // Room left under the ceiling, so some of the sustain is on the
+            // axis as well as the whole of the shape before it.
+            CHECK(window > start);
           } else {
-            CHECK(window == kMaxHeldMs);
+            CHECK(window >= start);
           }
         }
       }
@@ -1478,9 +1550,13 @@ void test_a_slow_release_is_simulated_to_the_end() {
   CHECK(!c.release_truncated);
   CHECK(c.release.points.back().out == ym2612_eg::kMaxAttenuation);
   CHECK(c.release_content_ms > 900.0);
-  // The held trace parks; the release is what makes the axis wide.
+  // The held trace parks, and the release is four times longer than the flat
+  // hold it hangs off. So the release is what makes the axis wide -- as wide
+  // as the budget lets it, past which it runs off the right edge rather than
+  // squeezing the shape into the left margin.
   CHECK(c.held_parked);
-  CHECK(c.span_ms >= c.release_content_ms);
+  CHECK(c.span_ms > c.held_ms);
+  CHECK(c.span_ms >= c.held_ms * 3.9);
 }
 
 // -------------------------------------------------- the one-at-a-time sweeps
@@ -1556,15 +1632,18 @@ constexpr int kSweepBases = 6;
  * across its whole range, over base patches slow enough that every phase runs
  * for seconds, and "no effect at all" fails as loudly as a jump does.
  *
- * SL is monotone too, but its *direction* is a property of the patch rather
- * than of SL, deliberately -- see the test below.
+ * Register 0 is exempt at both ends. A rate of 0 never advances, so its phase
+ * lasts forever: for AR and DR that is the shape running past every ceiling,
+ * and for SR it is the flat hold, which is a rule of its own. Either way the
+ * step off 0 is a discontinuity the policy means to have, and the test below
+ * pins it rather than smoothing it over.
  */
 void test_every_rate_moves_the_axis_monotonically() {
   for (const Field field : {Field::Ar, Field::Dr, Field::Sr, Field::Rr}) {
     bool moved_somewhere = false;
     for (int i = 0; i < kSweepBases; ++i) {
       const std::vector<double> spans = span_sweep(sweep_base(i), field);
-      for (size_t v = 1; v < spans.size(); ++v) {
+      for (size_t v = 2; v < spans.size(); ++v) {
         if (spans[v] > spans[v - 1] && !near_rel(spans[v], spans[v - 1], kSameSpan)) {
           std::cout << field_name(field) << " widened the axis at " << v
                     << " on base " << i << ": " << spans[v - 1] << " -> "
@@ -1572,12 +1651,8 @@ void test_every_rate_moves_the_axis_monotonically() {
         }
         CHECK(spans[v] <= spans[v - 1] || near_rel(spans[v], spans[v - 1], kSameSpan));
         // ... and it is continuous while it narrows: no neighbouring pair of
-        // registers may halve the axis. Value 0 is exempt, because "never
-        // advances at all" is a discontinuity of the hardware, not of the
-        // policy.
-        if (v >= 2) {
-          CHECK(spans[v] >= spans[v - 1] * 0.49);
-        }
+        // registers may halve the axis.
+        CHECK(spans[v] >= spans[v - 1] * 0.49);
       }
       moved_somewhere |= moves(spans);
     }
@@ -1587,34 +1662,62 @@ void test_every_rate_moves_the_axis_monotonically() {
 }
 
 /**
+ * The one step the axis is allowed to jump, and the price of drawing a flat
+ * line as a flat line.
+ *
+ * SR = 0 holds forever, so there is no length to be the axis and the hold takes
+ * kFlatHoldShare of it. SR = 1 is a sustain that really does end -- after a
+ * minute or two, so the ceiling takes it -- and the axis leaps from hundreds of
+ * milliseconds to the ceiling for one register step. Every step after it is
+ * ordinary again.
+ */
+void test_the_flat_hold_is_the_one_step_the_axis_jumps() {
+  for (int i = 0; i < kSweepBases; ++i) {
+    const std::vector<double> spans = span_sweep(sweep_base(i), Field::Sr);
+    // Whatever it does at the step off zero, it is only ever wider afterwards:
+    // a hold that never ends is never given more axis than one that does.
+    CHECK(spans[1] >= spans[0] || near_rel(spans[1], spans[0], kSameSpan));
+  }
+  // Named, on EG_SPEC's worked example: 324 ms of flat hold against a sustain
+  // that takes 109 s to die and is cut at the ceiling.
+  ym2612::OperatorSettings op = worked_example();
+  op.sustain_rate = 0;
+  const double flat = choose_held_ms(to_operator_params(op));
+  op.sustain_rate = 1;
+  CHECK(choose_held_ms(to_operator_params(op)) > flat * 10.0);
+}
+
+/**
  * SL, which the owner measured as having no effect whatever.
  *
- * It has one now. It is not monotone, and it cannot be, because the two things
- * the axis is made of pull opposite ways as SL rises. Raising SL hands
- * attenuation from the sustain phase to the decay phase: the sustain's *start*
- * therefore always moves later, so the floor under the axis always rises; but
- * the envelope's whole *life* only lengthens when DR is the slower of the two
- * rates, and in the ordinary case -- a quick decay into a long slow fade -- it
- * shortens, and dramatically. AR31 DR15 SL0 SR8 takes 9.7 s to fade from full
- * volume; the same patch at SL15 is finished in 1.0 s, because DR does nearly
- * all of the falling. A wider axis for the second would be a lie.
+ * It has one now, and under this rule it is plainly monotone -- which is worth
+ * saying, because the policy it replaced was not, and the old test could only
+ * ask that the axis never double back.
  *
- * The axis is the larger of those two, so it is quasi-convex: it may fall and
- * it may rise, but it never rises and then falls. That is the property worth
- * asserting -- it is what rules out a jitter, which is a fall and a rise inside
- * a couple of neighbouring values.
+ * Raising SL hands attenuation from the sustain phase to the decay phase. The
+ * envelope's life is the time to fall through the whole scale, so moving a
+ * slice of it from one rate to the other changes that life at a rate which is
+ * the difference of the two speeds -- a constant. The axis is the life, so it
+ * is linear in SL and therefore monotone, and its DIRECTION is a property of
+ * the patch rather than of SL: a slow decay into a fast fade lengthens with SL,
+ * a quick decay into a slow fade shortens with it, and dramatically. AR31 DR15
+ * SL0 SR8 takes 9.7 s to fade from full volume; the same patch at SL15 is done
+ * in 1.0 s, because DR does nearly all of the falling. A wider axis for the
+ * second would be a lie.
  */
-void test_sustain_level_moves_the_axis_without_ever_doubling_back() {
+void test_sustain_level_moves_the_axis_monotonically() {
   bool moved_somewhere = false;
   for (int i = 0; i < kSweepBases; ++i) {
     const std::vector<double> spans = span_sweep(sweep_base(i), Field::Sl);
     bool risen = false;
+    bool fallen = false;
     for (size_t v = 1; v < spans.size(); ++v) {
       const bool up = spans[v] > spans[v - 1] && !near_rel(spans[v], spans[v - 1], kSameSpan);
       const bool down = spans[v] < spans[v - 1] && !near_rel(spans[v], spans[v - 1], kSameSpan);
       risen |= up;
-      // Once the sustain's start is what sizes the axis, nothing takes it back.
-      CHECK(!(risen && down));
+      fallen |= down;
+      // One direction per patch, for the whole of the slider's travel.
+      CHECK(!(risen && fallen));
     }
     moved_somewhere |= moves(spans);
   }
@@ -1623,8 +1726,7 @@ void test_sustain_level_moves_the_axis_without_ever_doubling_back() {
   // Both directions, named. A slow decay into a fast fade lengthens with SL ...
   const std::vector<double> slow_decay = span_sweep(adsr(31, 4, 0, 20, 12, 0), Field::Sl);
   CHECK(slow_decay.back() > slow_decay.front());
-  // ... and a quick decay into a slow fade shortens with it, as long as the
-  // decay stays short enough that the floor never takes over.
+  // ... and a quick decay into a slow fade shortens with it.
   const std::vector<double> quick_decay = span_sweep(adsr(31, 20, 0, 4, 12, 0), Field::Sl);
   CHECK(quick_decay.back() < quick_decay.front());
 }
@@ -1632,7 +1734,7 @@ void test_sustain_level_moves_the_axis_without_ever_doubling_back() {
 /**
  * The owner's second report: TL0 AR1 DR12 SL6 RR5 at the reference note.
  *
- * AR = 1 makes the attack alone last 8.4 s. Sizing the axis from the compressed
+ * AR = 1 makes the attack alone last 8.4 s. Sizing the axis from a compressed
  * lifetime and nothing else gave 10 s at SR = 0 and then 6.4 s the moment SR
  * went to 1 -- at which point the attack no longer finished inside the graph,
  * and the sustain, the very thing SR governs, was entirely off the right edge.
@@ -1640,7 +1742,9 @@ void test_sustain_level_moves_the_axis_without_ever_doubling_back() {
  */
 void test_a_very_slow_attack_still_leaves_room_for_the_sustain() {
   double previous = 0.0;
-  for (int sr = 0; sr <= 31; ++sr) {
+  // From SR = 1: the step off the flat hold is the deliberate jump pinned in
+  // test_the_flat_hold_is_the_one_step_the_axis_jumps().
+  for (int sr = 1; sr <= 31; ++sr) {
     ym2612::OperatorSettings op = adsr(1, 12, 6, sr, 5, 0);
     op.total_level = 0;
     const auto params = to_operator_params(op);
@@ -1667,8 +1771,6 @@ void test_a_very_slow_attack_still_leaves_room_for_the_sustain() {
     previous = curve.span_ms;
   }
 }
-
-} // namespace
 
 /// The axis is a continuous function of the parameters: no neighbouring pair
 /// of sustain levels may move it more than a factor of two either way.
@@ -1916,28 +2018,31 @@ void test_a_release_picks_up_at_the_level_that_was_sounding() {
   }
 }
 
+} // namespace
+
 int main() {
   test_registers_map_straight_through();
   test_ssg_bits_are_packed_the_way_the_chip_wants_them();
   test_only_envelope_registers_count_as_a_change();
 
-  test_a_normal_patch_gets_a_visible_sustain();
-  test_an_sr0_patch_shows_its_flat_hold();
+  test_the_axis_reaches_the_end_of_the_sustain();
+  test_an_envelope_longer_than_the_ceiling_is_cut_at_the_ceiling();
+  test_a_hold_that_never_ends_takes_a_fixed_share();
   test_an_ssg_loop_shows_a_few_periods();
   test_a_slow_attack_ssg_loop_reports_a_musical_rate();
-  test_a_frozen_attack_still_produces_a_usable_window();
-  test_the_held_window_is_bounded_across_a_sweep();
+  test_the_release_budget_is_its_own();
 
   // The closed forms themselves -- the phase durations and the loop period --
   // live in ym2612_eg, along with the sweeps that cross-check them against the
   // simulator. What is here is the policy built on top of them.
   test_a_loop_that_never_folds_is_sized_like_a_plain_patch();
   test_only_a_non_standard_ssg_attack_earns_a_line();
-  test_the_window_curve_is_smooth_monotone_and_sub_linear();
-  test_the_window_never_cuts_off_the_phase_being_edited();
+  test_the_attack_and_decay_are_never_cut();
+  test_every_patch_has_a_finite_axis();
   test_every_phase_present_is_at_least_partly_visible();
   test_every_rate_moves_the_axis_monotonically();
-  test_sustain_level_moves_the_axis_without_ever_doubling_back();
+  test_the_flat_hold_is_the_one_step_the_axis_jumps();
+  test_sustain_level_moves_the_axis_monotonically();
   test_a_very_slow_attack_still_leaves_room_for_the_sustain();
   test_the_axis_does_not_jump_between_neighbouring_values();
 
