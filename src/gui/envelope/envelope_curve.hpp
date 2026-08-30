@@ -165,7 +165,7 @@ double grid_step_ms(double span_ms);
  * shape of the curve. Two bits and a comparison off the registers, which is
  * all the simulator's own SsgArBelow31 is.
  */
-const char *warning_line(const ym2612_eg::OperatorParams &op);
+const char *warning_line(const ym2612_eg::CurveResult &curve);
 
 /// Everything the graph needs for one operator.
 struct EnvelopeCurve {
