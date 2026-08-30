@@ -3,6 +3,7 @@
 #include "app_state.hpp"
 #include "channel_allocator.hpp"
 #include "ym2612/types.hpp"
+#include <cstdint>
 #include <imgui.h>
 
 namespace ui {
@@ -16,6 +17,9 @@ namespace ui {
  */
 struct EnvelopeVoices {
   struct Voice {
+    /// The allocator's own key-on counter, which is what tells one note from
+    /// the next on the same channel. Zero for a channel that never sounded.
+    uint64_t sequence = 0;
     int midi_note = 0;
     double since_key_on_ms = 0.0;
     /// Negative while the key is still down.

@@ -151,7 +151,40 @@ struct EnvelopeSlot {
   /// 0 until this operator has been drawn once, which is how the first frame
   /// starts at its target instead of growing into it from nothing.
   double drawn_span_ms = 0.0;
+  /// The voices this operator has already watched fade out. A released voice
+  /// only ever gets quieter, so once it has gone this graph will never draw it
+  /// again -- and the allocator keeps its record for as long as the longest
+  /// release it could have had, which is ten seconds even when the release
+  /// itself was over in twenty milliseconds. Six voices can sound, so six
+  /// sequence numbers are all this ever has to remember.
+  std::array<uint64_t, VoiceCurveCache::kMaxEntries> finished{};
 };
+
+bool already_finished(const EnvelopeSlot &slot, uint64_t sequence) {
+  return sequence != 0 &&
+         std::find(slot.finished.begin(), slot.finished.end(), sequence) !=
+             slot.finished.end();
+}
+
+void remember_finished(EnvelopeSlot &slot, uint64_t sequence) {
+  if (sequence == 0) {
+    return;
+  }
+  // Sequences only grow, so the smallest entry is the one furthest in the past
+  // and the safest to forget.
+  *std::min_element(slot.finished.begin(), slot.finished.end()) = sequence;
+}
+
+/// True while one of this operator's envelope sliders is being dragged.
+bool envelope_slider_active(const UIState::EnvelopeState &state) {
+  using Slider = UIState::EnvelopeState::SliderState;
+  return state.total_level == Slider::Active ||
+         state.attack_rate == Slider::Active ||
+         state.decay_rate == Slider::Active ||
+         state.sustain_level == Slider::Active ||
+         state.sustain_rate == Slider::Active ||
+         state.release_rate == Slider::Active;
+}
 
 EnvelopeSlot &slot_for(ImGuiID id) {
   static std::unordered_map<ImGuiID, EnvelopeSlot> slots;
@@ -675,6 +708,7 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   for (int i = 0; i < found; ++i) {
     const VoiceActivity &voice = *ordered[i];
     EnvelopeVoices::Voice item;
+    item.sequence = voice.sequence;
     item.midi_note = voice.midi_note;
     item.since_key_on_ms = elapsed_ms(voice.key_on_sample);
     item.since_key_off_ms =
@@ -778,13 +812,23 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
     double release_origin_ms;
     double held_to_ms;
   };
+  // While a slider is being dragged the registers move under the cache every
+  // frame, so a curve simulated now is dropped before it is ever drawn twice.
+  // The budget is worth more once the value settles.
+  int nothing_to_spend = 0;
+  int &build_budget = envelope_slider_active(state) ? nothing_to_spend
+                                                    : voice_build_budget();
+
   DrawnVoice drawn[6];
   int drawn_count = 0;
   for (int i = 0; i < voices.count; ++i) {
     const EnvelopeVoices::Voice &voice = voices.items[i];
+    if (already_finished(slot, voice.sequence)) {
+      continue; // this note is over on this operator
+    }
     const EnvelopeCurve *voice_curve =
         slot.voices.get(op, ym2612_eg::NotePitch::from_midi(voice.midi_note),
-                        curve, voice_build_budget());
+                        curve, build_budget);
     if (voice_curve == nullptr) {
       continue; // its curve is being built next frame
     }
@@ -797,6 +841,11 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
         std::clamp(1.0 - cursor.silent_for_ms / kVoiceFadeMs, 0.0, 1.0));
     const float alpha = voice.recency * fade;
     if (alpha < kVoiceMinAlpha) {
+      // Faded out for good rather than merely quiet: the silence a released
+      // voice sits in only ever gets older, so nothing can bring it back.
+      if (cursor.released && cursor.silent_for_ms >= kVoiceFadeMs) {
+        remember_finished(slot, voice.sequence);
+      }
       continue;
     }
     drawn[drawn_count++] =
