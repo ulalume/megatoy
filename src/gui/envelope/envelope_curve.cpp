@@ -250,18 +250,17 @@ double grid_step_ms(double span_ms) {
   return kGridSteps[std::size(kGridSteps) - 1];
 }
 
-const char *warning_line(const OperatorParams &op) {
+const char *warning_line(const CurveResult &curve) {
   // Only one line is ever drawn, and only one defect earns it. The others the
   // library reports are things the graph already shows -- a frozen attack is a
   // flat line at silence, a loop that never loops has no teeth, an audio-rate
   // loop is a solid block of them -- so naming them as well only crowds the
   // picture. This is a ladder with one rung: putting a line back is a rung,
   // ordered most broken first, and CurveWarning carries them all.
-  //
-  // Read from the registers rather than from a run: sample_curve() raises
-  // SsgArBelow31 on the same two bits, before it steps a single sample.
-  if ((op.ssg & 0x08) != 0 && op.ar < 31) {
-    return "AR<31: non-standard SSG-EG";
+  for (const ym2612_eg::CurveWarning w : curve.warnings) {
+    if (w == ym2612_eg::CurveWarning::SsgArBelow31) {
+      return "AR<31: non-standard SSG-EG";
+    }
   }
   return nullptr;
 }
@@ -384,7 +383,7 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
       std::min(ym2612_eg::sustain_attenuation(params.sl) + tl_att,
                static_cast<int>(ym2612_eg::kMaxAttenuation)));
 
-  out.warning = warning_line(params);
+  out.warning = warning_line(out.held);
   return out;
 }
 

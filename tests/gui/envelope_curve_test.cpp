@@ -345,21 +345,22 @@ void test_a_loop_that_never_folds_is_sized_like_a_plain_patch() {
             ym2612_eg::phase_durations(latching, reference_pitch())));
 }
 
-/// The warning is two bits and a comparison, not something a run reports.
-void test_the_warning_is_read_off_the_registers() {
-  CHECK(warning_line(to_operator_params(ssg_patch(0, 30, 15, 4, 8, 7, 0))) !=
-        nullptr);
-  CHECK(warning_line(to_operator_params(ssg_patch(0, 31, 15, 4, 8, 7, 0))) ==
-        nullptr);
+/// Which defect earns the one line the graph draws. The library decides what
+/// is wrong with a patch; this only picks which of its answers is worth a
+/// line, so the test asks the drawn curve rather than the registers.
+void test_only_a_non_standard_ssg_attack_earns_a_line() {
+  const auto warning_for = [](const ym2612::OperatorSettings &op) {
+    return build_envelope_curve(op).warning;
+  };
+  CHECK(warning_for(ssg_patch(0, 30, 15, 4, 8, 7, 0)) != nullptr);
+  CHECK(warning_for(ssg_patch(0, 31, 15, 4, 8, 7, 0)) == nullptr);
   // The same AR without SSG-EG is nobody's business.
-  CHECK(warning_line(to_operator_params(adsr(30, 15, 4, 8, 7, 0))) == nullptr);
+  CHECK(warning_for(adsr(30, 15, 4, 8, 7, 0)) == nullptr);
   // Every mode, including the ones that never fold: the convention is about
   // SSG-EG being on at all, not about whether the shape happens to loop.
   for (int type = 0; type < 8; ++type) {
-    CHECK(warning_line(to_operator_params(
-              ssg_patch(type, 0, 15, 4, 8, 7, 0))) != nullptr);
-    CHECK(warning_line(to_operator_params(
-              ssg_patch(type, 31, 15, 4, 8, 7, 0))) == nullptr);
+    CHECK(warning_for(ssg_patch(type, 0, 15, 4, 8, 7, 0)) != nullptr);
+    CHECK(warning_for(ssg_patch(type, 31, 15, 4, 8, 7, 0)) == nullptr);
   }
 }
 
@@ -1887,7 +1888,7 @@ int main() {
   // live in ym2612_eg, along with the sweeps that cross-check them against the
   // simulator. What is here is the policy built on top of them.
   test_a_loop_that_never_folds_is_sized_like_a_plain_patch();
-  test_the_warning_is_read_off_the_registers();
+  test_only_a_non_standard_ssg_attack_earns_a_line();
   test_the_window_curve_is_smooth_monotone_and_sub_linear();
   test_the_window_never_cuts_off_the_phase_being_edited();
   test_every_phase_present_is_at_least_partly_visible();
