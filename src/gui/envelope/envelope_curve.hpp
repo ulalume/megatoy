@@ -5,9 +5,13 @@
  * traces.
  *
  * The shapes come from ym2612_eg, a sample-accurate simulator of the chip's
- * envelope generator; everything here is the policy around it -- which note to
- * draw at, how much of the held envelope is worth showing, how wide the time
- * axis should be, and which single warning is worth a line of text.
+ * envelope generator, and so do the numbers behind them: it answers how long
+ * each phase takes and how fast an SSG loop runs, in closed form, without
+ * anything here having to know what an increment table is. Everything in this
+ * file is the policy around those answers -- which note to draw at, how much
+ * of the held envelope is worth showing, how wide the time axis should be,
+ * where a sounding voice's cursor sits, and which single warning is worth a
+ * line of text.
  *
  * The graph draws two *independent* traces on one elapsed-time axis, because
  * chaining them would mean inventing a key-off instant, and a made-up key-off
@@ -67,17 +71,6 @@ int reference_midi_note();
 ym2612_eg::NotePitch reference_pitch();
 
 /**
- * The key-scale value the chip derives every effective rate from --
- * `keycode >> (3 - KS)`, and the ONLY way the note reaches the envelope.
- *
- * Two notes that share a ksv have bit-identical envelopes, which is what
- * makes VoiceCurveCache's key sound: with KS = 0 the whole keyboard has four
- * of them.
- */
-int key_scale_value(const ym2612_eg::OperatorParams &op,
-                    ym2612_eg::NotePitch pitch);
-
-/**
  * megatoy stores the SSG-EG enable bit and the 3-bit shape separately; the
  * chip register (and ym2612_eg) wants one nibble:
  * bit3 enable, bit2 attack, bit1 alternate, bit0 hold.
@@ -87,91 +80,28 @@ uint8_t packed_ssg(const ym2612::OperatorSettings &op);
 ym2612_eg::OperatorParams
 to_operator_params(const ym2612::OperatorSettings &op);
 
-/**
- * The internal attenuation at which this operator is at its LOUDEST -- where
- * a release has to start from.
- *
- * Normally that is 0, the top of the scale. With SSG-EG enabled and the attack
- * bit set (types 4-7) the output is inverted, `(0x200 - att) & 0x3FF`, so the
- * scale runs the other way: 0 is the quietest point the ramp ever reaches and
- * 0x200 is full volume. Starting those patches at 0 releases from silence,
- * which the chip's key-off rules cut dead in a single sample.
- */
-uint16_t loudest_attenuation(const ym2612_eg::OperatorParams &op);
-
 bool same_envelope(const ym2612_eg::OperatorParams &lhs,
                    const ym2612_eg::OperatorParams &rhs);
 
 /**
- * How long each phase of the held envelope lasts at `pitch`, in ms.
+ * The phase durations of ym2612_eg::phase_durations(), saturated at the
+ * longest phase an axis can usefully hold.
  *
- * Closed form rather than measured. The post-attack phases are linear in
- * attenuation, so their durations are one division each; the attack is
- * exponential, so its own recurrence is iterated -- a couple of hundred steps,
- * against the hundreds of thousands of samples the same stretch would cost to
- * simulate. Nothing here depends on how far a probe happened to look, which is
- * the whole point: a horizon is a place for the answer to change discontinuously.
+ * This is a drawing policy, not a fact about the envelope: "never decays" and
+ * "decays over a minute" look the same on any axis, and saturating rather
+ * than special-casing infinity keeps them next to each other instead of a
+ * cliff apart.
  *
- * A phase whose effective rate is 0 lasts forever, and says so. SR = 0 really
- * does hold for ever, and reporting that honestly is what makes it the widest
- * axis rather than -- as a probe that gave up would have it -- indistinguishable
- * from SR = 31.
+ * The two saturate at different lengths on purpose. The sustain's start is
+ * what keeps a phase ON the graph, so shortening it below what the axis could
+ * actually have shown would hide the very phase being edited; the lifetime
+ * only ever widens the axis, so it saturates sooner -- past a few seconds
+ * "how long until silence" stops telling a reader anything the shape does
+ * not, and letting it run to the ceiling buries a 300 ms decay under ten
+ * seconds of flat line.
  */
-struct HeldTimeline {
-  double attack_ms = 0.0;
-  double decay_ms = 0.0;
-  double sustain_ms = 0.0;
-
-  /// Where the sustain begins: the last structural feature the envelope has,
-  /// and so the last instant the axis has to reach to be worth looking at.
-  /// Infinite when a phase before it never ends.
-  double sustain_start_ms() const { return attack_ms + decay_ms; }
-  double lifetime_ms() const { return sustain_start_ms() + sustain_ms; }
-
-  /// The same two, with each phase saturated at the longest one an axis can
-  /// usefully hold. This is a drawing policy, not a fact about the envelope:
-  /// "never decays" and "decays over a minute" look the same on any axis, and
-  /// saturating rather than special-casing infinity keeps them next to each
-  /// other instead of a cliff apart.
-  double drawable_sustain_start_ms() const;
-  double drawable_lifetime_ms() const;
-};
-
-HeldTimeline held_timeline(const ym2612_eg::OperatorParams &op,
-                           ym2612_eg::NotePitch pitch);
-
-/// The whole course of the held envelope, attack to silence.
-double held_lifetime_ms(const ym2612_eg::OperatorParams &op,
-                        ym2612_eg::NotePitch pitch);
-
-/**
- * The visible period of an SSG-EG loop at `pitch`, in ms; 0 when the patch is
- * not a looping mode at all, and infinite when it is one whose ramp never
- * finishes.
- *
- * Closed form, for the same reason the phase durations above are. The period
- * used to be measured -- a probe was run for twelve seconds and its folds
- * counted -- and twelve seconds was another horizon for the answer to change
- * across: a triangle at AR31 SL15 SR0 takes fifteen seconds per ramp at DR = 1,
- * so the probe saw no fold, reported no loop, and the graph fell back to the
- * policy for a patch that does not loop. One notch up at DR = 2 a fold landed
- * inside the window and the axis jumped from ten seconds to twenty-three.
- *
- * One ramp is the internal attenuation climbing from 0 to the fold at 0x200 --
- * through DR as far as the sustain level, then through SR the rest of the way,
- * all at SSG-EG's quadrupled increments -- plus the attack that follows each
- * fold. That attack starts from 0x200 rather than from silence, and at the
- * AR = 31 these modes are documented for it is instant. The alternating modes
- * (bit 1 of the SSG register) fold twice per visible period.
- *
- * Infinity is a phase of the ramp that never advances: DR = 0 below the
- * sustain level, SR = 0 above it, or AR = 0 after the fold. The envelope then
- * never folds again, which is not a slow loop but no loop -- exactly the case
- * the simulator names SsgNeverLoops -- and the graph is sized by the phase
- * that stalled instead.
- */
-double ssg_loop_period_ms(const ym2612_eg::OperatorParams &op,
-                          ym2612_eg::NotePitch pitch);
+double drawable_sustain_start_ms(const ym2612_eg::PhaseDurations &phases);
+double drawable_lifetime_ms(const ym2612_eg::PhaseDurations &phases);
 
 /**
  * How wide a given lifetime alone would ask the axis to be: a single smooth,
@@ -194,12 +124,13 @@ double window_for_lifetime_ms(double lifetime_ms);
  * be at least partly on screen, so the axis reaches past the sustain's start
  * whatever the lifetime says; the lifetime only ever widens it further.
  */
-double window_for_timeline_ms(const HeldTimeline &timeline);
+double window_for_timeline_ms(const ym2612_eg::PhaseDurations &phases);
 
 /**
  * How much of the held envelope is worth *seeing*, in ms. An SSG loop is sized
- * from ssg_loop_period_ms() -- that is what the graph is about. Everything else
- * is held_timeline() put through window_for_timeline_ms().
+ * from ym2612_eg::ssg_loop_period_ms() -- that is what the graph is about.
+ * Everything else is ym2612_eg::phase_durations() put through
+ * window_for_timeline_ms().
  *
  * This is a scale, not a length: it is what the axis width is chosen from, and
  * the envelope itself is then drawn across the whole of that axis. Nothing
@@ -286,9 +217,9 @@ struct EnvelopeCurve {
  *
  * There used to be a third, a held-forever probe, and nothing it produced was
  * ever drawn: the axis was sized from what it saw and the warning read off
- * what it flagged. Both come from the registers now -- held_timeline() for the
- * phases, ssg_loop_period_ms() for a loop, warning_line() for the one line --
- * so the probe had nothing left to answer.
+ * what it flagged. Both come from the registers now -- the library's
+ * phase_durations() for the phases, its ssg_loop_period_ms() for a loop,
+ * warning_line() for the one line -- so the probe had nothing left to answer.
  *
  * A pure function of the operator and the reference note. It used to take the
  * span drawn last frame, because the axis was quantised onto a ladder with

@@ -146,7 +146,8 @@ void test_a_normal_patch_gets_a_visible_sustain() {
 
   // EG_SPEC's worked example takes 27 s to reach silence. The 3 s probe never
   // saw that; the closed form does not have to.
-  const double lifetime = held_lifetime_ms(params, reference_pitch());
+  const double lifetime =
+      ym2612_eg::phase_durations(params, reference_pitch()).lifetime_ms();
   CHECK(lifetime > 20000.0);
   CHECK(lifetime < 35000.0);
 
@@ -173,7 +174,8 @@ void test_an_sr0_patch_shows_its_flat_hold() {
   const CurveResult held = simulate_held(op);
   CHECK(std::isfinite(held.park_ms));
   // The closed form still tells the truth about the envelope ...
-  CHECK(!std::isfinite(held_lifetime_ms(params, reference_pitch())));
+  CHECK(!std::isfinite(
+      ym2612_eg::phase_durations(params, reference_pitch()).lifetime_ms()));
   const double held_ms = choose_held_ms(params);
   // ... while the axis it is drawn on stays a readable width.
   CHECK(held_ms < 4000.0);
@@ -277,7 +279,7 @@ void test_the_held_window_is_bounded_across_a_sweep() {
   }
 }
 
-// ------------------------------------------------ the closed-form lifetime
+// ----------------------------------------------------- the patches under test
 
 ym2612::OperatorSettings adsr(int ar, int dr, int sl, int sr, int rr, int ks) {
   ym2612::OperatorSettings op;
@@ -290,64 +292,6 @@ ym2612::OperatorSettings adsr(int ar, int dr, int sl, int sr, int rr, int ks) {
   return op;
 }
 
-/// The claim the whole window policy rests on: the closed form is the same
-/// number the simulator would have reached, and it reaches it without a
-/// horizon. Every patch here outlives the 3 s probe, which is exactly the
-/// range the old policy was blind in.
-void test_the_lifetime_agrees_with_the_simulator() {
-  const ym2612::OperatorSettings cases[] = {
-      worked_example(),          adsr(31, 15, 4, 8, 7, 0),
-      adsr(20, 20, 8, 20, 7, 0), adsr(14, 18, 9, 14, 7, 0),
-      adsr(8, 10, 7, 4, 7, 0),   adsr(12, 12, 6, 12, 7, 2),
-      adsr(31, 15, 15, 31, 7, 0), adsr(1, 15, 4, 8, 7, 0),
-  };
-  for (const auto &op : cases) {
-    const auto params = to_operator_params(op);
-    const double lifetime = held_lifetime_ms(params, reference_pitch());
-    CHECK(std::isfinite(lifetime));
-    // Watch the whole thing die, however long that takes.
-    ym2612_eg::CurveRequest request;
-    request.op = params;
-    request.pitch = reference_pitch();
-    request.gate_ms = -1.0;
-    request.max_ms = lifetime * 1.5 + 100.0;
-    const CurveResult simulated = ym2612_eg::sample_curve(request);
-    CHECK(std::isfinite(simulated.park_ms));
-    CHECK(near_rel(lifetime, simulated.park_ms, 0.05));
-  }
-}
-
-/// A rate of 0 never advances its phase, so the envelope never gets past it.
-/// That is what SR = 0 holding forever *is*, and reporting it as infinite --
-/// rather than as "the probe saw no decay" -- is what makes it the widest axis
-/// instead of indistinguishable from the fastest.
-void test_a_rate_of_zero_lasts_forever() {
-  const auto life = [](const ym2612::OperatorSettings &op) {
-    return held_lifetime_ms(to_operator_params(op), reference_pitch());
-  };
-  CHECK(!std::isfinite(life(adsr(31, 10, 2, 0, 7, 0))));  // SR = 0
-  CHECK(!std::isfinite(life(adsr(31, 0, 2, 5, 7, 0))));   // DR = 0, SL > 0
-  CHECK(!std::isfinite(life(adsr(0, 10, 2, 5, 7, 0))));   // AR = 0
-  // ... but SL = 0 skips the decay outright, exactly as the chip does, so
-  // DR = 0 costs nothing there.
-  CHECK(std::isfinite(life(adsr(31, 0, 0, 5, 7, 0))));
-}
-
-/// SSG-EG quadruples every post-attack increment and stops the ramp at 0x200
-/// instead of 0x3F0, so the same registers live a small fraction as long.
-void test_ssg_eg_shortens_the_lifetime() {
-  ym2612::OperatorSettings plain = adsr(31, 20, 4, 10, 7, 0);
-  ym2612::OperatorSettings ssg = plain;
-  ssg.ssg_enable = true;
-  ssg.ssg_type_envelope_control = 1; // hold: not a loop, so the closed form runs
-  const double plain_ms = held_lifetime_ms(to_operator_params(plain), reference_pitch());
-  const double ssg_ms = held_lifetime_ms(to_operator_params(ssg), reference_pitch());
-  CHECK(ssg_ms < plain_ms * 0.2);
-  CHECK(ssg_ms > 0.0);
-}
-
-// ------------------------------------------------- the closed-form loop period
-
 ym2612::OperatorSettings ssg_patch(int type, int ar, int dr, int sl, int sr,
                                    int rr, int ks) {
   ym2612::OperatorSettings op = adsr(ar, dr, sl, sr, rr, ks);
@@ -357,107 +301,30 @@ ym2612::OperatorSettings ssg_patch(int type, int ar, int dr, int sl, int sr,
   return op;
 }
 
-/**
- * The claim the loop half of the window policy rests on, and the counterpart of
- * test_the_lifetime_agrees_with_the_simulator(): the period computed from the
- * registers is the period the chip actually runs at.
- *
- * Checked only where a simulation can answer at all -- sample_curve() needs
- * three folds before it will publish loop_hz, so a loop slower than a third of
- * the window here has no measurement to be compared against. That is precisely
- * the blindness this closed form exists to cure, and it is why the *other* loop
- * test below sweeps DR into the range no probe could ever have reached.
- *
- * Both fold conventions are covered: the alternating modes (types 2, 3, 6, 7)
- * count two ramps to a period and the rest one, and getting that wrong is a
- * clean factor of two rather than a few percent.
- */
-void test_the_loop_period_agrees_with_the_simulator() {
-  constexpr double kMeasurableMs = 12000.0;
-  double worst = 0.0;
-  int compared = 0;
-  for (const int type : {0, 2, 4, 6}) {
-    // AR = 14 is the weak corner of the model and belongs in the grid: below
-    // 31 the fold is followed by a real attack, and that attack's length is
-    // decided by where the climb before it left the shared counter.
-    for (const int ar : {31, 20, 14}) {
-      for (const int dr : {31, 24, 18, 12, 8}) {
-        for (const int sl : {0, 9, 14, 15}) {
-          for (const int sr : {31, 8, 3}) {
-            for (const int ks : {0, 3}) {
-              for (const int note : {48, 72, 84}) {
-                set_reference_midi_note(note);
-                const auto op = ssg_patch(type, ar, dr, sl, sr, 0, ks);
-                const auto params = to_operator_params(op);
-                const double analytic =
-                    ssg_loop_period_ms(params, reference_pitch());
-                CHECK(analytic > 0.0); // every one of these is a looping mode
-                // Three folds, and the alternating modes need two per period.
-                if (!std::isfinite(analytic) ||
-                    analytic * 4.0 > kMeasurableMs) {
-                  continue;
-                }
-                const CurveResult held = simulate_held(op, kMeasurableMs);
-                CHECK(held.loop_hz > 0.0);
-                const double simulated = 1000.0 / held.loop_hz;
-                const double error =
-                    std::fabs(analytic - simulated) / simulated;
-                if (error > worst) {
-                  worst = error;
-                }
-                ++compared;
-                // A few percent. What is left is not a modelling error but the
-                // loop's own shape: a ramp ends on a slot boundary of whichever
-                // rate carried it there, so successive ramps can differ by a
-                // slot, and the two answers average a different number of them.
-                CHECK(error < 0.04);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  set_reference_midi_note(kDefaultReferenceMidiNote);
-  CHECK(compared > 500);
-  std::cout << "loop period: " << compared
-            << " patches cross-checked, worst disagreement " << worst * 100.0
-            << "%\n";
-}
+// -------------------------------------------------------- the width policy
 
 /**
- * A ramp with a phase that never advances never reaches the fold, so the
- * envelope never loops again -- which is not a slow loop but no loop, and the
- * graph must size itself from the phase that stalled instead.
- *
- * These are exactly the patches ym2612_eg flags as SsgNeverLoops, and the
- * closed form arrives at the same three by arithmetic rather than by a rule:
- * an infinite phase makes the ramp infinite, and only the phases the ramp
- * actually needs are in the sum. SL = 0 skips the decay outright, so DR = 0
- * costs nothing there; SL = 15 puts the sustain level above the fold, so SR
- * never runs and SR = 0 costs nothing.
+ * A loop whose ramp never finishes is not a slow loop but no loop -- the
+ * library says so with an infinite period -- and the axis is then sized by
+ * the phase that stalled, exactly as it is for a patch with SSG-EG switched
+ * off. The arithmetic that decides which patches those are lives in
+ * ym2612_eg; what is tested here is that the width policy believes it.
  */
-void test_a_ramp_that_never_finishes_is_no_loop_at_all() {
-  const auto period = [](const ym2612::OperatorSettings &op) {
-    return ssg_loop_period_ms(to_operator_params(op), reference_pitch());
-  };
-  CHECK(!std::isfinite(period(ssg_patch(0, 31, 0, 8, 8, 7, 0))));  // DR = 0
-  CHECK(!std::isfinite(period(ssg_patch(0, 31, 15, 8, 0, 7, 0)))); // SR = 0
-  CHECK(!std::isfinite(period(ssg_patch(0, 0, 15, 8, 8, 7, 0))));  // AR = 0
-  CHECK(std::isfinite(period(ssg_patch(0, 31, 0, 0, 8, 7, 0))));   // SL = 0
-  CHECK(std::isfinite(period(ssg_patch(0, 31, 15, 15, 0, 7, 0)))); // SL = 15
-  // A mode that latches instead of folding is not a loop either, and says so
-  // with a plain zero rather than an infinity: nothing is stalled, the shape
-  // simply has no period.
-  CHECK(period(ssg_patch(1, 31, 15, 8, 8, 7, 0)) == 0.0); // hold
-  CHECK(period(adsr(31, 15, 8, 8, 7, 0)) == 0.0);         // SSG-EG off
-
-  // ... and a patch with no loop is drawn by the policy for one, which is the
-  // width its stalled phase asks for and not some fraction of a period.
-  const auto stalled = ssg_patch(0, 31, 15, 8, 0, 7, 0);
+void test_a_loop_that_never_folds_is_sized_like_a_plain_patch() {
+  const auto stalled = ssg_patch(0, 31, 15, 8, 0, 7, 0); // SR = 0
   const auto params = to_operator_params(stalled);
+  CHECK(!std::isfinite(
+      ym2612_eg::ssg_loop_period_ms(params, reference_pitch())));
   CHECK(choose_held_ms(params) ==
-        window_for_timeline_ms(held_timeline(params, reference_pitch())));
+        window_for_timeline_ms(
+            ym2612_eg::phase_durations(params, reference_pitch())));
+  // ... and a mode that latches rather than folding takes the same road, with
+  // a plain zero instead of an infinity.
+  const auto latching = to_operator_params(ssg_patch(1, 31, 15, 8, 8, 7, 0));
+  CHECK(ym2612_eg::ssg_loop_period_ms(latching, reference_pitch()) == 0.0);
+  CHECK(choose_held_ms(latching) ==
+        window_for_timeline_ms(
+            ym2612_eg::phase_durations(latching, reference_pitch())));
 }
 
 /// The warning is two bits and a comparison, not something a run reports.
@@ -520,7 +387,7 @@ void test_the_window_curve_is_smooth_monotone_and_sub_linear() {
  * lifetime only ever widens it further.
  */
 void test_the_window_never_cuts_off_the_phase_being_edited() {
-  HeldTimeline timeline;
+  ym2612_eg::PhaseDurations timeline;
   timeline.attack_ms = 8360.0;
   timeline.decay_ms = 460.0;
   timeline.sustain_ms = 200.0;
@@ -533,7 +400,7 @@ void test_the_window_never_cuts_off_the_phase_being_edited() {
 
   // A quarter of the axis is kept for the sustain, so SR always has somewhere
   // to be -- up to the ceiling, which still wins.
-  HeldTimeline modest;
+  ym2612_eg::PhaseDurations modest;
   modest.attack_ms = 100.0;
   modest.decay_ms = 200.0;
   modest.sustain_ms = 10.0;
@@ -547,16 +414,16 @@ void test_the_window_never_cuts_off_the_phase_being_edited() {
 
   // The floor only ever raises: a long-lived envelope with a short attack and
   // decay is still sized by its lifetime.
-  HeldTimeline long_lived;
+  ym2612_eg::PhaseDurations long_lived;
   long_lived.attack_ms = 5.0;
   long_lived.decay_ms = 20.0;
   long_lived.sustain_ms = 30000.0;
   CHECK(near_rel(window_for_timeline_ms(long_lived),
-                 window_for_lifetime_ms(long_lived.drawable_lifetime_ms()),
+                 window_for_lifetime_ms(drawable_lifetime_ms(long_lived)),
                  0.001));
   // 30 s of sustain is past what an axis can hold, so it is drawn as the
   // longest life the policy models rather than as itself.
-  CHECK(long_lived.drawable_lifetime_ms() < long_lived.lifetime_ms());
+  CHECK(drawable_lifetime_ms(long_lived) < long_lived.lifetime_ms());
 }
 
 /// Whatever the patch, the instant the sustain begins is inside the axis --
@@ -570,7 +437,8 @@ void test_every_phase_present_is_at_least_partly_visible() {
         for (int ks = 0; ks <= 3; ks += 3) {
           ym2612::OperatorSettings op = adsr(ar, dr, sl, 8, 5, ks);
           const auto params = to_operator_params(op);
-          const HeldTimeline timeline = held_timeline(params, reference_pitch());
+          const ym2612_eg::PhaseDurations timeline =
+              ym2612_eg::phase_durations(params, reference_pitch());
           const double window = choose_held_ms(params);
           if (timeline.sustain_start_ms() < 10000.0) {
             CHECK(window > timeline.sustain_start_ms());
@@ -1647,7 +1515,8 @@ void test_a_very_slow_attack_still_leaves_room_for_the_sustain() {
     ym2612::OperatorSettings op = adsr(1, 12, 6, sr, 5, 0);
     op.total_level = 0;
     const auto params = to_operator_params(op);
-    const HeldTimeline timeline = held_timeline(params, reference_pitch());
+    const ym2612_eg::PhaseDurations timeline =
+        ym2612_eg::phase_durations(params, reference_pitch());
     const EnvelopeCurve curve = build_envelope_curve(op);
 
     // The attack really is that long, and the sustain really does start after
@@ -1748,7 +1617,8 @@ void test_a_slow_loop_still_shows_a_period() {
   for (int dr = 20; dr >= 1; --dr) {
     const ym2612::OperatorSettings op = patch(dr);
     const double period =
-        ssg_loop_period_ms(to_operator_params(op), reference_pitch());
+        ym2612_eg::ssg_loop_period_ms(to_operator_params(op),
+                                      reference_pitch());
     const EnvelopeCurve c = build_envelope_curve(op);
     size_t folds = 0;
     for (const ym2612_eg::Marker &m : c.held.markers) {
@@ -1913,11 +1783,10 @@ int main() {
   test_a_frozen_attack_still_produces_a_usable_window();
   test_the_held_window_is_bounded_across_a_sweep();
 
-  test_the_lifetime_agrees_with_the_simulator();
-  test_a_rate_of_zero_lasts_forever();
-  test_ssg_eg_shortens_the_lifetime();
-  test_the_loop_period_agrees_with_the_simulator();
-  test_a_ramp_that_never_finishes_is_no_loop_at_all();
+  // The closed forms themselves -- the phase durations and the loop period --
+  // live in ym2612_eg now, and so do the sweeps that cross-check them against
+  // the simulator. What is left here is the policy built on top of them.
+  test_a_loop_that_never_folds_is_sized_like_a_plain_patch();
   test_the_warning_is_read_off_the_registers();
   test_the_window_curve_is_smooth_monotone_and_sub_linear();
   test_the_window_never_cuts_off_the_phase_being_edited();
