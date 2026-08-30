@@ -76,6 +76,32 @@ double silence_or_never(const CurveResult &curve) {
   return ms >= 0.0 ? ms : std::numeric_limits<double>::infinity();
 }
 
+/// The slope the trace would be continued along past its last point, in
+/// attenuation units per ms. Zero when the envelope came to rest, and zero
+/// when the whole trace sits at one level: both are continued flat.
+double tail_slope(const CurveResult &curve, bool at_rest) {
+  const auto &points = curve.points;
+  if (at_rest || points.size() < 2) {
+    return 0.0;
+  }
+  const ym2612_eg::CurvePoint &last = points.back();
+  // sample_curve() closes every polyline with a point at the end of the
+  // simulated span, which can repeat the level already there -- a final edge
+  // that is both very short and perfectly flat. Extrapolating a whole graph
+  // width from that would draw a flat line across an envelope that is plainly
+  // still moving, so measure from the last point at a different level instead.
+  std::size_t base = points.size() - 1;
+  while (base > 0 && points[base - 1].out == last.out) {
+    --base;
+  }
+  if (base == 0) {
+    return 0.0; // the whole trace sits at one level
+  }
+  const ym2612_eg::CurvePoint &previous = points[base - 1];
+  const double dt = static_cast<double>(last.ms) - previous.ms;
+  return dt > 0.0 ? (static_cast<double>(last.out) - previous.out) / dt : 0.0;
+}
+
 // ------------------------------------------------------------------ the axis
 
 /// The narrowest axis worth drawing, whatever the content says. A loop fast
@@ -373,6 +399,9 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   // quiet on its way somewhere?
   out.held_silence_ms = silence_or_never(out.held);
   out.release_silence_ms = silence_or_never(out.release);
+
+  out.held_tail_slope = tail_slope(out.held, out.held_parked);
+  out.release_tail_slope = tail_slope(out.release, !out.release_truncated);
 
   const int tl_att = static_cast<int>(params.tl) * 8;
   out.peak_out = static_cast<uint16_t>(
