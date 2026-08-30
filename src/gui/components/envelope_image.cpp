@@ -759,7 +759,39 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
   const EnvelopeCurve &curve = slot.curve.get(op);
 
-  ImGui::BeginChild("EnvelopeImage", size, false, ImGuiWindowFlags_NoScrollbar);
+  PlotArea plot;
+  plot.target_ms = std::max(curve.span_ms, 1.0);
+
+  // The axis follows the target rather than jumping to it. The curve is in
+  // milliseconds and was simulated for the target width, so this is purely a
+  // change of scale at draw time -- nothing is recomputed, and the animation
+  // cannot make the graph disagree with the registers.
+  //
+  // A pixel is the resolution the motion is worth having at all: the axis maps
+  // its whole width onto the plot's width, so a difference of target/width in
+  // milliseconds moves the right-hand end of the content by one pixel. Below
+  // that, snap.
+  //
+  // Kept outside the visibility test below: the width the axis is animating
+  // towards is a property of the registers, not of whether the graph happens
+  // to be scrolled into view, and a graph that comes back into view should be
+  // where it would have been rather than starting the journey again.
+  const float plot_width = std::max(size.x - 2.0f, 1.0f);
+  slot.drawn_span_ms =
+      approach_span(slot.drawn_span_ms, plot.target_ms, ImGui::GetIO().DeltaTime,
+                    plot.target_ms / plot_width);
+  plot.span_ms = std::max(slot.drawn_span_ms, 1.0);
+
+  // BeginChild answers whether anything inside it can be seen. Four of these
+  // are stacked in the operator editor and two or three of them are regularly
+  // scrolled out of view; without the test each one still builds its whole
+  // vertex stream for the clipper to throw away.
+  const bool visible =
+      ImGui::BeginChild("EnvelopeImage", size, false, ImGuiWindowFlags_NoScrollbar);
+  if (!visible) {
+    ImGui::EndChild();
+    return;
+  }
 
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
 
@@ -773,24 +805,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   // volume runs along the very top of the plot, and text over it would be
   // unreadable in both directions.
   const float label_height = ImGui::GetTextLineHeight();
-  PlotArea plot;
   plot.min = ImVec2(canvas_min.x + 1.0f, canvas_min.y + label_height + 1.0f);
   plot.max = ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f);
-  plot.target_ms = std::max(curve.span_ms, 1.0);
-
-  // The axis follows the target rather than jumping to it. The curve is in
-  // milliseconds and was simulated for the target width, so this is purely a
-  // change of scale at draw time -- nothing is recomputed, and the animation
-  // cannot make the graph disagree with the registers.
-  //
-  // A pixel is the resolution the motion is worth having at all: the axis maps
-  // its whole width onto plot.width(), so a difference of target/width in
-  // milliseconds moves the right-hand end of the content by one pixel. Below
-  // that, snap.
-  slot.drawn_span_ms =
-      approach_span(slot.drawn_span_ms, plot.target_ms, ImGui::GetIO().DeltaTime,
-                    plot.target_ms / plot.width());
-  plot.span_ms = std::max(slot.drawn_span_ms, 1.0);
 
   // The note the axis is drawn at, at the far end of the same strip. Now that
   // the reference note is a setting, an axis that does not say which note it
