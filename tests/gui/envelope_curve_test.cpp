@@ -217,13 +217,16 @@ void test_an_sr0_patch_shows_its_flat_hold() {
   CHECK(!std::isfinite(
       ym2612_eg::phase_durations(params, reference_pitch()).lifetime_ms()));
   const double held_ms = choose_held_ms(params);
-  // ... while the axis it is drawn on stays a readable width.
-  CHECK(held_ms < 4000.0);
+  // ... while the axis it is drawn on stays a readable width: a hold that
+  // never ends takes the widest a sustain may claim, and no more.
+  CHECK(held_ms <= kSustainSpanMaxMs * 1.001);
   // The flat part is visible, and the decay before it is not squeezed away.
   CHECK(held_ms > held.park_ms * 1.2);
-  // ~19% here: the axis is a little wider than this patch alone needs, which
-  // is the price of SR = 0 sitting beside SR = 1 instead of jumping.
-  CHECK(held.park_ms / held_ms > 0.15);
+  // ~7.5% here: a hold that never ends takes the whole of what a sustain may
+  // claim, which is the price of SR = 0 sitting beside SR = 1 rather than a
+  // jump away from it. The decay is still on the graph, which is the point.
+  CHECK(held.park_ms / held_ms > 0.05);
+  CHECK(held.park_ms < held_ms);
 
   // SR = 1 dies, but so slowly that it must land beside SR = 0, not a cliff
   // away from it.
@@ -369,13 +372,14 @@ void test_only_a_non_standard_ssg_attack_earns_a_line() {
 /// longer envelope must not get a ten-times wider one, or a slow patch
 /// swallows the graph).
 void test_the_window_curve_is_smooth_monotone_and_sub_linear() {
-  // The three points kWindowRefMs and kWindowExponent were tuned on.
+  // The three points kWindowRefMs and kWindowExponent were tuned on: a
+  // ten-times longer envelope earns roughly four times the axis, not ten.
   CHECK(window_for_lifetime_ms(300.0) >= 300.0);
   CHECK(window_for_lifetime_ms(300.0) <= 400.0);
-  CHECK(window_for_lifetime_ms(3000.0) >= 1000.0);
-  CHECK(window_for_lifetime_ms(3000.0) <= 1500.0);
-  CHECK(window_for_lifetime_ms(30000.0) >= 3000.0);
-  CHECK(window_for_lifetime_ms(30000.0) <= 5000.0);
+  CHECK(window_for_lifetime_ms(3000.0) >= 1200.0);
+  CHECK(window_for_lifetime_ms(3000.0) <= 1900.0);
+  CHECK(window_for_lifetime_ms(30000.0) >= 5000.0);
+  CHECK(window_for_lifetime_ms(30000.0) <= 9000.0);
 
   double previous = 0.0;
   for (double lifetime = 1.0; lifetime <= 1.0e6; lifetime *= 1.01) {
@@ -431,18 +435,27 @@ void test_the_window_never_cuts_off_the_phase_being_edited() {
   CHECK(window_for_timeline_ms(timeline) > timeline.sustain_start_ms());
   CHECK(window_for_timeline_ms(timeline) <= kMaxHeldMs);
 
-  // The floor only ever raises: a long-lived envelope with a short attack and
-  // decay is still sized by its lifetime.
+  // A long-lived envelope with a short attack and decay is sized by its
+  // lifetime, up to what a sustain is allowed to claim. Without that bound the
+  // attack and decay -- 25 ms of a 30 s note -- would be a smear at the origin.
   ym2612_eg::PhaseDurations long_lived;
   long_lived.attack_ms = 5.0;
   long_lived.decay_ms = 20.0;
   long_lived.sustain_ms = 30000.0;
-  CHECK(near_rel(window_for_timeline_ms(long_lived),
-                 window_for_lifetime_ms(drawable_lifetime_ms(long_lived)),
-                 0.001));
-  // 30 s of sustain is past what an axis can hold, so it is drawn as the
-  // longest life the policy models rather than as itself.
-  CHECK(drawable_lifetime_ms(long_lived) < long_lived.lifetime_ms());
+  const double asked =
+      window_for_lifetime_ms(drawable_lifetime_ms(long_lived));
+  CHECK(window_for_timeline_ms(long_lived) < asked);
+  CHECK(near_rel(window_for_timeline_ms(long_lived), kSustainSpanMaxMs, 0.001));
+  // It still grows with the lifetime while it can.
+  ym2612_eg::PhaseDurations shorter = long_lived;
+  shorter.sustain_ms = 900.0;
+  CHECK(window_for_timeline_ms(shorter) < window_for_timeline_ms(long_lived));
+  // A hold that never ends asks for an infinite axis and is given the same
+  // bound as a merely long one, so the two sit beside each other.
+  ym2612_eg::PhaseDurations endless = long_lived;
+  endless.sustain_ms = std::numeric_limits<double>::infinity();
+  CHECK(near_rel(window_for_timeline_ms(endless),
+                 window_for_timeline_ms(long_lived), 0.001));
 }
 
 /// Whatever the patch, the instant the sustain begins is inside the axis --

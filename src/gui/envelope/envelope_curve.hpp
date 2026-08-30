@@ -65,6 +65,12 @@ inline constexpr int kMaxReferenceMidiNote = 107; // B7
 inline constexpr double kMinSpanMs = 25.0;
 inline constexpr double kMinHeldMs = 50.0;
 inline constexpr double kMaxHeldMs = 10000.0;
+/// The widest a sustain may push the axis. Absolute, not a multiple of what
+/// the attack and decay need: SL moves that base itself, so a proportional
+/// bound would widen the axis as SL rose and narrow it again once the bound
+/// stopped binding -- a hump in the middle of a slider's travel.
+inline constexpr double kSustainSpanMaxMs = 4000.0;
+
 inline constexpr double kLoopVisiblePeriods = 1.2;
 inline constexpr double kLoopMaxAxisMs = 20000.0;
 

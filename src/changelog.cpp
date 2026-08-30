@@ -12,6 +12,7 @@ constexpr std::string_view kEnvelopeDetails[] = {
 
 constexpr ChangelogItem kItems_0_9_0[] = {
     {"Envelope graphs match the chip, on a millisecond axis", kEnvelopeDetails},
+    {"Added 10 built-in FM Patches", {}},
 };
 
 constexpr ChangelogItem kItems_0_8_4[] = {
