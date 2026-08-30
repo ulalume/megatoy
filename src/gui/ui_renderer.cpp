@@ -348,6 +348,29 @@ void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
       });
 }
 
+/// Ask for a name and a format, then write the new patch and open it.
+void request_new_patch(AppContext &ctx, const std::filesystem::path &folder) {
+  auto &session = ctx.services.patch_session;
+  if (!session.can_create_patch_in(folder)) {
+    return;
+  }
+  ctx.ui_state().new_patch_prompt_state.request(
+      folder, session.save_formats(),
+      [&ctx, folder](const std::string &name, const std::string &extension) {
+        auto &patch_session = ctx.services.patch_session;
+        const auto result =
+            patch_session.create_patch_in(folder, name, extension);
+        if (result.is_success()) {
+          megatoy::status::success("Created \"" +
+                                   result.path.filename().string() + "\".");
+        } else {
+          megatoy::status::error(result.error_message.empty()
+                                     ? "Could not create the patch."
+                                     : result.error_message);
+        }
+      });
+}
+
 MainMenuContext make_main_menu_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
@@ -409,6 +432,7 @@ ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
   return {ui_state.confirmation_state,
           ui_state.danger_confirmation_state,
           ui_state.text_prompt_state,
+          ui_state.new_patch_prompt_state,
           ui_state.drop_state,
           [patch_actions_facade](const patches::PatchEntry &entry) {
             patch_actions_facade.load(entry);
@@ -500,6 +524,9 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_deletion(ctx, entry);
+      },
+      [&ctx](const std::filesystem::path &folder) {
+        request_new_patch(ctx, folder);
       }};
 }
 

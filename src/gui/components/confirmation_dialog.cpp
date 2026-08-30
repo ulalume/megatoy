@@ -2,11 +2,117 @@
 #include "common.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "modal.hpp"
+#include "patches/filename_utils.hpp"
 #include <algorithm>
 #include <cstring>
 #include <imgui.h>
+#include <string>
 
 namespace ui {
+
+namespace {
+
+/**
+ * "New Patch": a name and one of the formats megatoy can write, on one row.
+ *
+ * Confirm is refused while the name is one the folder cannot take -- empty,
+ * unusable, or already there in the chosen format -- and says which.
+ */
+void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
+  constexpr const char *kTitle = "New Patch";
+  if (prompt.requested) {
+    ImGui::OpenPopup(kTitle);
+    prompt.requested = false;
+  }
+
+  auto modal = begin_modal(kTitle, ModalDismiss::Escape);
+  bool cancelled = modal.dismissed;
+  bool confirmed = false;
+  if (modal.visible) {
+    // The combo is sized to the longest name it has to show; the field takes
+    // what is left of the row.
+    float combo_width = 0.0f;
+    for (const auto &format : prompt.formats) {
+      combo_width = std::max(
+          combo_width, ImGui::CalcTextSize(format.display_name().c_str()).x);
+    }
+    combo_width += ImGui::GetFrameHeight() +
+                   ImGui::GetStyle().FramePadding.x * 2.0f;
+
+    char input[512];
+    std::strncpy(input, prompt.name.c_str(), sizeof(input) - 1);
+    input[sizeof(input) - 1] = '\0';
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - combo_width -
+                            ImGui::GetStyle().ItemSpacing.x);
+    if (ImGui::InputTextWithHint("##NewPatchName", "Name", input,
+                                 sizeof(input))) {
+      prompt.name = input;
+    }
+
+    ImGui::SameLine();
+    std::string preview = prompt.extension;
+    for (const auto &format : prompt.formats) {
+      if (format.extension == prompt.extension) {
+        preview = format.display_name();
+        break;
+      }
+    }
+    ImGui::SetNextItemWidth(combo_width);
+    if (ImGui::BeginCombo("##NewPatchFormat", preview.c_str())) {
+      for (const auto &format : prompt.formats) {
+        const bool selected = format.extension == prompt.extension;
+        if (ImGui::Selectable(format.display_name().c_str(), selected)) {
+          prompt.extension = format.extension;
+        }
+        if (selected) {
+          ImGui::SetItemDefaultFocus();
+        }
+      }
+      ImGui::EndCombo();
+    }
+
+    const std::string validation_error = patches::new_patch_name_error(
+        prompt.name, prompt.extension, prompt.folder);
+    // The empty field the dialog opens with is not a mistake the user has
+    // made yet -- its hint already says what belongs there. Create stays
+    // disabled either way.
+    if (!validation_error.empty() && !prompt.name.empty()) {
+      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusWarning), "%s",
+                         validation_error.c_str());
+    }
+    ImGui::Spacing();
+
+    const float create_width =
+        std::max(dialog_button_width(), button_width("Create"));
+    align_buttons_right({dialog_button_width(), create_width});
+    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
+      cancelled = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!validation_error.empty());
+    if (ImGui::Button("Create", ImVec2(create_width, 0))) {
+      confirmed = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndDisabled();
+    end_modal();
+  }
+
+  if (cancelled) {
+    prompt.clear();
+  } else if (confirmed) {
+    const std::string name = prompt.name;
+    const std::string extension = prompt.extension;
+    auto on_confirm = std::move(prompt.on_confirm);
+    prompt.clear();
+    if (on_confirm) {
+      on_confirm(name, extension);
+    }
+  }
+}
+
+} // namespace
 
 void render_confirmation_dialog(ConfirmationDialogContext &context) {
   auto &confirmation_state = context.state;
@@ -179,6 +285,8 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
       on_confirm(value);
     }
   }
+
+  render_new_patch_prompt(context.new_patch_prompt_state);
 }
 
 } // namespace ui
