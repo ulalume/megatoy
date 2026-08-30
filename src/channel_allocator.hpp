@@ -72,15 +72,17 @@ public:
 
   bool is_note_active(const ym2612::Note &note) const;
   /// `sample_position` is where the key-on reaches the chip, in rendered
-  /// output frames; it is published for the graph and nothing else.
+  /// output frames; it is published for the graph and nothing else. There is
+  /// no default: a caller that left it out would stamp its voice at t = 0 and
+  /// the graph would draw a confident, wrong cursor with nothing to say so.
   std::optional<ChannelClaim> note_on(const ym2612::Note &note,
                                       uint8_t velocity, bool allow_voice_steal,
-                                      uint64_t sample_position = 0);
+                                      uint64_t sample_position);
   std::optional<ym2612::Note> active_note(ym2612::ChannelIndex channel) const;
   std::optional<uint8_t> active_velocity(ym2612::ChannelIndex channel) const;
   bool note_off(const ym2612::Note &note, ym2612::Device &device,
-                uint64_t sample_position = 0);
-  void release_all(ym2612::Device &device, uint64_t sample_position = 0);
+                uint64_t sample_position);
+  void release_all(ym2612::Device &device, uint64_t sample_position);
 
   // --- readable from any thread ---
 
@@ -101,6 +103,9 @@ public:
 
 private:
   void publish();
+  /// The key coming up on one channel: it stops sounding, but its voice keeps
+  /// its record, because it is still falling through its release.
+  void release_channel(uint8_t index, uint64_t sample_position);
   void publish_voice(std::size_t index, const VoiceActivity &voice);
   VoiceActivity published_voice(std::size_t index) const;
 

@@ -197,6 +197,21 @@ ChannelAllocator::active_note(ym2612::ChannelIndex channel) const {
   return channel_to_note_[index];
 }
 
+void ChannelAllocator::release_channel(uint8_t index,
+                                       uint64_t sample_position) {
+  channel_key_on_[index] = false;
+  channel_to_note_[index].reset();
+  channel_velocity_[index] = 0;
+
+  // The voice keeps its record: it is releasing, not gone.
+  VoiceActivity &voice = voice_state_[index];
+  if (voice.valid()) {
+    voice.held = false;
+    voice.key_off_sample = sample_position;
+    publish_voice(index, voice);
+  }
+}
+
 bool ChannelAllocator::note_off(const ym2612::Note &note,
                                 ym2612::Device &device,
                                 uint64_t sample_position) {
@@ -208,19 +223,8 @@ bool ChannelAllocator::note_off(const ym2612::Note &note,
   ym2612::ChannelIndex channel = it->second;
   device.channel(channel).write_key_off();
 
-  auto channel_idx = static_cast<uint8_t>(channel);
-  channel_key_on_[channel_idx] = false;
-  channel_to_note_[channel_idx].reset();
-  channel_velocity_[channel_idx] = 0;
+  release_channel(static_cast<uint8_t>(channel), sample_position);
   note_to_channel_.erase(it);
-
-  // The voice keeps its record: it is releasing, not gone.
-  VoiceActivity &voice = voice_state_[channel_idx];
-  if (voice.valid()) {
-    voice.held = false;
-    voice.key_off_sample = sample_position;
-    publish_voice(channel_idx, voice);
-  }
 
   publish();
   return true;
@@ -230,18 +234,12 @@ void ChannelAllocator::release_all(ym2612::Device &device,
                                    uint64_t sample_position) {
   for (const auto &[note, channel] : note_to_channel_) {
     device.channel(channel).write_key_off();
-    auto channel_idx = static_cast<uint8_t>(channel);
-    channel_key_on_[channel_idx] = false;
-    channel_to_note_[channel_idx].reset();
-    channel_velocity_[channel_idx] = 0;
+    const auto channel_idx = static_cast<uint8_t>(channel);
+    release_channel(channel_idx, sample_position);
+    // Unlike a single note-off, which leaves the freed channel its place in
+    // the recency order: the counter goes back to zero here, so the orders
+    // have to as well.
     channel_order_[channel_idx] = 0;
-
-    VoiceActivity &voice = voice_state_[channel_idx];
-    if (voice.valid()) {
-      voice.held = false;
-      voice.key_off_sample = sample_position;
-      publish_voice(channel_idx, voice);
-    }
   }
   note_to_channel_.clear();
   allocation_counter_ = 0;
