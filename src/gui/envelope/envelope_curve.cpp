@@ -1,6 +1,7 @@
 #include "gui/envelope/envelope_curve.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iterator>
 #include <limits>
@@ -611,19 +612,77 @@ const EnvelopeCurve *VoiceCurveCache::get(const ym2612::OperatorSettings &op,
   return &entries_[slot].curve;
 }
 
+// ------------------------------------------------- how often to rebuild
+
+double RebuildThrottle::interval_for_ms(double cost_ms) {
+  if (!(cost_ms > 0.0)) {
+    return 0.0;
+  }
+  // The budget is a share of wall-clock time, so the interval is the cost
+  // divided by that share: a rebuild worth one budget's work every frame is
+  // spaced one frame apart, and one worth six is spaced six.
+  const double interval =
+      cost_ms * (kRebuildBudgetPeriodMs / kRebuildBudgetMs);
+  return std::min(interval, kMaxRebuildDeferMs);
+}
+
+bool RebuildThrottle::may_rebuild(double now_ms) const {
+  if (!ever_) {
+    return true;
+  }
+  return now_ms - last_rebuild_ms_ >= interval_ms();
+}
+
+void RebuildThrottle::note_rebuild(double now_ms, double cost_ms) {
+  last_rebuild_ms_ = now_ms;
+  // A clock that went backwards, or a rebuild too quick to measure, is worth
+  // nothing to the spacing: it earns no wait at all.
+  last_cost_ms_ = std::max(cost_ms, 0.0);
+  ever_ = true;
+}
+
+double steady_now_ms() {
+  const auto since_epoch = std::chrono::steady_clock::now().time_since_epoch();
+  return std::chrono::duration<double, std::milli>(since_epoch).count();
+}
+
 const EnvelopeCurve &EnvelopeCurveCache::get(const ym2612::OperatorSettings &op) {
   const ym2612_eg::OperatorParams params = to_operator_params(op);
   const ym2612_eg::NotePitch pitch = reference_pitch();
-  const bool unchanged = valid_ && same_envelope(params, params_) &&
-                         pitch.fnum == pitch_.fnum && pitch.block == pitch_.block;
-  if (unchanged) {
+  const auto same_pitch = [](ym2612_eg::NotePitch lhs,
+                             ym2612_eg::NotePitch rhs) {
+    return lhs.fnum == rhs.fnum && lhs.block == rhs.block;
+  };
+
+  // Whether this is the second frame in a row to ask for the same thing --
+  // measured against the previous REQUEST rather than against the curve, so a
+  // value that arrived while a rebuild was deferred still counts as settled.
+  const bool settled = requested_valid_ && same_envelope(params, requested_) &&
+                       same_pitch(pitch, requested_pitch_);
+  requested_ = params;
+  requested_pitch_ = pitch;
+  requested_valid_ = true;
+
+  if (valid_ && same_envelope(params, params_) && same_pitch(pitch, pitch_)) {
+    // The curve on hand is the one being asked for: nothing to decide, and no
+    // clock read either. This is every frame the user is not editing.
     return curve_;
   }
+
+  const double now_ms = now_ms_();
+  if (valid_ && !settled && !throttle_.may_rebuild(now_ms)) {
+    // Still moving, and the last rebuild has not earned its keep yet. Last
+    // frame's curve goes out again -- one frame further out of date than the
+    // one the graph drew a moment ago, which is a difference no drag can see.
+    return curve_;
+  }
+
   curve_ = build_envelope_curve(op);
   params_ = params;
   pitch_ = pitch;
   valid_ = true;
   ++rebuilds_;
+  throttle_.note_rebuild(now_ms, now_ms_() - now_ms);
   return curve_;
 }
 
