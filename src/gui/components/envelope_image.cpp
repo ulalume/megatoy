@@ -511,9 +511,20 @@ void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
                    0.0);
   const float thickness = ui::scale::px(1.0f);
   const size_t edges = path.edges();
-  for (size_t i = 0; i < edges; ++i) {
-    draw_list->AddLine(path.pixels[i], path.pixels[i + 1],
-                       colors[bounds.index_at(path.at_ms[i])], thickness);
+  // One polyline per stretch of one colour rather than one line per vertex.
+  // The boundaries are the segment markers, so there are three runs at most
+  // however many thousand vertices an SSG trace carries.
+  size_t run_start = 0;
+  while (run_start < edges) {
+    const int owner = bounds.index_at(path.at_ms[run_start]);
+    size_t run_end = run_start + 1;
+    while (run_end < edges && bounds.index_at(path.at_ms[run_end]) == owner) {
+      ++run_end;
+    }
+    draw_list->AddPolyline(&path.pixels[run_start],
+                           static_cast<int>(run_end - run_start + 1),
+                           colors[owner], ImDrawFlags_None, thickness);
+    run_start = run_end;
   }
 }
 
@@ -574,11 +585,12 @@ void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
   }
   TracePath &path = trace_scratch();
   build_trace_path(path, points, plot, curve.held_tail_slope, 0.0, to_ms, 0.0);
-  const float thickness = ui::scale::px(1.0f);
-  const size_t edges = path.edges();
-  for (size_t i = 0; i < edges; ++i) {
-    draw_list->AddLine(path.pixels[i], path.pixels[i + 1], color, thickness);
+  if (path.pixels.size() < 2) {
+    return;
   }
+  draw_list->AddPolyline(path.pixels.data(),
+                         static_cast<int>(path.pixels.size()), color,
+                         ImDrawFlags_None, ui::scale::px(1.0f));
 }
 
 /// The release this voice is actually taking: the drawn release trace from the
@@ -596,11 +608,12 @@ void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
   // The release keeps its shape and is slid along to where the key came up.
   build_trace_path(path, points, plot, curve.release_tail_slope, from_ms, to_ms,
                    origin_ms - from_ms);
-  const float thickness = ui::scale::px(1.0f);
-  const size_t edges = path.edges();
-  for (size_t i = 0; i < edges; ++i) {
-    draw_list->AddLine(path.pixels[i], path.pixels[i + 1], color, thickness);
+  if (path.pixels.size() < 2) {
+    return;
   }
+  draw_list->AddPolyline(path.pixels.data(),
+                         static_cast<int>(path.pixels.size()), color,
+                         ImDrawFlags_None, ui::scale::px(1.0f));
 }
 
 /// The single warning, bottom left. Wrapped rather than clipped: it is a
