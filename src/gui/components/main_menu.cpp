@@ -84,10 +84,13 @@ void draw_load_graph(const Panel &panel,
 void render_load_menu(MainMenuContext &context) {
   auto &ui_prefs = context.ui_prefs;
 
+  ImGui::SeparatorText("Improve performance");
+
   const bool core_at_best =
       ui_prefs.ym2612_core == static_cast<int>(ym2612::CoreType::Ymfm);
-  if (ImGui::MenuItem(core_at_best ? "Core (already set)" : "Core...", nullptr,
-                      false, !core_at_best)) {
+  if (ImGui::MenuItem(core_at_best ? "Switch core to ymfm (already set)"
+                                   : "Switch core to ymfm...",
+                      nullptr, false, !core_at_best)) {
     context.open_sound_preferences = true;
   }
 
@@ -97,8 +100,8 @@ void render_load_menu(MainMenuContext &context) {
                                 ? ui_prefs.audio_buffer_frames
                                 : context.default_audio_buffer_frames;
   const bool buffer_at_best = buffer_frames >= largest_buffer;
-  if (ImGui::MenuItem(buffer_at_best ? "Buffer Size (already set)"
-                                     : "Buffer Size...",
+  if (ImGui::MenuItem(buffer_at_best ? "Increase buffer size (already set)"
+                                     : "Increase buffer size...",
                       nullptr, false, !buffer_at_best)) {
     context.open_sound_preferences = true;
   }
@@ -108,8 +111,8 @@ void render_load_menu(MainMenuContext &context) {
   // the time the waveform takes comes out of the same deadline. Where audio
   // has a thread of its own it cannot, and the item is not offered.
   const bool waveform_at_best = !ui_prefs.show_waveform;
-  if (ImGui::MenuItem(waveform_at_best ? "Hide Waveform (already set)"
-                                       : "Hide Waveform",
+  if (ImGui::MenuItem(waveform_at_best ? "Hide waveform (already set)"
+                                       : "Hide waveform",
                       nullptr, false, !waveform_at_best)) {
     ui_prefs.show_waveform = false;
   }
@@ -128,8 +131,17 @@ void render_audio_load(MainMenuContext &context) {
 
   const Panel panel = begin_panel(size, "##audio_load");
   const bool clicked = ImGui::IsItemClicked();
-  draw_load_graph(panel, context.audio_load.history());
+  const bool hovered = ImGui::IsItemHovered();
+  const auto history = context.audio_load.history();
+  draw_load_graph(panel, history);
   end_panel(panel);
+
+  if (hovered) {
+    const float latest =
+        history.count > 0 ? history.values[history.count - 1] : 0.0f;
+    ImGui::SetTooltip("Audio load: %.0f%% of the time available",
+                      static_cast<double>(latest) * 100.0);
+  }
 
   if (clicked) {
     ImGui::OpenPopup("##audio_load_menu");
