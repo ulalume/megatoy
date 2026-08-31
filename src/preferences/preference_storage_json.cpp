@@ -1,3 +1,4 @@
+#include "audio/load_meter.hpp"
 #include "platform/platform_config.hpp"
 #include "preference_storage.hpp"
 #include <algorithm>
@@ -163,6 +164,11 @@ public:
           data.ui_preferences.audio_buffer_frames =
               ui["audio_buffer_frames"].get<int>();
         }
+        if (ui.contains("audio_load_reading")) {
+          data.ui_preferences.audio_load_reading =
+              static_cast<int>(audio::load_reading_from_int(
+                  ui["audio_load_reading"].get<int>()));
+        }
         if (ui.contains("ui_scale")) {
           data.ui_preferences.ui_scale = ui["ui_scale"].get<float>();
         }
@@ -278,6 +284,7 @@ public:
       ui["ym2612_chip_type"] = data.ui_preferences.ym2612_chip_type;
       ui["ym2612_core"] = data.ui_preferences.ym2612_core;
       ui["audio_buffer_frames"] = data.ui_preferences.audio_buffer_frames;
+      ui["audio_load_reading"] = data.ui_preferences.audio_load_reading;
       ui["ui_scale"] = data.ui_preferences.ui_scale;
       ui["use_velocity"] = data.ui_preferences.use_velocity;
       ui["use_pitch_bend"] = data.ui_preferences.use_pitch_bend;

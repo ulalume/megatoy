@@ -36,11 +36,13 @@ constexpr float kLoadWindowMs = 10000.0f;
 constexpr std::size_t kMaxLoadColumns = 256;
 
 // The drawn window, folded to one column per pixel by taking the highest
-// value in each: the reading beside the graph is the top of what is drawn.
+// value in each. Peak and average are taken over the samples the columns were
+// folded from, so either reading describes the span the graph draws.
 struct LoadWindow {
   std::array<float, kMaxLoadColumns> columns{};
   std::size_t count = 0;
   float peak = 0.0f;
+  float average = 0.0f;
 };
 
 LoadWindow load_window(const audio::LoadMeter::History &history, float width) {
@@ -57,14 +59,36 @@ LoadWindow load_window(const audio::LoadMeter::History &history, float width) {
   const std::size_t columns = std::min<std::size_t>(
       kMaxLoadColumns, std::max<std::size_t>(2, static_cast<std::size_t>(width)));
   out.count = std::min(columns, used);
+  double total = 0.0;
   for (std::size_t i = 0; i < used; ++i) {
     const std::size_t column = out.count < 2 ? 0
                                              : i * (out.count - 1) / (used - 1);
     const float value = history.values[first + i];
     out.columns[column] = std::max(out.columns[column], value);
     out.peak = std::max(out.peak, value);
+    total += static_cast<double>(value);
   }
+  out.average = static_cast<float>(total / static_cast<double>(used));
   return out;
+}
+
+// The tilde marks the mean wherever it appears; a bare number is the peak, and
+// stands nearest the graph whose top it names.
+void format_load_reading(char *out, std::size_t size, const LoadWindow &window,
+                         audio::LoadReading reading) {
+  const double peak = static_cast<double>(window.peak) * 100.0;
+  const double average = static_cast<double>(window.average) * 100.0;
+  switch (reading) {
+  case audio::LoadReading::Average:
+    std::snprintf(out, size, "~%.0f%%", average);
+    return;
+  case audio::LoadReading::PeakAndAverage:
+    std::snprintf(out, size, "~%.0f%% %.0f%%", average, peak);
+    return;
+  case audio::LoadReading::Peak:
+    break;
+  }
+  std::snprintf(out, size, "%.0f%%", peak);
 }
 
 void draw_load_graph(const Panel &panel, const LoadWindow &window) {
@@ -161,9 +185,10 @@ void render_audio_load(MainMenuContext &context) {
 
   const auto history = context.audio_load.history();
   const LoadWindow window = load_window(history, size.x);
-  char reading[8];
-  std::snprintf(reading, sizeof(reading), "%.0f%%",
-                static_cast<double>(window.peak) * 100.0);
+  char reading[16];
+  format_load_reading(
+      reading, sizeof(reading), window,
+      audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
   const float reading_width = ImGui::CalcTextSize(reading).x;
   const float row = ImGui::GetTextLineHeight();
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/load_meter.hpp"
 #include "core/types.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/theme.hpp"
@@ -26,6 +27,8 @@ struct UIPreferences {
    * audio device.
    */
   int audio_buffer_frames = 0;
+  /// 0 = peak, 1 = average, 2 = both, matching audio::LoadReading.
+  int audio_load_reading = static_cast<int>(audio::LoadReading::Peak);
   /**
    * Factor the interface is drawn at; 0 follows the display. Values outside
    * the supported range are clamped when the style is built.
@@ -83,6 +86,7 @@ struct UIPreferences {
            lhs.ym2612_chip_type == rhs.ym2612_chip_type &&
            lhs.ym2612_core == rhs.ym2612_core &&
            lhs.audio_buffer_frames == rhs.audio_buffer_frames &&
+           lhs.audio_load_reading == rhs.audio_load_reading &&
            lhs.ui_scale == rhs.ui_scale &&
            lhs.use_velocity == rhs.use_velocity &&
            lhs.velocity_sensitivity_depth == rhs.velocity_sensitivity_depth &&

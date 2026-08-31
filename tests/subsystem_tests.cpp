@@ -1,5 +1,6 @@
 #include "audio/audio_manager.hpp"
 #include "audio/audio_transport.hpp"
+#include "audio/load_meter.hpp"
 #include "core/status.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/folder_metadata.hpp"
@@ -343,6 +344,52 @@ void test_core_preference_round_trip(const std::filesystem::path &root) {
     PreferenceManager preferences(paths);
     CHECK(preferences.ui_preferences().ym2612_core ==
           static_cast<int>(ym2612::CoreType::Ymfm));
+  }
+}
+
+void test_load_reading_preference_round_trip(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "load-reading-preference-config";
+  std::filesystem::remove_all(config);
+  std::filesystem::create_directories(config);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    auto ui = preferences.ui_preferences();
+    CHECK(ui.audio_load_reading == static_cast<int>(audio::LoadReading::Peak));
+    ui.audio_load_reading =
+        static_cast<int>(audio::LoadReading::PeakAndAverage);
+    preferences.set_ui_preferences(ui);
+  }
+
+  nlohmann::json stored;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> stored;
+  }
+  CHECK(stored.at("ui").at("audio_load_reading").get<int>() ==
+        static_cast<int>(audio::LoadReading::PeakAndAverage));
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().audio_load_reading ==
+          static_cast<int>(audio::LoadReading::PeakAndAverage));
+  }
+
+  // Out of range falls back to the default.
+  stored["ui"]["audio_load_reading"] = 9;
+  {
+    std::ofstream output(config / "preferences.json");
+    output << stored.dump(2);
+  }
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().audio_load_reading ==
+          static_cast<int>(audio::LoadReading::Peak));
   }
 }
 
@@ -1275,6 +1322,7 @@ int main() {
   test_velocity_sensitivity_preference_round_trip(migration_root);
   test_chip_type_preference_round_trip(migration_root);
   test_core_preference_round_trip(migration_root);
+  test_load_reading_preference_round_trip(migration_root);
   test_envelope_reference_note_preference_round_trip(migration_root);
   test_last_patch_preference_round_trip(migration_root);
   test_legacy_data_directory_migration();
