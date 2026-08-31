@@ -61,7 +61,7 @@ private:
 
   uint32_t sample_rate_ = 0;
   ChipType chip_type_ = ChipType::Ym2612;
-  CoreType core_type_ = CoreType::Nuked;
+  CoreType core_type_ = CoreType::Ymfm;
   audio::LowPassFilter lowpass_;
   std::unique_ptr<Chip> nuked_chip_;
   std::unique_ptr<Chip> ymfm_chip_;

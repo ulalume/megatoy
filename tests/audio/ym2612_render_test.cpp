@@ -160,6 +160,7 @@ void test_nuked_idle_stretch_holds_its_level() {
 
   ym2612::Device device;
   device.init(kSampleRate);
+  device.set_core_type(ym2612::CoreType::Nuked);
   CHECK(device.core_type() == ym2612::CoreType::Nuked);
 
   const auto patch = make_all_carrier_patch(20);
@@ -389,7 +390,7 @@ void test_switching_chip_type_releases_notes_and_keeps_audio_working() {
 void test_switching_core_releases_notes_and_keeps_audio_working() {
   AudioEngine engine;
   CHECK(engine.initialize(kSampleRate));
-  CHECK(engine.device().core_type() == ym2612::CoreType::Nuked);
+  CHECK(engine.device().core_type() == ym2612::CoreType::Ymfm);
 
   const auto patch = make_all_carrier_patch(20);
   submit_patch(engine, patch);
@@ -399,9 +400,9 @@ void test_switching_core_releases_notes_and_keeps_audio_working() {
   CHECK(before > 0.01f);
 
   CHECK(engine.submit(
-      audio::AudioCommand::set_core_type(ym2612::CoreType::Ymfm)));
+      audio::AudioCommand::set_core_type(ym2612::CoreType::Nuked)));
   render_ac_peak(engine, 64);
-  CHECK(engine.device().core_type() == ym2612::CoreType::Ymfm);
+  CHECK(engine.device().core_type() == ym2612::CoreType::Nuked);
   CHECK(engine.notes().published_notes().empty());
 
   const auto second_note = ym2612::Note::from_midi_note(64);
