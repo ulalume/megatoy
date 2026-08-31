@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/audio_command.hpp"
+#include "audio/load_meter.hpp"
 #include "audio/scope_buffer.hpp"
 #include "channel_allocator.hpp"
 #include "ym2612/device.hpp"
@@ -82,6 +83,10 @@ public:
   audio::ScopeBuffer &scope_buffer() { return scope_buffer_; }
   const audio::ScopeBuffer &scope_buffer() const { return scope_buffer_; }
 
+  /// How much of each block's deadline render() has been using. Safe to read
+  /// from any thread.
+  const audio::LoadMeter &load_meter() const { return load_meter_; }
+
   uint32_t sample_rate() const { return sample_rate_; }
   uint32_t frame_size() const { return frame_size_; }
   bool is_running() const { return running_; }
@@ -103,6 +108,8 @@ private:
   float dc_y_[2] = {0.0f, 0.0f};
   ym2612::Device device_;
   audio::ScopeBuffer scope_buffer_;
+  // Written once per render() from the audio thread.
+  audio::LoadMeter load_meter_;
   audio::AudioCommandQueue commands_;
   audio::AudioCommandQueue midi_commands_;
   std::mutex midi_push_mutex_;

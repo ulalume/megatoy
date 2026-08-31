@@ -395,7 +395,10 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
             // separate undo steps.
             patch_history.begin_snapshot(label, {});
           },
-          [patch_history]() { patch_history.commit(); }};
+          [patch_history]() { patch_history.commit(); },
+          ctx.services.audio_manager.load_meter(),
+          ui_state.open_sound_preferences,
+          ctx.services.audio_manager.default_buffer_frames()};
 }
 
 void render_save_export_popup_host(AppContext &ctx) {
@@ -560,6 +563,7 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
       ctx.services.preference_manager,
       ui_state.prefs,
       ui_state.open_add_folder_dialog,
+      ui_state.open_sound_preferences,
       ctx.services.path_service.paths(),
       state.connected_midi_inputs(),
       midi_status.message,

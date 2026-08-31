@@ -238,22 +238,48 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
   //    which is why an SSG-EG patch's release is so much shorter than the same
   //    patch without it. It shares nothing with the held trace but the axis.
   //
-  //    "Full volume" is the library's loudest_attenuation(), not 0: with an
-  //    inverted SSG-EG mode 0 is the quiet end of the ramp, and releasing from
-  //    there is a one-sample cut rather than a curve. AR is zeroed for this run
+  //    "Full volume" is one step short of the library's
+  //    loudest_attenuation(), not 0: with an inverted SSG-EG mode 0 is the
+  //    quiet end of the ramp, and the loudest attenuation is the fold level
+  //    itself, which an operator only ever passes through -- reaching it
+  //    re-triggers, and a hold mode latches there. AR is zeroed for this run
   //    alone -- sample_curve() calls key_on(), which snaps an instant attack
   //    straight to att = 0 and would throw the start level away, and the
   //    release rate does not depend on AR. The AttackFrozen warning that comes
   //    back with it is never read: warning_line() is asked about the registers,
   //    not about any run.
+  //
+  //    The gate is short rather than zero because a key write takes a sample
+  //    to reach the envelope; released on sample zero the note never starts.
   ym2612_eg::CurveRequest release;
   release.op = params;
   release.op.ar = 0;
   release.pitch = pitch;
-  release.gate_ms = 0.0;
+  release.gate_ms =
+      2000.0 / ym2612_eg::sample_rate_hz(ym2612_eg::kNtscClockHz);
   release.max_ms = release_max_ms();
-  release.start_att = ym2612_eg::loudest_attenuation(params);
+  const uint16_t loudest = ym2612_eg::loudest_attenuation(params);
+  release.start_att = loudest > 0 ? static_cast<uint16_t>(loudest - 1) : 0;
   out.release = ym2612_eg::sample_curve(release);
+  // The key reaches the envelope one sample after the write, so the samples
+  // before that carry a level the note never sounds at. Drop them and put the
+  // first sounding one at the origin the trace is drawn from.
+  {
+    const float settled = static_cast<float>(
+        1000.0 / ym2612_eg::sample_rate_hz(ym2612_eg::kNtscClockHz));
+    std::vector<ym2612_eg::CurvePoint> &points = out.release.points;
+    const auto first = std::find_if(
+        points.begin(), points.end(),
+        [settled](const ym2612_eg::CurvePoint &p) { return p.ms >= settled; });
+    if (first != points.begin() && first != points.end()) {
+      points.erase(points.begin(), first);
+      const float origin = points.front().ms;
+      for (ym2612_eg::CurvePoint &p : points)
+        p.ms -= origin;
+      for (ym2612_eg::Marker &m : out.release.markers)
+        m.ms = m.ms > origin ? m.ms - origin : 0.0f;
+    }
+  }
   out.release_content_ms =
       out.release.points.empty()
           ? 0.0

@@ -61,6 +61,20 @@ if(NOT ymfm_POPULATED)
   FetchContent_Populate(ymfm)
 endif()
 
+# Nuked-OPN2 - YM2612 emulation core.
+# Plain C and no CMake project, so only the sources are fetched; the library
+# target is defined in cmake/targets.cmake. The repository publishes no tags,
+# so the pin below is a commit SHA.
+FetchContent_Declare(
+  nuked_opn2
+  GIT_REPOSITORY https://github.com/nukeykt/Nuked-OPN2
+  GIT_TAG        335747d78cb0abbc3b55b004e62dad9763140115
+)
+FetchContent_GetProperties(nuked_opn2)
+if(NOT nuked_opn2_POPULATED)
+  FetchContent_Populate(nuked_opn2)
+endif()
+
 if(NOT EMSCRIPTEN)
   # RtMidi
   FetchContent_Declare(
@@ -146,7 +160,7 @@ FetchContent_MakeAvailable(ym2612_format)
 FetchContent_Declare(
   ym2612_eg
   GIT_REPOSITORY https://github.com/ulalume/ym2612_eg.git
-  GIT_TAG        v0.2.1
+  GIT_TAG        v0.2.2
 )
 set(YM2612_EG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YM2612_EG_BUILD_BENCH OFF CACHE BOOL "" FORCE)

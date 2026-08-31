@@ -1,6 +1,7 @@
 #include "waveform.hpp"
 
 #include "audio/scope_trigger.hpp"
+#include "gui/components/panel.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 
@@ -29,34 +30,10 @@ constexpr std::uint64_t kClipHoldFrames = 22050;
 // Per-UI-frame release of the spectrum display.
 constexpr float kSpectrumSmoothing = 0.8f;
 
-struct Panel {
-  ImDrawList *draw_list;
-  ImVec2 min;
-  ImVec2 max;
-};
-
 ImU32 with_alpha(ImU32 color, float alpha) {
   ImVec4 value = ImGui::ColorConvertU32ToFloat4(color);
   value.w *= alpha;
   return ImGui::ColorConvertFloat4ToU32(value);
-}
-
-Panel begin_panel(const ImVec2 &size, const char *id) {
-  const ImVec2 origin = ImGui::GetCursorScreenPos();
-  ImGui::InvisibleButton(id, size);
-
-  Panel panel{ImGui::GetWindowDrawList(), origin,
-              ImVec2(origin.x + size.x, origin.y + size.y)};
-  panel.draw_list->AddRectFilled(panel.min, panel.max,
-                                 ImGui::GetColorU32(ImGuiCol_FrameBg));
-  panel.draw_list->PushClipRect(panel.min, panel.max, true);
-  return panel;
-}
-
-void end_panel(const Panel &panel) {
-  panel.draw_list->PopClipRect();
-  panel.draw_list->AddRect(panel.min, panel.max,
-                           ImGui::GetColorU32(ImGuiCol_Border));
 }
 
 void draw_channel(const Panel &panel, const std::vector<float> &samples,

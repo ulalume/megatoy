@@ -155,6 +155,10 @@ public:
           data.ui_preferences.ym2612_chip_type =
               std::clamp(ui["ym2612_chip_type"].get<int>(), 0, 1);
         }
+        if (ui.contains("ym2612_core")) {
+          data.ui_preferences.ym2612_core =
+              std::clamp(ui["ym2612_core"].get<int>(), 0, 1);
+        }
         if (ui.contains("audio_buffer_frames")) {
           data.ui_preferences.audio_buffer_frames =
               ui["audio_buffer_frames"].get<int>();
@@ -272,6 +276,7 @@ public:
       ui["show_patch_lab"] = data.ui_preferences.show_patch_lab;
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
       ui["ym2612_chip_type"] = data.ui_preferences.ym2612_chip_type;
+      ui["ym2612_core"] = data.ui_preferences.ym2612_core;
       ui["audio_buffer_frames"] = data.ui_preferences.audio_buffer_frames;
       ui["ui_scale"] = data.ui_preferences.ui_scale;
       ui["use_velocity"] = data.ui_preferences.use_velocity;

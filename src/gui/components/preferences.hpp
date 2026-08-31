@@ -12,10 +12,15 @@
 
 namespace ui {
 
+/// Audio buffer sizes the Sound tab offers, in frames, smallest first.
+inline constexpr int kAudioBufferChoices[] = {256, 384, 512, 1024, 2048};
+
 struct PreferencesContext {
   PreferenceManager &preferences;
   PreferenceManager::UIPreferences &ui_prefs;
   bool &open_add_folder_dialog;
+  /// Show the window with the Sound tab selected. Consumed when it is drawn.
+  bool &open_sound_tab;
   const megatoy::system::DirectoryPaths &paths;
   const std::vector<std::string> &connected_midi_devices;
   std::string midi_status_message;

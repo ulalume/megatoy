@@ -54,6 +54,9 @@ public:
     return engine_.scope_buffer();
   }
 
+  /// How much of each block's deadline rendering has been using.
+  const audio::LoadMeter &load_meter() const { return engine_.load_meter(); }
+
   /**
    * Hand a chip write to the audio thread. See AudioEngine::submit.
    */
@@ -90,6 +93,10 @@ public:
 
   void set_chip_type(ym2612::ChipType type) {
     engine_.submit(audio::AudioCommand::set_chip_type(type));
+  }
+
+  void set_core_type(ym2612::CoreType type) {
+    engine_.submit(audio::AudioCommand::set_core_type(type));
   }
 
   /// Note state, safe to read from the UI thread.

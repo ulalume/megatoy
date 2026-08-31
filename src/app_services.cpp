@@ -110,6 +110,8 @@ void AppServices::initialize_app(AppState &state) {
   announce_version_change(preference_manager);
 
   state.ui_state().prefs = preference_manager.ui_preferences();
+  audio_manager.set_core_type(static_cast<ym2612::CoreType>(
+      std::clamp(state.ui_state().prefs.ym2612_core, 0, 1)));
   audio_manager.set_chip_type(static_cast<ym2612::ChipType>(
       std::clamp(state.ui_state().prefs.ym2612_chip_type, 0, 1)));
   audio_manager.set_note_options(

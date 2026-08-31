@@ -44,6 +44,13 @@ add_library(ymfm_core STATIC
 )
 target_include_directories(ymfm_core PUBLIC ${ymfm_SOURCE_DIR}/src)
 
+# Nuked-OPN2: one C translation unit, kept as its own target so the
+# project-wide C++ standard is not applied to it.
+add_library(nuked_opn2_core STATIC
+  ${nuked_opn2_SOURCE_DIR}/ym3438.c
+)
+target_include_directories(nuked_opn2_core PUBLIC ${nuked_opn2_SOURCE_DIR})
+
 # Sample rate conversion, vendored from libvgm (src/audio/resampler). Kept as
 # a separate C target so the project-wide C++ standard is not applied to it.
 add_library(megatoy_resampler STATIC
@@ -143,6 +150,7 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
   src/ym2612/operator_edit.cpp
+  src/ym2612/nuked_chip.cpp
   src/ym2612/ymfm_chip.cpp
 )
 
@@ -209,6 +217,7 @@ endif()
 
 target_link_libraries(megatoy_core PUBLIC
   ymfm_core
+  nuked_opn2_core
   megatoy_resampler
   imgui_lib
   SDL3::SDL3

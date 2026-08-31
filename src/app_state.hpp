@@ -16,6 +16,8 @@
 struct UIState {
   PreferenceManager::UIPreferences prefs;
   bool open_add_folder_dialog = false;
+  /// Raised to bring up Preferences on its Sound tab.
+  bool open_sound_preferences = false;
 
   struct DropState {
     bool show_picker_for_multiple_instruments = false;
