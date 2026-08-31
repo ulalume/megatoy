@@ -26,6 +26,26 @@ constexpr float load_ratio(std::int64_t elapsed_ns, std::uint32_t frames,
   return static_cast<float>(static_cast<double>(elapsed_ns) / deadline_ns);
 }
 
+/// What the numbers beside the load graph name.
+enum class LoadReading : std::uint8_t { Peak, PeakAndAverage };
+
+/// A stored reading preference, with anything unrecognised read as Peak.
+constexpr LoadReading load_reading_from_int(int value) {
+  if (value == static_cast<int>(LoadReading::PeakAndAverage)) {
+    return LoadReading::PeakAndAverage;
+  }
+  return LoadReading::Peak;
+}
+
+/**
+ * Whether a block that cost this share of its deadline missed it.
+ *
+ * At 1.0 a block took as long to render as it takes to play, which is the
+ * point where rendering stops keeping pace with the device and the audio it
+ * is playing runs out.
+ */
+constexpr bool is_dropout(float ratio) { return ratio >= 1.0f; }
+
 /**
  * The recent render load, written by the audio thread and read by the UI.
  *
@@ -37,7 +57,8 @@ constexpr float load_ratio(std::int64_t elapsed_ns, std::uint32_t frames,
  */
 class LoadMeter {
 public:
-  static constexpr std::size_t kCapacity = 64;
+  // Ten seconds of history at the shortest buffer megatoy offers.
+  static constexpr std::size_t kCapacity = 2048;
   static_assert((kCapacity & (kCapacity - 1)) == 0,
                 "the write counter wraps, so the ring has to divide 2^32");
 
@@ -45,6 +66,8 @@ public:
     std::array<float, kCapacity> values{};
     /// Entries in `values`, oldest first.
     std::size_t count = 0;
+    /// Milliseconds of audio each entry covers; 0 before the first render.
+    float slot_ms = 0.0f;
   };
 
   /// Audio thread only.
@@ -53,6 +76,10 @@ public:
     const std::uint32_t written = written_.load(std::memory_order_relaxed);
     values_[written % kCapacity].store(
         load_ratio(elapsed_ns, frames, sample_rate), std::memory_order_relaxed);
+    slot_ms_.store(sample_rate > 0 ? static_cast<float>(frames) * 1000.0f /
+                                         static_cast<float>(sample_rate)
+                                   : 0.0f,
+                   std::memory_order_relaxed);
     written_.store(written + 1, std::memory_order_release);
   }
 
@@ -70,6 +97,7 @@ public:
     History out;
     out.count = static_cast<std::size_t>(std::min<std::uint32_t>(
         written, static_cast<std::uint32_t>(kCapacity)));
+    out.slot_ms = slot_ms_.load(std::memory_order_relaxed);
     const std::uint32_t first = written - static_cast<std::uint32_t>(out.count);
     for (std::size_t i = 0; i < out.count; ++i) {
       out.values[i] =
@@ -83,6 +111,7 @@ private:
   static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
 
   std::array<std::atomic<float>, kCapacity> values_{};
+  std::atomic<float> slot_ms_{0.0f};
   std::atomic<std::uint32_t> written_{0};
 };
 

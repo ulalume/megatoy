@@ -1,4 +1,5 @@
 #include "preferences.hpp"
+#include "audio/load_meter.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
@@ -538,7 +539,15 @@ void render_sound_tab(PreferencesContext &context) {
     ui_prefs.audio_buffer_frames = kAudioBufferChoices[buffer_index];
   }
   ImGui::TextWrapped("Lower values reduce latency but increase the risk of "
-                     "audio dropouts. Changes apply on the next launch.");
+                     "audio dropouts.");
+
+  ImGui::Spacing();
+
+  static constexpr const char *load_readings[] = {"Peak", "Peak and average"};
+  ui_prefs.audio_load_reading = static_cast<int>(
+      audio::load_reading_from_int(ui_prefs.audio_load_reading));
+  ImGui::Combo("Load meter", &ui_prefs.audio_load_reading, load_readings,
+               static_cast<int>(std::size(load_readings)));
 
   ImGui::Spacing();
 

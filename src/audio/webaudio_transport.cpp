@@ -68,10 +68,12 @@ bool WebAudioTransport::start(std::uint32_t sample_rate,
   if (SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(audio_stream_),
                                &device_format, &sample_frames) &&
       sample_frames > 0) {
+    // Sized rather than reserved, and sized here rather than in the callback,
+    // which runs on the thread the render deadline is measured against.
     const std::size_t reserved_frames =
         static_cast<std::size_t>(sample_frames) * kReservedPeriods;
-    temp_buffer_.reserve(reserved_frames * frame_size_);
-    int_buffer_.reserve(reserved_frames * kEngineChannels);
+    temp_buffer_.assign(reserved_frames * frame_size_, 0);
+    int_buffer_.assign(reserved_frames * kEngineChannels, 0);
   }
 
   if (!SDL_SetAudioStreamGetCallback(audio_stream_, stream_callback, this)) {
@@ -114,6 +116,7 @@ void WebAudioTransport::stop() {
 
   callback_ = nullptr;
   temp_buffer_.clear();
+  int_buffer_.clear();
   initialized_ = false;
 }
 
@@ -147,9 +150,14 @@ void WebAudioTransport::handle_stream_callback(SDL_AudioStream *stream,
   if (frames_requested == 0) {
     return;
   }
+  // A device that asks for more than start() sized the buffers for still gets
+  // the audio it asked for; growing here is the exception, not the rule.
   const std::size_t samples_requested = frames_requested * kEngineChannels;
   if (int_buffer_.size() < samples_requested) {
     int_buffer_.resize(samples_requested);
+  }
+  if (temp_buffer_.size() < samples_requested * sizeof(float)) {
+    temp_buffer_.resize(samples_requested * sizeof(float));
   }
 
   const std::uint32_t produced =
@@ -166,7 +174,6 @@ void WebAudioTransport::handle_stream_callback(SDL_AudioStream *stream,
   }
 
   const std::size_t produced_samples = frames * kEngineChannels;
-  temp_buffer_.resize(produced_samples * sizeof(float));
   float *out = reinterpret_cast<float *>(temp_buffer_.data());
   const int16_t *in = int_buffer_.data();
 

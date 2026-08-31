@@ -30,6 +30,28 @@ public:
    */
   bool initialize(uint32_t sample_rate, int buffer_frames = 0);
 
+  /**
+   * Reopen the device on a different buffer size.
+   *
+   * A device cannot be reopened from inside its own callback, so this closes
+   * the transport and does the work on the calling thread rather than through
+   * the command queue, which that callback drains. The patch is carried
+   * across; sounding notes are released and the load history, whose entries
+   * would otherwise no longer all cover the same span of audio, is dropped. A
+   * gap in the output while the device is closed is expected.
+   *
+   * `buffer_frames` is the preference, 0 meaning the platform default; only a
+   * change in the frames it resolves to reopens anything. Does nothing while
+   * no device is open: the preference is read again when one is.
+   *
+   * @return false if the device would not reopen. The previous size is put
+   * back if it still works; is_running() says whether it did.
+   */
+  bool set_buffer_frames(int buffer_frames);
+
+  /// Frames per callback the open device was asked for.
+  int buffer_frames() const { return buffer_frames_; }
+
   /// Frames the device uses when the buffer preference is left unset.
   int default_buffer_frames() const {
     return transport_ ? transport_->default_buffer_frames() : 0;
@@ -121,6 +143,11 @@ public:
   uint32_t sample_rate() const { return engine_.sample_rate(); }
 
 private:
+  /// Open the device on `buffer_frames`, recording what that resolves to.
+  bool start_transport(int buffer_frames);
+  int resolve_buffer_frames(int preference) const;
+
   AudioEngine engine_;
   std::unique_ptr<AudioTransport> transport_;
+  int buffer_frames_ = 0;
 };

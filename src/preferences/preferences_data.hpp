@@ -1,8 +1,10 @@
 #pragma once
 
+#include "audio/load_meter.hpp"
 #include "core/types.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/theme.hpp"
+#include "ym2612/chip.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -18,13 +20,15 @@ struct UIPreferences {
   bool show_patch_lab = true;
   int ym2612_chip_type = 0;
   /// 0 = Nuked-OPN2, 1 = ymfm, matching ym2612::CoreType.
-  int ym2612_core = 0;
+  int ym2612_core = static_cast<int>(ym2612::CoreType::Ymfm);
   /**
    * Frames per audio callback; 0 keeps the platform's default. Smaller means
-   * less latency and less room to absorb a stall. Read when the audio device
-   * opens, so a change lands on the next launch.
+   * less latency and less room to absorb a stall. Changing it reopens the
+   * audio device.
    */
   int audio_buffer_frames = 0;
+  /// 0 = peak, 1 = peak and average, matching audio::LoadReading.
+  int audio_load_reading = static_cast<int>(audio::LoadReading::Peak);
   /**
    * Factor the interface is drawn at; 0 follows the display. Values outside
    * the supported range are clamped when the style is built.
@@ -82,6 +86,7 @@ struct UIPreferences {
            lhs.ym2612_chip_type == rhs.ym2612_chip_type &&
            lhs.ym2612_core == rhs.ym2612_core &&
            lhs.audio_buffer_frames == rhs.audio_buffer_frames &&
+           lhs.audio_load_reading == rhs.audio_load_reading &&
            lhs.ui_scale == rhs.ui_scale &&
            lhs.use_velocity == rhs.use_velocity &&
            lhs.velocity_sensitivity_depth == rhs.velocity_sensitivity_depth &&

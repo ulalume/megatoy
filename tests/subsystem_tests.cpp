@@ -1,5 +1,6 @@
 #include "audio/audio_manager.hpp"
 #include "audio/audio_transport.hpp"
+#include "audio/load_meter.hpp"
 #include "core/status.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/folder_metadata.hpp"
@@ -312,8 +313,8 @@ void test_core_preference_round_trip(const std::filesystem::path &root) {
     megatoy::system::PathService paths(fs, config);
     PreferenceManager preferences(paths);
     auto ui = preferences.ui_preferences();
-    CHECK(ui.ym2612_core == 0);
-    ui.ym2612_core = 1;
+    CHECK(ui.ym2612_core == static_cast<int>(ym2612::CoreType::Ymfm));
+    ui.ym2612_core = static_cast<int>(ym2612::CoreType::Nuked);
     preferences.set_ui_preferences(ui);
   }
 
@@ -322,14 +323,17 @@ void test_core_preference_round_trip(const std::filesystem::path &root) {
     std::ifstream input(config / "preferences.json");
     input >> stored;
   }
-  CHECK(stored.at("ui").at("ym2612_core").get<int>() == 1);
+  CHECK(stored.at("ui").at("ym2612_core").get<int>() ==
+        static_cast<int>(ym2612::CoreType::Nuked));
 
   {
     megatoy::system::PathService paths(fs, config);
     PreferenceManager preferences(paths);
-    CHECK(preferences.ui_preferences().ym2612_core == 1);
+    CHECK(preferences.ui_preferences().ym2612_core ==
+          static_cast<int>(ym2612::CoreType::Nuked));
   }
 
+  // Out of range falls back to the default.
   stored["ui"]["ym2612_core"] = 9;
   {
     std::ofstream output(config / "preferences.json");
@@ -338,7 +342,55 @@ void test_core_preference_round_trip(const std::filesystem::path &root) {
   {
     megatoy::system::PathService paths(fs, config);
     PreferenceManager preferences(paths);
-    CHECK(preferences.ui_preferences().ym2612_core == 1);
+    CHECK(preferences.ui_preferences().ym2612_core ==
+          static_cast<int>(ym2612::CoreType::Ymfm));
+  }
+}
+
+void test_load_reading_preference_round_trip(
+    const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "load-reading-preference-config";
+  std::filesystem::remove_all(config);
+  std::filesystem::create_directories(config);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    auto ui = preferences.ui_preferences();
+    CHECK(ui.audio_load_reading == static_cast<int>(audio::LoadReading::Peak));
+    ui.audio_load_reading =
+        static_cast<int>(audio::LoadReading::PeakAndAverage);
+    preferences.set_ui_preferences(ui);
+  }
+
+  nlohmann::json stored;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> stored;
+  }
+  CHECK(stored.at("ui").at("audio_load_reading").get<int>() ==
+        static_cast<int>(audio::LoadReading::PeakAndAverage));
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().audio_load_reading ==
+          static_cast<int>(audio::LoadReading::PeakAndAverage));
+  }
+
+  // Out of range falls back to the default, whether it was never a setting
+  // or is one a stored file may still carry.
+  for (const int out_of_range : {2, 9, -1}) {
+    stored["ui"]["audio_load_reading"] = out_of_range;
+    {
+      std::ofstream output(config / "preferences.json");
+      output << stored.dump(2);
+    }
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().audio_load_reading ==
+          static_cast<int>(audio::LoadReading::Peak));
   }
 }
 
@@ -623,8 +675,13 @@ find_patch_entry(const std::vector<patches::PatchEntry> &entries,
 class TestAudioTransport final : public AudioTransport {
 public:
   bool start(std::uint32_t, RenderCallback callback) override {
+    if (failed_starts_ < starts_to_fail_) {
+      ++failed_starts_;
+      return false;
+    }
     callback_ = std::move(callback);
     active_ = true;
+    ++start_count_;
     return true;
   }
 
@@ -634,6 +691,17 @@ public:
   }
 
   bool is_active() const override { return active_; }
+
+  void set_buffer_frames(int frames) override { buffer_frames_ = frames; }
+  int buffer_frames() const { return buffer_frames_; }
+  int start_count() const { return start_count_; }
+
+  /// Refuse the next `count` calls to start(), as a device that will not open
+  /// at the requested size does.
+  void refuse_next_starts(int count) {
+    starts_to_fail_ = count;
+    failed_starts_ = 0;
+  }
 
   float render_ac_peak(uint32_t frames) {
     CHECK(callback_);
@@ -657,6 +725,10 @@ public:
 private:
   RenderCallback callback_;
   bool active_ = false;
+  int buffer_frames_ = 0;
+  int start_count_ = 0;
+  int starts_to_fail_ = 0;
+  int failed_starts_ = 0;
 };
 
 ym2612::Patch make_session_audio_patch(uint8_t total_level) {
@@ -722,6 +794,66 @@ void test_performance_commands_do_not_dirty_session(TestEnvironment &env) {
   CHECK(session.current_patch() == patch_before);
   CHECK(!session.is_modified());
   CHECK(!session.apply_patch_to_audio_if_changed());
+}
+
+// A buffer size change reopens the device while the app runs. The patch has
+// to survive it, nothing may be left keyed on, and the load history cannot
+// carry entries recorded at the previous size.
+void test_buffer_size_change_reopens_the_device(TestEnvironment &env) {
+  auto transport = std::make_unique<TestAudioTransport>();
+  auto *test_transport = transport.get();
+  AudioManager audio(std::move(transport));
+  patches::PatchSession session(env.directories, env.preferences, audio);
+  CHECK(audio.initialize(44100, 512));
+  CHECK(audio.buffer_frames() == 512);
+  CHECK(test_transport->buffer_frames() == 512);
+  CHECK(test_transport->start_count() == 1);
+
+  session.current_patch() = make_session_audio_patch(20);
+  session.apply_patch_to_audio();
+
+  PreferenceManager::UIPreferences prefs{};
+  prefs.use_velocity = true;
+  prefs.steal_oldest_note_when_full = true;
+  const auto c4 = ym2612::Note::from_midi_note(60);
+  CHECK(session.note_on(c4, 127, prefs));
+  const float sounding = test_transport->render_ac_peak(4410);
+  CHECK(sounding > 0.0f);
+  CHECK(session.note_is_active(c4));
+  CHECK(audio.load_meter().history().count > 0);
+
+  // Nothing reopens while the frames the preference resolves to stay put.
+  CHECK(audio.set_buffer_frames(512));
+  CHECK(test_transport->start_count() == 1);
+
+  CHECK(audio.set_buffer_frames(1024));
+  CHECK(test_transport->start_count() == 2);
+  CHECK(test_transport->buffer_frames() == 1024);
+  CHECK(audio.buffer_frames() == 1024);
+  CHECK(audio.is_running());
+
+  // The note the reopen interrupted is released, not left sounding.
+  CHECK(!session.note_is_active(c4));
+  for (bool active : session.active_channels()) {
+    CHECK(!active);
+  }
+  CHECK(audio.load_meter().history().count == 0);
+
+  // The patch came across, so the same note plays at the same level.
+  CHECK(session.note_on(c4, 127, prefs));
+  const float after = test_transport->render_ac_peak(4410);
+  CHECK(after > sounding * 0.5f);
+  session.release_all_notes();
+
+  // A device that will not open at the new size keeps the one that works.
+  test_transport->refuse_next_starts(1);
+  CHECK(!audio.set_buffer_frames(2048));
+  CHECK(audio.is_running());
+  CHECK(audio.buffer_frames() == 1024);
+  CHECK(test_transport->buffer_frames() == 1024);
+  CHECK(session.note_on(c4, 127, prefs));
+  CHECK(test_transport->render_ac_peak(4410) > sounding * 0.5f);
+  session.release_all_notes();
 }
 
 void test_workspace_folder_is_visible(TestEnvironment &env) {
@@ -961,7 +1093,8 @@ void test_folder_rename_follows_the_current_patch(TestEnvironment &env) {
   CHECK(patches::write_patch(patch, source_path));
   // An empty directory does not show up in the tree, so the decoy needs
   // something in it too.
-  CHECK(patches::write_patch(patch, env.patches_folder / "elsewhere" / "x.gin"));
+  CHECK(
+      patches::write_patch(patch, env.patches_folder / "elsewhere" / "x.gin"));
   env.session.repository().refresh();
 
   const auto *found =
@@ -981,8 +1114,7 @@ void test_folder_rename_follows_the_current_patch(TestEnvironment &env) {
   CHECK(env.session.current_patch_path() == path_before);
 
   // The folder it lives in: the path follows.
-  const auto *pads =
-      find_patch_entry(env.session.repository().tree(), folder);
+  const auto *pads = find_patch_entry(env.session.repository().tree(), folder);
   CHECK(pads != nullptr);
   CHECK(pads->is_directory);
   const auto pads_entry = *pads;
@@ -991,7 +1123,8 @@ void test_folder_rename_follows_the_current_patch(TestEnvironment &env) {
   CHECK(!std::filesystem::exists(folder));
   CHECK(std::filesystem::exists(env.patches_folder / "warm pads" / "warm.gin"));
   CHECK(env.session.current_patch_path() != path_before);
-  CHECK(std::filesystem::path(env.session.current_patch_path()).parent_path()
+  CHECK(std::filesystem::path(env.session.current_patch_path())
+            .parent_path()
             .filename() == "warm pads");
   CHECK(env.session.current_patch().name == "warm");
 }
@@ -999,8 +1132,8 @@ void test_folder_rename_follows_the_current_patch(TestEnvironment &env) {
 // A workspace folder is registered by path, so renaming one has to move the
 // registration with it or the folder comes back missing.
 void test_workspace_root_rename_follows_the_preference(TestEnvironment &env) {
-  const auto *root = find_patch_entry(env.session.repository().tree(),
-                                      env.patches_folder);
+  const auto *root =
+      find_patch_entry(env.session.repository().tree(), env.patches_folder);
   CHECK(root != nullptr);
   CHECK(root->is_directory);
   CHECK(env.preferences.workspace().contains(env.patches_folder));
@@ -1099,8 +1232,8 @@ void test_create_patch_in_folder(TestEnvironment &env) {
   CHECK(!session.can_create_patch_in(env.root));
   CHECK(session.create_patch_in(env.root, "nowhere", ".gin").is_error());
 
-  const auto created = session.create_patch_in(env.patches_folder,
-                                               "brand new", ".gin");
+  const auto created =
+      session.create_patch_in(env.patches_folder, "brand new", ".gin");
   CHECK(created.is_success());
   CHECK(created.path == env.patches_folder / "brand new.gin");
   CHECK(std::filesystem::exists(created.path));
@@ -1117,8 +1250,7 @@ void test_create_patch_in_folder(TestEnvironment &env) {
   CHECK(session.current_patch_path() == relative);
   CHECK(session.current_patch_selection_path() == relative);
   CHECK(!session.is_modified());
-  CHECK(find_patch_entry(session.repository().tree(), created.path) !=
-        nullptr);
+  CHECK(find_patch_entry(session.repository().tree(), created.path) != nullptr);
 
   // The name is taken in the format that claimed it, and free in any other.
   CHECK(session.create_patch_in(env.patches_folder, "brand new", ".gin")
@@ -1191,6 +1323,7 @@ int main() {
   test_velocity_sensitivity_preference_round_trip(migration_root);
   test_chip_type_preference_round_trip(migration_root);
   test_core_preference_round_trip(migration_root);
+  test_load_reading_preference_round_trip(migration_root);
   test_envelope_reference_note_preference_round_trip(migration_root);
   test_last_patch_preference_round_trip(migration_root);
   test_legacy_data_directory_migration();
@@ -1207,6 +1340,7 @@ int main() {
   test_performance_commands_do_not_dirty_session(env);
   test_patch_snapshot_roundtrip(env);
   test_note_allocation(env);
+  test_buffer_size_change_reopens_the_device(env);
   test_workspace_folder_is_visible(env);
   test_default_save_format_is_gin(env);
   test_ginpkg_versions_appear_as_container_items(env);
