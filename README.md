@@ -90,6 +90,7 @@ For experimental WebAssembly builds, see [docs/BUILD_WEB.md](docs/BUILD_WEB.md).
 
 ## Thanks
 
+- [Nuked-OPN2](https://github.com/nukeykt/Nuked-OPN2) - YM2612 emulation core
 - [ymfm](https://github.com/aaronsgiles/ymfm) - YM2612 emulation core
 - [libvgm](https://github.com/ValleyBell/libvgm/) - sample rate conversion
 - [YM2612 registers reference](https://plutiedev.com/ym2612-registers)

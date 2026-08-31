@@ -500,6 +500,11 @@ void render_sound_tab(PreferencesContext &context) {
   ImGui::Combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
                static_cast<int>(std::size(chip_types)));
 
+  static constexpr const char *cores[] = {"Nuked-OPN2", "ymfm"};
+  ui_prefs.ym2612_core = std::clamp(ui_prefs.ym2612_core, 0, 1);
+  ImGui::Combo("Core", &ui_prefs.ym2612_core, cores,
+               static_cast<int>(std::size(cores)));
+
   ImGui::Spacing();
 
   // The frames the device ends up with. The web backend is asked for half of

@@ -1,8 +1,8 @@
 #pragma once
 
+#include "ym2612/chip.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/types.hpp"
-#include "ym2612/ymfm_chip.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -32,6 +32,7 @@ struct AudioCommand {
     PitchBend,
     ModWheel,
     SetChipType,
+    SetCore,
   };
 
   Type type = Type::AllNotesOff;
@@ -42,6 +43,7 @@ struct AudioCommand {
   uint16_t pitch_bend_value = 8192;
   uint8_t mod_wheel_value = 0;
   ym2612::ChipType chip_type = ym2612::ChipType::Ym2612;
+  ym2612::CoreType core_type = ym2612::CoreType::Nuked;
 
   // ApplyPatch only. The patch *name* is deliberately absent: it never
   // reaches a register, and keeping the command trivially copyable keeps the
@@ -100,6 +102,13 @@ struct AudioCommand {
     AudioCommand command;
     command.type = Type::SetChipType;
     command.chip_type = type;
+    return command;
+  }
+
+  static AudioCommand set_core_type(ym2612::CoreType type) {
+    AudioCommand command;
+    command.type = Type::SetCore;
+    command.core_type = type;
     return command;
   }
 };

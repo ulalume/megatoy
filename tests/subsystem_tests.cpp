@@ -302,6 +302,46 @@ void test_chip_type_preference_round_trip(const std::filesystem::path &root) {
   }
 }
 
+void test_core_preference_round_trip(const std::filesystem::path &root) {
+  NativeFileSystem fs;
+  const auto config = root / "core-preference-config";
+  std::filesystem::remove_all(config);
+  std::filesystem::create_directories(config);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    auto ui = preferences.ui_preferences();
+    CHECK(ui.ym2612_core == 0);
+    ui.ym2612_core = 1;
+    preferences.set_ui_preferences(ui);
+  }
+
+  nlohmann::json stored;
+  {
+    std::ifstream input(config / "preferences.json");
+    input >> stored;
+  }
+  CHECK(stored.at("ui").at("ym2612_core").get<int>() == 1);
+
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().ym2612_core == 1);
+  }
+
+  stored["ui"]["ym2612_core"] = 9;
+  {
+    std::ofstream output(config / "preferences.json");
+    output << stored.dump(2);
+  }
+  {
+    megatoy::system::PathService paths(fs, config);
+    PreferenceManager preferences(paths);
+    CHECK(preferences.ui_preferences().ym2612_core == 1);
+  }
+}
+
 void test_last_patch_preference_round_trip(const std::filesystem::path &root) {
   NativeFileSystem fs;
   const auto config = root / "last-patch-preference-config";
@@ -1150,6 +1190,7 @@ int main() {
       migration_root);
   test_velocity_sensitivity_preference_round_trip(migration_root);
   test_chip_type_preference_round_trip(migration_root);
+  test_core_preference_round_trip(migration_root);
   test_envelope_reference_note_preference_round_trip(migration_root);
   test_last_patch_preference_round_trip(migration_root);
   test_legacy_data_directory_migration();

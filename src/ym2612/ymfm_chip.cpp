@@ -135,11 +135,4 @@ void YmfmChip::render(int32_t *left, int32_t *right, uint32_t frames) {
   }
 }
 
-void YmfmChip::stream_update(void *info, uint32_t frames, int32_t **outputs) {
-  if (info == nullptr || outputs == nullptr) {
-    return;
-  }
-  static_cast<YmfmChip *>(info)->render(outputs[0], outputs[1], frames);
-}
-
 } // namespace ym2612

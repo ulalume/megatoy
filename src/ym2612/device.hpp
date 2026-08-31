@@ -1,8 +1,8 @@
 #pragma once
 
 #include "audio/lowpass_filter.hpp"
+#include "ym2612/chip.hpp"
 #include "ym2612/types.hpp"
-#include "ym2612/ymfm_chip.hpp"
 #include <cstdint>
 #include <memory>
 
@@ -11,8 +11,8 @@ namespace ym2612 {
 class Channel; // Forward declaration
 
 /**
- * YM2612 device: an ymfm chip running at its native rate, resampled to the
- * host output rate.
+ * YM2612 device: an emulated chip running at its native rate, resampled to
+ * the host output rate.
  *
  * Rendering produces normalized floats so nothing downstream (audio output,
  * analyzers) has to know about the chip's internal scale.
@@ -35,9 +35,13 @@ public:
   uint32_t sample_rate() const { return sample_rate_; }
   uint32_t native_sample_rate() const;
   ChipType chip_type() const { return chip_type_; }
+  CoreType core_type() const { return core_type_; }
 
   /// Select a pre-created chip; register state must be re-established.
   void set_chip_type(ChipType type);
+
+  /// Select a pre-created core; register state must be re-established.
+  void set_core_type(CoreType type);
 
   Channel channel(ChannelIndex idx);
 
@@ -53,10 +57,16 @@ public:
 private:
   struct Resampler; // owns the vendored libvgm resampler state + scratch
 
+  Chip *active_chip();
+
   uint32_t sample_rate_ = 0;
   ChipType chip_type_ = ChipType::Ym2612;
+  CoreType core_type_ = CoreType::Nuked;
   audio::LowPassFilter lowpass_;
-  std::unique_ptr<YmfmChip> chip_;
+  std::unique_ptr<Chip> nuked_chip_;
+  std::unique_ptr<Chip> ymfm_chip_;
+  // The core currently rendering, owned by one of the pointers above.
+  Chip *chip_ = nullptr;
   std::unique_ptr<Resampler> resampler_;
 };
 

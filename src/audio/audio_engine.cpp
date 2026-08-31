@@ -90,15 +90,15 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   // ahead of the audio it has heard.
   rendered_samples_.store(block_start + frames, std::memory_order_release);
 
-  // The YM2612's DAC is discontinuous around zero and ymfm reproduces that
-  // faithfully, so even an idle chip emits a constant offset (about 500 LSB
-  // at 16 bits). Real hardware never lets that reach the speaker -- the
-  // console AC-couples its audio output -- but shipping it to a modern DAC
-  // means the "silent" signal is a nonzero constant. Amplifiers that gate on
-  // signal energy then drop in and out of standby, and every transition is
-  // an audible pop; users reported exactly that, a tick every several
-  // seconds while the app sat idle. Blocking DC restores the coupling the
-  // hardware had: idle output decays to true digital silence.
+  // The YM2612's DAC is discontinuous around zero and the emulation
+  // reproduces that faithfully, so even an idle chip emits a constant offset
+  // (about 500 LSB at 16 bits). Real hardware never lets that reach the
+  // speaker -- the console AC-couples its audio output -- but shipping it to
+  // a modern DAC means the "silent" signal is a nonzero constant. Amplifiers
+  // that gate on signal energy then drop in and out of standby, and every
+  // transition is an audible pop; users reported exactly that, a tick every
+  // several seconds while the app sat idle. Blocking DC restores the coupling
+  // the hardware had: idle output decays to true digital silence.
   remove_dc(mix_buffer_.data(), frames);
 
   scope_buffer_.write(mix_buffer_.data(), frames);
@@ -340,6 +340,13 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
 
   case Type::SetChipType:
     device_.set_chip_type(command.chip_type);
+    apply(audio::AudioCommand::apply_patch(current_global_, current_channel_,
+                                           current_instrument_));
+    apply(audio::AudioCommand::all_notes_off());
+    break;
+
+  case Type::SetCore:
+    device_.set_core_type(command.core_type);
     apply(audio::AudioCommand::apply_patch(current_global_, current_channel_,
                                            current_instrument_));
     apply(audio::AudioCommand::all_notes_off());

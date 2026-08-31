@@ -92,6 +92,10 @@ public:
     engine_.submit(audio::AudioCommand::set_chip_type(type));
   }
 
+  void set_core_type(ym2612::CoreType type) {
+    engine_.submit(audio::AudioCommand::set_core_type(type));
+  }
+
   /// Note state, safe to read from the UI thread.
   const ChannelAllocator &notes() const { return engine_.notes(); }
 

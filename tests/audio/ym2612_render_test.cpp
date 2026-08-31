@@ -305,6 +305,37 @@ void test_switching_chip_type_releases_notes_and_keeps_audio_working() {
   CHECK(std::abs(idle[idle.size() - 1]) < 0.000001f);
 }
 
+// The core is swapped on the audio thread, and the chip it hands over to
+// starts blank: the engine has to re-establish the registers before the next
+// note, exactly as it does for a chip-type change.
+void test_switching_core_releases_notes_and_keeps_audio_working() {
+  AudioEngine engine;
+  CHECK(engine.initialize(kSampleRate));
+  CHECK(engine.device().core_type() == ym2612::CoreType::Nuked);
+
+  const auto patch = make_all_carrier_patch(20);
+  submit_patch(engine, patch);
+  const auto first_note = ym2612::Note::from_midi_note(60);
+  CHECK(engine.submit(audio::AudioCommand::note_on(first_note, 127)));
+  const float before = render_ac_peak(engine, kSampleRate / 10);
+  CHECK(before > 0.01f);
+
+  CHECK(engine.submit(
+      audio::AudioCommand::set_core_type(ym2612::CoreType::Ymfm)));
+  render_ac_peak(engine, 64);
+  CHECK(engine.device().core_type() == ym2612::CoreType::Ymfm);
+  CHECK(engine.notes().published_notes().empty());
+
+  const auto second_note = ym2612::Note::from_midi_note(64);
+  CHECK(engine.submit(audio::AudioCommand::note_on(second_note, 127)));
+  const float after = render_ac_peak(engine, kSampleRate / 10);
+  CHECK(after > 0.01f);
+  // The same patch at the same velocity: the two cores must land on the same
+  // order of magnitude, or one of them is wired up wrong.
+  CHECK(after > before * 0.5f);
+  CHECK(after < before * 2.0f);
+}
+
 } // namespace
 
 int main() {
@@ -316,6 +347,7 @@ int main() {
   test_apply_patch_updates_instrument_for_future_notes();
   test_apply_patch_preserves_sustaining_note_velocity();
   test_switching_chip_type_releases_notes_and_keeps_audio_working();
+  test_switching_core_releases_notes_and_keeps_audio_working();
 
   AudioEngine engine;
   CHECK(engine.initialize(kSampleRate));
