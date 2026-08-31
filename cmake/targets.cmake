@@ -194,13 +194,16 @@ target_include_directories(megatoy_core PUBLIC
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(MEGATOY_CORE_RELEASE_FLAGS -O3 -ffast-math -funroll-loops)
+  # Envelope timings use infinity for a phase that never advances, so the float
+  # model has to keep infinities: -ffast-math makes isfinite() answer true for
+  # them and the curve sampler then runs without a bound.
+  set(MEGATOY_CORE_RELEASE_FLAGS -O3 -funroll-loops)
   if(MEGATOY_RELEASE_CPU_FLAGS)
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
   endif()
   target_compile_options(megatoy_core PRIVATE
       $<$<CXX_COMPILER_ID:GNU,Clang>:${MEGATOY_CORE_RELEASE_FLAGS}>
-      $<$<CXX_COMPILER_ID:MSVC>:/O2 /fp:fast>
+      $<$<CXX_COMPILER_ID:MSVC>:/O2>
   )
 endif()
 

@@ -146,7 +146,7 @@ FetchContent_MakeAvailable(ym2612_format)
 FetchContent_Declare(
   ym2612_eg
   GIT_REPOSITORY https://github.com/ulalume/ym2612_eg.git
-  GIT_TAG        v0.2.0
+  GIT_TAG        v0.2.1
 )
 set(YM2612_EG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YM2612_EG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
