@@ -72,12 +72,36 @@ void test_history_order() {
   CHECK(meter.history().count == 0);
 }
 
+void test_dropout_threshold() {
+  // The deadline itself is the line: a block that took exactly as long to
+  // render as it plays for left the device nothing to play.
+  CHECK(!audio::is_dropout(0.0f));
+  CHECK(!audio::is_dropout(0.7f));
+  CHECK(!audio::is_dropout(0.999f));
+  CHECK(audio::is_dropout(1.0f));
+  CHECK(audio::is_dropout(3.0f));
+
+  constexpr std::int64_t block_ns = 512LL * 1'000'000'000LL / 48000LL;
+  CHECK(audio::is_dropout(audio::load_ratio(block_ns * 2, 512, 48000)));
+  CHECK(!audio::is_dropout(audio::load_ratio(block_ns / 2, 512, 48000)));
+}
+
+void test_reading_preference_values() {
+  CHECK(audio::load_reading_from_int(0) == audio::LoadReading::Peak);
+  CHECK(audio::load_reading_from_int(1) == audio::LoadReading::PeakAndAverage);
+  // Anything else, including settings that no longer exist.
+  CHECK(audio::load_reading_from_int(2) == audio::LoadReading::Peak);
+  CHECK(audio::load_reading_from_int(-1) == audio::LoadReading::Peak);
+}
+
 } // namespace
 
 int main() {
   test_load_ratio();
   test_load_ratio_edges();
   test_history_order();
+  test_dropout_threshold();
+  test_reading_preference_values();
   std::cout << "load_meter_test passed" << std::endl;
   return 0;
 }

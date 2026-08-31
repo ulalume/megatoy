@@ -27,7 +27,7 @@ struct UIPreferences {
    * audio device.
    */
   int audio_buffer_frames = 0;
-  /// 0 = peak, 1 = average, 2 = both, matching audio::LoadReading.
+  /// 0 = peak, 1 = peak and average, matching audio::LoadReading.
   int audio_load_reading = static_cast<int>(audio::LoadReading::Peak);
   /**
    * Factor the interface is drawn at; 0 follows the display. Values outside

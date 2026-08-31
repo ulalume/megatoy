@@ -80,13 +80,17 @@ bool SdlAudioTransport::start(std::uint32_t sample_rate,
   if (frame_size_ == 0) {
     frame_size_ = kFallbackFrameSize;
   }
+  // Sized rather than reserved, and sized here rather than in the callback:
+  // the callback runs on the device thread, where an allocation would be paid
+  // for out of the render deadline.
   SDL_AudioSpec device_format{};
   int sample_frames = 0;
   if (SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(audio_stream_),
                                &device_format, &sample_frames) &&
       sample_frames > 0) {
-    stream_buffer_.reserve(static_cast<std::size_t>(sample_frames) *
-                           kReservedPeriods * frame_size_);
+    stream_buffer_.assign(static_cast<std::size_t>(sample_frames) *
+                              kReservedPeriods * frame_size_,
+                          0);
   }
 
   // SDL's device thread pulls data through this callback as the device
@@ -162,7 +166,11 @@ void SdlAudioTransport::handle_stream_callback(SDL_AudioStream *stream,
 
   const std::uint32_t bytes =
       align_to_frame(static_cast<std::uint32_t>(required), frame_size_);
-  stream_buffer_.resize(bytes);
+  // A device that asks for more than start() sized the buffer for still gets
+  // the audio it asked for; growing here is the exception, not the rule.
+  if (bytes > stream_buffer_.size()) {
+    stream_buffer_.resize(bytes);
+  }
 
   const std::uint32_t produced =
       callback_(bytes, static_cast<void *>(stream_buffer_.data()));

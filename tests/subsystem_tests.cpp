@@ -379,13 +379,14 @@ void test_load_reading_preference_round_trip(
           static_cast<int>(audio::LoadReading::PeakAndAverage));
   }
 
-  // Out of range falls back to the default.
-  stored["ui"]["audio_load_reading"] = 9;
-  {
-    std::ofstream output(config / "preferences.json");
-    output << stored.dump(2);
-  }
-  {
+  // Out of range falls back to the default, whether it was never a setting
+  // or is one a stored file may still carry.
+  for (const int out_of_range : {2, 9, -1}) {
+    stored["ui"]["audio_load_reading"] = out_of_range;
+    {
+      std::ofstream output(config / "preferences.json");
+      output << stored.dump(2);
+    }
     megatoy::system::PathService paths(fs, config);
     PreferenceManager preferences(paths);
     CHECK(preferences.ui_preferences().audio_load_reading ==

@@ -26,20 +26,25 @@ constexpr float load_ratio(std::int64_t elapsed_ns, std::uint32_t frames,
   return static_cast<float>(static_cast<double>(elapsed_ns) / deadline_ns);
 }
 
-/// What the number beside the load graph names.
-enum class LoadReading : std::uint8_t { Peak, Average, PeakAndAverage };
+/// What the numbers beside the load graph name.
+enum class LoadReading : std::uint8_t { Peak, PeakAndAverage };
 
 /// A stored reading preference, with anything unrecognised read as Peak.
 constexpr LoadReading load_reading_from_int(int value) {
-  switch (value) {
-  case static_cast<int>(LoadReading::Average):
-    return LoadReading::Average;
-  case static_cast<int>(LoadReading::PeakAndAverage):
+  if (value == static_cast<int>(LoadReading::PeakAndAverage)) {
     return LoadReading::PeakAndAverage;
-  default:
-    return LoadReading::Peak;
   }
+  return LoadReading::Peak;
 }
+
+/**
+ * Whether a block that cost this share of its deadline missed it.
+ *
+ * At 1.0 a block took as long to render as it takes to play, which is the
+ * point where rendering stops keeping pace with the device and the audio it
+ * is playing runs out.
+ */
+constexpr bool is_dropout(float ratio) { return ratio >= 1.0f; }
 
 /**
  * The recent render load, written by the audio thread and read by the UI.

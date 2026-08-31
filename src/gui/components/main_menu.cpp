@@ -36,10 +36,13 @@ constexpr float kLoadWindowMs = 10000.0f;
 constexpr std::size_t kMaxLoadColumns = 256;
 
 // The drawn window, folded to one column per pixel by taking the highest
-// value in each. Peak and average are taken over the samples the columns were
-// folded from, so either reading describes the span the graph draws.
+// value in each. Peak, average and the dropout flags are taken over the
+// samples the columns were folded from, so every reading describes the span
+// the graph draws.
 struct LoadWindow {
   std::array<float, kMaxLoadColumns> columns{};
+  /// Set where any sample folded into the column broke the output.
+  std::array<bool, kMaxLoadColumns> dropouts{};
   std::size_t count = 0;
   float peak = 0.0f;
   float average = 0.0f;
@@ -65,6 +68,7 @@ LoadWindow load_window(const audio::LoadMeter::History &history, float width) {
                                              : i * (out.count - 1) / (used - 1);
     const float value = history.values[first + i];
     out.columns[column] = std::max(out.columns[column], value);
+    out.dropouts[column] = out.dropouts[column] || audio::is_dropout(value);
     out.peak = std::max(out.peak, value);
     total += static_cast<double>(value);
   }
@@ -72,21 +76,15 @@ LoadWindow load_window(const audio::LoadMeter::History &history, float width) {
   return out;
 }
 
-// The tilde marks the mean wherever it appears; a bare number is the peak, and
-// stands nearest the graph whose top it names.
+// Alone the peak needs no label; paired it takes one, so neither number can be
+// read for the other.
 void format_load_reading(char *out, std::size_t size, const LoadWindow &window,
                          audio::LoadReading reading) {
   const double peak = static_cast<double>(window.peak) * 100.0;
   const double average = static_cast<double>(window.average) * 100.0;
-  switch (reading) {
-  case audio::LoadReading::Average:
-    std::snprintf(out, size, "~%.0f%%", average);
+  if (reading == audio::LoadReading::PeakAndAverage) {
+    std::snprintf(out, size, "peak %.0f%%  avg %.0f%%", peak, average);
     return;
-  case audio::LoadReading::PeakAndAverage:
-    std::snprintf(out, size, "~%.0f%% %.0f%%", average, peak);
-    return;
-  case audio::LoadReading::Peak:
-    break;
   }
   std::snprintf(out, size, "%.0f%%", peak);
 }
@@ -110,6 +108,18 @@ void draw_load_graph(const Panel &panel, const LoadWindow &window) {
   // The newest column sits on the right edge, older ones running left from it,
   // so a window that is not full yet grows leftwards instead of stretching.
   const float step = width / static_cast<float>(window.count - 1);
+
+  // A dropout is a moment rather than a level, so it is marked across the
+  // full height of the column it fell in and drawn under the trace.
+  for (std::size_t i = 0; i < window.count; ++i) {
+    if (!window.dropouts[i]) {
+      continue;
+    }
+    const float x = panel.min.x + step * static_cast<float>(i);
+    panel.draw_list->AddLine(ImVec2(x, panel.min.y), ImVec2(x, panel.max.y),
+                             warning);
+  }
+
   const auto point = [&](std::size_t index) {
     const float value = std::clamp(window.columns[index], 0.0f, 1.0f);
     const float x = panel.min.x + step * static_cast<float>(index);
@@ -185,7 +195,7 @@ void render_audio_load(MainMenuContext &context) {
 
   const auto history = context.audio_load.history();
   const LoadWindow window = load_window(history, size.x);
-  char reading[16];
+  char reading[32];
   format_load_reading(
       reading, sizeof(reading), window,
       audio::load_reading_from_int(context.ui_prefs.audio_load_reading));

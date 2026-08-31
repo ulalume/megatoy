@@ -543,8 +543,7 @@ void render_sound_tab(PreferencesContext &context) {
 
   ImGui::Spacing();
 
-  static constexpr const char *load_readings[] = {"Peak", "Average",
-                                                 "Peak and average"};
+  static constexpr const char *load_readings[] = {"Peak", "Peak and average"};
   ui_prefs.audio_load_reading = static_cast<int>(
       audio::load_reading_from_int(ui_prefs.audio_load_reading));
   ImGui::Combo("Load meter", &ui_prefs.audio_load_reading, load_readings,
