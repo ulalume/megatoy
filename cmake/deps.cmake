@@ -178,6 +178,6 @@ FetchContent_MakeAvailable(ym2612_eg)
 FetchContent_Declare(
   ym2612_patches
   GIT_REPOSITORY https://github.com/ulalume/ym2612-patches.git
-  GIT_TAG        2cc50842a51ae6dc43a88edd4223f09d8583ab50
+  GIT_TAG        e7761a82460c4d67418904099e00cb7c96424842
 )
 FetchContent_MakeAvailable(ym2612_patches)
