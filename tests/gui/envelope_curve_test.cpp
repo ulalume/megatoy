@@ -762,8 +762,10 @@ void test_an_inverted_ssg_release_is_as_long_as_the_upright_one() {
   CHECK(near_rel(inv.release_content_ms, up.release_content_ms, 0.01));
   // Not the one-sample cut: at 53 kHz that would be 0.02 ms.
   CHECK(inv.release_content_ms > 100.0);
-  // Both start from full volume and both end in silence.
-  CHECK(inv.release.points.front().out == inv.peak_out);
+  // Both start from full volume and both end in silence. An inverted mode is
+  // loudest at the fold level itself, which an operator only ever passes
+  // through, so its release starts one step short of the nominal peak.
+  CHECK(inv.release.points.front().out == inv.peak_out + 1);
   CHECK(inv.release.points.back().out == ym2612_eg::kMaxAttenuation);
   CHECK(!inv.release_truncated);
   // ... and it still only ever falls.
@@ -1074,10 +1076,24 @@ CurveResult simulated_release_from(const ym2612::OperatorSettings &op,
   // high would let key_on() snap the start level away.
   request.op.ar = 0;
   request.pitch = reference_pitch();
-  request.gate_ms = 0.0;
+  // Same as the drawn release: a key write takes a sample to reach the
+  // envelope, so a note released on sample zero never starts.
+  const double sample_ms =
+      1000.0 / ym2612_eg::sample_rate_hz(ym2612_eg::kNtscClockHz);
+  request.gate_ms = 2.0 * sample_ms;
   request.max_ms = release_max_ms();
   request.start_att = static_cast<uint16_t>(att + 0.5);
-  return ym2612_eg::sample_curve(request);
+  CurveResult result = ym2612_eg::sample_curve(request);
+  const auto first = std::find_if(
+      result.points.begin(), result.points.end(),
+      [sample_ms](const ym2612_eg::CurvePoint &p) { return p.ms >= sample_ms; });
+  if (first != result.points.begin() && first != result.points.end()) {
+    result.points.erase(result.points.begin(), first);
+    const float origin = result.points.front().ms;
+    for (ym2612_eg::CurvePoint &p : result.points)
+      p.ms -= origin;
+  }
+  return result;
 }
 
 void test_the_cursor_is_where_the_elapsed_time_says() {
