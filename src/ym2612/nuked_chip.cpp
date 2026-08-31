@@ -15,6 +15,12 @@ namespace {
 constexpr uint32_t kClocksPerSample = 24;
 constexpr uint32_t kMasterClocksPerClock = 6;
 
+/// Operator slots the core runs, one per internal clock of a sample.
+constexpr std::size_t kSlots = 24;
+
+/// Envelope level at full attenuation, where a slot contributes nothing.
+constexpr uint16_t kEnvelopeFloor = 0x3ff;
+
 /**
  * The six channels are multiplexed across the 24 clocks of a sample, three
  * clocks each, and a channel is nine bits. Accumulating the clocks therefore
@@ -35,6 +41,15 @@ constexpr uint32_t kWriteSpacingClocks = 15;
 
 /// Room for every write a full patch update issues, several times over.
 constexpr std::size_t kWriteQueueSize = 2048;
+
+/**
+ * Frames of unchanging output required before the core stops being clocked.
+ *
+ * A bus write reaches the envelope state through latches that only advance
+ * while the chip is clocked, so the count restarts at every write and has to
+ * outlast those latches before the envelopes read as settled.
+ */
+constexpr uint32_t kSettledFramesBeforeRest = 4;
 
 Bit32u nuked_mode(ChipType type) {
   // ym3438_mode_ym2612 selects the nine-bit DAC with the ladder effect;
@@ -64,6 +79,7 @@ struct NukedChip::Impl {
     tail = 0;
     pending = 0;
     clocks_until_write = 0;
+    settled_frames = 0;
   }
 
   void release_write() {
@@ -71,9 +87,11 @@ struct NukedChip::Impl {
     OPN2_Write(&chip, entry.offset, entry.data);
     head = (head + 1) % kWriteQueueSize;
     --pending;
+    settled_frames = 0;
   }
 
   void queue_write(uint8_t offset, uint8_t data) {
+    settled_frames = 0;
     if (pending == kWriteQueueSize) {
       // A whole queue of writes has arrived without the chip being clocked.
       // Let the oldest through and clock far enough for it to be latched; the
@@ -105,6 +123,40 @@ struct NukedChip::Impl {
     right += out[1];
   }
 
+  /**
+   * Every envelope at full attenuation with no key held. Nothing inside the
+   * core can lift an envelope out of that state, so its output holds until
+   * the next bus write.
+   */
+  bool envelopes_at_rest() const {
+    for (std::size_t slot = 0; slot < kSlots; ++slot) {
+      if (chip.eg_level[slot] != kEnvelopeFloor || chip.eg_kon[slot] != 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool at_rest() const { return settled_frames >= kSettledFramesBeforeRest; }
+
+  /// Record what a clocked frame produced and whether the core is at rest.
+  void observe_frame(int32_t left, int32_t right) {
+    if (pending > 0 || !envelopes_at_rest()) {
+      settled_frames = 0;
+      return;
+    }
+    if (settled_frames > 0 && left == rest_left && right == rest_right) {
+      ++settled_frames;
+      return;
+    }
+    rest_left = left;
+    rest_right = right;
+    settled_frames = 1;
+  }
+
+  /// Anything that can change the core puts it back on the clocked path.
+  void disturb() { settled_frames = 0; }
+
   uint32_t clock_hz;
   ChipType chip_type = ChipType::Ym2612;
   ym3438_t chip{};
@@ -113,6 +165,9 @@ struct NukedChip::Impl {
   std::size_t tail = 0;
   std::size_t pending = 0;
   uint32_t clocks_until_write = 0;
+  uint32_t settled_frames = 0;
+  int32_t rest_left = 0;
+  int32_t rest_right = 0;
 };
 
 NukedChip::NukedChip(uint32_t clock) : impl_(std::make_unique<Impl>(clock)) {}
@@ -128,6 +183,7 @@ ChipType NukedChip::chip_type() const { return impl_->chip_type; }
 void NukedChip::set_chip_type(ChipType type) {
   impl_->chip_type = type;
   impl_->select_mode();
+  impl_->disturb();
 }
 
 void NukedChip::reset() {
@@ -142,6 +198,7 @@ void NukedChip::write(uint8_t offset, uint8_t data) {
 
 uint8_t NukedChip::read(uint8_t offset) {
   impl_->select_mode();
+  impl_->disturb();
   return OPN2_Read(&impl_->chip, offset);
 }
 
@@ -154,8 +211,19 @@ void NukedChip::render(int32_t *left, int32_t *right, uint32_t frames) {
   for (uint32_t frame = 0; frame < frames; ++frame) {
     int32_t accumulated_left = 0;
     int32_t accumulated_right = 0;
-    for (uint32_t tick = 0; tick < kClocksPerSample; ++tick) {
-      impl_->advance(accumulated_left, accumulated_right);
+    if (impl_->at_rest()) {
+      // A chip with nothing to play does not emit zero: the ladder in the
+      // YM2612's DAC leaves a constant offset on every clock. Replaying the
+      // frame the core produced while it was last clocked carries that offset
+      // through the pause, where emitting silence would step the signal at
+      // both ends of it.
+      accumulated_left = impl_->rest_left;
+      accumulated_right = impl_->rest_right;
+    } else {
+      for (uint32_t tick = 0; tick < kClocksPerSample; ++tick) {
+        impl_->advance(accumulated_left, accumulated_right);
+      }
+      impl_->observe_frame(accumulated_left, accumulated_right);
     }
     left[frame] = accumulated_left * kFullScale / kAccumulatedFullScale;
     right[frame] = accumulated_right * kFullScale / kAccumulatedFullScale;

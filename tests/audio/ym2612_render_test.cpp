@@ -8,6 +8,7 @@
 #include "audio/lowpass_filter.hpp"
 #include "ym2612/channel.hpp"
 #include "ym2612/note.hpp"
+#include "ym2612/nuked_chip.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/ymfm_chip.hpp"
 
@@ -115,6 +116,83 @@ void test_raw_idle_dc_by_chip_type() {
   chip.render(left, right, kFrames);
   CHECK(left[kFrames - 1] == 0);
   CHECK(right[kFrames - 1] == 0);
+}
+
+// The Nuked core stops being clocked once it has nothing left to play, so an
+// idle stretch is made of samples the pause itself produces. They have to be
+// the offset the chip emits, held for the whole stretch: a run of zeroes
+// would step the signal at both ends of the pause.
+void test_nuked_raw_idle_dc_by_chip_type() {
+  ym2612::NukedChip chip(ym2612::Device::kClock);
+  constexpr uint32_t kFrames = 4096;
+  std::vector<int32_t> left(kFrames, 0);
+  std::vector<int32_t> right(kFrames, 0);
+
+  const auto rendered_range = [&](int32_t &lowest, int32_t &highest) {
+    chip.render(left.data(), right.data(), kFrames);
+    lowest = left[0];
+    highest = left[0];
+    for (uint32_t i = 0; i < kFrames; ++i) {
+      lowest = std::min({lowest, left[i], right[i]});
+      highest = std::max({highest, left[i], right[i]});
+    }
+  };
+
+  int32_t lowest = 0;
+  int32_t highest = 0;
+
+  CHECK(chip.chip_type() == ym2612::ChipType::Ym2612);
+  rendered_range(lowest, highest);
+  CHECK(lowest == 512);
+  CHECK(highest == 512);
+
+  chip.set_chip_type(ym2612::ChipType::Ym3438);
+  rendered_range(lowest, highest);
+  CHECK(lowest == 0);
+  CHECK(highest == 0);
+}
+
+// A note released into a long silence and then retriggered. The core stops
+// somewhere in the middle of that silence and starts again on the write, and
+// the samples across both boundaries have to sit at the same level.
+void test_nuked_idle_stretch_holds_its_level() {
+  constexpr float kIdleLevel = 512.0f / 32768.0f;
+
+  ym2612::Device device;
+  device.init(kSampleRate);
+  CHECK(device.core_type() == ym2612::CoreType::Nuked);
+
+  const auto patch = make_all_carrier_patch(20);
+  auto channel = device.channel(ym2612::ChannelIndex::Fm1);
+  channel.write_settings(patch.channel);
+  channel.write_instrument(patch.instrument);
+  channel.write_frequency(ym2612::Note::from_midi_note(60));
+  channel.write_key_on(true, true, true, true);
+
+  std::vector<float> sounding(static_cast<size_t>(kSampleRate) / 10 * 2, 0.0f);
+  device.render(kSampleRate / 10, sounding.data());
+  channel.write_key_off();
+
+  // Long enough for the release to run out with the pause still to come.
+  const uint32_t idle_frames = kSampleRate / 2;
+  std::vector<float> idle(static_cast<size_t>(idle_frames) * 2, 0.0f);
+  device.render(idle_frames, idle.data());
+
+  // The second half of the stretch is entirely past the release.
+  float largest_step = 0.0f;
+  for (size_t i = idle.size() / 2; i < idle.size(); ++i) {
+    largest_step = std::max(largest_step, std::abs(idle[i] - kIdleLevel));
+  }
+  CHECK(largest_step == 0.0f);
+
+  channel.write_key_on(true, true, true, true);
+  std::vector<float> again(static_cast<size_t>(kSampleRate) / 20 * 2, 0.0f);
+  device.render(kSampleRate / 20, again.data());
+  float peak = 0.0f;
+  for (float sample : again) {
+    peak = std::max(peak, std::abs(sample - kIdleLevel));
+  }
+  CHECK(peak > 0.01f);
 }
 
 void test_sample_rates() {
@@ -341,6 +419,8 @@ void test_switching_core_releases_notes_and_keeps_audio_working() {
 int main() {
   test_sample_rates();
   test_raw_idle_dc_by_chip_type();
+  test_nuked_raw_idle_dc_by_chip_type();
+  test_nuked_idle_stretch_holds_its_level();
   test_ctrmml_lowpass_response();
   test_idle_settles_to_digital_silence();
   test_apply_patch_reaches_sustaining_note();
