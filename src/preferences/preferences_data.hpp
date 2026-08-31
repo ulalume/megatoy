@@ -17,6 +17,8 @@ struct UIPreferences {
   bool show_waveform = true;
   bool show_patch_lab = true;
   int ym2612_chip_type = 0;
+  /// 0 = Nuked-OPN2, 1 = ymfm, matching ym2612::CoreType.
+  int ym2612_core = 0;
   /**
    * Frames per audio callback; 0 keeps the platform's default. Smaller means
    * less latency and less room to absorb a stall. Read when the audio device
@@ -78,6 +80,7 @@ struct UIPreferences {
            lhs.show_waveform == rhs.show_waveform &&
            lhs.show_patch_lab == rhs.show_patch_lab &&
            lhs.ym2612_chip_type == rhs.ym2612_chip_type &&
+           lhs.ym2612_core == rhs.ym2612_core &&
            lhs.audio_buffer_frames == rhs.audio_buffer_frames &&
            lhs.ui_scale == rhs.ui_scale &&
            lhs.use_velocity == rhs.use_velocity &&

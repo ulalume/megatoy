@@ -1,7 +1,10 @@
 #include "ym2612/device.hpp"
 #include "ym2612/channel.hpp"
+#include "ym2612/nuked_chip.hpp"
+#include "ym2612/ymfm_chip.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 #include <vector>
 
@@ -14,10 +17,10 @@ namespace ym2612 {
 namespace {
 
 // The resampler applies an 8.8 fixed-point gain, so a full-scale chip sample
-// (YmfmChip::kFullScale) comes out as kFullScale * kResamplerVolume.
+// (Chip::kFullScale) comes out as kFullScale * kResamplerVolume.
 constexpr uint16_t kResamplerVolume = 0x100;
 constexpr float kInverseFullScale =
-    1.0f / (static_cast<float>(YmfmChip::kFullScale) * kResamplerVolume);
+    1.0f / (static_cast<float>(Chip::kFullScale) * kResamplerVolume);
 
 } // namespace
 
@@ -36,14 +39,21 @@ struct Device::Resampler {
     state = {};
   }
 
-  void init(YmfmChip &chip, uint32_t destination_rate) {
+  void init(Chip &chip, uint32_t destination_rate) {
     deinit();
     state.smpRateSrc = chip.native_sample_rate();
-    state.StreamUpdate = &YmfmChip::stream_update;
+    state.StreamUpdate = &Chip::stream_update;
     state.su_DataPtr = &chip;
     Resmpl_SetVals(&state, 0xFF, kResamplerVolume, destination_rate);
     Resmpl_Init(&state);
     initialized = true;
+  }
+
+  /// Point the callback at another core. Every core runs at the same native
+  /// rate, so nothing the resampler was set up with changes.
+  void rebind(Chip &chip) {
+    assert(!initialized || state.smpRateSrc == chip.native_sample_rate());
+    state.su_DataPtr = &chip;
   }
 };
 
@@ -57,8 +67,11 @@ void Device::init(uint32_t sample_rate) {
   }
 
   sample_rate_ = sample_rate;
-  chip_ = std::make_unique<YmfmChip>(kClock);
-  chip_->set_chip_type(chip_type_);
+  nuked_chip_ = std::make_unique<NukedChip>(kClock);
+  ymfm_chip_ = std::make_unique<YmfmChip>(kClock);
+  nuked_chip_->set_chip_type(chip_type_);
+  ymfm_chip_->set_chip_type(chip_type_);
+  chip_ = active_chip();
   resampler_ = std::make_unique<Resampler>();
   resampler_->init(*chip_, sample_rate_);
   lowpass_.init(sample_rate_);
@@ -66,8 +79,14 @@ void Device::init(uint32_t sample_rate) {
 
 void Device::stop() {
   resampler_.reset();
-  chip_.reset();
+  chip_ = nullptr;
+  ymfm_chip_.reset();
+  nuked_chip_.reset();
   sample_rate_ = 0;
+}
+
+Chip *Device::active_chip() {
+  return core_type_ == CoreType::Nuked ? nuked_chip_.get() : ymfm_chip_.get();
 }
 
 uint32_t Device::native_sample_rate() const {
@@ -81,8 +100,29 @@ void Device::set_chip_type(ChipType type) {
     chip_->reset();
   }
   chip_type_ = type;
-  if (chip_) {
-    chip_->set_chip_type(type);
+  // Both cores follow, so whichever is selected next is already on the
+  // chip the caller asked for.
+  if (nuked_chip_) {
+    nuked_chip_->set_chip_type(type);
+  }
+  if (ymfm_chip_) {
+    ymfm_chip_->set_chip_type(type);
+  }
+}
+
+void Device::set_core_type(CoreType type) {
+  if (chip_ && core_type_ != type) {
+    // An inactive core must not retain keyed envelopes that can resume when
+    // it is selected again, nor bus writes it never got to clock in.
+    chip_->reset();
+  }
+  core_type_ = type;
+  if (!chip_) {
+    return;
+  }
+  chip_ = active_chip();
+  if (resampler_) {
+    resampler_->rebind(*chip_);
   }
 }
 

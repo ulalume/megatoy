@@ -7,18 +7,19 @@
 namespace ym2612 {
 
 /**
- * ymfm's YM2612-family cores.
+ * Nuked-OPN2.
  *
- * ymfm's headers are template-heavy, so the chip instance lives behind a
- * pimpl and is compiled in exactly one translation unit.
+ * The core advances one internal clock at a time and latches bus writes
+ * through a pipeline that needs clocking, so the chip instance and the queue
+ * of writes waiting for their turn live behind a pimpl.
  */
-class YmfmChip final : public Chip {
+class NukedChip final : public Chip {
 public:
-  explicit YmfmChip(uint32_t clock);
-  ~YmfmChip() override;
+  explicit NukedChip(uint32_t clock);
+  ~NukedChip() override;
 
-  YmfmChip(const YmfmChip &) = delete;
-  YmfmChip &operator=(const YmfmChip &) = delete;
+  NukedChip(const NukedChip &) = delete;
+  NukedChip &operator=(const NukedChip &) = delete;
 
   uint32_t native_sample_rate() const override;
 

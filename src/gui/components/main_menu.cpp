@@ -6,13 +6,141 @@
 
 #include "about_dialog.hpp"
 #include "changelog_dialog.hpp"
+#include "gui/components/common.hpp"
+#include "gui/components/panel.hpp"
+#include "gui/components/preferences.hpp"
 #include "gui/save_export_actions.hpp"
+#include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
+#include "ym2612/chip.hpp"
+#include <cstddef>
 #include <imgui.h>
+#include <iterator>
 #include <string>
 #include <string_view>
 
 namespace ui {
+
+namespace {
+
+// Full scale on the graph is the render deadline: 1.0 means a block took as
+// long to produce as it takes to play.
+constexpr float kLoadWarningLevel = 0.7f;
+constexpr float kLoadGraphWidth = 64.0f;
+
+void draw_load_graph(const Panel &panel,
+                     const audio::LoadMeter::History &history) {
+  const float width = panel.max.x - panel.min.x;
+  const float height = panel.max.y - panel.min.y;
+
+  const ImU32 warning = styles::color_u32(styles::MegatoyCol::StatusWarning);
+  const ImU32 trace = ImGui::GetColorU32(ImGuiCol_PlotLines);
+
+  const float threshold_y = panel.max.y - height * kLoadWarningLevel;
+  panel.draw_list->AddLine(ImVec2(panel.min.x, threshold_y),
+                           ImVec2(panel.max.x, threshold_y),
+                           color_with_alpha(warning, 0.5f));
+
+  if (history.count < 2) {
+    return;
+  }
+
+  // The newest value sits on the right edge, older ones running left from it,
+  // so a ring that is not full yet grows leftwards instead of stretching.
+  const float step =
+      width / static_cast<float>(audio::LoadMeter::kCapacity - 1);
+  const auto point = [&](std::size_t index) {
+    const float value = std::clamp(history.values[index], 0.0f, 1.0f);
+    const float x =
+        panel.max.x - step * static_cast<float>(history.count - 1 - index);
+    return ImVec2(x, panel.max.y - height * value);
+  };
+  const auto over_threshold = [&](std::size_t index) {
+    return history.values[index] > kLoadWarningLevel;
+  };
+
+  // Split into runs so a segment touching a sample over the threshold is
+  // stroked in the warning colour.
+  ImU32 run_color = (over_threshold(0) || over_threshold(1)) ? warning : trace;
+  panel.draw_list->PathClear();
+  panel.draw_list->PathLineTo(point(0));
+  for (std::size_t i = 1; i < history.count; ++i) {
+    const ImU32 color =
+        (over_threshold(i - 1) || over_threshold(i)) ? warning : trace;
+    if (color != run_color) {
+      panel.draw_list->PathStroke(run_color, ImDrawFlags_None, 1.0f);
+      panel.draw_list->PathClear();
+      panel.draw_list->PathLineTo(point(i - 1));
+      run_color = color;
+    }
+    panel.draw_list->PathLineTo(point(i));
+  }
+  panel.draw_list->PathStroke(run_color, ImDrawFlags_None, 1.0f);
+}
+
+/// The remedies for a high load. Each one that has nothing left to give is
+/// disabled and says so.
+void render_load_menu(MainMenuContext &context) {
+  auto &ui_prefs = context.ui_prefs;
+
+  const bool core_at_best =
+      ui_prefs.ym2612_core == static_cast<int>(ym2612::CoreType::Ymfm);
+  if (ImGui::MenuItem(core_at_best ? "Core (already set)" : "Core...", nullptr,
+                      false, !core_at_best)) {
+    context.open_sound_preferences = true;
+  }
+
+  const int largest_buffer =
+      kAudioBufferChoices[std::size(kAudioBufferChoices) - 1];
+  const int buffer_frames = ui_prefs.audio_buffer_frames > 0
+                                ? ui_prefs.audio_buffer_frames
+                                : context.default_audio_buffer_frames;
+  const bool buffer_at_best = buffer_frames >= largest_buffer;
+  if (ImGui::MenuItem(buffer_at_best ? "Buffer Size (already set)"
+                                     : "Buffer Size...",
+                      nullptr, false, !buffer_at_best)) {
+    context.open_sound_preferences = true;
+  }
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  // The browser draws the interface on the thread that renders the audio, so
+  // the time the waveform takes comes out of the same deadline. Where audio
+  // has a thread of its own it cannot, and the item is not offered.
+  const bool waveform_at_best = !ui_prefs.show_waveform;
+  if (ImGui::MenuItem(waveform_at_best ? "Hide Waveform (already set)"
+                                       : "Hide Waveform",
+                      nullptr, false, !waveform_at_best)) {
+    ui_prefs.show_waveform = false;
+  }
+#endif
+}
+
+/// The load graph, at the right-hand end of the bar.
+void render_audio_load(MainMenuContext &context) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const ImVec2 size(ui::scale::px(kLoadGraphWidth), ImGui::GetTextLineHeight());
+  // Never left of the menus: an overlap would take their clicks.
+  const float x =
+      std::max(ImGui::GetCursorPosX(),
+               ImGui::GetWindowWidth() - size.x - style.FramePadding.x * 2.0f);
+  ImGui::SetCursorPos(ImVec2(x, (ImGui::GetWindowHeight() - size.y) * 0.5f));
+
+  const Panel panel = begin_panel(size, "##audio_load");
+  const bool clicked = ImGui::IsItemClicked();
+  draw_load_graph(panel, context.audio_load.history());
+  end_panel(panel);
+
+  if (clicked) {
+    ImGui::OpenPopup("##audio_load_menu");
+  }
+  if (ImGui::BeginPopup("##audio_load_menu")) {
+    render_load_menu(context);
+    ImGui::EndPopup();
+  }
+}
+
+} // namespace
 
 void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
@@ -213,6 +341,9 @@ void render_main_menu(MainMenuContext &context) {
       }
       ImGui::EndMenu();
     }
+
+    render_audio_load(context);
+
     ImGui::EndMainMenuBar();
   }
 

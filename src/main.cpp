@@ -101,6 +101,10 @@ bool run_frame(RuntimeContext &runtime) {
   ui::render_all(*runtime.app_context);
   const auto &saved_prefs = services.preference_manager.ui_preferences();
   const auto &current_prefs = app_state.ui_state().prefs;
+  if (current_prefs.ym2612_core != saved_prefs.ym2612_core) {
+    services.audio_manager.set_core_type(static_cast<ym2612::CoreType>(
+        std::clamp(current_prefs.ym2612_core, 0, 1)));
+  }
   if (current_prefs.ym2612_chip_type != saved_prefs.ym2612_chip_type) {
     services.audio_manager.set_chip_type(static_cast<ym2612::ChipType>(
         std::clamp(current_prefs.ym2612_chip_type, 0, 1)));
