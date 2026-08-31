@@ -10,6 +10,15 @@ constexpr std::string_view kEnvelopeDetails[] = {
     "Played notes show where they are on the envelope",
 };
 
+constexpr std::string_view kCoreDetails[] = {
+    "ymfm is still selectable in Preferences",
+};
+
+constexpr ChangelogItem kItems_0_9_1[] = {
+    {"Sound is emulated with Nuked-OPN2", kCoreDetails},
+    {"Audio load meter in the menu bar", {}},
+};
+
 constexpr ChangelogItem kItems_0_9_0[] = {
     {"Envelope graphs match the chip, on a millisecond axis", kEnvelopeDetails},
     {"Added 10 built-in FM Patches", {}},
@@ -55,7 +64,8 @@ constexpr ChangelogItem kItems_0_6_0[] = {
 };
 
 constexpr ChangelogEntry kEntries[] = {
-    {"v0.9.0", kItems_0_9_0}, {"v0.8.4", kItems_0_8_4},
+    {"v0.9.1", kItems_0_9_1}, {"v0.9.0", kItems_0_9_0},
+    {"v0.8.4", kItems_0_8_4},
     {"v0.8.3", kItems_0_8_3}, {"v0.8.2", kItems_0_8_2},
     {"v0.8.1", kItems_0_8_1}, {"v0.8.0", kItems_0_8_0},
     {"v0.6.0", kItems_0_6_0},
