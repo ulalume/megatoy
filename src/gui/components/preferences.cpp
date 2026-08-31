@@ -494,16 +494,17 @@ void render_patches_tab(PreferencesContext &context) {
 void render_sound_tab(PreferencesContext &context) {
   auto &ui_prefs = context.ui_prefs;
 
+  static constexpr const char *cores[] = {"Nuked-OPN2 (accurate)",
+                                         "ymfm (fast)"};
+  ui_prefs.ym2612_core = std::clamp(ui_prefs.ym2612_core, 0, 1);
+  ImGui::Combo("Core", &ui_prefs.ym2612_core, cores,
+               static_cast<int>(std::size(cores)));
+
   static constexpr const char *chip_types[] = {
       "YM2612 (Model 1, DAC distortion)", "YM3438 (Model 2, clean)"};
   ui_prefs.ym2612_chip_type = std::clamp(ui_prefs.ym2612_chip_type, 0, 1);
   ImGui::Combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
                static_cast<int>(std::size(chip_types)));
-
-  static constexpr const char *cores[] = {"Nuked-OPN2", "ymfm"};
-  ui_prefs.ym2612_core = std::clamp(ui_prefs.ym2612_core, 0, 1);
-  ImGui::Combo("Core", &ui_prefs.ym2612_core, cores,
-               static_cast<int>(std::size(cores)));
 
   ImGui::Spacing();
 
