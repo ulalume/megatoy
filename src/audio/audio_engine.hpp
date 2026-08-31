@@ -24,6 +24,19 @@ public:
   bool initialize(uint32_t sample_rate);
   void shutdown();
 
+  /**
+   * Take rendering down and back up around a device reopen, keeping the
+   * patch and the chip's registers.
+   *
+   * Both must run with the transport stopped, because both write the chip
+   * from the calling thread. suspend() releases every sounding note -- the
+   * queue has no consumer once it returns, so a release could not be
+   * delivered later -- and drops the load history, whose slot duration is
+   * about to change. resume() rewrites the chip from the current patch.
+   */
+  void suspend();
+  void resume();
+
   /// Fill `data` with up to `buf_size` bytes of interleaved stereo s16 audio.
   /// Returns the number of bytes written.
   uint32_t render(uint32_t buf_size, void *data);
@@ -98,6 +111,9 @@ private:
   void drain_commands();
   void drain(audio::AudioCommandQueue &queue);
   void apply(const audio::AudioCommand &command);
+  /// Put the chip into the state the current patch describes, with nothing
+  /// keyed on.
+  void restore_chip_state();
   void remove_dc(float *interleaved, uint32_t frames);
   bool try_push_midi_command(const audio::AudioCommand &command,
                              bool &queue_full);

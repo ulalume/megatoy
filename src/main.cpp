@@ -123,6 +123,19 @@ bool run_frame(RuntimeContext &runtime) {
     services.audio_manager.set_performance_options(current_prefs.use_pitch_bend,
                                                    current_prefs.use_mod_wheel);
   }
+  // Reopening the device has to happen here rather than through the audio
+  // command queue: that queue is drained by the device's own callback.
+  if (current_prefs.audio_buffer_frames != saved_prefs.audio_buffer_frames &&
+      !services.audio_manager.set_buffer_frames(
+          current_prefs.audio_buffer_frames)) {
+    megatoy::status::error(
+        services.audio_manager.is_running()
+            ? "Audio device would not reopen at that buffer size."
+            : "Audio device unavailable -- megatoy is running without sound.");
+    // Show the size the device is actually using.
+    app_state.ui_state().prefs.audio_buffer_frames =
+        services.audio_manager.buffer_frames();
+  }
   services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);
   services.gui_manager.end_frame();
   return true;

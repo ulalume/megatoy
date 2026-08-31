@@ -52,6 +52,27 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
   return running_;
 }
 
+void AudioEngine::suspend() {
+  if (!running_) {
+    return;
+  }
+  running_ = false;
+  // With running_ cleared the queue has no consumer, so the release has to go
+  // through the direct path rather than be submitted.
+  apply(audio::AudioCommand::all_notes_off());
+  // The graph's window is derived from how long one entry covers, so entries
+  // recorded at two buffer sizes cannot be drawn together.
+  load_meter_.clear();
+}
+
+void AudioEngine::resume() {
+  if (running_ || !device_.is_initialized()) {
+    return;
+  }
+  restore_chip_state();
+  running_ = true;
+}
+
 void AudioEngine::shutdown() {
   running_ = false;
   midi_release_recovery_pending_.store(false, std::memory_order_relaxed);
@@ -352,18 +373,20 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
 
   case Type::SetChipType:
     device_.set_chip_type(command.chip_type);
-    apply(audio::AudioCommand::apply_patch(current_global_, current_channel_,
-                                           current_instrument_));
-    apply(audio::AudioCommand::all_notes_off());
+    restore_chip_state();
     break;
 
   case Type::SetCore:
     device_.set_core_type(command.core_type);
-    apply(audio::AudioCommand::apply_patch(current_global_, current_channel_,
-                                           current_instrument_));
-    apply(audio::AudioCommand::all_notes_off());
+    restore_chip_state();
     break;
   }
+}
+
+void AudioEngine::restore_chip_state() {
+  apply(audio::AudioCommand::apply_patch(current_global_, current_channel_,
+                                         current_instrument_));
+  apply(audio::AudioCommand::all_notes_off());
 }
 
 void AudioEngine::apply_patch_to_all_channels(const ym2612::Patch &patch) {
