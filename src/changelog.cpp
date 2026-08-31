@@ -10,12 +10,8 @@ constexpr std::string_view kEnvelopeDetails[] = {
     "Played notes show where they are on the envelope",
 };
 
-constexpr std::string_view kCoreDetails[] = {
-    "ymfm is still selectable in Preferences",
-};
-
 constexpr ChangelogItem kItems_0_9_1[] = {
-    {"Sound is emulated with Nuked-OPN2", kCoreDetails},
+    {"Nuked-OPN2 emulation core, in Preferences", {}},
     {"Audio load meter in the menu bar", {}},
 };
 
