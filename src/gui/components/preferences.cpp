@@ -538,7 +538,7 @@ void render_sound_tab(PreferencesContext &context) {
     ui_prefs.audio_buffer_frames = kAudioBufferChoices[buffer_index];
   }
   ImGui::TextWrapped("Lower values reduce latency but increase the risk of "
-                     "audio dropouts. Changes apply on the next launch.");
+                     "audio dropouts.");
 
   ImGui::Spacing();
 

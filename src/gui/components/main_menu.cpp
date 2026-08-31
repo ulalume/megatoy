@@ -135,9 +135,8 @@ void render_load_menu(MainMenuContext &context) {
                                 ? ui_prefs.audio_buffer_frames
                                 : context.default_audio_buffer_frames;
   const bool buffer_at_best = buffer_frames >= largest_buffer;
-  if (ImGui::MenuItem(buffer_at_best
-                          ? "Increase buffer size (already set)"
-                          : "Increase buffer size (next launch)...",
+  if (ImGui::MenuItem(buffer_at_best ? "Increase buffer size (already set)"
+                                     : "Increase buffer size...",
                       nullptr, false, !buffer_at_best)) {
     context.open_sound_preferences = true;
   }

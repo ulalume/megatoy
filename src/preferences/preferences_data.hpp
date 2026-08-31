@@ -22,8 +22,8 @@ struct UIPreferences {
   int ym2612_core = static_cast<int>(ym2612::CoreType::Ymfm);
   /**
    * Frames per audio callback; 0 keeps the platform's default. Smaller means
-   * less latency and less room to absorb a stall. Read when the audio device
-   * opens, so a change lands on the next launch.
+   * less latency and less room to absorb a stall. Changing it reopens the
+   * audio device.
    */
   int audio_buffer_frames = 0;
   /**
