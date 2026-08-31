@@ -1,6 +1,7 @@
 #include "main_menu.hpp"
 #include "platform/platform_config.hpp"
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <optional>
 
@@ -15,6 +16,7 @@
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
 #include <cstddef>
+#include <cstdio>
 #include <imgui.h>
 #include <iterator>
 #include <string>
@@ -28,9 +30,44 @@ namespace {
 // long to produce as it takes to play.
 constexpr float kLoadWarningLevel = 0.7f;
 constexpr float kLoadGraphWidth = 64.0f;
+// How far back the graph reaches: long enough that a glitch is still on
+// screen once the ear has noticed it and the eye has arrived.
+constexpr float kLoadWindowMs = 10000.0f;
+constexpr std::size_t kMaxLoadColumns = 256;
 
-void draw_load_graph(const Panel &panel,
-                     const audio::LoadMeter::History &history) {
+// The drawn window, folded to one column per pixel by taking the highest
+// value in each: the reading beside the graph is the top of what is drawn.
+struct LoadWindow {
+  std::array<float, kMaxLoadColumns> columns{};
+  std::size_t count = 0;
+  float peak = 0.0f;
+};
+
+LoadWindow load_window(const audio::LoadMeter::History &history, float width) {
+  LoadWindow out;
+  if (history.count == 0) {
+    return out;
+  }
+  const std::size_t wanted =
+      history.slot_ms > 0.0f
+          ? static_cast<std::size_t>(kLoadWindowMs / history.slot_ms) + 1
+          : history.count;
+  const std::size_t used = std::min(history.count, wanted);
+  const std::size_t first = history.count - used;
+  const std::size_t columns = std::min<std::size_t>(
+      kMaxLoadColumns, std::max<std::size_t>(2, static_cast<std::size_t>(width)));
+  out.count = std::min(columns, used);
+  for (std::size_t i = 0; i < used; ++i) {
+    const std::size_t column = out.count < 2 ? 0
+                                             : i * (out.count - 1) / (used - 1);
+    const float value = history.values[first + i];
+    out.columns[column] = std::max(out.columns[column], value);
+    out.peak = std::max(out.peak, value);
+  }
+  return out;
+}
+
+void draw_load_graph(const Panel &panel, const LoadWindow &window) {
   const float width = panel.max.x - panel.min.x;
   const float height = panel.max.y - panel.min.y;
 
@@ -42,22 +79,20 @@ void draw_load_graph(const Panel &panel,
                            ImVec2(panel.max.x, threshold_y),
                            color_with_alpha(warning, 0.5f));
 
-  if (history.count < 2) {
+  if (window.count < 2) {
     return;
   }
 
-  // The newest value sits on the right edge, older ones running left from it,
-  // so a ring that is not full yet grows leftwards instead of stretching.
-  const float step =
-      width / static_cast<float>(audio::LoadMeter::kCapacity - 1);
+  // The newest column sits on the right edge, older ones running left from it,
+  // so a window that is not full yet grows leftwards instead of stretching.
+  const float step = width / static_cast<float>(window.count - 1);
   const auto point = [&](std::size_t index) {
-    const float value = std::clamp(history.values[index], 0.0f, 1.0f);
-    const float x =
-        panel.max.x - step * static_cast<float>(history.count - 1 - index);
+    const float value = std::clamp(window.columns[index], 0.0f, 1.0f);
+    const float x = panel.min.x + step * static_cast<float>(index);
     return ImVec2(x, panel.max.y - height * value);
   };
   const auto over_threshold = [&](std::size_t index) {
-    return history.values[index] > kLoadWarningLevel;
+    return window.columns[index] > kLoadWarningLevel;
   };
 
   // Split into runs so a segment touching a sample over the threshold is
@@ -65,7 +100,7 @@ void draw_load_graph(const Panel &panel,
   ImU32 run_color = (over_threshold(0) || over_threshold(1)) ? warning : trace;
   panel.draw_list->PathClear();
   panel.draw_list->PathLineTo(point(0));
-  for (std::size_t i = 1; i < history.count; ++i) {
+  for (std::size_t i = 1; i < window.count; ++i) {
     const ImU32 color =
         (over_threshold(i - 1) || over_threshold(i)) ? warning : trace;
     if (color != run_color) {
@@ -123,24 +158,34 @@ void render_load_menu(MainMenuContext &context) {
 void render_audio_load(MainMenuContext &context) {
   const ImGuiStyle &style = ImGui::GetStyle();
   const ImVec2 size(ui::scale::px(kLoadGraphWidth), ImGui::GetTextLineHeight());
-  // Never left of the menus: an overlap would take their clicks.
-  const float x =
-      std::max(ImGui::GetCursorPosX(),
-               ImGui::GetWindowWidth() - size.x - style.FramePadding.x * 2.0f);
-  ImGui::SetCursorPos(ImVec2(x, (ImGui::GetWindowHeight() - size.y) * 0.5f));
 
+  const auto history = context.audio_load.history();
+  const LoadWindow window = load_window(history, size.x);
+  char reading[8];
+  std::snprintf(reading, sizeof(reading), "%.0f%%",
+                static_cast<double>(window.peak) * 100.0);
+  const float reading_width = ImGui::CalcTextSize(reading).x;
+  const float row = ImGui::GetTextLineHeight();
+
+  // Never left of the menus: an overlap would take their clicks.
+  const float x = std::max(ImGui::GetCursorPosX(),
+                           ImGui::GetWindowWidth() - size.x - reading_width -
+                               style.ItemSpacing.x -
+                               style.FramePadding.x * 2.0f);
+  const float y = (ImGui::GetWindowHeight() - row) * 0.5f;
+  ImGui::SetCursorPos(ImVec2(x, y));
+  ImGui::TextUnformatted(reading);
+
+  ImGui::SetCursorPos(
+      ImVec2(x + reading_width + style.ItemSpacing.x, y));
   const Panel panel = begin_panel(size, "##audio_load");
   const bool clicked = ImGui::IsItemClicked();
   const bool hovered = ImGui::IsItemHovered();
-  const auto history = context.audio_load.history();
-  draw_load_graph(panel, history);
+  draw_load_graph(panel, window);
   end_panel(panel);
 
   if (hovered) {
-    const float latest =
-        history.count > 0 ? history.values[history.count - 1] : 0.0f;
-    ImGui::SetTooltip("Audio load: %.0f%% of the time available",
-                      static_cast<double>(latest) * 100.0);
+    ImGui::SetTooltip("Audio load");
   }
 
   if (clicked) {
