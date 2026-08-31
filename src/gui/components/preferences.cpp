@@ -510,12 +510,11 @@ void render_sound_tab(PreferencesContext &context) {
   // The frames the device ends up with. The web backend is asked for half of
   // it, because it doubles whatever it is given, so the default is not the
   // same number on every platform.
-  static constexpr int kBufferChoices[] = {256, 384, 512, 1024, 2048};
   const int platform_default = context.default_audio_buffer_frames;
   std::vector<std::string> buffer_labels;
   std::vector<const char *> buffer_label_pointers;
-  buffer_labels.reserve(std::size(kBufferChoices));
-  for (const int frames : kBufferChoices) {
+  buffer_labels.reserve(std::size(kAudioBufferChoices));
+  for (const int frames : kAudioBufferChoices) {
     buffer_labels.push_back(std::to_string(frames) + " frames" +
                             (frames == platform_default ? " (default)" : ""));
   }
@@ -527,15 +526,15 @@ void render_sound_tab(PreferencesContext &context) {
                                   ? ui_prefs.audio_buffer_frames
                                   : platform_default;
   int buffer_index = 0;
-  for (int i = 0; i < static_cast<int>(std::size(kBufferChoices)); ++i) {
-    if (kBufferChoices[i] == selected_frames) {
+  for (int i = 0; i < static_cast<int>(std::size(kAudioBufferChoices)); ++i) {
+    if (kAudioBufferChoices[i] == selected_frames) {
       buffer_index = i;
       break;
     }
   }
   if (ImGui::Combo("Buffer size", &buffer_index, buffer_label_pointers.data(),
                    static_cast<int>(buffer_label_pointers.size()))) {
-    ui_prefs.audio_buffer_frames = kBufferChoices[buffer_index];
+    ui_prefs.audio_buffer_frames = kAudioBufferChoices[buffer_index];
   }
   ImGui::TextWrapped("Lower values reduce latency but increase the risk of "
                      "audio dropouts. Changes apply on the next launch.");
@@ -617,12 +616,19 @@ void render_input_tab(PreferencesContext &context) {
 void render_preferences_window(const char *title, PreferencesContext &context) {
   auto &ui_prefs = context.ui_prefs;
   normalize_custom_layout(ui_prefs);
+  const bool open_sound_tab = std::exchange(context.open_sound_tab, false);
+  if (open_sound_tab) {
+    ui_prefs.show_preferences = true;
+  }
   if (!ui_prefs.show_preferences) {
     return;
   }
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(480, 260)),
                            ImGuiCond_FirstUseEver);
+  if (open_sound_tab) {
+    ImGui::SetNextWindowFocus();
+  }
 
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
     if (ImGui::BeginTabBar("##preference_tabs")) {
@@ -640,7 +646,9 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
         ImGui::EndChild();
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem("Sound")) {
+      if (ImGui::BeginTabItem("Sound", nullptr,
+                              open_sound_tab ? ImGuiTabItemFlags_SetSelected
+                                             : ImGuiTabItemFlags_None)) {
         ImGui::BeginChild("##sound");
         render_sound_tab(context);
         ImGui::EndChild();

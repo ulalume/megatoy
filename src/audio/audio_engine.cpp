@@ -1,6 +1,7 @@
 #include "audio/audio_engine.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <thread>
 
@@ -38,6 +39,7 @@ bool AudioEngine::initialize(uint32_t sample_rate) {
   mix_buffer_.clear();
   mix_buffer_.reserve(kReservedMixFrames * 2);
   scope_buffer_.clear();
+  load_meter_.clear();
   midi_release_recovery_pending_.store(false, std::memory_order_relaxed);
   rendered_samples_.store(0, std::memory_order_release);
   command_sample_ = 0;
@@ -54,6 +56,7 @@ void AudioEngine::shutdown() {
   running_ = false;
   midi_release_recovery_pending_.store(false, std::memory_order_relaxed);
   scope_buffer_.clear();
+  load_meter_.clear();
   mix_buffer_.clear();
   device_.stop();
 }
@@ -70,6 +73,10 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   if (frames == 0) {
     return 0;
   }
+
+  // Timed against the duration of the audio produced below, so the meter
+  // reads the share of the deadline this call used.
+  const auto render_started = std::chrono::steady_clock::now();
 
   const size_t required = static_cast<size_t>(frames) * 2;
   if (mix_buffer_.size() < required) {
@@ -107,6 +114,11 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   for (size_t i = 0; i < required; ++i) {
     pcm[i] = to_pcm16(mix_buffer_[i]);
   }
+
+  load_meter_.record(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         std::chrono::steady_clock::now() - render_started)
+                         .count(),
+                     frames, sample_rate_);
 
   return frames * frame_size_;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/load_meter.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/gui_manager.hpp"
 #include "gui/save_export_state.hpp"
@@ -26,6 +27,12 @@ struct MainMenuContext {
   /// Opens and closes one undo step around an operator command.
   std::function<void(const std::string &label)> begin_patch_history;
   std::function<void()> commit_patch_history;
+  /// What the audio load graph plots.
+  const audio::LoadMeter &audio_load;
+  /// Raised by the graph's menu to bring up the Sound preferences.
+  bool &open_sound_preferences;
+  /// Frames the audio device uses when the buffer preference is unset.
+  int default_audio_buffer_frames = 0;
 };
 
 void render_main_menu(MainMenuContext &context);
