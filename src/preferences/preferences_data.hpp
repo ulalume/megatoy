@@ -3,6 +3,7 @@
 #include "core/types.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/theme.hpp"
+#include "ym2612/chip.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -18,7 +19,7 @@ struct UIPreferences {
   bool show_patch_lab = true;
   int ym2612_chip_type = 0;
   /// 0 = Nuked-OPN2, 1 = ymfm, matching ym2612::CoreType.
-  int ym2612_core = 0;
+  int ym2612_core = static_cast<int>(ym2612::CoreType::Ymfm);
   /**
    * Frames per audio callback; 0 keeps the platform's default. Smaller means
    * less latency and less room to absorb a stall. Read when the audio device

@@ -312,8 +312,8 @@ void test_core_preference_round_trip(const std::filesystem::path &root) {
     megatoy::system::PathService paths(fs, config);
     PreferenceManager preferences(paths);
     auto ui = preferences.ui_preferences();
-    CHECK(ui.ym2612_core == 0);
-    ui.ym2612_core = 1;
+    CHECK(ui.ym2612_core == static_cast<int>(ym2612::CoreType::Ymfm));
+    ui.ym2612_core = static_cast<int>(ym2612::CoreType::Nuked);
     preferences.set_ui_preferences(ui);
   }
 
@@ -322,14 +322,17 @@ void test_core_preference_round_trip(const std::filesystem::path &root) {
     std::ifstream input(config / "preferences.json");
     input >> stored;
   }
-  CHECK(stored.at("ui").at("ym2612_core").get<int>() == 1);
+  CHECK(stored.at("ui").at("ym2612_core").get<int>() ==
+        static_cast<int>(ym2612::CoreType::Nuked));
 
   {
     megatoy::system::PathService paths(fs, config);
     PreferenceManager preferences(paths);
-    CHECK(preferences.ui_preferences().ym2612_core == 1);
+    CHECK(preferences.ui_preferences().ym2612_core ==
+          static_cast<int>(ym2612::CoreType::Nuked));
   }
 
+  // Out of range falls back to the default.
   stored["ui"]["ym2612_core"] = 9;
   {
     std::ofstream output(config / "preferences.json");
@@ -338,7 +341,8 @@ void test_core_preference_round_trip(const std::filesystem::path &root) {
   {
     megatoy::system::PathService paths(fs, config);
     PreferenceManager preferences(paths);
-    CHECK(preferences.ui_preferences().ym2612_core == 1);
+    CHECK(preferences.ui_preferences().ym2612_core ==
+          static_cast<int>(ym2612::CoreType::Ymfm));
   }
 }
 
