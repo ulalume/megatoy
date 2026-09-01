@@ -406,6 +406,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
 
   // TL runs down the left of the panel in every layout; the graph and the rate
   // sliders start to the right of it.
+  const float block_left = ImGui::GetCursorPosX();
   render_total_level_slider(widget, envelope_state);
   ImGui::SameLine();
 
@@ -424,12 +425,13 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::EndGroup();
 
   if (column_layout) {
-    ImGui::SameLine();
-    ImGui::Spacing();
-    ImGui::SameLine();
-    // Level with the vertical sliders rather than with the graph, so the SSG
-    // controls sit straight above Key Scale.
-    ImGui::SetCursorPosY(sliders_top);
+    // Placed against the slider block, not the group just closed -- that
+    // group is as wide as the graph, so SameLine() off it would land past
+    // the panel's right edge. Level with the vertical sliders rather than
+    // with the graph, so the SSG controls sit straight above Key Scale.
+    ImGui::SetCursorPos(
+        ImVec2(block_left + hslider_width() + ImGui::GetStyle().ItemSpacing.x * 2,
+               sliders_top));
     ImGui::BeginGroup();
   } else {
     ImGui::Spacing();
