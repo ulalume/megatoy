@@ -43,6 +43,16 @@ float frame_padding() { return ui::scale::px(6.0f); }
 // Clearance either side of the header where the top border breaks for it.
 float header_gap() { return ui::scale::px(4.0f); }
 
+/// The envelope graph and the rate slider row beneath it, as one height.
+float total_level_slider_height() {
+  return vslider_height() * 2.0f + ImGui::GetStyle().ItemSpacing.y;
+}
+
+/// What the TL column costs the graph beside it: one slider and the gap.
+float total_level_column_width() {
+  return vslider_width() + ImGui::GetStyle().ItemSpacing.x;
+}
+
 ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
   return context.prefs.multi_operator_edit_absolute
              ? ym2612::MultiEditMode::Absolute
@@ -275,13 +285,34 @@ float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
 }
 
 /**
- * The six vertical sliders under the graph, labelled.
+ * TL's own column, the label above a slider as tall as the envelope graph and
+ * the rate slider row together.
  *
- * Always hslider_width() wide: six 20 px columns and the gaps between them.
- * The graph above is wider than this in the two-column layout, and the
- * sliders deliberately do not follow it -- widening them would claim they
- * share the graph's axis, and a 20 px column is the width these are grabbed
- * at.
+ * TL runs 0..127 where the rate sliders run 0..31 and 0..15, so it takes both
+ * rows' height for one step to stay wider than a pixel under the mouse. It
+ * sits beside the graph rather than under it because the graph's vertical
+ * axis is attenuation and TL is the operator's output level: the two read as
+ * one axis.
+ */
+void render_total_level_slider(OperatorWidget &widget,
+                               UIState::EnvelopeState &envelope_state) {
+  const ImVec2 slider_size(vslider_width(), total_level_slider_height());
+
+  ImGui::BeginGroup();
+  text_centered("TL", slider_size.x);
+  operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
+                  &slider_size, nullptr, &envelope_state.total_level);
+  ImGui::EndGroup();
+}
+
+/**
+ * The five rate sliders under the graph, labelled.
+ *
+ * Five 20 px columns and the gaps between them, which together with the TL
+ * column beside them comes to hslider_width(). The graph above is wider than
+ * this in the two-column layout, and the sliders deliberately do not follow
+ * it -- widening them would claim they share the graph's axis, and a 20 px
+ * column is the width these are grabbed at.
  */
 void render_envelope_sliders(OperatorWidget &widget,
                              UIState::EnvelopeState &envelope_state) {
@@ -291,8 +322,6 @@ void render_envelope_sliders(OperatorWidget &widget,
   ImGui::BeginGroup(); // ADSR slider block
 
   ImGui::BeginGroup();
-  text_centered("TL", label_width);
-  ImGui::SameLine();
   text_centered("AR", label_width);
   ImGui::SameLine();
   text_centered("DR", label_width);
@@ -305,9 +334,6 @@ void render_envelope_sliders(OperatorWidget &widget,
   ImGui::EndGroup();
 
   ImGui::BeginGroup();
-  operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
-                  &slider_size, nullptr, &envelope_state.total_level);
-  ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
                   &slider_size, nullptr, &envelope_state.attack_rate);
   ImGui::SameLine();
@@ -378,19 +404,34 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
       &ym2612::OperatorSettings::amplitude_modulation_enable, true);
   ImGui::Spacing();
 
-  // The graph is what the panel is read for, so it spans the whole width in
-  // every layout, with the rest starting underneath. frame_padding() comes off
-  // the right so it clears the border by as much as the contents do on the
-  // left. Only the pixels change: the time axis is unaffected.
+  // TL runs down the left of the panel in every layout; the graph and the rate
+  // sliders start to the right of it.
+  const float block_left = ImGui::GetCursorPosX();
+  render_total_level_slider(widget, envelope_state);
+  ImGui::SameLine();
+
+  // The graph is what the panel is read for, so it spans what the TL column
+  // leaves in every layout, with the rate sliders underneath. frame_padding()
+  // comes off the right so it clears the border by as much as the contents do
+  // on the left. Only the pixels change: the time axis is unaffected.
+  ImGui::BeginGroup();
   render_envelope_image(
       op, envelope_state,
-      ImVec2(content_width - frame_padding(), vslider_height()), voices);
+      ImVec2(content_width - frame_padding() - total_level_column_width(),
+             vslider_height()),
+      voices);
+  const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
+  ImGui::EndGroup();
 
   if (column_layout) {
-    ImGui::SameLine();
-    ImGui::Spacing();
-    ImGui::SameLine();
+    // Placed against the slider block, not the group just closed -- that
+    // group is as wide as the graph, so SameLine() off it would land past
+    // the panel's right edge. Level with the vertical sliders rather than
+    // with the graph, so the SSG controls sit straight above Key Scale.
+    ImGui::SetCursorPos(
+        ImVec2(block_left + hslider_width() + ImGui::GetStyle().ItemSpacing.x * 2,
+               sliders_top));
     ImGui::BeginGroup();
   } else {
     ImGui::Spacing();
@@ -419,9 +460,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndDisabled();
   }
 
-  // Nothing to clear in the two-column layout any more: the right column now
-  // starts level with the vertical sliders rather than with the graph, so the
-  // SSG controls sit straight above Key Scale.
+  // Only the single-column layout needs a break here: in the two-column one
+  // the SSG controls already stand clear of the sliders beside them.
   if (!column_layout) {
     ImGui::Spacing();
   }

@@ -5,6 +5,7 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 
 #include <filesystem>
+#include <string_view>
 
 namespace platform {
 class VirtualFileSystem;
@@ -20,8 +21,13 @@ namespace platform::web {
 bool download_workspace_path(const VirtualFileSystem &vfs,
                              const std::filesystem::path &path);
 
-/// Serialize and download the current editor patch without saving it.
-bool download_patch(const ym2612::Patch &patch);
+/**
+ * Serialize and download the current editor patch without saving it.
+ *
+ * `extension` names one of the registry's writable formats, dot included,
+ * and picks the writer Save As would use for it.
+ */
+bool download_patch(const ym2612::Patch &patch, std::string_view extension);
 
 } // namespace platform::web
 
