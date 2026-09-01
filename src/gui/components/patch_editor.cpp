@@ -35,6 +35,32 @@ void track_patch_history(PatchEditorContext &context, const std::string &label,
 
 namespace {
 
+#if defined(MEGATOY_PLATFORM_WEB)
+/**
+ * The Download button's format menu.
+ *
+ * The same list Save As offers, named the same way, so the browser can take
+ * the patch out in any format megatoy can write.
+ */
+void render_download_menu(patches::PatchSession &session) {
+  if (!ImGui::BeginPopup("Download")) {
+    return;
+  }
+  for (const auto &format : session.save_formats()) {
+    if (ImGui::MenuItem(format.display_name().c_str())) {
+      if (platform::web::download_patch(session.current_patch(),
+                                        format.extension)) {
+        megatoy::status::success("Download started.");
+      } else {
+        megatoy::status::error("Failed to prepare " + format.extension +
+                               " download.");
+      }
+    }
+  }
+  ImGui::EndPopup();
+}
+#endif
+
 void render_save_export_buttons(PatchEditorContext &context,
                                 PatchEditorState &state) {
   auto &patch_session = context.session;
@@ -94,12 +120,9 @@ void render_save_export_buttons(PatchEditorContext &context,
 #if defined(MEGATOY_PLATFORM_WEB)
   ImGui::SameLine();
   if (ImGui::Button("Download")) {
-    if (platform::web::download_patch(patch_session.current_patch())) {
-      megatoy::status::success("Download started.");
-    } else {
-      megatoy::status::error("Failed to prepare download.");
-    }
+    ImGui::OpenPopup("Download");
   }
+  render_download_menu(patch_session);
 #endif
 
   ImGui::SameLine();

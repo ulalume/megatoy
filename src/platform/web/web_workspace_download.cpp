@@ -114,15 +114,18 @@ bool download_workspace_path(const VirtualFileSystem &vfs,
   return true;
 }
 
-bool download_patch(const ym2612::Patch &patch) {
+bool download_patch(const ym2612::Patch &patch, std::string_view extension) {
   std::string stem = patches::sanitize_filename(
       patch.name.empty() ? std::string("patch") : patch.name);
   if (stem.empty()) {
     stem = "patch";
   }
 
-  const auto temporary =
-      std::filesystem::temp_directory_path() / "megatoy-patch-download.gin";
+  // The extension names the format: write_patch() dispatches on it through
+  // the same registry writers Save As uses.
+  const std::string suffix(extension);
+  const auto temporary = std::filesystem::temp_directory_path() /
+                         ("megatoy-patch-download" + suffix);
   std::error_code cleanup_error;
   auto patch_to_write = patch;
   patch_to_write.name = stem;
@@ -145,7 +148,7 @@ bool download_patch(const ym2612::Patch &patch) {
     return false;
   }
 
-  download_binary(stem + ".gin", bytes, "application/octet-stream");
+  download_binary(stem + suffix, bytes, "application/octet-stream");
   return true;
 }
 
