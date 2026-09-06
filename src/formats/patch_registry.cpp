@@ -230,10 +230,10 @@ void PatchRegistry::register_defaults() {
       };
     }
 
-    // FormatInfo carries a single extension ("vgm"), but vgm::parse()
-    // transparently gunzips, so the same handler serves .vgz.
-    if (format == ym2612_format::Format::Vgm) {
-      register_format(".vgz", handler);
+    // Aliases share the primary extension's handler (e.g. .vgz is a gzipped
+    // .vgm, which vgm::parse() decompresses transparently).
+    for (const auto &alias : info.aliases) {
+      register_format("." + alias, handler);
     }
     register_format(adapter::extension_for(format), std::move(handler));
   }

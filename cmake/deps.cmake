@@ -145,11 +145,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(IconFontCppHeaders)
 
 # ym2612_format - patch file readers and writers.
-# It also brings in miniz, which megatoy uses directly for .ginpkg packaging.
+# It vendors miniz (third_party/miniz amalgamation) as a `miniz` target, which
+# megatoy uses directly for .ginpkg packaging.
 FetchContent_Declare(
   ym2612_format
   GIT_REPOSITORY https://github.com/ulalume/ym2612_format
-  GIT_TAG        v0.2.4
+  GIT_TAG        v0.3.0
 )
 set(YM2612_FORMAT_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(YM2612_FORMAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -178,6 +179,6 @@ FetchContent_MakeAvailable(ym2612_eg)
 FetchContent_Declare(
   ym2612_patches
   GIT_REPOSITORY https://github.com/ulalume/ym2612-patches.git
-  GIT_TAG        e7761a82460c4d67418904099e00cb7c96424842
+  GIT_TAG        6422f9a1842acbe6ed01a4f8a62cec93cf2199e2
 )
 FetchContent_MakeAvailable(ym2612_patches)
