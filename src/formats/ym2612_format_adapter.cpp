@@ -140,9 +140,8 @@ const std::vector<std::string> &readable_extensions() {
     for (const auto &info : known_formats()) {
       if (info.can_read) {
         result.push_back("." + info.extension);
-        // vgm::parse() transparently gunzips, so .vgz is readable too.
-        if (info.format == ym2612_format::Format::Vgm) {
-          result.push_back(".vgz");
+        for (const auto &alias : info.aliases) {
+          result.push_back("." + alias);
         }
       }
     }
