@@ -5,10 +5,7 @@
 namespace ui::envelope {
 namespace {
 
-/// The reference note, and the only mutable state in this file. The app writes
-/// it whenever the preference changes; every curve built afterwards is drawn
-/// at it, and EnvelopeCurveCache notices because it remembers the pitch it
-/// last built at.
+/// The reference note, and the only mutable state in this file.
 int g_reference_midi_note = kDefaultReferenceMidiNote;
 
 } // namespace
@@ -25,10 +22,9 @@ ym2612_eg::NotePitch reference_pitch() {
 }
 
 uint8_t packed_ssg(const ym2612::OperatorSettings &op) {
-  // Byte for byte what ym2612::Operator::write_settings() puts in $90-$9F.
-  // The shape bits are kept even while the enable bit is clear, exactly as the
-  // chip receives them; with bit3 down they are inert on hardware and in the
-  // simulator alike.
+  // Byte for byte what ym2612::Operator::write_settings() puts in $90-$9F: the
+  // shape bits are kept even while the enable bit is clear, where they are
+  // inert on hardware and in the simulator alike.
   return static_cast<uint8_t>((op.ssg_enable ? 0x08 : 0x00) |
                               (op.ssg_type_envelope_control & 0x07));
 }

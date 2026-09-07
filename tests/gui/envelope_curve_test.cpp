@@ -22,12 +22,8 @@ ym2612::OperatorSettings adsr(int ar, int dr, int sl, int sr, int rr, int ks) {
 /// EG_SPEC's worked example: AR=31 TL=0 DR=10 SL=2 SR=5 RR=7, KS=0.
 ym2612::OperatorSettings worked_example() { return adsr(31, 10, 2, 5, 7, 0); }
 
-/**
- * A clock that leaps a whole second every time it is read, so the cache's
- * rebuild throttle never has cause to defer. The tests below ask what the
- * cache NOTICES, not when it acts on it, and a second is past every interval
- * the throttle can ask for.
- */
+/// A clock that leaps a whole second every time it is read, which is past
+/// every interval the cache's rebuild throttle can ask for.
 double g_leaping_ms = 0.0;
 double leaping_clock() {
   g_leaping_ms += 1000.0;
@@ -53,8 +49,7 @@ void test_registers_map_straight_through() {
 void test_ssg_bits_are_packed_the_way_the_chip_wants_them() {
   ym2612::OperatorSettings op;
 
-  // Disabled: the shape bits still go out, exactly as write_settings() sends
-  // them, and are inert while bit3 is clear.
+  // Disabled: the shape bits still go out and are inert while bit3 is clear.
   op.ssg_enable = false;
   op.ssg_type_envelope_control = 5;
   CHECK(packed_ssg(op) == 0x05);
@@ -80,8 +75,7 @@ void test_ssg_bits_are_packed_the_way_the_chip_wants_them() {
 }
 
 /// The fields the translation deliberately drops: multiple, detune and the
-/// rest do not shape an envelope, so a change to one must not reach the params
-/// and must not make a cache rebuild.
+/// rest do not shape an envelope.
 void test_only_envelope_registers_count_as_a_change() {
   const ym2612::OperatorSettings a = worked_example();
   ym2612::OperatorSettings b = a;
@@ -130,9 +124,8 @@ void test_the_reference_note_is_a_setting() {
   set_reference_midi_note(kDefaultReferenceMidiNote);
 }
 
-/// Key scaling is the whole reason the note is worth choosing: the same
-/// registers decay far faster high up the keyboard, and the curve built
-/// without a pitch is built at the reference note.
+/// The same registers decay far faster high up the keyboard, and the curve
+/// built without a pitch is built at the reference note.
 void test_key_scaling_follows_the_reference_note() {
   ym2612::OperatorSettings op = worked_example();
   op.key_scale = 3;
@@ -176,9 +169,8 @@ void test_the_cache_rebuilds_when_the_reference_note_changes() {
   CHECK(cache.rebuild_count() == 3);
 }
 
-/// The voice cache is asked about a note; the note it compares that one
-/// against is the reference note, so a voice playing it is drawn by the curve
-/// already on screen rather than by one of its own.
+/// A voice at the reference note is drawn by the curve already on screen
+/// rather than by one of its own.
 void test_a_voice_at_the_reference_note_reuses_the_reference_curve() {
   ym2612::OperatorSettings op = worked_example();
   op.key_scale = 3; // every block is its own key-scale value
