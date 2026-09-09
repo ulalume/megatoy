@@ -91,10 +91,15 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   // nothing to point at -- the knee stands on the peak, and a drag there
   // would be guesswork about which of the two was meant.
   if (curve.attack_end_ms >= 0.0 && curve.attack_end_ms <= span) {
-    const bool knee_on_axis =
-        curve.decay_end_ms >= 0.0 && curve.decay_end_ms <= span;
-    const double decay_ms =
-        (knee_on_axis ? curve.decay_end_ms : span) - curve.attack_end_ms;
+    // Just clear of the peak, where the decay would begin. A decay rate of 0
+    // never advances and a sustain level of 0 has nowhere to fall to: either
+    // way there is no knee on the line, and this is where pulling one out
+    // starts.
+    const double clear_ms =
+        curve.attack_end_ms +
+        (metrics.grab + metrics.radius) * plot.ms_per_px();
+    const bool has_knee = curve.decay_end_ms >= 0.0;
+    const bool knee_on_axis = has_knee && curve.decay_end_ms <= span;
     const double out_att = knee_on_axis ? curve.sustain_out
                                         : curve_out_at_ms(curve.held, span);
     // Where the eye finds the knee, which comes before the decay's own end
@@ -102,22 +107,22 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
     // envelope, so a high sustain level is already at the floor of the graph
     // while the attenuation still has ground to cover.
     const double at_ms =
-        first_time_at_level(curve.held, out_att, curve.attack_end_ms,
-                            knee_on_axis ? curve.decay_end_ms : span);
-    const double drawn_ms = at_ms - curve.attack_end_ms;
+        has_knee ? first_time_at_level(curve.held, out_att,
+                                       curve.attack_end_ms,
+                                       knee_on_axis ? curve.decay_end_ms : span)
+                 : clear_ms;
     const ImVec2 peak = plot.at(curve.attack_end_ms, curve.peak_out);
     const ImVec2 knee = plot.at(at_ms, out_att);
-    if (std::abs(knee.x - peak.x) >= metrics.radius ||
-        std::abs(knee.y - peak.y) >= metrics.radius) {
+    const bool clear_of_peak = std::abs(knee.x - peak.x) >= metrics.radius ||
+                               std::abs(knee.y - peak.y) >= metrics.radius;
+    if (has_knee && clear_of_peak) {
+      const double decay_ms =
+          (knee_on_axis ? curve.decay_end_ms : span) - curve.attack_end_ms;
+      const double drawn_ms = at_ms - curve.attack_end_ms;
       place(kDecayHandle, decay_ms, at_ms, out_att,
             drawn_ms > 0.0 ? decay_ms / drawn_ms : 1.0, !knee_on_axis,
             curve.attack_end_ms, curve.peak_out);
     } else {
-      // A sustain level of 0 puts the knee on the peak, where a dot would be
-      // the peak's. It stands just clear of it instead: the decay is what
-      // pulling it away from there gives the envelope.
-      const double clear_ms =
-          curve.attack_end_ms + metrics.grab * plot.ms_per_px();
       place(kDecayHandle, clear_ms - curve.attack_end_ms, clear_ms,
             curve_out_at_ms(curve.held, clear_ms), 1.0, true,
             curve.attack_end_ms, curve.peak_out);

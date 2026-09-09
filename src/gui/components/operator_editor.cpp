@@ -352,13 +352,17 @@ slider_state_for(UIState::EnvelopeState::HandleLit &states,
 /// One field of a drag, written the way a slider writes it: the value the
 /// solver answers for where the pointer has got to, spread across the
 /// selection from the baseline taken on the grab.
-void write_handle_edit(OperatorWidget &widget, ym2612::OperatorField field,
-                       const ym2612::OperatorEditBaseline &baseline,
+int solve_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
                        double target, double elapsed_ms) {
+  const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
+  return ui::envelope::solve_operator_field(op, field, target, elapsed_ms);
+}
+
+void write_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
+                        const ym2612::OperatorEditBaseline &baseline,
+                        int value) {
   auto &state = widget.editor.operator_edit;
   const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
-  const int value =
-      ui::envelope::solve_operator_field(op, field, target, elapsed_ms);
   if (value == ym2612::read_operator_field(op, field)) {
     return;
   }
@@ -366,6 +370,13 @@ void write_handle_edit(OperatorWidget &widget, ym2612::OperatorField field,
                                     baseline, field, widget.slot, value,
                                     multi_edit_mode(widget.editor));
   ImGui::MarkItemEdited(ImGui::GetItemID());
+}
+
+void write_handle_edit(OperatorWidget &widget, ym2612::OperatorField field,
+                       const ym2612::OperatorEditBaseline &baseline,
+                       double target, double elapsed_ms) {
+  write_handle_value(widget, field, baseline,
+                     solve_handle_value(widget, field, target, elapsed_ms));
 }
 
 /// Whether a handle was put on the graph at all, and how it is to be lit.
@@ -466,18 +477,33 @@ HandleTouch operator_handle(OperatorWidget &widget,
         write_handle_edit(widget, *spec.down, drag.down, level, drag.grab_ms);
       }
       break;
-    case DragKind::Knee:
+    case DragKind::Knee: {
+      if (!spec.down || !spec.across) {
+        break;
+      }
+      const int level_value =
+          solve_handle_value(widget, *spec.down, level, drag.grab_ms);
+      // A knee dragged up onto the peak leaves no decay to describe. The
+      // register for that is a decay rate of 0, which never advances: the
+      // envelope holds where the attack left it. The sustain level stays one
+      // step below the peak so the knee has somewhere to come back to.
+      if (level_value <= 0) {
+        write_handle_value(widget, *spec.down, drag.down, 1);
+        write_handle_value(widget, *spec.across, drag.across, 0);
+        break;
+      }
       // The level first: how long a decay lasts is measured to where it is
       // going, so the rate has to be solved against the level just set.
-      if (spec.down && moved.y != 0.0f) {
-        write_handle_edit(widget, *spec.down, drag.down, level, drag.grab_ms);
+      if (moved.y != 0.0f) {
+        write_handle_value(widget, *spec.down, drag.down, level_value);
       }
-      if (spec.across && moved.x != 0.0f) {
+      if (moved.x != 0.0f) {
         write_handle_edit(widget, *spec.across, drag.across,
                           (at_ms - drag.anchor_ms) * drag.ms_per_drawn,
                           drag.grab_ms);
       }
       break;
+    }
     case DragKind::Tilt: {
       // The line is pinned where its phase begins, so the pointer names an
       // angle. A sustain answers the level it has reached by then; a release

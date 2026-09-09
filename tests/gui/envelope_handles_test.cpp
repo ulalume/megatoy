@@ -204,6 +204,26 @@ void test_a_line_handle_carries_the_end_it_is_pinned_at() {
   CHECK(slower < same);
 }
 
+void test_the_knee_stands_clear_of_the_peak_when_it_has_nowhere_to_be() {
+  // A decay that never advances and one with nowhere to fall to both leave
+  // the knee off the line; it waits a grab box and a dot clear of the peak,
+  // which is far enough that the pointer can tell the two apart.
+  const HandleMetrics m = metrics();
+  for (const auto &op : {adsr(31, 0, 4, 5, 7, 20), adsr(31, 10, 0, 5, 7, 20)}) {
+    const EnvelopeCurve curve = build_envelope_curve(op);
+    const PlotArea plot = plot_over(curve);
+    const EnvelopeHandles handles = handle_layout(curve, plot, false, m);
+    const EnvelopeHandle &knee = handles.items[kDecayHandle];
+    CHECK(knee.shown);
+    CHECK(knee.parked);
+    const float clear = knee.pos.x - handles.items[kAttackHandle].pos.x;
+    CHECK(clear >= m.grab);
+    CHECK(nearest_handle(handles, knee.pos) == kDecayHandle);
+    CHECK(nearest_handle(handles, handles.items[kAttackHandle].pos) ==
+          kAttackHandle);
+  }
+}
+
 void test_a_parked_handle_says_so() {
   // DR 0: the knee waits at the edge. SL 0: it waits beside the peak. Neither
   // stands where the curve would put it.
