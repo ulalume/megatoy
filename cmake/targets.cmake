@@ -88,6 +88,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
   src/gui/envelope/envelope_curve.cpp
+  src/gui/envelope/envelope_handles.cpp
   src/gui/input/keyboard_typing.cpp
   src/gui/components/main_menu.cpp
   src/gui/components/modal.cpp

@@ -2,13 +2,20 @@
 #include "envelope_image.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
+#include "gui/envelope/envelope_handles.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_editor.hpp"
 #include "ym2612/operator_edit.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
+#include <cmath>
 #include <imgui.h>
+// MarkItemEdited(): an invisible button is not a widget ImGui counts as
+// editable, and the undo step a drag opens is closed on that count.
+#include <imgui_internal.h>
+#include <iterator>
+#include <optional>
 #include <string>
 
 namespace ui {
@@ -45,7 +52,8 @@ float header_gap() { return ui::scale::px(4.0f); }
 
 /// The envelope graph and the rate slider row beneath it, as one height.
 float total_level_slider_height() {
-  return vslider_height() * 2.0f + ImGui::GetStyle().ItemSpacing.y;
+  return envelope_graph_height() + vslider_height() +
+         ImGui::GetStyle().ItemSpacing.y;
 }
 
 /// What the TL column costs the graph beside it: one slider and the gap.
@@ -190,17 +198,35 @@ struct OperatorWidget {
 void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
                      const char *id, const ImVec2 *vertical_size,
                      const char *value_format,
-                     UIState::EnvelopeState::SliderState *slider_state) {
+                     UIState::EnvelopeState::SliderState *slider_state,
+                     UIState::EnvelopeState::SliderState handle_lit =
+                         UIState::EnvelopeState::SliderState::None) {
   auto &state = widget.editor.operator_edit;
   auto &op = ym2612::operator_at(widget.instrument, widget.slot);
   const auto range = ym2612::operator_field_range(field);
   const auto labels = field_labels(field);
+
+  // The handle on the graph and the slider set the same register, so pointing
+  // at either shows on both.
+  const bool lit_elsewhere =
+      handle_lit != UIState::EnvelopeState::SliderState::None;
+  if (lit_elsewhere) {
+    ImGui::PushStyleColor(
+        ImGuiCol_FrameBg,
+        ImGui::GetStyleColorVec4(
+            handle_lit == UIState::EnvelopeState::SliderState::Active
+                ? ImGuiCol_FrameBgActive
+                : ImGuiCol_FrameBgHovered));
+  }
 
   int value = ym2612::read_operator_field(op, field);
   const bool changed =
       vertical_size
           ? ImGui::VSliderInt(id, *vertical_size, &value, range.max, range.min)
           : ImGui::SliderInt(id, &value, range.min, range.max, value_format);
+  if (lit_elsewhere) {
+    ImGui::PopStyleColor();
+  }
   if (slider_state) {
     update_slider_state(*slider_state);
   }
@@ -229,6 +255,327 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
   if (vertical_size && ImGui::IsItemHovered()) {
     ImGui::SetTooltip("%s", labels.name);
   }
+}
+
+/**
+ * The two parameters a handle stands for: the one it drags along the time
+ * axis and the one it drags up and down. Either may be absent, and both are
+ * one undo entry -- a drag that moves the peak moves TL and AR together.
+ */
+/// What the pointer's two distances mean to the parameters a handle stands
+/// for. Every kind puts the dot where the pointer is; they differ in what
+/// question that asks.
+enum class DragKind {
+  /// The two axes are the two parameters: how long across, how loud down.
+  Corner,
+  /// The level settles where the decay stops, and the time then settles how
+  /// fast it gets there -- in that order, because the length of a decay
+  /// depends on where it is going.
+  Knee,
+  /// A line pinned at one end: the pointer names a point on it, and the angle
+  /// through the two names the rate.
+  Tilt,
+};
+
+struct HandleSpec {
+  ui::envelope::HandleIndex handle;
+  std::optional<ym2612::OperatorField> across;
+  std::optional<ym2612::OperatorField> down;
+  DragKind kind;
+  const char *name;
+  /// Also the button's ID, which lives in the graph's own window and so
+  /// cannot collide with the slider's.
+  const char *key;
+};
+
+/// In the order the parameters they stand for run.
+constexpr HandleSpec kHandleSpecs[] = {
+    {ui::envelope::kAttackHandle, ym2612::OperatorField::AttackRate,
+     ym2612::OperatorField::TotalLevel, DragKind::Corner, "Attack Peak",
+     "attack_peak"},
+    {ui::envelope::kDecayHandle, ym2612::OperatorField::DecayRate,
+     ym2612::OperatorField::SustainLevel, DragKind::Knee, "Decay Knee",
+     "decay_knee"},
+    {ui::envelope::kSustainHandle, std::nullopt,
+     ym2612::OperatorField::SustainRate, DragKind::Tilt, "Sustain Rate",
+     "sustain_rate"},
+    {ui::envelope::kReleaseHandle, ym2612::OperatorField::ReleaseRate,
+     std::nullopt, DragKind::Tilt, "Release Rate", "release_rate"},
+};
+
+/// What a drag remembers between frames. ImGui has one active item, so there
+/// is one of these however many graphs are on screen.
+struct HandleDrag {
+  ImGuiID id = 0;
+  ImVec2 grab_mouse;
+  double grab_ms = 0.0;
+  /// Where the dot stood on the axis, in the milliseconds it is drawn in.
+  double grab_at_ms = 0.0;
+  double grab_out = 0.0;
+  /// The line the handle sits on and the scale between drawn and real
+  /// milliseconds, as they were when it was grabbed.
+  double anchor_ms = 0.0;
+  double anchor_out = 0.0;
+  double ms_per_drawn = 1.0;
+  ym2612::OperatorEditBaseline across;
+  ym2612::OperatorEditBaseline down;
+};
+
+HandleDrag &handle_drag() {
+  static HandleDrag drag;
+  return drag;
+}
+
+/// Where a field lights up on the graph, or nullptr for one the graph says
+/// nothing about.
+UIState::EnvelopeState::SliderState *
+slider_state_for(UIState::EnvelopeState::HandleLit &states,
+                 ym2612::OperatorField field) {
+  switch (field) {
+  case ym2612::OperatorField::TotalLevel:
+    return &states.total_level;
+  case ym2612::OperatorField::AttackRate:
+    return &states.attack_rate;
+  case ym2612::OperatorField::DecayRate:
+    return &states.decay_rate;
+  case ym2612::OperatorField::SustainLevel:
+    return &states.sustain_level;
+  case ym2612::OperatorField::SustainRate:
+    return &states.sustain_rate;
+  case ym2612::OperatorField::ReleaseRate:
+    return &states.release_rate;
+  default:
+    return nullptr;
+  }
+}
+
+/// One field of a drag, written the way a slider writes it: the value the
+/// solver answers for where the pointer has got to, spread across the
+/// selection from the baseline taken on the grab.
+int solve_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
+                       double target, double elapsed_ms) {
+  const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
+  return ui::envelope::solve_operator_field(op, field, target, elapsed_ms);
+}
+
+void write_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
+                        const ym2612::OperatorEditBaseline &baseline,
+                        int value) {
+  auto &state = widget.editor.operator_edit;
+  const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
+  if (value == ym2612::read_operator_field(op, field)) {
+    return;
+  }
+  ym2612::apply_operator_field_edit(widget.instrument, state.selection.selected,
+                                    baseline, field, widget.slot, value,
+                                    multi_edit_mode(widget.editor));
+  ImGui::MarkItemEdited(ImGui::GetItemID());
+}
+
+void write_handle_edit(OperatorWidget &widget, ym2612::OperatorField field,
+                       const ym2612::OperatorEditBaseline &baseline,
+                       double target, double elapsed_ms) {
+  write_handle_value(widget, field, baseline,
+                     solve_handle_value(widget, field, target, elapsed_ms));
+}
+
+/// Whether a handle was put on the graph at all, and how it is to be lit.
+struct HandleTouch {
+  bool placed = false;
+  UIState::EnvelopeState::SliderState lit =
+      UIState::EnvelopeState::SliderState::None;
+};
+
+/**
+ * One handle: the invisible button on it, the drag measured from where it was
+ * grabbed, and the same write path a slider takes -- so a drag spreads across
+ * the selection and comes back in one undo step like any other edit.
+ */
+HandleTouch operator_handle(OperatorWidget &widget,
+                            const ui::envelope::EnvelopeHandles &handles,
+                            const HandleSpec &spec,
+                            ui::envelope::HandleIndex nearest,
+                            UIState::EnvelopeState::HandleLit &handle_states) {
+  const ui::envelope::EnvelopeHandle &item = handles.items[spec.handle];
+  const ImGuiID id = ImGui::GetID(spec.key);
+  // A handle whose own rule has stopped showing it keeps its button while it
+  // is the one being dragged: the drag is the pointer's until it is let go.
+  const bool held = ImGui::GetActiveID() == id;
+  if (!item.shown && !held) {
+    return {};
+  }
+  // Only the handle the pointer is nearest gets a button, so two that share a
+  // grab box do not decide it between them by the order they are offered in.
+  if (!held && spec.handle != nearest) {
+    HandleTouch idle;
+    idle.placed = true;
+    return idle;
+  }
+
+  auto &state = widget.editor.operator_edit;
+  HandleDrag &drag = handle_drag();
+  const ui::envelope::PlotArea &plot = handles.plot;
+  const float grab = handles.metrics.grab;
+  // The box stays inside the plot: half of one hanging over the edge is half
+  // a box that cannot be clicked, and it would leave the graph's own window
+  // with something to scroll.
+  const ImVec2 corner(std::min(std::max(item.pos.x - grab, plot.min.x),
+                               plot.max.x - grab * 2.0f),
+                      std::min(std::max(item.pos.y - grab, plot.min.y),
+                               plot.max.y - grab * 2.0f));
+  ImGui::SetCursorScreenPos(corner);
+  ImGui::InvisibleButton(spec.key, ImVec2(grab * 2.0f, grab * 2.0f));
+
+  // The order a slider keeps on the frame a drag starts: the selection
+  // settles, then the baselines, and only then is anything written.
+  if (ImGui::IsItemActivated()) {
+    note_operator_edit(state.selection, widget.slot);
+    drag = HandleDrag{};
+    drag.id = id;
+    drag.grab_mouse = ImGui::GetIO().MousePos;
+    drag.grab_ms = item.ms;
+    drag.grab_at_ms = item.at_ms;
+    drag.grab_out = item.out;
+    drag.anchor_ms = item.anchor_ms;
+    drag.anchor_out = item.anchor_out;
+    drag.ms_per_drawn = item.ms_per_drawn;
+    if (spec.across) {
+      ym2612::capture_operator_baseline(drag.across, widget.instrument,
+                                        *spec.across, widget.slot);
+    }
+    if (spec.down) {
+      ym2612::capture_operator_baseline(drag.down, widget.instrument,
+                                        *spec.down, widget.slot);
+    }
+  }
+
+  track_patch_history(widget.editor,
+                      history_label(state.selection, widget.slot, spec.name),
+                      history_key(widget.slot, spec.key));
+
+  if (ImGui::IsItemActive() && drag.id == id) {
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    const ImVec2 moved(mouse.x - drag.grab_mouse.x,
+                       mouse.y - drag.grab_mouse.y);
+    // Measured from the grab, so a pointer that has not moved asks for the
+    // value the handle is already at -- and nothing is written for it. Where
+    // the pointer has got to, in the units the graph is drawn in:
+    const double at_ms =
+        ui::envelope::dragged_ms(handles.plot, drag.grab_at_ms, moved.x);
+    const double level =
+        ui::envelope::dragged_out(handles.plot, drag.grab_out, moved.y);
+    switch (spec.kind) {
+    case DragKind::Corner:
+      if (spec.across && moved.x != 0.0f) {
+        write_handle_edit(
+            widget, *spec.across, drag.across,
+            ui::envelope::dragged_ms(handles.plot, drag.grab_ms, moved.x,
+                                     drag.ms_per_drawn),
+            drag.grab_ms);
+      }
+      if (spec.down && moved.y != 0.0f) {
+        write_handle_edit(widget, *spec.down, drag.down, level, drag.grab_ms);
+      }
+      break;
+    case DragKind::Knee: {
+      if (!spec.down || !spec.across) {
+        break;
+      }
+      // The level first: how long a decay lasts is measured to where it is
+      // going, so the rate has to be solved against the level just set.
+      if (moved.y != 0.0f) {
+        const int level_value =
+            solve_handle_value(widget, *spec.down, level, drag.grab_ms);
+        // A knee dragged up onto the peak leaves no decay to describe. The
+        // register for that is a decay rate of 0, which never advances: the
+        // envelope holds where the attack left it. The sustain level stays
+        // one step below the peak so the knee has somewhere to come back to.
+        if (level_value <= 0) {
+          write_handle_value(widget, *spec.down, drag.down, 1);
+          write_handle_value(widget, *spec.across, drag.across, 0);
+          break;
+        }
+        write_handle_value(widget, *spec.down, drag.down, level_value);
+      }
+      if (moved.x != 0.0f) {
+        write_handle_edit(widget, *spec.across, drag.across,
+                          (at_ms - drag.anchor_ms) * drag.ms_per_drawn,
+                          drag.grab_ms);
+      }
+      break;
+    }
+    case DragKind::Tilt: {
+      // The line is pinned where its phase begins, so the pointer names an
+      // angle. A sustain answers the level it has reached by then; a release
+      // answers where that angle would put the floor. Never at the instant it
+      // is pinned, where every rate passes through the one point.
+      const double elapsed =
+          std::max(at_ms - drag.anchor_ms, handles.plot.ms_per_px());
+      if (!spec.down || !spec.across) {
+        if (spec.down) {
+          write_handle_edit(widget, *spec.down, drag.down, level, elapsed);
+        } else if (spec.across) {
+          const double fall = level - drag.anchor_out;
+          const double reach =
+              fall > 1.0
+                  ? elapsed * (ui::envelope::kFullScale - drag.anchor_out) /
+                        fall
+                  : elapsed;
+          write_handle_edit(widget, *spec.across, drag.across,
+                            reach * drag.ms_per_drawn, drag.grab_ms);
+        }
+      }
+      break;
+    }
+    }
+  }
+  if (ImGui::IsItemDeactivated()) {
+    drag = HandleDrag{};
+  }
+
+  HandleTouch touch;
+  touch.placed = true;
+  update_slider_state(touch.lit);
+  // Both of a handle's parameters light up together: they are the two halves
+  // of the one point being pointed at.
+  for (const auto &field : {spec.across, spec.down}) {
+    if (!field) {
+      continue;
+    }
+    if (auto *lit = slider_state_for(handle_states, *field)) {
+      if (static_cast<int>(touch.lit) > static_cast<int>(*lit)) {
+        *lit = touch.lit;
+      }
+    }
+  }
+  return touch;
+}
+
+/// The handles on one graph. Returns whether one of them is being dragged,
+/// which is what holds the time axis still.
+bool render_envelope_handles(OperatorWidget &widget,
+                             const ui::envelope::EnvelopeHandles &handles,
+                             UIState::EnvelopeState::HandleLit &handle_states) {
+  constexpr size_t count = std::size(kHandleSpecs);
+  const ui::envelope::HandleIndex nearest =
+      ui::envelope::nearest_handle(handles, ImGui::GetIO().MousePos);
+  HandleTouch touched[count];
+  for (size_t i = 0; i < count; ++i) {
+    touched[i] = operator_handle(widget, handles, kHandleSpecs[i], nearest,
+                                 handle_states);
+  }
+
+  bool active = false;
+  // Back to front, so two that stand close together are drawn in the order
+  // the parameters run rather than the other way about.
+  for (size_t i = count; i-- > 0;) {
+    if (!touched[i].placed) {
+      continue;
+    }
+    active |= touched[i].lit == UIState::EnvelopeState::SliderState::Active;
+    draw_envelope_handle(handles, kHandleSpecs[i].handle, touched[i].lit);
+  }
+  return active;
 }
 
 /**
@@ -301,7 +648,8 @@ void render_total_level_slider(OperatorWidget &widget,
   ImGui::BeginGroup();
   text_centered("TL", slider_size.x);
   operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
-                  &slider_size, nullptr, &envelope_state.total_level);
+                  &slider_size, nullptr, &envelope_state.total_level,
+                  envelope_state.handles.total_level);
   ImGui::EndGroup();
 }
 
@@ -335,20 +683,25 @@ void render_envelope_sliders(OperatorWidget &widget,
 
   ImGui::BeginGroup();
   operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
-                  &slider_size, nullptr, &envelope_state.attack_rate);
+                  &slider_size, nullptr, &envelope_state.attack_rate,
+                  envelope_state.handles.attack_rate);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::DecayRate, "##Decay Rate",
-                  &slider_size, nullptr, &envelope_state.decay_rate);
+                  &slider_size, nullptr, &envelope_state.decay_rate,
+                  envelope_state.handles.decay_rate);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::SustainLevel,
                   "##Sustain Level", &slider_size, nullptr,
-                  &envelope_state.sustain_level);
+                  &envelope_state.sustain_level,
+                  envelope_state.handles.sustain_level);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::SustainRate, "##Sustain Rate",
-                  &slider_size, nullptr, &envelope_state.sustain_rate);
+                  &slider_size, nullptr, &envelope_state.sustain_rate,
+                  envelope_state.handles.sustain_rate);
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::ReleaseRate, "##Release Rate",
-                  &slider_size, nullptr, &envelope_state.release_rate);
+                  &slider_size, nullptr, &envelope_state.release_rate,
+                  envelope_state.handles.release_rate);
   ImGui::EndGroup();
 
   ImGui::EndGroup(); // End ADSR slider block
@@ -415,11 +768,17 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // comes off the right so it clears the border by as much as the contents do
   // on the left. Only the pixels change: the time axis is unaffected.
   ImGui::BeginGroup();
-  render_envelope_image(
+  const ui::envelope::EnvelopeHandles handles = render_envelope_image(
       op, envelope_state,
       ImVec2(content_width - frame_padding() - total_level_column_width(),
-             vslider_height()),
+             envelope_graph_height()),
       voices);
+  // Inside the graph's own window, which render_envelope_image leaves open:
+  // an item anywhere else could not be hovered over the graph.
+  envelope_state.handles = UIState::EnvelopeState::HandleLit{};
+  envelope_state.handle_active =
+      render_envelope_handles(widget, handles, envelope_state.handles);
+  end_envelope_image();
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
   ImGui::EndGroup();

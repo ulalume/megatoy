@@ -200,6 +200,10 @@ target_include_directories(envelope_curve_test PRIVATE src)
 # ImGui at all, which is the point of keeping it out of the component.
 target_link_libraries(envelope_curve_test PRIVATE imgui_lib ym2612_eg::ym2612_eg)
 add_test(NAME envelope_curve_test COMMAND envelope_curve_test)
+add_executable(envelope_handles_test tests/gui/envelope_handles_test.cpp)
+target_include_directories(envelope_handles_test PRIVATE src)
+target_link_libraries(envelope_handles_test PRIVATE megatoy_core ym2612_eg::ym2612_eg)
+add_test(NAME envelope_handles_test COMMAND envelope_handles_test)
 add_executable(ui_scale_test tests/gui/ui_scale_test.cpp src/gui/ui_scale.cpp)
 target_include_directories(ui_scale_test PRIVATE src)
 target_link_libraries(ui_scale_test PRIVATE imgui_lib)
@@ -256,7 +260,7 @@ add_custom_target(check
           background_folder_scan_test
           operator_layout_test operator_edit_test operator_selection_test
           note_test
-          envelope_curve_test
+          envelope_curve_test envelope_handles_test
           ui_scale_test
           snapshot_entry_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

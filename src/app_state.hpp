@@ -41,6 +41,20 @@ struct UIState {
     SliderState sustain_level = SliderState::None;
     SliderState sustain_rate = SliderState::None;
     SliderState release_rate = SliderState::None;
+    /// The same six as the graph's handles light them. Kept apart from the
+    /// sliders' own, which are written and read at different points of the
+    /// frame: the graph and the sliders each take the stronger of the two.
+    struct HandleLit {
+      SliderState total_level = SliderState::None;
+      SliderState attack_rate = SliderState::None;
+      SliderState decay_rate = SliderState::None;
+      SliderState sustain_level = SliderState::None;
+      SliderState sustain_rate = SliderState::None;
+      SliderState release_rate = SliderState::None;
+    } handles;
+    /// A handle on the graph is being dragged, which holds the time axis
+    /// still.
+    bool handle_active = false;
   } envelope_states[4];
 
   ui::OperatorEditState operator_edit;
