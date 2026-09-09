@@ -1,6 +1,5 @@
 #pragma once
 
-#include "app_state.hpp"
 #include "patches/patch_session.hpp"
 #include "save_export_state.hpp"
 #include <string_view>
@@ -15,7 +14,6 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
 void request_save_as(SaveExportState &state);
 
 void render_save_export_popups(patches::PatchSession &session,
-                               SaveExportState &state,
-                               UIState::TextPromptState &text_prompt_state);
+                               SaveExportState &state);
 
 } // namespace ui

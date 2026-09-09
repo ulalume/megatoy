@@ -118,6 +118,14 @@ public:
   SaveResult
   save_current_patch_as_forced(std::string_view preferred_extension = {},
                                std::string_view filename_stem = {});
+  /// Save As into one named workspace folder rather than the default one.
+  SaveResult save_current_patch_as_in(const std::filesystem::path &folder,
+                                      std::string_view preferred_extension = {},
+                                      std::string_view filename_stem = {});
+  SaveResult
+  save_current_patch_as_in_forced(const std::filesystem::path &folder,
+                                  std::string_view preferred_extension = {},
+                                  std::string_view filename_stem = {});
   /// True when a new patch may be written straight into `folder`.
   bool can_create_patch_in(const std::filesystem::path &folder) const;
   /**
@@ -172,6 +180,10 @@ public:
   bool current_patch_is_user_patch() const;
   const char *save_label_for(bool is_user_patch) const;
 
+  /// The workspace folder holding the current patch, when it may be written
+  /// to. Empty for a new patch, the built-in presets, or a read-only folder.
+  std::optional<std::filesystem::path> writable_source_folder() const;
+
 private:
   /// default_patch() together with the file it came from, empty when the
   /// built-in defaults were used.
@@ -181,11 +193,13 @@ private:
   };
   DefaultPatch default_patch_source() const;
 
+  /// `folder` names one workspace folder to write into; empty means the
+  /// repository's own default target.
   SaveResult save_current_patch_as_impl(std::string_view preferred_extension,
                                         std::string_view filename_stem,
-                                        bool overwrite);
+                                        bool overwrite,
+                                        const std::filesystem::path &folder);
   void set_file_identity(const std::filesystem::path &path);
-  std::optional<std::filesystem::path> writable_source_folder() const;
 
   megatoy::system::PathService &directories_;
   PreferenceManager &preferences_;

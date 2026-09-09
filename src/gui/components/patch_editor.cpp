@@ -1,16 +1,11 @@
 #include "patch_editor.hpp"
 #include "common.hpp"
-#include "core/status.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
-#include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_workspace_download.hpp"
-#endif
 #include <filesystem>
 #include <imgui.h>
 #include <optional>
@@ -34,32 +29,6 @@ void track_patch_history(PatchEditorContext &context, const std::string &label,
 }
 
 namespace {
-
-#if defined(MEGATOY_PLATFORM_WEB)
-/**
- * The Download button's format menu.
- *
- * The same list Save As offers, named the same way, so the browser can take
- * the patch out in any format megatoy can write.
- */
-void render_download_menu(patches::PatchSession &session) {
-  if (!ImGui::BeginPopup("Download")) {
-    return;
-  }
-  for (const auto &format : session.save_formats()) {
-    if (ImGui::MenuItem(format.display_name().c_str())) {
-      if (platform::web::download_patch(session.current_patch(),
-                                        format.extension)) {
-        megatoy::status::success("Download started.");
-      } else {
-        megatoy::status::error("Failed to prepare " + format.extension +
-                               " download.");
-      }
-    }
-  }
-  ImGui::EndPopup();
-}
-#endif
 
 void render_save_export_buttons(PatchEditorContext &context,
                                 PatchEditorState &state) {
@@ -117,21 +86,13 @@ void render_save_export_buttons(PatchEditorContext &context,
     }
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  ImGui::SameLine();
-  if (ImGui::Button("Download")) {
-    ImGui::OpenPopup("Download");
-  }
-  render_download_menu(patch_session);
-#endif
-
   ImGui::SameLine();
   auto relative_path = patch_session.repository().to_relative_path(
       patch_session.current_patch_path());
   ImGui::Text("%s", display_preset_path(relative_path).c_str());
 
   // Render popups in the same window/ID stack as the actions that open them.
-  render_save_export_popups(patch_session, state, context.text_prompt_state);
+  render_save_export_popups(patch_session, state);
 }
 
 void render_patch_metadata(PatchEditorContext &context,
