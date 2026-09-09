@@ -36,6 +36,8 @@ using ui::envelope::EnvelopeCurve;
 using ui::envelope::EnvelopeCurveCache;
 using ui::envelope::kFullScale;
 using ui::envelope::PlotArea;
+using ui::envelope::to_imvec;
+using ui::envelope::to_point;
 using ui::envelope::VoiceCurveCache;
 
 /// The wash under the release.
@@ -337,10 +339,10 @@ void build_trace_path(TracePath &path,
       ms1 = limit;
     }
     if (path.pixels.empty()) {
-      path.pixels.push_back(plot.at(ms0 + shift_ms, out0));
+      path.pixels.push_back(to_imvec(plot.at(ms0 + shift_ms, out0)));
       path.at_ms.push_back(ms0);
     }
-    path.pixels.push_back(plot.at(ms1 + shift_ms, out1));
+    path.pixels.push_back(to_imvec(plot.at(ms1 + shift_ms, out1)));
     path.at_ms.push_back(ms1);
     if (ms1 >= limit) {
       break;
@@ -628,8 +630,9 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   // The time labels get a strip of their own along the top: a curve at full
   // volume runs along the very top of the plot.
   const float label_height = ImGui::GetTextLineHeight();
-  plot.min = ImVec2(canvas_min.x + 1.0f, canvas_min.y + label_height + 1.0f);
-  plot.max = ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f);
+  plot.min =
+      to_point(ImVec2(canvas_min.x + 1.0f, canvas_min.y + label_height + 1.0f));
+  plot.max = to_point(ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f));
 
   // The note the axis is drawn at, at the far end of the same strip; the
   // milliseconds stop short of it.
@@ -753,7 +756,7 @@ void draw_envelope_handle(const ui::envelope::EnvelopeHandles &handles,
   const ui::envelope::EnvelopeHandle &item = handles.items[handle];
   const ImU32 color = color_from_slider_state(state);
   ImGui::GetWindowDrawList()->AddCircleFilled(
-      item.pos, handles.metrics.radius,
+      to_imvec(item.pos), handles.metrics.radius,
       state == UIState::EnvelopeState::SliderState::None
           ? color_with_alpha(color, kHandleIdleAlpha)
           : color);

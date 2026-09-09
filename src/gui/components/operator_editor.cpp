@@ -262,26 +262,10 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
  * axis and the one it drags up and down. Either may be absent, and both are
  * one undo entry -- a drag that moves the peak moves TL and AR together.
  */
-/// What the pointer's two distances mean to the parameters a handle stands
-/// for. Every kind puts the dot where the pointer is; they differ in what
-/// question that asks.
-enum class DragKind {
-  /// The two axes are the two parameters: how long across, how loud down.
-  Corner,
-  /// The level settles where the decay stops, and the time then settles how
-  /// fast it gets there -- in that order, because the length of a decay
-  /// depends on where it is going.
-  Knee,
-  /// A line pinned at one end: the pointer names a point on it, and the angle
-  /// through the two names the rate.
-  Tilt,
-};
-
 struct HandleSpec {
   ui::envelope::HandleIndex handle;
   std::optional<ym2612::OperatorField> across;
   std::optional<ym2612::OperatorField> down;
-  DragKind kind;
   const char *name;
   /// Also the button's ID, which lives in the graph's own window and so
   /// cannot collide with the slider's.
@@ -291,16 +275,13 @@ struct HandleSpec {
 /// In the order the parameters they stand for run.
 constexpr HandleSpec kHandleSpecs[] = {
     {ui::envelope::kAttackHandle, ym2612::OperatorField::AttackRate,
-     ym2612::OperatorField::TotalLevel, DragKind::Corner, "Attack Peak",
-     "attack_peak"},
+     ym2612::OperatorField::TotalLevel, "Attack Peak", "attack_peak"},
     {ui::envelope::kDecayHandle, ym2612::OperatorField::DecayRate,
-     ym2612::OperatorField::SustainLevel, DragKind::Knee, "Decay Knee",
-     "decay_knee"},
+     ym2612::OperatorField::SustainLevel, "Decay Knee", "decay_knee"},
     {ui::envelope::kSustainHandle, std::nullopt,
-     ym2612::OperatorField::SustainRate, DragKind::Tilt, "Sustain Rate",
-     "sustain_rate"},
+     ym2612::OperatorField::SustainRate, "Sustain Rate", "sustain_rate"},
     {ui::envelope::kReleaseHandle, ym2612::OperatorField::ReleaseRate,
-     std::nullopt, DragKind::Tilt, "Release Rate", "release_rate"},
+     std::nullopt, "Release Rate", "release_rate"},
 };
 
 /// What a drag remembers between frames. ImGui has one active item, so there
@@ -308,15 +289,8 @@ constexpr HandleSpec kHandleSpecs[] = {
 struct HandleDrag {
   ImGuiID id = 0;
   ImVec2 grab_mouse;
-  double grab_ms = 0.0;
-  /// Where the dot stood on the axis, in the milliseconds it is drawn in.
-  double grab_at_ms = 0.0;
-  double grab_out = 0.0;
-  /// The line the handle sits on and the scale between drawn and real
-  /// milliseconds, as they were when it was grabbed.
-  double anchor_ms = 0.0;
-  double anchor_out = 0.0;
-  double ms_per_drawn = 1.0;
+  /// The handle and the plot it stood on, as they were when it was grabbed.
+  ui::envelope::HandleGrab grab;
   ym2612::OperatorEditBaseline across;
   ym2612::OperatorEditBaseline down;
 };
@@ -349,15 +323,8 @@ slider_state_for(UIState::EnvelopeState::HandleLit &states,
   }
 }
 
-/// One field of a drag, written the way a slider writes it: the value the
-/// solver answers for where the pointer has got to, spread across the
+/// One field of a drag, written the way a slider writes it: spread across the
 /// selection from the baseline taken on the grab.
-int solve_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
-                       double target, double elapsed_ms) {
-  const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
-  return ui::envelope::solve_operator_field(op, field, target, elapsed_ms);
-}
-
 void write_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
                         const ym2612::OperatorEditBaseline &baseline,
                         int value) {
@@ -370,13 +337,6 @@ void write_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
                                     baseline, field, widget.slot, value,
                                     multi_edit_mode(widget.editor));
   ImGui::MarkItemEdited(ImGui::GetItemID());
-}
-
-void write_handle_edit(OperatorWidget &widget, ym2612::OperatorField field,
-                       const ym2612::OperatorEditBaseline &baseline,
-                       double target, double elapsed_ms) {
-  write_handle_value(widget, field, baseline,
-                     solve_handle_value(widget, field, target, elapsed_ms));
 }
 
 /// Whether a handle was put on the graph at all, and how it is to be lit.
@@ -433,12 +393,7 @@ HandleTouch operator_handle(OperatorWidget &widget,
     drag = HandleDrag{};
     drag.id = id;
     drag.grab_mouse = ImGui::GetIO().MousePos;
-    drag.grab_ms = item.ms;
-    drag.grab_at_ms = item.at_ms;
-    drag.grab_out = item.out;
-    drag.anchor_ms = item.anchor_ms;
-    drag.anchor_out = item.anchor_out;
-    drag.ms_per_drawn = item.ms_per_drawn;
+    drag.grab = ui::envelope::grab_handle(handles, spec.handle);
     if (spec.across) {
       ym2612::capture_operator_baseline(drag.across, widget.instrument,
                                         *spec.across, widget.slot);
@@ -455,78 +410,30 @@ HandleTouch operator_handle(OperatorWidget &widget,
 
   if (ImGui::IsItemActive() && drag.id == id) {
     const ImVec2 mouse = ImGui::GetIO().MousePos;
-    const ImVec2 moved(mouse.x - drag.grab_mouse.x,
-                       mouse.y - drag.grab_mouse.y);
     // Measured from the grab, so a pointer that has not moved asks for the
-    // value the handle is already at -- and nothing is written for it. Where
-    // the pointer has got to, in the units the graph is drawn in:
-    const double at_ms =
-        ui::envelope::dragged_ms(handles.plot, drag.grab_at_ms, moved.x);
-    const double level =
-        ui::envelope::dragged_out(handles.plot, drag.grab_out, moved.y);
-    switch (spec.kind) {
-    case DragKind::Corner:
-      if (spec.across && moved.x != 0.0f) {
-        write_handle_edit(
-            widget, *spec.across, drag.across,
-            ui::envelope::dragged_ms(handles.plot, drag.grab_ms, moved.x,
-                                     drag.ms_per_drawn),
-            drag.grab_ms);
+    // value the handle is already at -- and nothing is written for it.
+    const ui::envelope::Point moved{mouse.x - drag.grab_mouse.x,
+                                    mouse.y - drag.grab_mouse.y};
+    const ui::envelope::HandleEdit edit = ui::envelope::drag_handle(
+        drag.grab,
+        ui::envelope::to_operator_params(
+            ym2612::operator_at(widget.instrument, widget.slot)),
+        ui::envelope::reference_pitch(), moved);
+    // In the order they were answered in: a knee's level settles before the
+    // rate that is measured to it.
+    for (int i = 0; i < edit.count; ++i) {
+      const ym2612::OperatorField field =
+          ui::envelope::field_of(edit.writes[i].field);
+      const ym2612::OperatorEditBaseline *baseline = nullptr;
+      if (spec.across && field == *spec.across) {
+        baseline = &drag.across;
+      } else if (spec.down && field == *spec.down) {
+        baseline = &drag.down;
       }
-      if (spec.down && moved.y != 0.0f) {
-        write_handle_edit(widget, *spec.down, drag.down, level, drag.grab_ms);
+      if (baseline == nullptr) {
+        continue;
       }
-      break;
-    case DragKind::Knee: {
-      if (!spec.down || !spec.across) {
-        break;
-      }
-      // The level first: how long a decay lasts is measured to where it is
-      // going, so the rate has to be solved against the level just set.
-      if (moved.y != 0.0f) {
-        const int level_value =
-            solve_handle_value(widget, *spec.down, level, drag.grab_ms);
-        // A knee dragged up onto the peak leaves no decay to describe. The
-        // register for that is a decay rate of 0, which never advances: the
-        // envelope holds where the attack left it. The sustain level stays
-        // one step below the peak so the knee has somewhere to come back to.
-        if (level_value <= 0) {
-          write_handle_value(widget, *spec.down, drag.down, 1);
-          write_handle_value(widget, *spec.across, drag.across, 0);
-          break;
-        }
-        write_handle_value(widget, *spec.down, drag.down, level_value);
-      }
-      if (moved.x != 0.0f) {
-        write_handle_edit(widget, *spec.across, drag.across,
-                          (at_ms - drag.anchor_ms) * drag.ms_per_drawn,
-                          drag.grab_ms);
-      }
-      break;
-    }
-    case DragKind::Tilt: {
-      // The line is pinned where its phase begins, so the pointer names an
-      // angle. A sustain answers the level it has reached by then; a release
-      // answers where that angle would put the floor. Never at the instant it
-      // is pinned, where every rate passes through the one point.
-      const double elapsed =
-          std::max(at_ms - drag.anchor_ms, handles.plot.ms_per_px());
-      if (!spec.down || !spec.across) {
-        if (spec.down) {
-          write_handle_edit(widget, *spec.down, drag.down, level, elapsed);
-        } else if (spec.across) {
-          const double fall = level - drag.anchor_out;
-          const double reach =
-              fall > 1.0
-                  ? elapsed * (ui::envelope::kFullScale - drag.anchor_out) /
-                        fall
-                  : elapsed;
-          write_handle_edit(widget, *spec.across, drag.across,
-                            reach * drag.ms_per_drawn, drag.grab_ms);
-        }
-      }
-      break;
-    }
+      write_handle_value(widget, field, *baseline, edit.writes[i].value);
     }
   }
   if (ImGui::IsItemDeactivated()) {
@@ -557,8 +464,8 @@ bool render_envelope_handles(OperatorWidget &widget,
                              const ui::envelope::EnvelopeHandles &handles,
                              UIState::EnvelopeState::HandleLit &handle_states) {
   constexpr size_t count = std::size(kHandleSpecs);
-  const ui::envelope::HandleIndex nearest =
-      ui::envelope::nearest_handle(handles, ImGui::GetIO().MousePos);
+  const ui::envelope::HandleIndex nearest = ui::envelope::nearest_handle(
+      handles, ui::envelope::to_point(ImGui::GetIO().MousePos));
   HandleTouch touched[count];
   for (size_t i = 0; i < count; ++i) {
     touched[i] = operator_handle(widget, handles, kHandleSpecs[i], nearest,
