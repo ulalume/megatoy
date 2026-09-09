@@ -566,12 +566,28 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
 
 ui::envelope::EnvelopeHandles
 render_envelope_image(const ym2612::OperatorSettings &op,
-                      const UIState::EnvelopeState &state, ImVec2 size,
+                      const UIState::EnvelopeState &slider_state, ImVec2 size,
                       const EnvelopeVoices &voices) {
   // Before BeginChild, so the ID comes from the operator's stack rather than
   // from the child window.
   EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
   const EnvelopeCurve &curve = slot.curve.get(op);
+
+  // A parameter is lit by its slider or by the handle that sets it, whichever
+  // is the stronger: the two are pointed at in the same place on the graph.
+  UIState::EnvelopeState state = slider_state;
+  const auto raise = [](UIState::EnvelopeState::SliderState &into,
+                        UIState::EnvelopeState::SliderState from) {
+    if (static_cast<int>(from) > static_cast<int>(into)) {
+      into = from;
+    }
+  };
+  raise(state.total_level, slider_state.handles.total_level);
+  raise(state.attack_rate, slider_state.handles.attack_rate);
+  raise(state.decay_rate, slider_state.handles.decay_rate);
+  raise(state.sustain_level, slider_state.handles.sustain_level);
+  raise(state.sustain_rate, slider_state.handles.sustain_rate);
+  raise(state.release_rate, slider_state.handles.release_rate);
 
   PlotArea plot;
   const double target_ms = std::max(curve.span_ms, 1.0);

@@ -11,6 +11,9 @@ namespace ui {
 
 inline float vslider_width() { return ui::scale::px(20.0f); }
 inline float vslider_height() { return ui::scale::px(102.0f); }
+/// The graph is taller than the sliders under it: a handle is dragged through
+/// attenuation, which wants the room more than a slider does.
+inline float envelope_graph_height() { return ui::scale::px(128.0f); }
 inline ImVec2 vslider_size() {
   return ImVec2(vslider_width(), vslider_height());
 }

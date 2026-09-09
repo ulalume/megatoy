@@ -79,6 +79,11 @@ struct EnvelopeHandle {
   double ms = 0.0;
   /// What the down parameter's solver is asked about.
   double out = 0.0;
+  /// False for a handle waiting somewhere the curve does not put it: a decay
+  /// that never ends waits at the right-hand edge, and one with no length at
+  /// all waits beside the peak. A drag from there still sets the register,
+  /// but reading it back does not answer the value it came from.
+  bool parked = false;
   /// How much `ms` moves per millisecond the dot does. One wherever the dot
   /// stands on what it sets; a release ends on the graph before its own trace
   /// does whenever TL lifts the floor, so a millisecond there is worth more

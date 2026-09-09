@@ -12,6 +12,25 @@ ImVec2 inside(const PlotArea &plot, ImVec2 pos, float radius) {
                 std::clamp(pos.y, plot.min.y + radius, plot.max.y - radius));
 }
 
+/// The first instant on `trace` at or past `level`, looked for between `from`
+/// and `to`. The phases are monotone, so this is where the drawn line arrives
+/// at a level the registers put somewhere else.
+double first_time_at_level(const ym2612_eg::CurveResult &trace, double level,
+                           double from_ms, double to_ms) {
+  for (const auto &point : trace.points) {
+    if (point.ms < from_ms) {
+      continue;
+    }
+    if (point.ms > to_ms) {
+      break;
+    }
+    if (static_cast<double>(point.out) >= level) {
+      return point.ms;
+    }
+  }
+  return to_ms;
+}
+
 } // namespace
 
 double sustain_probe_ms(const EnvelopeCurve &curve, double span_ms) {
@@ -34,11 +53,13 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   // `ms` is what the solver is asked about; `at_ms` is where on the axis that
   // puts the dot. They differ wherever a phase does not start at zero.
   const auto place = [&](HandleIndex index, double ms, double at_ms,
-                         double out_att, double ms_per_drawn = 1.0) {
+                         double out_att, double ms_per_drawn = 1.0,
+                         bool parked = false) {
     EnvelopeHandle &handle = out.items[index];
     handle.shown = true;
     handle.ms = ms;
     handle.out = out_att;
+    handle.parked = parked;
     handle.ms_per_drawn = ms_per_drawn;
     handle.pos = inside(plot, plot.at(at_ms, out_att), metrics.radius);
   };
@@ -60,14 +81,32 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   if (curve.attack_end_ms >= 0.0 && curve.attack_end_ms <= span) {
     const bool knee_on_axis =
         curve.decay_end_ms >= 0.0 && curve.decay_end_ms <= span;
-    const double at_ms = knee_on_axis ? curve.decay_end_ms : span;
+    const double decay_ms =
+        (knee_on_axis ? curve.decay_end_ms : span) - curve.attack_end_ms;
     const double out_att = knee_on_axis ? curve.sustain_out
-                                        : curve_out_at_ms(curve.held, at_ms);
+                                        : curve_out_at_ms(curve.held, span);
+    // Where the eye finds the knee, which comes before the decay's own end
+    // whenever the output saturates on the way down: TL lifts the whole
+    // envelope, so a high sustain level is already at the floor of the graph
+    // while the attenuation still has ground to cover.
+    const double at_ms =
+        first_time_at_level(curve.held, out_att, curve.attack_end_ms,
+                            knee_on_axis ? curve.decay_end_ms : span);
+    const double drawn_ms = at_ms - curve.attack_end_ms;
     const ImVec2 peak = plot.at(curve.attack_end_ms, curve.peak_out);
     const ImVec2 knee = plot.at(at_ms, out_att);
     if (std::abs(knee.x - peak.x) >= metrics.radius ||
         std::abs(knee.y - peak.y) >= metrics.radius) {
-      place(kDecayHandle, at_ms - curve.attack_end_ms, at_ms, out_att);
+      place(kDecayHandle, decay_ms, at_ms, out_att,
+            drawn_ms > 0.0 ? decay_ms / drawn_ms : 1.0, !knee_on_axis);
+    } else {
+      // A sustain level of 0 puts the knee on the peak, where a dot would be
+      // the peak's. It stands just clear of it instead: the decay is what
+      // pulling it away from there gives the envelope.
+      const double clear_ms =
+          curve.attack_end_ms + metrics.grab * plot.ms_per_px();
+      place(kDecayHandle, clear_ms - curve.attack_end_ms, clear_ms,
+            curve_out_at_ms(curve.held, clear_ms), 1.0, true);
     }
   }
 

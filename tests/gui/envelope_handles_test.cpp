@@ -171,6 +171,26 @@ void test_the_release_dot_stands_where_the_release_reaches_the_floor() {
              release.ms, 1e-9));
 }
 
+void test_a_parked_handle_says_so() {
+  // DR 0: the knee waits at the edge. SL 0: it waits beside the peak. Neither
+  // stands where the curve would put it.
+  const EnvelopeCurve never = build_envelope_curve(adsr(6, 0, 4, 0, 4, 31));
+  CHECK(handle_layout(never, plot_over(never), false, metrics())
+            .items[kDecayHandle]
+            .parked);
+  const EnvelopeCurve flat = build_envelope_curve(adsr(31, 10, 0, 5, 7, 20));
+  const EnvelopeHandle &beside =
+      handle_layout(flat, plot_over(flat), false, metrics())
+          .items[kDecayHandle];
+  CHECK(beside.shown);
+  CHECK(beside.parked);
+  // A knee the curve does put somewhere is not parked.
+  const EnvelopeCurve real = build_envelope_curve(adsr(31, 10, 4, 5, 7, 20));
+  CHECK(!handle_layout(real, plot_over(real), false, metrics())
+             .items[kDecayHandle]
+             .parked);
+}
+
 void test_a_decay_that_never_ends_waits_at_the_edge() {
   // DR 0 never reaches the sustain level, so the graph shows no knee -- but
   // pulling one in from the edge is the only way to give it one.
@@ -302,7 +322,7 @@ void test_reading_a_handle_back_leaves_the_curve_where_it_is() {
                                              attack.out, 0.0) == tl);
                 }
                 const EnvelopeHandle &decay = handles.items[kDecayHandle];
-                if (decay.shown) {
+                if (decay.shown && !decay.parked) {
                   const EnvelopeCurve rate = solved_curve(
                       ym2612::OperatorField::DecayRate, decay.ms, 0.0);
                   CHECK(near(rate.decay_end_ms - rate.attack_end_ms, decay.ms,
