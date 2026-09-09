@@ -481,20 +481,20 @@ HandleTouch operator_handle(OperatorWidget &widget,
       if (!spec.down || !spec.across) {
         break;
       }
-      const int level_value =
-          solve_handle_value(widget, *spec.down, level, drag.grab_ms);
-      // A knee dragged up onto the peak leaves no decay to describe. The
-      // register for that is a decay rate of 0, which never advances: the
-      // envelope holds where the attack left it. The sustain level stays one
-      // step below the peak so the knee has somewhere to come back to.
-      if (level_value <= 0) {
-        write_handle_value(widget, *spec.down, drag.down, 1);
-        write_handle_value(widget, *spec.across, drag.across, 0);
-        break;
-      }
       // The level first: how long a decay lasts is measured to where it is
       // going, so the rate has to be solved against the level just set.
       if (moved.y != 0.0f) {
+        const int level_value =
+            solve_handle_value(widget, *spec.down, level, drag.grab_ms);
+        // A knee dragged up onto the peak leaves no decay to describe. The
+        // register for that is a decay rate of 0, which never advances: the
+        // envelope holds where the attack left it. The sustain level stays
+        // one step below the peak so the knee has somewhere to come back to.
+        if (level_value <= 0) {
+          write_handle_value(widget, *spec.down, drag.down, 1);
+          write_handle_value(widget, *spec.across, drag.across, 0);
+          break;
+        }
         write_handle_value(widget, *spec.down, drag.down, level_value);
       }
       if (moved.x != 0.0f) {

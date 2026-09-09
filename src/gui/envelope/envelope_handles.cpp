@@ -84,12 +84,8 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   }
 
   // The knee, whose time is the decay's own length rather than where it falls
-  // on the axis. A decay rate of 0 never reaches the sustain level and a slow
-  // one can end past the axis: either way the knee waits at the right-hand
-  // edge, on the line it would leave, and pulling it in is what gives the
-  // envelope a decay at all. A sustain level of 0 is the one case with
-  // nothing to point at -- the knee stands on the peak, and a drag there
-  // would be guesswork about which of the two was meant.
+  // on the axis. A slow decay can end past the axis, and then the knee waits
+  // at the right-hand edge on the line it would leave.
   if (curve.attack_end_ms >= 0.0 && curve.attack_end_ms <= span) {
     // Just clear of the peak, where the decay would begin. A decay rate of 0
     // never advances and a sustain level of 0 has nowhere to fall to: either
@@ -148,17 +144,12 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
           curve.decay_end_ms, curve.sustain_out);
   }
 
-  // Where the release reaches the floor of the graph, which comes before the
-  // trace's own end whenever TL lifts the envelope: the output saturates
-  // while the attenuation still has ground to cover. The dot stands on what
-  // the eye sees and the solver is told about the release behind it. One that
-  // outran the simulation ends where the budget did rather than where the
-  // release does, so the budget is what has to be tested.
+  // Where the release reaches the floor of the graph. It falls at one rate
+  // from full volume, and TL lifts the whole envelope: the output saturates
+  // while the attenuation still has ground to cover, so the fall the eye sees
+  // is the shorter of the two by exactly that ratio. The dot stands on what
+  // the eye sees and the solver is told about the release behind it.
   if (curve.release_content_ms > 0.0) {
-    // The release falls at one rate from full volume, and TL lifts the whole
-    // envelope: the output saturates while the attenuation still has ground
-    // to cover, so the fall the eye sees is the shorter of the two by exactly
-    // that ratio.
     const double drawn_fall = kFullScale - static_cast<double>(curve.peak_out);
     const double scale =
         drawn_fall > 0.0 ? kCutAttenuation / drawn_fall : 1.0;
