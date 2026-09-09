@@ -28,8 +28,8 @@ Changes apply directly to your active patch with full undo support.
 
 ### Patch Management
 
-- **Load patches** from many formats, via [ym2612_format](https://github.com/ulalume/ym2612_format): DefleMask preset (`.dmp`) and module (`.dmf`), Furnace instrument (`.fui`) and module (`.fur`), [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`), VOPM/MiOPMdrv (`.opm`), TFM Music Maker (`.tfi`), `.rym2612`, VGM Music Maker (`.vgi`), Echo (`.eif`), Sona (`.spat`), VGM/VGZ register log (`.vgm`/`.vgz`)
-- **Save patches as** `.gin`, `.dmp`, `.fui`, `.eif`, `.spat`, `.tfi`, `.vgi`, or `.mml`
+- **Load patches** from many formats, via [ym2612_format](https://github.com/ulalume/ym2612_format): DefleMask preset (`.dmp`) and module (`.dmf`), Furnace instrument (`.fui`) and module (`.fur`), [ctrmml](https://github.com/superctr/ctrmml)/ [mmlgui](https://github.com/superctr/mmlgui) (`.mml`), VOPM/MiOPMdrv (`.opm`), TFM Music Maker (`.tfi`), `.rym2612`, VGM Music Maker (`.vgi`), Echo (`.eif`), Sona (`.spat`), TYI (`.tyi`), Gens KMod (`.y12`), YM2612 Instrument Editor (`.dat`), MVS Tracker MD (`.ins`), VGM/VGZ register log (`.vgm`/`.vgz`)
+- **Save patches as** `.gin`, `.dmp`, `.fui`, `.eif`, `.spat`, `.tfi`, `.tyi`, `.vgi`, `.y12`, or `.mml`
 - **Organize patches** with metadata (star ratings and categories) for quick retrieval and filtering
 - **Drag & drop** support for easy file loading
 
