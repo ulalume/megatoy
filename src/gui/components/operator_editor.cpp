@@ -433,7 +433,8 @@ HandleTouch operator_handle(OperatorWidget &widget,
     if (drag.axis == DragAxis::Across && spec.across) {
       write_handle_edit(
           widget, *spec.across, drag.across,
-          ui::envelope::dragged_ms(handles.plot, drag.grab_ms, moved.x),
+          ui::envelope::dragged_ms(handles.plot, drag.grab_ms, moved.x,
+                                   item.ms_per_drawn),
           drag.grab_ms);
     } else if (drag.axis == DragAxis::Down && spec.down) {
       write_handle_edit(

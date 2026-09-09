@@ -144,6 +144,47 @@ void test_ssg_eg_leaves_no_handle_behind() {
   }
 }
 
+void test_the_release_dot_stands_where_the_release_reaches_the_floor() {
+  // TL lifts the whole envelope, so the output saturates while the release
+  // still has attenuation to cover: the trace ends after the graph does.
+  const auto op = adsr(31, 10, 4, 5, 4, 31);
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  const PlotArea plot = plot_over(curve);
+  const EnvelopeHandles handles = handle_layout(curve, plot, false, metrics());
+  const EnvelopeHandle &release = handles.items[kReleaseHandle];
+  CHECK(release.shown);
+
+  double floor_ms = curve.release_content_ms;
+  for (const auto &point : curve.release.points) {
+    if (point.out >= ym2612_eg::kMaxAttenuation) {
+      floor_ms = point.ms;
+      break;
+    }
+  }
+  CHECK(floor_ms < curve.release_content_ms);
+  CHECK(near(release.pos.x, plot.x_of(floor_ms), 0.51));
+  // The solver is still asked about the release itself, and a drag of the dot
+  // is worth that much more of it.
+  CHECK(near(release.ms, curve.release_content_ms, 1e-6));
+  CHECK(near(release.ms_per_drawn, curve.release_content_ms / floor_ms, 1e-9));
+  CHECK(near(dragged_ms(plot, release.ms, 0.0f, release.ms_per_drawn),
+             release.ms, 1e-9));
+}
+
+void test_a_decay_that_never_ends_waits_at_the_edge() {
+  // DR 0 never reaches the sustain level, so the graph shows no knee -- but
+  // pulling one in from the edge is the only way to give it one.
+  const auto op = adsr(6, 0, 4, 0, 4, 31);
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  CHECK(curve.decay_end_ms < 0.0);
+  const PlotArea plot = plot_over(curve);
+  const EnvelopeHandles handles = handle_layout(curve, plot, false, metrics());
+  const EnvelopeHandle &knee = handles.items[kDecayHandle];
+  CHECK(knee.shown);
+  CHECK(near(knee.pos.x, plot.max.x - metrics().radius, 0.51));
+  CHECK(knee.ms > 0.0);
+}
+
 void test_a_knee_that_stands_on_the_peak_is_not_offered() {
   // Sustain level 0 leaves the decay no length: the knee would be the peak.
   const auto op = adsr(31, 10, 0, 5, 7, 20);

@@ -34,11 +34,12 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   // `ms` is what the solver is asked about; `at_ms` is where on the axis that
   // puts the dot. They differ wherever a phase does not start at zero.
   const auto place = [&](HandleIndex index, double ms, double at_ms,
-                         double out_att) {
+                         double out_att, double ms_per_drawn = 1.0) {
     EnvelopeHandle &handle = out.items[index];
     handle.shown = true;
     handle.ms = ms;
     handle.out = out_att;
+    handle.ms_per_drawn = ms_per_drawn;
     handle.pos = inside(plot, plot.at(at_ms, out_att), metrics.radius);
   };
 
@@ -50,17 +51,23 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   }
 
   // The knee, whose time is the decay's own length rather than where it falls
-  // on the axis. A sustain level of 0 leaves no decay to point at: the knee
-  // stands on the peak, where a dot would be the peak's and a drag would be
-  // guesswork about which of the two was meant.
-  if (curve.attack_end_ms >= 0.0 && curve.decay_end_ms >= 0.0 &&
-      curve.decay_end_ms <= span) {
+  // on the axis. A decay rate of 0 never reaches the sustain level and a slow
+  // one can end past the axis: either way the knee waits at the right-hand
+  // edge, on the line it would leave, and pulling it in is what gives the
+  // envelope a decay at all. A sustain level of 0 is the one case with
+  // nothing to point at -- the knee stands on the peak, and a drag there
+  // would be guesswork about which of the two was meant.
+  if (curve.attack_end_ms >= 0.0 && curve.attack_end_ms <= span) {
+    const bool knee_on_axis =
+        curve.decay_end_ms >= 0.0 && curve.decay_end_ms <= span;
+    const double at_ms = knee_on_axis ? curve.decay_end_ms : span;
+    const double out_att = knee_on_axis ? curve.sustain_out
+                                        : curve_out_at_ms(curve.held, at_ms);
     const ImVec2 peak = plot.at(curve.attack_end_ms, curve.peak_out);
-    const ImVec2 knee = plot.at(curve.decay_end_ms, curve.sustain_out);
+    const ImVec2 knee = plot.at(at_ms, out_att);
     if (std::abs(knee.x - peak.x) >= metrics.radius ||
         std::abs(knee.y - peak.y) >= metrics.radius) {
-      place(kDecayHandle, curve.decay_end_ms - curve.attack_end_ms,
-            curve.decay_end_ms, curve.sustain_out);
+      place(kDecayHandle, at_ms - curve.attack_end_ms, at_ms, out_att);
     }
   }
 
@@ -78,14 +85,25 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
     }
   }
 
-  // Where the release reaches the floor. One that outran the simulation ends
-  // where the budget did rather than where the release does -- and it can
-  // reach the bottom of the graph long before that, so the budget is what has
-  // to be tested.
+  // Where the release reaches the floor of the graph, which comes before the
+  // trace's own end whenever TL lifts the envelope: the output saturates
+  // while the attenuation still has ground to cover. The dot stands on what
+  // the eye sees and the solver is told about the release behind it. One that
+  // outran the simulation ends where the budget did rather than where the
+  // release does, so the budget is what has to be tested.
   if (curve.release_content_ms > 0.0 && curve.release_content_ms <= span &&
       curve.release_content_ms < release_max_ms() * 0.999) {
-    place(kReleaseHandle, curve.release_content_ms, curve.release_content_ms,
-          kFullScale);
+    double floor_ms = curve.release_content_ms;
+    for (const auto &point : curve.release.points) {
+      if (point.out >= ym2612_eg::kMaxAttenuation) {
+        floor_ms = point.ms;
+        break;
+      }
+    }
+    const double scale =
+        floor_ms > 0.0 ? curve.release_content_ms / floor_ms : 1.0;
+    place(kReleaseHandle, curve.release_content_ms, floor_ms, kFullScale,
+          scale);
   }
 
   return out;
@@ -110,8 +128,10 @@ HandleIndex nearest_handle(const EnvelopeHandles &handles, ImVec2 pos) {
   return nearest;
 }
 
-double dragged_ms(const PlotArea &plot, double grabbed_ms, float moved_px) {
-  return grabbed_ms + static_cast<double>(moved_px) * plot.ms_per_px();
+double dragged_ms(const PlotArea &plot, double grabbed_ms, float moved_px,
+                  double ms_per_drawn) {
+  return grabbed_ms +
+         static_cast<double>(moved_px) * plot.ms_per_px() * ms_per_drawn;
 }
 
 double dragged_out(const PlotArea &plot, double grabbed_out, float moved_px) {

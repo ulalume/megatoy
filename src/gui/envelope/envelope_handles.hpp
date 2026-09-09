@@ -79,6 +79,11 @@ struct EnvelopeHandle {
   double ms = 0.0;
   /// What the down parameter's solver is asked about.
   double out = 0.0;
+  /// How much `ms` moves per millisecond the dot does. One wherever the dot
+  /// stands on what it sets; a release ends on the graph before its own trace
+  /// does whenever TL lifts the floor, so a millisecond there is worth more
+  /// than a millisecond of release.
+  double ms_per_drawn = 1.0;
 };
 
 struct EnvelopeHandles {
@@ -106,7 +111,8 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
  * arrives at is the one the handle was grabbed at plus that much. A pointer
  * that has not moved therefore asks for the value the handle already holds.
  */
-double dragged_ms(const PlotArea &plot, double grabbed_ms, float moved_px);
+double dragged_ms(const PlotArea &plot, double grabbed_ms, float moved_px,
+                  double ms_per_drawn = 1.0);
 double dragged_out(const PlotArea &plot, double grabbed_out, float moved_px);
 
 /**
