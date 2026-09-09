@@ -274,38 +274,32 @@ void test_the_pointer_answers_the_handle_it_is_nearest() {
         kHandleCount);
 }
 
-void test_a_sliver_of_sustain_carries_no_handle() {
-  // SL 15 leaves the sustain a few units above the floor: on a 100 px plot
-  // that is three, and there is nothing to drag it through.
-  const ym2612::OperatorSettings op = adsr(31, 10, 15, 5, 7, 0);
+void test_a_sliver_of_sustain_still_carries_a_handle() {
+  // A sustain level of 15 leaves the phase sixteen units tall, which is no
+  // room to drag a line through -- but the dot stays, parked, because that is
+  // where tilting one starts.
+  const auto op = adsr(31, 10, 15, 5, 7, 0);
   const EnvelopeCurve curve = build_envelope_curve(op);
   const EnvelopeHandles handles =
       handle_layout(curve, plot_over(curve), false, metrics());
-  CHECK(!handles.items[kSustainHandle].shown);
-  CHECK(handles.items[kDecayHandle].shown);
+  CHECK(handles.items[kSustainHandle].shown);
+  CHECK(handles.items[kSustainHandle].parked);
 }
 
-void test_a_release_that_outran_the_simulation_has_no_end_to_grab() {
-  // RR 0 to 3 are longer than the release is ever simulated for, so what the
-  // trace ends at is the budget rather than the release.
-  for (int rr = 0; rr <= 3; ++rr) {
-    const EnvelopeCurve curve = build_envelope_curve(adsr(31, 10, 2, 5, rr, 0));
-    const EnvelopeHandles handles =
-        handle_layout(curve, plot_over(curve), false, metrics());
-    CHECK(!handles.items[kReleaseHandle].shown);
-  }
-  // A TL that has already taken the trace to the bottom of the graph does not
-  // make the budget any less the reason it stopped.
-  const EnvelopeCurve quiet = build_envelope_curve(adsr(31, 10, 2, 5, 3, 64));
-  CHECK(!quiet.release_truncated);
-  CHECK(!handle_layout(quiet, plot_over(quiet), false, metrics())
-             .items[kReleaseHandle]
-             .shown);
-
-  const EnvelopeCurve curve = build_envelope_curve(adsr(31, 10, 2, 5, 4, 64));
-  CHECK(handle_layout(curve, plot_over(curve), false, metrics())
-            .items[kReleaseHandle]
-            .shown);
+void test_a_release_that_outran_the_simulation_waits_at_the_edge() {
+  // RR 0 falls for longer than the simulation covers, so its end is not on the
+  // graph. The dot waits on the line at the right-hand edge rather than going
+  // away: tilting it there is what brings the end back.
+  const auto op = adsr(31, 10, 4, 5, 0, 0);
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  const PlotArea plot = plot_over(curve);
+  const EnvelopeHandles handles = handle_layout(curve, plot, false, metrics());
+  const EnvelopeHandle &release = handles.items[kReleaseHandle];
+  CHECK(release.shown);
+  CHECK(release.parked);
+  // It stands where the drawn line stops, which is where the simulation did.
+  CHECK(near(release.at_ms,
+             std::min(curve.release_content_ms, plot.span_ms), 1e-6));
 }
 
 // ------------------------------------------------------ back to a register
@@ -366,7 +360,7 @@ void test_reading_a_handle_back_leaves_the_curve_where_it_is() {
                 }
                 const EnvelopeHandle &sustain = handles.items[kSustainHandle];
                 if (sustain.shown) {
-                  const double at = sustain_probe_ms(curve, plot.span_ms);
+                  const double at = sustain.at_ms;
                   const EnvelopeCurve rate = solved_curve(
                       ym2612::OperatorField::SustainRate, sustain.out,
                       sustain.ms);
@@ -434,8 +428,8 @@ int main() {
   test_the_whole_dot_stays_inside_the_plot();
 
   test_ssg_eg_leaves_no_handle_behind();
-  test_a_sliver_of_sustain_carries_no_handle();
-  test_a_release_that_outran_the_simulation_has_no_end_to_grab();
+  test_a_sliver_of_sustain_still_carries_a_handle();
+  test_a_release_that_outran_the_simulation_waits_at_the_edge();
 
   test_reading_a_handle_back_leaves_the_curve_where_it_is();
   test_a_drag_goes_where_it_is_pointed();

@@ -105,8 +105,15 @@ struct EnvelopeHandles {
   EnvelopeHandle items[kHandleCount];
 };
 
-/// Where the sustain handle reads the line: half way between the end of the
-/// decay and the right-hand edge.
+/// The first instant on `trace` at or past `level`, between `from_ms` and
+/// `to_ms`. Each phase is monotone, so this is where the drawn line arrives at
+/// a level the registers put somewhere else: TL lifts the whole envelope, and
+/// the output saturates before the attenuation does.
+double first_time_at_level(const ym2612_eg::CurveResult &trace, double level,
+                           double from_ms, double to_ms);
+
+/// Where the sustain handle reads the line: half way along the part of it that
+/// can still be seen falling.
 double sustain_probe_ms(const EnvelopeCurve &curve, double span_ms);
 
 /// The handle nearest `pos` and within its grab box, or `kHandleCount` for

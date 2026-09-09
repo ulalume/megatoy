@@ -312,6 +312,11 @@ struct HandleDrag {
   /// Where the dot stood on the axis, in the milliseconds it is drawn in.
   double grab_at_ms = 0.0;
   double grab_out = 0.0;
+  /// The line the handle sits on and the scale between drawn and real
+  /// milliseconds, as they were when it was grabbed.
+  double anchor_ms = 0.0;
+  double anchor_out = 0.0;
+  double ms_per_drawn = 1.0;
   ym2612::OperatorEditBaseline across;
   ym2612::OperatorEditBaseline down;
 };
@@ -420,6 +425,9 @@ HandleTouch operator_handle(OperatorWidget &widget,
     drag.grab_ms = item.ms;
     drag.grab_at_ms = item.at_ms;
     drag.grab_out = item.out;
+    drag.anchor_ms = item.anchor_ms;
+    drag.anchor_out = item.anchor_out;
+    drag.ms_per_drawn = item.ms_per_drawn;
     if (spec.across) {
       ym2612::capture_operator_baseline(drag.across, widget.instrument,
                                         *spec.across, widget.slot);
@@ -451,7 +459,7 @@ HandleTouch operator_handle(OperatorWidget &widget,
         write_handle_edit(
             widget, *spec.across, drag.across,
             ui::envelope::dragged_ms(handles.plot, drag.grab_ms, moved.x,
-                                     item.ms_per_drawn),
+                                     drag.ms_per_drawn),
             drag.grab_ms);
       }
       if (spec.down && moved.y != 0.0f) {
@@ -466,7 +474,7 @@ HandleTouch operator_handle(OperatorWidget &widget,
       }
       if (spec.across && moved.x != 0.0f) {
         write_handle_edit(widget, *spec.across, drag.across,
-                          (at_ms - item.anchor_ms) * item.ms_per_drawn,
+                          (at_ms - drag.anchor_ms) * drag.ms_per_drawn,
                           drag.grab_ms);
       }
       break;
@@ -476,19 +484,19 @@ HandleTouch operator_handle(OperatorWidget &widget,
       // answers where that angle would put the floor. Never at the instant it
       // is pinned, where every rate passes through the one point.
       const double elapsed =
-          std::max(at_ms - item.anchor_ms, handles.plot.ms_per_px());
+          std::max(at_ms - drag.anchor_ms, handles.plot.ms_per_px());
       if (!spec.down || !spec.across) {
         if (spec.down) {
           write_handle_edit(widget, *spec.down, drag.down, level, elapsed);
         } else if (spec.across) {
-          const double fall = level - item.anchor_out;
+          const double fall = level - drag.anchor_out;
           const double reach =
               fall > 1.0
-                  ? elapsed * (ui::envelope::kFullScale - item.anchor_out) /
+                  ? elapsed * (ui::envelope::kFullScale - drag.anchor_out) /
                         fall
                   : elapsed;
           write_handle_edit(widget, *spec.across, drag.across,
-                            reach * item.ms_per_drawn, drag.grab_ms);
+                            reach * drag.ms_per_drawn, drag.grab_ms);
         }
       }
       break;

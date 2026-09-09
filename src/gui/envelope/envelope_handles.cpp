@@ -12,9 +12,13 @@ ImVec2 inside(const PlotArea &plot, ImVec2 pos, float radius) {
                 std::clamp(pos.y, plot.min.y + radius, plot.max.y - radius));
 }
 
-/// The first instant on `trace` at or past `level`, looked for between `from`
-/// and `to`. The phases are monotone, so this is where the drawn line arrives
-/// at a level the registers put somewhere else.
+
+/// The attenuation the chip cuts the output at, which is where a release ends
+/// rather than at the bottom of the scale.
+constexpr double kCutAttenuation = 1008.0;
+
+} // namespace
+
 double first_time_at_level(const ym2612_eg::CurveResult &trace, double level,
                            double from_ms, double to_ms) {
   for (const auto &point : trace.points) {
@@ -31,11 +35,15 @@ double first_time_at_level(const ym2612_eg::CurveResult &trace, double level,
   return to_ms;
 }
 
-} // namespace
-
 double sustain_probe_ms(const EnvelopeCurve &curve, double span_ms) {
   const double start = std::max(curve.decay_end_ms, 0.0);
-  return start + (span_ms - start) * 0.5;
+  // Half way along the part of the sustain the eye can still see falling. Past
+  // the floor the line is flat and every rate lies on top of every other, so a
+  // dot there would stand nowhere in particular.
+  const double end =
+      std::min(first_time_at_level(curve.held, kFullScale, start, span_ms),
+               span_ms);
+  return start + (end - start) * 0.5;
 }
 
 EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
@@ -119,16 +127,20 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   // The sustain has no corner to grab, so the handle sits at a fixed instant
   // along it and carries the level the trace is actually drawn at there. Too
   // thin or too narrow and there is nothing to drag it through.
-  if (curve.decay_end_ms >= 0.0) {
-    const double at_ms = sustain_probe_ms(curve, span);
+  if (curve.decay_end_ms >= 0.0 && curve.decay_end_ms < span) {
+    const double at_ms =
+        std::max(sustain_probe_ms(curve, span),
+                 curve.decay_end_ms + metrics.grab * plot.ms_per_px());
     const float room_x = plot.x_of(span) - plot.x_of(curve.decay_end_ms);
     const float room_y = plot.y_of(kFullScale) - plot.y_of(curve.sustain_out);
-    if (at_ms > curve.decay_end_ms && room_x >= metrics.min_sustain_width &&
-        room_y >= metrics.min_sustain_height) {
-      const double out_att = curve_out_at_ms(curve.held, at_ms);
-      place(kSustainHandle, at_ms - curve.decay_end_ms, at_ms, out_att,
-            1.0, false, curve.decay_end_ms, curve.sustain_out);
-    }
+    // Room enough to drag the line through means the dot stands on what it
+    // sets; without it -- a sustain level of 15 leaves a sliver -- it waits
+    // there instead, which is still where tilting one starts.
+    const bool has_room = room_x >= metrics.min_sustain_width &&
+                          room_y >= metrics.min_sustain_height;
+    place(kSustainHandle, at_ms - curve.decay_end_ms, at_ms,
+          curve_out_at_ms(curve.held, at_ms), 1.0, !has_room,
+          curve.decay_end_ms, curve.sustain_out);
   }
 
   // Where the release reaches the floor of the graph, which comes before the
@@ -137,22 +149,27 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   // the eye sees and the solver is told about the release behind it. One that
   // outran the simulation ends where the budget did rather than where the
   // release does, so the budget is what has to be tested.
-  if (curve.release_content_ms > 0.0 &&
-      curve.release_content_ms < release_max_ms() * 0.999) {
-    double floor_ms = curve.release_content_ms;
-    for (const auto &point : curve.release.points) {
-      if (point.out >= ym2612_eg::kMaxAttenuation) {
-        floor_ms = point.ms;
-        break;
-      }
-    }
+  if (curve.release_content_ms > 0.0) {
+    // The release falls at one rate from full volume, and TL lifts the whole
+    // envelope: the output saturates while the attenuation still has ground
+    // to cover, so the fall the eye sees is the shorter of the two by exactly
+    // that ratio.
+    const double drawn_fall = kFullScale - static_cast<double>(curve.peak_out);
     const double scale =
-        floor_ms > 0.0 ? curve.release_content_ms / floor_ms : 1.0;
-    // A release that reaches the floor past the right-hand edge is still a
-    // line on the graph: the dot waits on it at the edge, where tilting it
-    // is what brings the end back into view.
-    const bool ends_on_axis = floor_ms <= span;
-    const double at_ms = ends_on_axis ? floor_ms : span;
+        drawn_fall > 0.0 ? kCutAttenuation / drawn_fall : 1.0;
+    // A release that outran the simulation ends where the budget did, not
+    // where the release does, so its floor is not on the graph at all. Either
+    // way the dot waits on the line -- at the end of what is drawn, or at the
+    // right-hand edge -- because tilting it there is what brings the end back
+    // into view.
+    const bool truncated =
+        curve.release_content_ms >= release_max_ms() * 0.999;
+    const double floor_ms = curve.release_content_ms / scale;
+    const bool ends_on_axis = !truncated && floor_ms <= span;
+    const double at_ms =
+        ends_on_axis ? floor_ms
+                     : std::min(truncated ? curve.release_content_ms : span,
+                                span);
     place(kReleaseHandle, curve.release_content_ms, at_ms,
           ends_on_axis ? kFullScale : curve_out_at_ms(curve.release, at_ms),
           scale, !ends_on_axis, 0.0, curve.peak_out);
