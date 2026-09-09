@@ -263,8 +263,7 @@ struct HandleSpec {
   const char *key;
 };
 
-/// Submitted in this order, and ImGui gives an overlap to the first: the peak
-/// keeps the spot the knee shares with it whenever SL is 0.
+/// In the order the parameters they stand for run.
 constexpr HandleSpec kHandleSpecs[] = {
     {ui::envelope::kAttackHandle, ym2612::OperatorField::AttackRate,
      ym2612::OperatorField::TotalLevel, "Attack Peak", "attack_peak"},
@@ -478,8 +477,8 @@ bool render_envelope_handles(OperatorWidget &widget,
   }
 
   bool active = false;
-  // Drawn back to front, so the one that answers an overlap is the one on top
-  // of it.
+  // Back to front, so two that stand close together are drawn in the order
+  // the parameters run rather than the other way about.
   for (size_t i = count; i-- > 0;) {
     if (!touched[i].placed) {
       continue;
