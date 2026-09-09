@@ -89,14 +89,15 @@ void entry_context_menu(PatchSelectorContext &context,
     }
   }
 
-  if (context.download_entry) {
-    if (ImGui::MenuItem("Download")) {
-      context.download_entry(entry);
-    }
+  // A single patch leaves through Save As, which names the file and the
+  // format; only a whole folder is downloaded from here.
+  const bool can_download = entry.is_directory && context.download_entry;
+  if (can_download && ImGui::MenuItem("Download")) {
+    context.download_entry(entry);
   }
 
   if (can_create_patch || (!entry.is_directory && !is_current) || is_current ||
-      context.download_entry) {
+      can_download) {
     ImGui::Separator();
   }
 

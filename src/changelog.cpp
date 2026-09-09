@@ -10,6 +10,11 @@ constexpr std::string_view kEnvelopeDetails[] = {
     "Played notes show where they are on the envelope",
 };
 
+constexpr ChangelogItem kItems_0_9_3[] = {
+    {"Save As on the web picks the folder and format, or downloads instead",
+     {}},
+};
+
 constexpr ChangelogItem kItems_0_9_2[] = {
     {"A taller Total Level slider, beside the envelope graph", {}},
     {"Download on the web offers every format Save As does", {}},
@@ -65,7 +70,8 @@ constexpr ChangelogItem kItems_0_6_0[] = {
 };
 
 constexpr ChangelogEntry kEntries[] = {
-    {"v0.9.2", kItems_0_9_2}, {"v0.9.1", kItems_0_9_1},
+    {"v0.9.3", kItems_0_9_3}, {"v0.9.2", kItems_0_9_2},
+    {"v0.9.1", kItems_0_9_1},
     {"v0.9.0", kItems_0_9_0},
     {"v0.8.4", kItems_0_8_4},
     {"v0.8.3", kItems_0_8_3}, {"v0.8.2", kItems_0_8_2},

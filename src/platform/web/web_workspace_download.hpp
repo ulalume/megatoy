@@ -25,9 +25,11 @@ bool download_workspace_path(const VirtualFileSystem &vfs,
  * Serialize and download the current editor patch without saving it.
  *
  * `extension` names one of the registry's writable formats, dot included,
- * and picks the writer Save As would use for it.
+ * and picks the writer Save As would use for it. `filename_stem` names the
+ * downloaded file; the patch's own name is used when it is empty.
  */
-bool download_patch(const ym2612::Patch &patch, std::string_view extension);
+bool download_patch(const ym2612::Patch &patch, std::string_view extension,
+                    std::string_view filename_stem);
 
 } // namespace platform::web
 

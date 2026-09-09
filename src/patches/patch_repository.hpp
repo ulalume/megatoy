@@ -106,6 +106,9 @@ public:
   std::string primary_writable_label() const;
   bool patch_name_conflicts(const std::string &name) const;
 
+  /// The folders the tree mirrors, in the order it lists them.
+  const megatoy::workspace::Workspace &workspace() const { return workspace_; }
+
   bool show_builtin_presets() const { return show_builtin_presets_; }
   void set_show_builtin_presets(bool show);
 

@@ -410,8 +410,7 @@ void render_save_export_popup_host(AppContext &ctx) {
   ImGui::SetNextWindowSize(ImVec2(0, 0));
   if (ImGui::Begin("##save_export_popup_host", nullptr, flags)) {
     render_save_export_popups(ctx.services.patch_session,
-                              ctx.app_state().ui_state().save_export_state,
-                              ctx.app_state().ui_state().text_prompt_state);
+                              ctx.app_state().ui_state().save_export_state);
   }
   ImGui::End();
 }
@@ -458,7 +457,6 @@ PatchEditorContext make_patch_editor_context(AppContext &ctx) {
           ui_state.prefs,
           ui_state.envelope_states,
           ui_state.operator_edit,
-          ui_state.text_prompt_state,
           [patch_history](const std::string &label,
                           const std::string &merge_key, const ym2612::Patch &) {
             patch_history.begin_snapshot(label, merge_key);

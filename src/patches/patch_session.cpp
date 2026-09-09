@@ -311,20 +311,34 @@ SaveResult
 PatchSession::save_current_patch_as(std::string_view preferred_extension,
                                     std::string_view filename_stem) {
   return save_current_patch_as_impl(preferred_extension, filename_stem,
-                                    /*overwrite=*/false);
+                                    /*overwrite=*/false, {});
 }
 
 SaveResult
 PatchSession::save_current_patch_as_forced(std::string_view preferred_extension,
                                            std::string_view filename_stem) {
   return save_current_patch_as_impl(preferred_extension, filename_stem,
-                                    /*overwrite=*/true);
+                                    /*overwrite=*/true, {});
 }
 
 SaveResult
-PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
-                                         std::string_view filename_stem,
-                                         bool overwrite) {
+PatchSession::save_current_patch_as_in(const std::filesystem::path &folder,
+                                       std::string_view preferred_extension,
+                                       std::string_view filename_stem) {
+  return save_current_patch_as_impl(preferred_extension, filename_stem,
+                                    /*overwrite=*/false, folder);
+}
+
+SaveResult PatchSession::save_current_patch_as_in_forced(
+    const std::filesystem::path &folder, std::string_view preferred_extension,
+    std::string_view filename_stem) {
+  return save_current_patch_as_impl(preferred_extension, filename_stem,
+                                    /*overwrite=*/true, folder);
+}
+
+SaveResult PatchSession::save_current_patch_as_impl(
+    std::string_view preferred_extension, std::string_view filename_stem,
+    bool overwrite, const std::filesystem::path &folder) {
   std::string suggested_name =
       filename_stem.empty() ? current_patch_.name : std::string(filename_stem);
   const std::string sanitized_name =
@@ -341,8 +355,12 @@ PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
   if (megatoy::platform::is_web()) {
     auto patch_to_write = current_patch_;
     patch_to_write.name = sanitized_name;
-    auto result = repository_->save_patch(patch_to_write, sanitized_name,
-                                          overwrite, extension);
+    auto result =
+        folder.empty()
+            ? repository_->save_patch(patch_to_write, sanitized_name, overwrite,
+                                      extension)
+            : repository_->save_patch_in(folder, patch_to_write, sanitized_name,
+                                         overwrite, extension);
     if (result.status == SavePatchResult::Status::Success) {
       auto loaded = formats::load_patch_from_file(result.path);
       if (loaded.status == formats::PatchLoadStatus::Success &&
@@ -358,7 +376,10 @@ PatchSession::save_current_patch_as_impl(std::string_view preferred_extension,
     if (result.status == SavePatchResult::Status::Duplicate) {
       return SaveResult::duplicated();
     }
-    return SaveResult::error("No writable patch folder is available.");
+    return SaveResult::error(folder.empty()
+                                 ? "No writable patch folder is available."
+                                 : "Cannot write into \"" +
+                                       folder.filename().string() + "\".");
   }
 
   // Start in the folder the patch came from when that folder is writable,

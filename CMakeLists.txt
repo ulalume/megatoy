@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(MEGATOY_VERSION "0.9.2")
+set(MEGATOY_VERSION "0.9.3")
 project(megatoy VERSION ${MEGATOY_VERSION})
 
 # Objective-C sources are used for macOS integrations
@@ -200,6 +200,10 @@ target_include_directories(envelope_curve_test PRIVATE src)
 # ImGui at all, which is the point of keeping it out of the component.
 target_link_libraries(envelope_curve_test PRIVATE imgui_lib ym2612_eg::ym2612_eg)
 add_test(NAME envelope_curve_test COMMAND envelope_curve_test)
+add_executable(save_as_dialog_test tests/gui/save_as_dialog_test.cpp)
+target_include_directories(save_as_dialog_test PRIVATE src)
+target_link_libraries(save_as_dialog_test PRIVATE megatoy_core)
+add_test(NAME save_as_dialog_test COMMAND save_as_dialog_test)
 add_executable(ui_scale_test tests/gui/ui_scale_test.cpp src/gui/ui_scale.cpp)
 target_include_directories(ui_scale_test PRIVATE src)
 target_link_libraries(ui_scale_test PRIVATE imgui_lib)
@@ -257,7 +261,7 @@ add_custom_target(check
           operator_layout_test operator_edit_test operator_selection_test
           note_test
           envelope_curve_test
-          ui_scale_test
+          ui_scale_test save_as_dialog_test
           snapshot_entry_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})

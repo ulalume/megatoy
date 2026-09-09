@@ -114,9 +114,10 @@ bool download_workspace_path(const VirtualFileSystem &vfs,
   return true;
 }
 
-bool download_patch(const ym2612::Patch &patch, std::string_view extension) {
+bool download_patch(const ym2612::Patch &patch, std::string_view extension,
+                    std::string_view filename_stem) {
   std::string stem = patches::sanitize_filename(
-      patch.name.empty() ? std::string("patch") : patch.name);
+      filename_stem.empty() ? patch.name : std::string(filename_stem));
   if (stem.empty()) {
     stem = "patch";
   }
