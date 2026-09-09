@@ -3,6 +3,7 @@
 #include "app_state.hpp"
 #include "common.hpp"
 #include "gui/envelope/envelope_curve.hpp"
+#include "gui/envelope/envelope_handles.hpp"
 #include "gui/ui_scale.hpp"
 #include "ym2612/note.hpp"
 
@@ -24,7 +25,8 @@
  * filled area, and each sounding voice as a faint curve plus a thin vertical
  * cursor at where it has got to. The shapes, the milliseconds across and the
  * attenuation down all come from ym2612_eg by way of gui/envelope; this file
- * only turns them into pixels.
+ * only turns them into pixels. Where the drag handles go is decided there
+ * too: all that happens here is that they are drawn.
  */
 
 namespace ui {
@@ -32,13 +34,21 @@ namespace {
 
 using ui::envelope::EnvelopeCurve;
 using ui::envelope::EnvelopeCurveCache;
+using ui::envelope::kFullScale;
+using ui::envelope::PlotArea;
 using ui::envelope::VoiceCurveCache;
-
-/// Attenuation at the bottom of the graph; 0 (full volume) is at the top.
-constexpr double kFullScale = static_cast<double>(ym2612_eg::kMaxAttenuation);
 
 /// The wash under the release.
 constexpr float kFillAlpha = 0.30f;
+/// A handle is a hint until it is wanted: dimmer than the line it sits on
+/// until the pointer is on it, when it takes the stretch's own colour.
+constexpr float kHandleIdleAlpha = 0.55f;
+/// The dot, the box it is grabbed by, and the room a sustain has to have
+/// before it can carry one -- an SL of 15 leaves a sliver.
+constexpr float kHandleRadiusPx = 3.0f;
+constexpr float kHandleGrabPx = 6.0f;
+constexpr float kMinSustainHeightPx = 6.0f;
+constexpr float kMinSustainWidthPx = 8.0f;
 /// The warning line is a footnote, not an alert.
 constexpr float kWarningAlpha = 0.6f;
 
@@ -185,30 +195,6 @@ SegmentBounds segment_bounds(const EnvelopeCurve &curve) {
                bounds.attack_end);
   return bounds;
 }
-
-/// Maps the curve's own units onto the canvas: ms across, attenuation down.
-struct PlotArea {
-  ImVec2 min;
-  ImVec2 max;
-  /// The width being drawn this frame, which during an animation is somewhere
-  /// between the last one and the target.
-  double span_ms = 1.0;
-  /// The width it is heading for.
-  double target_ms = 1.0;
-
-  float width() const { return std::max(max.x - min.x, 1.0f); }
-  float height() const { return std::max(max.y - min.y, 1.0f); }
-
-  float x_of(double ms) const {
-    const double t = std::clamp(ms / span_ms, 0.0, 1.0);
-    return min.x + static_cast<float>(t) * width();
-  }
-  float y_of(double out) const {
-    const double t = std::clamp(out / kFullScale, 0.0, 1.0);
-    return min.y + static_cast<float>(t) * height();
-  }
-  ImVec2 at(double ms, double out) const { return ImVec2(x_of(ms), y_of(out)); }
-};
 
 void format_ms(char (&out)[16], double ms) {
   std::snprintf(out, sizeof(out), "%dms", static_cast<int>(ms + 0.5));
@@ -578,27 +564,32 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   return out;
 }
 
-void render_envelope_image(const ym2612::OperatorSettings &op,
-                           const UIState::EnvelopeState &state, ImVec2 size,
-                           const EnvelopeVoices &voices) {
+ui::envelope::EnvelopeHandles
+render_envelope_image(const ym2612::OperatorSettings &op,
+                      const UIState::EnvelopeState &state, ImVec2 size,
+                      const EnvelopeVoices &voices) {
   // Before BeginChild, so the ID comes from the operator's stack rather than
   // from the child window.
   EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
   const EnvelopeCurve &curve = slot.curve.get(op);
 
   PlotArea plot;
-  plot.target_ms = std::max(curve.span_ms, 1.0);
+  const double target_ms = std::max(curve.span_ms, 1.0);
 
   // The axis follows the target rather than jumping to it. The curve is
   // already in milliseconds, so this is purely a change of scale at draw time
   // and nothing is recomputed. The snap threshold is target/width, which is
   // the difference that moves the right-hand end of the content by one pixel.
   // Kept outside the visibility test below, so a graph scrolled back into view
-  // is where it would have been rather than starting the journey again.
+  // is where it would have been rather than starting the journey again. A held
+  // handle stops it outright: the axis must not rescale under the pointer that
+  // is dragging it.
   const float plot_width = std::max(size.x - 2.0f, 1.0f);
-  slot.drawn_span_ms =
-      approach_span(slot.drawn_span_ms, plot.target_ms, ImGui::GetIO().DeltaTime,
-                    plot.target_ms / plot_width);
+  if (!state.handle_active) {
+    slot.drawn_span_ms =
+        approach_span(slot.drawn_span_ms, target_ms, ImGui::GetIO().DeltaTime,
+                      target_ms / plot_width);
+  }
   plot.span_ms = std::max(slot.drawn_span_ms, 1.0);
 
   // BeginChild answers whether anything inside it can be seen; without the
@@ -607,8 +598,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   const bool visible =
       ImGui::BeginChild("EnvelopeImage", size, false, ImGuiWindowFlags_NoScrollbar);
   if (!visible) {
-    ImGui::EndChild();
-    return;
+    return {};
   }
 
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
@@ -724,7 +714,35 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   }
   draw_warning(draw_list, curve.warning, plot);
 
-  ImGui::EndChild();
+  // The handles are the editor's to place, so all that is settled here is
+  // where they would go. They keep out of the way until the pointer is on the
+  // graph, and stay up for as long as one is held wherever the pointer wanders
+  // off to.
+  const bool wanted = state.handle_active || ImGui::IsWindowHovered();
+  if (!wanted) {
+    return {};
+  }
+  const ui::envelope::HandleMetrics metrics{
+      ui::scale::px(kHandleRadiusPx),
+      ui::scale::px(kHandleGrabPx),
+      ui::scale::px(kMinSustainHeightPx),
+      ui::scale::px(kMinSustainWidthPx),
+  };
+  return ui::envelope::handle_layout(curve, plot, op.ssg_enable, metrics);
 }
+
+void draw_envelope_handle(const ui::envelope::EnvelopeHandles &handles,
+                          ui::envelope::HandleIndex handle,
+                          UIState::EnvelopeState::SliderState state) {
+  const ui::envelope::EnvelopeHandle &item = handles.items[handle];
+  const ImU32 color = color_from_slider_state(state);
+  ImGui::GetWindowDrawList()->AddCircleFilled(
+      item.pos, handles.metrics.radius,
+      state == UIState::EnvelopeState::SliderState::None
+          ? color_with_alpha(color, kHandleIdleAlpha)
+          : color);
+}
+
+void end_envelope_image() { ImGui::EndChild(); }
 
 } // namespace ui

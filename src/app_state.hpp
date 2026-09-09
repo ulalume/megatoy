@@ -41,6 +41,9 @@ struct UIState {
     SliderState sustain_level = SliderState::None;
     SliderState sustain_rate = SliderState::None;
     SliderState release_rate = SliderState::None;
+    /// A handle on the graph is being dragged. Settled after the sliders and
+    /// read by the graph on the next frame, like the states above.
+    bool handle_active = false;
   } envelope_states[4];
 
   ui::OperatorEditState operator_edit;
