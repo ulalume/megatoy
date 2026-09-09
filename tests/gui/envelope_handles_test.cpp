@@ -171,6 +171,39 @@ void test_the_release_dot_stands_where_the_release_reaches_the_floor() {
              release.ms, 1e-9));
 }
 
+void test_a_line_handle_carries_the_end_it_is_pinned_at() {
+  // A tilt is measured from where its phase begins: the release from full
+  // volume at the origin, the sustain from the knee.
+  const auto op = adsr(20, 12, 6, 8, 9, 24);
+  const EnvelopeCurve curve = build_envelope_curve(op);
+  const PlotArea plot = plot_over(curve);
+  const EnvelopeHandles handles = handle_layout(curve, plot, false, metrics());
+
+  const EnvelopeHandle &release = handles.items[kReleaseHandle];
+  CHECK(release.shown);
+  CHECK(near(release.anchor_ms, 0.0, 1e-9));
+  CHECK(near(release.anchor_out, curve.peak_out, 1e-9));
+
+  const EnvelopeHandle &sustain = handles.items[kSustainHandle];
+  if (sustain.shown) {
+    CHECK(near(sustain.anchor_ms, curve.decay_end_ms, 1e-9));
+    CHECK(near(sustain.anchor_out, curve.sustain_out, 1e-9));
+  }
+
+  // Tilting the release shallower asks for a slower fall, and a slower fall
+  // is a smaller register.
+  const double elapsed = release.at_ms;
+  const double reach = elapsed * (kFullScale - release.anchor_out) /
+                       (release.out - release.anchor_out);
+  const int same = solve_operator_field(op, ym2612::OperatorField::ReleaseRate,
+                                        reach * release.ms_per_drawn, 0.0);
+  CHECK(same == op.release_rate);
+  const int slower = solve_operator_field(
+      op, ym2612::OperatorField::ReleaseRate,
+      reach * release.ms_per_drawn * 4.0, 0.0);
+  CHECK(slower < same);
+}
+
 void test_a_parked_handle_says_so() {
   // DR 0: the knee waits at the edge. SL 0: it waits beside the peak. Neither
   // stands where the curve would put it.

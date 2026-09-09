@@ -262,14 +262,26 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
  * axis and the one it drags up and down. Either may be absent, and both are
  * one undo entry -- a drag that moves the peak moves TL and AR together.
  */
+/// What the pointer's two distances mean to the parameters a handle stands
+/// for. Every kind puts the dot where the pointer is; they differ in what
+/// question that asks.
+enum class DragKind {
+  /// The two axes are the two parameters: how long across, how loud down.
+  Corner,
+  /// The level settles where the decay stops, and the time then settles how
+  /// fast it gets there -- in that order, because the length of a decay
+  /// depends on where it is going.
+  Knee,
+  /// A line pinned at one end: the pointer names a point on it, and the angle
+  /// through the two names the rate.
+  Tilt,
+};
+
 struct HandleSpec {
   ui::envelope::HandleIndex handle;
   std::optional<ym2612::OperatorField> across;
   std::optional<ym2612::OperatorField> down;
-  /// The handle tilts a line rather than moving a corner: both ways the
-  /// pointer travels are one question for the `down` parameter, which is
-  /// asked where the line now passes through.
-  bool tilt;
+  DragKind kind;
   const char *name;
   /// Also the button's ID, which lives in the graph's own window and so
   /// cannot collide with the slider's.
@@ -279,13 +291,16 @@ struct HandleSpec {
 /// In the order the parameters they stand for run.
 constexpr HandleSpec kHandleSpecs[] = {
     {ui::envelope::kAttackHandle, ym2612::OperatorField::AttackRate,
-     ym2612::OperatorField::TotalLevel, false, "Attack Peak", "attack_peak"},
+     ym2612::OperatorField::TotalLevel, DragKind::Corner, "Attack Peak",
+     "attack_peak"},
     {ui::envelope::kDecayHandle, ym2612::OperatorField::DecayRate,
-     ym2612::OperatorField::SustainLevel, false, "Decay Knee", "decay_knee"},
+     ym2612::OperatorField::SustainLevel, DragKind::Knee, "Decay Knee",
+     "decay_knee"},
     {ui::envelope::kSustainHandle, std::nullopt,
-     ym2612::OperatorField::SustainRate, true, "Sustain Rate", "sustain_rate"},
+     ym2612::OperatorField::SustainRate, DragKind::Tilt, "Sustain Rate",
+     "sustain_rate"},
     {ui::envelope::kReleaseHandle, ym2612::OperatorField::ReleaseRate,
-     std::nullopt, false, "Release Rate", "release_rate"},
+     std::nullopt, DragKind::Tilt, "Release Rate", "release_rate"},
 };
 
 /// What a drag remembers between frames. ImGui has one active item, so there
@@ -294,6 +309,8 @@ struct HandleDrag {
   ImGuiID id = 0;
   ImVec2 grab_mouse;
   double grab_ms = 0.0;
+  /// Where the dot stood on the axis, in the milliseconds it is drawn in.
+  double grab_at_ms = 0.0;
   double grab_out = 0.0;
   ym2612::OperatorEditBaseline across;
   ym2612::OperatorEditBaseline down;
@@ -401,6 +418,7 @@ HandleTouch operator_handle(OperatorWidget &widget,
     drag.id = id;
     drag.grab_mouse = ImGui::GetIO().MousePos;
     drag.grab_ms = item.ms;
+    drag.grab_at_ms = item.at_ms;
     drag.grab_out = item.out;
     if (spec.across) {
       ym2612::capture_operator_baseline(drag.across, widget.instrument,
@@ -421,19 +439,14 @@ HandleTouch operator_handle(OperatorWidget &widget,
     const ImVec2 moved(mouse.x - drag.grab_mouse.x,
                        mouse.y - drag.grab_mouse.y);
     // Measured from the grab, so a pointer that has not moved asks for the
-    // value the handle is already at -- and nothing is written for it.
-    if (spec.tilt && spec.down) {
-      // The line is tilted rather than a corner moved: the level the pointer
-      // stands at, at the instant it stands over. Never at the instant the
-      // line starts, where every rate passes through the same point.
-      const double elapsed = std::max(
-          ui::envelope::dragged_ms(handles.plot, drag.grab_ms, moved.x),
-          handles.plot.ms_per_px());
-      write_handle_edit(
-          widget, *spec.down, drag.down,
-          ui::envelope::dragged_out(handles.plot, drag.grab_out, moved.y),
-          elapsed);
-    } else {
+    // value the handle is already at -- and nothing is written for it. Where
+    // the pointer has got to, in the units the graph is drawn in:
+    const double at_ms =
+        ui::envelope::dragged_ms(handles.plot, drag.grab_at_ms, moved.x);
+    const double level =
+        ui::envelope::dragged_out(handles.plot, drag.grab_out, moved.y);
+    switch (spec.kind) {
+    case DragKind::Corner:
       if (spec.across && moved.x != 0.0f) {
         write_handle_edit(
             widget, *spec.across, drag.across,
@@ -442,11 +455,44 @@ HandleTouch operator_handle(OperatorWidget &widget,
             drag.grab_ms);
       }
       if (spec.down && moved.y != 0.0f) {
-        write_handle_edit(
-            widget, *spec.down, drag.down,
-            ui::envelope::dragged_out(handles.plot, drag.grab_out, moved.y),
-            drag.grab_ms);
+        write_handle_edit(widget, *spec.down, drag.down, level, drag.grab_ms);
       }
+      break;
+    case DragKind::Knee:
+      // The level first: how long a decay lasts is measured to where it is
+      // going, so the rate has to be solved against the level just set.
+      if (spec.down && moved.y != 0.0f) {
+        write_handle_edit(widget, *spec.down, drag.down, level, drag.grab_ms);
+      }
+      if (spec.across && moved.x != 0.0f) {
+        write_handle_edit(widget, *spec.across, drag.across,
+                          (at_ms - item.anchor_ms) * item.ms_per_drawn,
+                          drag.grab_ms);
+      }
+      break;
+    case DragKind::Tilt: {
+      // The line is pinned where its phase begins, so the pointer names an
+      // angle. A sustain answers the level it has reached by then; a release
+      // answers where that angle would put the floor. Never at the instant it
+      // is pinned, where every rate passes through the one point.
+      const double elapsed =
+          std::max(at_ms - item.anchor_ms, handles.plot.ms_per_px());
+      if (!spec.down || !spec.across) {
+        if (spec.down) {
+          write_handle_edit(widget, *spec.down, drag.down, level, elapsed);
+        } else if (spec.across) {
+          const double fall = level - item.anchor_out;
+          const double reach =
+              fall > 1.0
+                  ? elapsed * (ui::envelope::kFullScale - item.anchor_out) /
+                        fall
+                  : elapsed;
+          write_handle_edit(widget, *spec.across, drag.across,
+                            reach * item.ms_per_drawn, drag.grab_ms);
+        }
+      }
+      break;
+    }
     }
   }
   if (ImGui::IsItemDeactivated()) {

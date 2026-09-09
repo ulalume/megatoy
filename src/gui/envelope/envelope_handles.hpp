@@ -79,6 +79,14 @@ struct EnvelopeHandle {
   double ms = 0.0;
   /// What the down parameter's solver is asked about.
   double out = 0.0;
+  /// Where the dot stands on the axis, in the milliseconds the graph is drawn
+  /// in. `ms` is what the solver is told; these are what the pointer moves.
+  double at_ms = 0.0;
+  /// Where the phase this handle belongs to leaves its start, in the same
+  /// drawn units and in attenuation. A pointer anywhere along the line from
+  /// there names an angle, and the angle names the rate.
+  double anchor_ms = 0.0;
+  double anchor_out = 0.0;
   /// False for a handle waiting somewhere the curve does not put it: a decay
   /// that never ends waits at the right-hand edge, and one with no length at
   /// all waits beside the peak. A drag from there still sets the register,

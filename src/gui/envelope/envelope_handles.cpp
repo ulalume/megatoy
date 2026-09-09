@@ -54,11 +54,15 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   // puts the dot. They differ wherever a phase does not start at zero.
   const auto place = [&](HandleIndex index, double ms, double at_ms,
                          double out_att, double ms_per_drawn = 1.0,
-                         bool parked = false) {
+                         bool parked = false, double anchor_ms = 0.0,
+                         double anchor_out = 0.0) {
     EnvelopeHandle &handle = out.items[index];
     handle.shown = true;
     handle.ms = ms;
     handle.out = out_att;
+    handle.at_ms = at_ms;
+    handle.anchor_ms = anchor_ms;
+    handle.anchor_out = anchor_out;
     handle.parked = parked;
     handle.ms_per_drawn = ms_per_drawn;
     handle.pos = inside(plot, plot.at(at_ms, out_att), metrics.radius);
@@ -98,7 +102,8 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
     if (std::abs(knee.x - peak.x) >= metrics.radius ||
         std::abs(knee.y - peak.y) >= metrics.radius) {
       place(kDecayHandle, decay_ms, at_ms, out_att,
-            drawn_ms > 0.0 ? decay_ms / drawn_ms : 1.0, !knee_on_axis);
+            drawn_ms > 0.0 ? decay_ms / drawn_ms : 1.0, !knee_on_axis,
+            curve.attack_end_ms, curve.peak_out);
     } else {
       // A sustain level of 0 puts the knee on the peak, where a dot would be
       // the peak's. It stands just clear of it instead: the decay is what
@@ -106,7 +111,8 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
       const double clear_ms =
           curve.attack_end_ms + metrics.grab * plot.ms_per_px();
       place(kDecayHandle, clear_ms - curve.attack_end_ms, clear_ms,
-            curve_out_at_ms(curve.held, clear_ms), 1.0, true);
+            curve_out_at_ms(curve.held, clear_ms), 1.0, true,
+            curve.attack_end_ms, curve.peak_out);
     }
   }
 
@@ -120,7 +126,8 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
     if (at_ms > curve.decay_end_ms && room_x >= metrics.min_sustain_width &&
         room_y >= metrics.min_sustain_height) {
       const double out_att = curve_out_at_ms(curve.held, at_ms);
-      place(kSustainHandle, at_ms - curve.decay_end_ms, at_ms, out_att);
+      place(kSustainHandle, at_ms - curve.decay_end_ms, at_ms, out_att,
+            1.0, false, curve.decay_end_ms, curve.sustain_out);
     }
   }
 
@@ -130,7 +137,7 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
   // the eye sees and the solver is told about the release behind it. One that
   // outran the simulation ends where the budget did rather than where the
   // release does, so the budget is what has to be tested.
-  if (curve.release_content_ms > 0.0 && curve.release_content_ms <= span &&
+  if (curve.release_content_ms > 0.0 &&
       curve.release_content_ms < release_max_ms() * 0.999) {
     double floor_ms = curve.release_content_ms;
     for (const auto &point : curve.release.points) {
@@ -141,8 +148,14 @@ EnvelopeHandles handle_layout(const EnvelopeCurve &curve, const PlotArea &plot,
     }
     const double scale =
         floor_ms > 0.0 ? curve.release_content_ms / floor_ms : 1.0;
-    place(kReleaseHandle, curve.release_content_ms, floor_ms, kFullScale,
-          scale);
+    // A release that reaches the floor past the right-hand edge is still a
+    // line on the graph: the dot waits on it at the edge, where tilting it
+    // is what brings the end back into view.
+    const bool ends_on_axis = floor_ms <= span;
+    const double at_ms = ends_on_axis ? floor_ms : span;
+    place(kReleaseHandle, curve.release_content_ms, at_ms,
+          ends_on_axis ? kFullScale : curve_out_at_ms(curve.release, at_ms),
+          scale, !ends_on_axis, 0.0, curve.peak_out);
   }
 
   return out;
