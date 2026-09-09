@@ -19,30 +19,12 @@
 #include <vector>
 
 /**
- * The envelope graph: two independent traces on one elapsed-time axis.
- *
- * Everything drawn here comes from ym2612_eg by way of gui/envelope: the
- * polylines are the chip's own envelope, the x axis is real milliseconds and
- * the y axis is real attenuation. This file decides nothing about the shapes --
- * it only turns them into pixels, colours the segment the user is dragging,
- * and prints the one warning the policy layer picked.
- *
- * The held envelope (attack, decay, sustain, key never released) is a LINE;
- * the release, which starts from full volume at x = 0, is a translucent FILLED
- * AREA. They start from different events and are deliberately not chained:
- * chaining them would mean inventing a key-off instant, which would cut the
- * sustain short at an arbitrary time and start the release from a level that
- * fiction produced. The two-shape language is the one megatoy's graph has
- * always used.
- *
- * While notes sound, each voice adds two more things and nothing else: its own
- * curve, in the same two shapes but faint, underneath the reference one; and a
- * thin vertical cursor at where it has actually got to. The voice's curve is
- * drawn because the envelope depends on the note -- a played note is generally
- * not the curve on screen -- and a cursor on the wrong curve would be an
- * approximation dressed up as a measurement. Where the two curves agree
- * (whenever the note shares the reference note's key-scale value, which with
- * KS = 0 is most of the keyboard) nothing extra is drawn at all.
+ * The envelope graph: the held envelope (attack, decay, sustain, key never
+ * released) as a line, the release from full volume at x = 0 as a translucent
+ * filled area, and each sounding voice as a faint curve plus a thin vertical
+ * cursor at where it has got to. The shapes, the milliseconds across and the
+ * attenuation down all come from ym2612_eg by way of gui/envelope; this file
+ * only turns them into pixels.
  */
 
 namespace ui {
@@ -55,27 +37,14 @@ using ui::envelope::VoiceCurveCache;
 /// Attenuation at the bottom of the graph; 0 (full volume) is at the top.
 constexpr double kFullScale = static_cast<double>(ym2612_eg::kMaxAttenuation);
 
-/// The wash under the release. It covers one falling edge rather than the
-/// whole shape, so it can be strong enough to read as an area on its own --
-/// this is the alpha the release triangle has always been drawn at.
+/// The wash under the release.
 constexpr float kFillAlpha = 0.30f;
 /// The warning line is a footnote, not an alert.
 constexpr float kWarningAlpha = 0.6f;
 
-/**
- * How a sounding voice is drawn.
- *
- * All four numbers are constants rather than settings: this graph has no
- * controls of its own, and every one of them is a legibility choice with an
- * obviously right end of the range rather than a preference.
- *
- * The ghost curve sits well below the reference curve's weight so it reads as
- * context rather than as a second thing to edit; the cursor sits well above it
- * so it can be found at a glance. The falloff runs six voices from full
- * strength down to about an eighth, which keeps the newest note obvious in a
- * chord without making the others invisible. The fade is long enough to read
- * as a note ending and short enough not to litter the graph.
- */
+/// How a sounding voice is drawn: the ghost curve well below the reference
+/// curve's weight, the cursor well above it, each older voice in a chord
+/// fainter than the last, and a finished voice fading out over kVoiceFadeMs.
 constexpr float kVoiceCurveAlpha = 0.30f;
 constexpr float kVoiceCursorAlpha = 0.85f;
 constexpr float kVoiceRecencyFalloff = 0.65f;
@@ -83,18 +52,9 @@ constexpr double kVoiceFadeMs = 400.0;
 /// Below this a voice is not worth the draw calls.
 constexpr float kVoiceMinAlpha = 0.02f;
 
-/**
- * How many voice curves the whole editor may simulate in one frame.
- *
- * Almost every note-on needs none: its key-scale value is the reference
- * note's, or one already cached. The exceptions cost what building any curve
- * costs -- about twelve milliseconds for the slowest envelope the chip can
- * make, which is the same bill a slider drag on that patch already pays -- and
- * four operators' worth landing on one frame would be a visible stutter. So
- * they queue: a voice without a curve yet is simply not drawn, and arrives a
- * frame or two later, which on a note that has just started is not something
- * an eye can catch.
- */
+/// How many voice curves the whole editor may simulate in one frame. Building
+/// one is expensive enough that four at once would stutter, so they queue: a
+/// voice without a curve yet is not drawn, and arrives a frame or two later.
 constexpr int kVoiceBuildsPerFrame = 1;
 
 /// The budget above, refilled once per ImGui frame and shared by all four
@@ -110,9 +70,8 @@ int &voice_build_budget() {
   return budget;
 }
 
-/// Which parameter owns a stretch of the curve. The slider highlight follows
-/// these, so the boundaries are the curve's own markers rather than anything
-/// re-derived from the registers.
+/// Which parameter owns a stretch of the curve. The boundaries are the curve's
+/// own markers rather than anything re-derived from the registers.
 enum SegmentIndex {
   kAttack = 0,
   kDecay = 1,
@@ -121,42 +80,23 @@ enum SegmentIndex {
   kSegmentCount = 4,
 };
 
-/**
- * How quickly the axis follows a change of width.
- *
- * The axis moving at all is a nuisance: the user changed a rate, not the
- * zoom, and anything that draws the eye away from the curve is in the way. So
- * it is quick and it decelerates -- an exponential approach rather than a
- * fixed-duration tween, which means a small correction takes a couple of
- * frames while a large one still lands in about a third of a second, and a
- * change that arrives mid-motion simply bends the path instead of restarting
- * it. 120 ms is short enough to read as the axis having already moved.
- */
+/// Time constant, in seconds, of the axis' exponential approach to a new width.
 constexpr float kAxisTimeConstantSec = 0.12f;
 
-/**
- * Everything one operator's graph remembers between frames.
- *
- * The curve, because rebuilding it every frame would run the simulator four
- * times a frame for nothing; and the width the axis was last drawn at, which is
- * what the animation interpolates from. operator_editor pushes the slot onto
- * the ID stack, so the widget's own ID separates them and the map never holds
- * more than four entries.
- */
+/// Everything one operator's graph remembers between frames: the curve, and
+/// the width the axis was last drawn at. operator_editor pushes the slot onto
+/// the ID stack, so the map never holds more than four entries.
 struct EnvelopeSlot {
   EnvelopeCurveCache curve;
   /// The curves of whatever is sounding, keyed on key-scale value rather than
   /// on the note; see VoiceCurveCache.
   VoiceCurveCache voices;
-  /// 0 until this operator has been drawn once, which is how the first frame
-  /// starts at its target instead of growing into it from nothing.
+  /// 0 until this operator has been drawn once; the first frame then starts at
+  /// its target instead of growing into it from nothing.
   double drawn_span_ms = 0.0;
   /// The voices this operator has already watched fade out. A released voice
-  /// only ever gets quieter, so once it has gone this graph will never draw it
-  /// again -- and the allocator keeps its record for as long as the longest
-  /// release it could have had, which is ten seconds even when the release
-  /// itself was over in twenty milliseconds. Six voices can sound, so six
-  /// sequence numbers are all this ever has to remember.
+  /// only ever gets quieter, so one that has gone is never drawn again. Six
+  /// voices can sound, so six sequence numbers are enough.
   std::array<uint64_t, VoiceCurveCache::kMaxEntries> finished{};
 };
 
@@ -191,13 +131,8 @@ EnvelopeSlot &slot_for(ImGuiID id) {
   return slots[id];
 }
 
-/**
- * One frame of the axis' approach to `target_ms`.
- *
- * `snap_ms` is a pixel's worth of width: past that the remaining motion cannot
- * be seen, and continuing it would only leave the axis creeping imperceptibly
- * for another second.
- */
+/// One frame of the axis' approach to `target_ms`. `snap_ms` is a pixel's
+/// worth of width: below that the remaining motion cannot be seen.
 double approach_span(double current_ms, double target_ms, float dt_sec,
                      double snap_ms) {
   if (!(current_ms > 0.0)) {
@@ -207,16 +142,13 @@ double approach_span(double current_ms, double target_ms, float dt_sec,
     return target_ms;
   }
   // Exponential in real time, so the motion is the same whatever the frame
-  // rate -- and a frame the app stalled through lands most of the way there
-  // rather than one frame's worth.
+  // rate, and a stalled frame lands most of the way there.
   const double alpha =
       1.0 - std::exp(-static_cast<double>(dt_sec) / kAxisTimeConstantSec);
   return current_ms + (target_ms - current_ms) * alpha;
 }
 
-/// Hovering a slider and dragging it light the same stretch the same way: the
-/// question the highlight answers is "which part of the curve is this", and
-/// the answer does not change once the mouse goes down.
+/// Hovering a slider and dragging it light the same stretch the same way.
 ImU32 color_from_slider_state(
     const UIState::EnvelopeState::SliderState &state) {
   return state == UIState::EnvelopeState::SliderState::None
@@ -224,16 +156,10 @@ ImU32 color_from_slider_state(
              : ImGui::GetColorU32(ImGuiCol_FrameBgActive);
 }
 
-/**
- * The instants the held line changes hands.
- *
- * A marker is negative when the segment never happened, and then the segment
- * before it simply runs on: an AR = 0 patch is attack forever, and a DR = 0
- * patch decays without ever reaching sustain. Each boundary is therefore
- * pinned to the one before it. There is no key-off on this line, so the
- * sustain owns everything past the decay -- including the stretch continued
- * out to the right edge.
- */
+/// The instants the held line changes hands. A marker is negative when the
+/// segment never happened, and the segment before it runs on, so each boundary
+/// is pinned to the one before. No key-off here: the sustain owns everything
+/// past the decay.
 struct SegmentBounds {
   double attack_end = 0.0;
   double decay_end = 0.0;
@@ -267,9 +193,7 @@ struct PlotArea {
   /// The width being drawn this frame, which during an animation is somewhere
   /// between the last one and the target.
   double span_ms = 1.0;
-  /// The width it is heading for. Everything that must not churn while the
-  /// axis moves -- the grid interval, which lines carry a label -- is read
-  /// from here rather than from span_ms.
+  /// The width it is heading for.
   double target_ms = 1.0;
 
   float width() const { return std::max(max.x - min.x, 1.0f); }
@@ -290,45 +214,23 @@ void format_ms(char (&out)[16], double ms) {
   std::snprintf(out, sizeof(out), "%dms", static_cast<int>(ms + 0.5));
 }
 
-/// Everything written along the top strip -- the milliseconds and the note the
-/// axis is drawn at -- is a caption on the axis rather than part of the
-/// picture, so it is all the one subdued text colour.
+/// The one subdued colour for every caption along the top strip.
 ImU32 axis_label_color() {
   return color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha);
 }
 
 /**
- * The time grid, labelled every nth line.
- *
- * The graph is about as wide as six vertical sliders, so on most axes the six
- * divisions do not all have room for their text. Labelling every nth line --
- * n being however many it takes for the widest label to fit between two of
- * them -- keeps the labels evenly spaced, which reads as an axis; labelling
- * whichever ones happen to fit gives 0, 250, 750 and reads as a mistake. The
- * lines themselves are all drawn.
- *
- * `label_limit_x` is where the text has to stop: the right edge of the plot,
- * less whatever the note label at that end has already claimed.
- *
- * The interval, and which lines carry a label, come from the axis' *target*
- * width rather than the width being drawn this frame. Otherwise every animation
- * would relabel the axis two or three times on its way -- 0/250/500 becoming
- * 0/500/1000 becoming 0/1000/2000 -- and the churning text would be the loudest
- * thing on the screen, which is the exact opposite of what the motion is for.
- *
- * How MANY lines there are does follow the drawn width, because they have to
- * cover it: while the axis is still wider than its target the extra ones slide
- * off the right-hand end as it closes, which is what a zoom looks like. While
- * it is narrower, the ones that have not arrived yet are simply not drawn.
+ * The time grid, labelled every nth line -- n being however many it takes for
+ * the widest label to fit between two of them, so the labels stay evenly
+ * spaced. Every line is drawn. `label_limit_x` is where the text has to stop:
+ * the right edge of the plot, less whatever the note label there has claimed.
  */
 void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
                     float label_baseline, float label_limit_x) {
   const ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
   const ImU32 label_color = axis_label_color();
-  // Everything here comes from the width being drawn, not the one being
-  // animated towards. Reading the step off the target puts a 900 ms axis's
-  // ticks on a 20 s one while the two are still apart: eighty lines, and the
-  // labels for them piled on top of each other.
+  // The width being drawn, not the one being animated towards: the lines have
+  // to cover what is actually on screen.
   const double drawn_ms = std::max(plot.span_ms, 1.0);
   const double step = ui::envelope::grid_step_ms(drawn_ms);
   const int lines = static_cast<int>(drawn_ms / step + 1e-6);
@@ -365,34 +267,18 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
 }
 
 /**
- * One trace turned into the polyline that is actually drawn.
- *
- * Every drawer needs the same three things of a trace, and each of them used
- * to spell them out again:
- *
- *   - enter it at `from_ms`, because the release a voice is taking joins the
- *     drawn release partway along, at the level the key came up on;
- *   - stop at `limit_ms`, because a trace regularly outruns what may be drawn
- *     -- the release runs off the right edge by design, a voice draws only the
- *     road it has travelled, and while the axis animates inwards the held
- *     trace is longer than the width being drawn;
- *   - cut the edge that straddles either end there. That one is not tidiness:
- *     x_of() clamps, so an uncut edge folds every point past the limit onto
- *     the last column and draws a vertical smear down it.
- *
- * `shift_ms` slides the whole thing along the axis, which is what lets a
- * voice's release keep the drawn release's shape while starting from where the
- * key actually came up.
- *
- * The path is continued past the trace's last point along `slope` -- the
- * curve's own, measured when it was built -- so a line never stops in mid-air.
- * Zero continues it flat, which is what an envelope at rest does.
+ * One trace turned into the polyline that is actually drawn: entered at
+ * `from_ms`, stopped at `limit_ms`, and slid along the axis by `shift_ms`. The
+ * edge straddling either end is cut there because x_of() clamps, so an uncut
+ * edge would smear down the last column. The path is continued past the
+ * trace's last point along `slope` -- the curve's own -- so a line never stops
+ * in mid-air; zero continues it flat.
  */
 struct TracePath {
   /// The polyline in pixels.
   std::vector<ImVec2> pixels;
   /// Where on the trace each vertex sits, so a drawer can ask which parameter
-  /// owns the edge that starts there. Same length as `pixels`.
+  /// owns the edge starting there. Same length as `pixels`.
   std::vector<double> at_ms;
 
   size_t edges() const { return pixels.size() < 2 ? 0 : pixels.size() - 1; }
@@ -451,8 +337,8 @@ void build_trace_path(TracePath &path,
       break; // past the end of what may be drawn
     }
     if (ms0 < from_ms) {
-      // Start exactly where the trace is entered, between the two points that
-      // straddle it, rather than at whichever vertex happens to follow.
+      // Start exactly where the trace is entered, between the two straddling
+      // points, rather than at whichever vertex happens to follow.
       const double dt = ms1 - ms0;
       const double t = dt > 0.0 ? (from_ms - ms0) / dt : 0.0;
       out0 = out0 + (out1 - out0) * t;
@@ -477,24 +363,18 @@ void build_trace_path(TracePath &path,
 }
 
 /// The scratch the paths are built into. One graph is drawn at a time, so a
-/// single buffer serves all four drawers and the allocation happens once for
-/// the life of the process rather than once per curve per frame.
+/// single buffer serves every drawer and allocates once for the process.
 TracePath &trace_scratch() {
   static TracePath path;
   return path;
 }
 
 /**
- * The release: a translucent area from x = 0 down to the floor.
- *
- * It answers "if the note were let go at full volume, how fast does it fall?",
- * which is a property of RR (and of the SSG-EG key-off rules) alone -- so it is
- * drawn from the left edge rather than hung off a key-off that never happened.
- *
- * The fill is one quad per polyline edge rather than a polygon, because an
- * SSG-EG release is not convex and AddConvexPolyFilled would fold it inside
- * out. Anti-aliased fill is switched off for the run so the quads meet without
- * leaving seams between them.
+ * The release: a translucent area from x = 0 down to the floor, since what it
+ * answers is a property of RR and the SSG-EG key-off rules alone. The fill is
+ * one quad per polyline edge rather than a polygon, because an SSG-EG release
+ * is not convex and AddConvexPolyFilled would fold it inside out;
+ * anti-aliased fill is off for the run so the quads meet without seams.
  */
 void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
                        const PlotArea &plot, ImU32 color) {
@@ -521,14 +401,9 @@ void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
   draw_list->Flags = saved_flags;
 }
 
-/**
- * The held envelope: a line, no fill, with the key never released.
- *
- * Each edge is coloured by the parameter that owns the instant it starts at,
- * so AR, DR and SR light up their own stretch. The tail past the last
- * simulated point belongs to whatever was happening there -- the sustain,
- * unless the patch never got that far.
- */
+/// The held envelope: a line, no fill, with the key never released. Each edge
+/// is coloured by the parameter that owns the instant it starts at; the tail
+/// past the last simulated point belongs to whatever was happening there.
 void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
                     const PlotArea &plot, const SegmentBounds &bounds,
                     const ImU32 (&colors)[kSegmentCount]) {
@@ -541,9 +416,9 @@ void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
                    0.0);
   const float thickness = ui::scale::px(1.0f);
   const size_t edges = path.edges();
-  // One polyline per stretch of one colour rather than one line per vertex.
-  // The boundaries are the segment markers, so there are three runs at most
-  // however many thousand vertices an SSG trace carries.
+  // One polyline per stretch of one colour: the boundaries are the segment
+  // markers, so there are three runs at most however many thousand vertices an
+  // SSG trace carries.
   size_t run_start = 0;
   while (run_start < edges) {
     const int owner = bounds.index_at(path.at_ms[run_start]);
@@ -578,19 +453,12 @@ void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
   }
 }
 
-/**
- * One voice's cursor: a thin vertical rule at where that note has actually got
- * to on its own envelope.
- *
- * A line rather than a dot because the graph is read column by column -- the
- * question is "which part of the envelope am I hearing", and a rule answers it
- * against the grid, the segment colours and the level markers at once.
- */
+/// One voice's cursor: a thin vertical rule at where that note has actually
+/// got to on its own envelope.
 void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
                        ImU32 color) {
-  // A voice still moving when it reaches the end of the axis leaves the graph
-  // rather than parking on its edge: a cursor sitting on the border reads as
-  // "the envelope stopped here", which is the one thing it does not mean.
+  // A voice past the end of the axis leaves the graph rather than parking on
+  // its edge, where it would read as "the envelope stopped here".
   if (ms < 0.0 || ms > plot.span_ms) {
     return;
   }
@@ -599,14 +467,9 @@ void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
                      ui::scale::px(1.0f));
 }
 
-/// The voice's own attack, decay and sustain, at a fraction of the reference
-/// curve's weight. One flat colour, not the four segment colours: this is
-/// context, and lighting up a ghost's decay when the DR slider is hovered
-/// would claim the slider edits it.
-///
-/// No release. The drawn release area is the one a note released at full
-/// volume would take, which is not the one this voice took -- that is drawn
-/// separately, from where the key actually came up.
+/// The voice's own attack, decay and sustain, in one flat colour at a fraction
+/// of the reference curve's weight. No release: the release this voice took is
+/// drawn separately, from where the key actually came up.
 void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
                       const PlotArea &plot, double to_ms, ImU32 color) {
   const std::vector<ym2612_eg::CurvePoint> &points = curve.held.points;
@@ -623,10 +486,9 @@ void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
                          ImDrawFlags_None, ui::scale::px(1.0f));
 }
 
-/// The release this voice is actually taking: the drawn release trace from the
-/// point where it is already at the level the key came up on, which is exactly
-/// the part of it this note travels. Drawn as a line, like the voice's own
-/// attack and decay, so it reads as this voice rather than as the reference.
+/// The release this voice is actually taking: the drawn release trace entered
+/// at the level the key came up on. A line, like the voice's own attack and
+/// decay, so it reads as this voice rather than as the reference.
 void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
                              const PlotArea &plot, double from_ms,
                              double origin_ms, double to_ms, ImU32 color) {
@@ -647,8 +509,7 @@ void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
 }
 
 /// The single warning, bottom left. Wrapped rather than clipped: it is a
-/// little wider than the graph at the smallest UI scale, and a sentence cut
-/// off mid-word reads as a bug.
+/// little wider than the graph at the smallest UI scale.
 void draw_warning(ImDrawList *draw_list, const char *warning,
                   const PlotArea &plot) {
   if (warning == nullptr) {
@@ -675,20 +536,17 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   // only ever simulated this far, and the fade is over well before then.
   const double keep_ms = ui::envelope::release_max_ms() + kVoiceFadeMs;
 
-  // The clock is published after the block it belongs to, and every key stamp
-  // is the start of some block already rendered, so `now` is never behind a
-  // stamp. Saturating anyway costs one comparison and keeps the arithmetic
-  // safe across an engine restart, which puts the clock back to zero.
+  // `now` is never behind a stamp, but saturating keeps the arithmetic safe
+  // across an engine restart, which puts the clock back to zero.
   const auto elapsed_ms = [&](uint64_t from) {
     return frame.now_samples > from
                ? static_cast<double>(frame.now_samples - from) * ms_per_sample
                : 0.0;
   };
 
-  // Newest first. `sequence` counts key-ons across the whole allocator, so it
-  // is the recency order -- and a stolen channel arrives as a strictly greater
-  // sequence, which is what makes the steal a new voice rather than the old
-  // one carrying on.
+  // Newest first: `sequence` counts key-ons across the whole allocator, so it
+  // is the recency order, and a stolen channel arrives as a strictly greater
+  // sequence.
   std::array<const VoiceActivity *, 6> ordered{};
   int found = 0;
   for (const VoiceActivity &voice : frame.voices) {
@@ -731,30 +589,21 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   PlotArea plot;
   plot.target_ms = std::max(curve.span_ms, 1.0);
 
-  // The axis follows the target rather than jumping to it. The curve is in
-  // milliseconds and was simulated for the target width, so this is purely a
-  // change of scale at draw time -- nothing is recomputed, and the animation
-  // cannot make the graph disagree with the registers.
-  //
-  // A pixel is the resolution the motion is worth having at all: the axis maps
-  // its whole width onto the plot's width, so a difference of target/width in
-  // milliseconds moves the right-hand end of the content by one pixel. Below
-  // that, snap.
-  //
-  // Kept outside the visibility test below: the width the axis is animating
-  // towards is a property of the registers, not of whether the graph happens
-  // to be scrolled into view, and a graph that comes back into view should be
-  // where it would have been rather than starting the journey again.
+  // The axis follows the target rather than jumping to it. The curve is
+  // already in milliseconds, so this is purely a change of scale at draw time
+  // and nothing is recomputed. The snap threshold is target/width, which is
+  // the difference that moves the right-hand end of the content by one pixel.
+  // Kept outside the visibility test below, so a graph scrolled back into view
+  // is where it would have been rather than starting the journey again.
   const float plot_width = std::max(size.x - 2.0f, 1.0f);
   slot.drawn_span_ms =
       approach_span(slot.drawn_span_ms, plot.target_ms, ImGui::GetIO().DeltaTime,
                     plot.target_ms / plot_width);
   plot.span_ms = std::max(slot.drawn_span_ms, 1.0);
 
-  // BeginChild answers whether anything inside it can be seen. Four of these
-  // are stacked in the operator editor and two or three of them are regularly
-  // scrolled out of view; without the test each one still builds its whole
-  // vertex stream for the clipper to throw away.
+  // BeginChild answers whether anything inside it can be seen; without the
+  // test an off-screen graph still builds its whole vertex stream for the
+  // clipper to throw away.
   const bool visible =
       ImGui::BeginChild("EnvelopeImage", size, false, ImGuiWindowFlags_NoScrollbar);
   if (!visible) {
@@ -771,16 +620,13 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
                      ImGui::GetColorU32(ImGuiCol_Separator));
 
   // The time labels get a strip of their own along the top: a curve at full
-  // volume runs along the very top of the plot, and text over it would be
-  // unreadable in both directions.
+  // volume runs along the very top of the plot.
   const float label_height = ImGui::GetTextLineHeight();
   plot.min = ImVec2(canvas_min.x + 1.0f, canvas_min.y + label_height + 1.0f);
   plot.max = ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f);
 
-  // The note the axis is drawn at, at the far end of the same strip. Now that
-  // the reference note is a setting, an axis that does not say which note it
-  // is is anonymous; it is a caption, so it is written exactly as the
-  // milliseconds are and the milliseconds stop short of it.
+  // The note the axis is drawn at, at the far end of the same strip; the
+  // milliseconds stop short of it.
   const float label_baseline = canvas_min.y + 1.0f;
   const std::string note_name =
       ym2612::Note::from_midi_note(
@@ -798,9 +644,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
       color_from_slider_state(state.sustain_rate),
       color_from_slider_state(state.release_rate),
   };
-  // What is sounding, newest first -- which is also the order the one curve a
-  // frame may build is offered in, so the note the user just played is the one
-  // that gets it.
+  // What is sounding, newest first, which is also the order the frame's one
+  // curve build is offered in.
   struct DrawnVoice {
     const EnvelopeCurve *curve;
     ui::envelope::VoiceCursor cursor;
@@ -808,15 +653,6 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   };
   // While a slider is being dragged the registers move under the cache every
   // frame, so a curve simulated now is dropped before it is ever drawn twice.
-  // The budget is worth more once the value settles.
-  //
-  // This and EnvelopeCurveCache's own rebuild throttle spend on opposite
-  // frames by construction, so neither can starve the other: the throttle only
-  // has anything to do while the registers are moving, and that is exactly
-  // when this budget is zero. They meet on one frame -- the one where a drag
-  // ends, which settles the reference curve and hands the voices their budget
-  // back at the same time -- and that frame paid for both before there was a
-  // throttle at all.
   int nothing_to_spend = 0;
   int &build_budget = envelope_slider_active(state) ? nothing_to_spend
                                                     : voice_build_budget();
@@ -867,8 +703,8 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
   // The release each voice is taking, over the ghosts and under the reference
-  // curve. Drawn for every voice that has let go, whatever its key scale: it
-  // is the one part of a note the reference curve cannot stand in for.
+  // curve. Drawn whatever its key scale: it is the one part of a note the
+  // reference curve cannot stand in for.
   for (int i = drawn_count - 1; i >= 0; --i) {
     draw_voice_release_line(
         draw_list, *drawn[i].curve, plot, drawn[i].cursor.release_from_ms,
@@ -879,8 +715,7 @@ void render_envelope_image(const ym2612::OperatorSettings &op,
   draw_release_area(draw_list, curve, plot, colors[kRelease]);
   draw_held_line(draw_list, curve, plot, segment_bounds(curve), colors);
   draw_level_markers(draw_list, curve, state, plot);
-  // Over everything: a cursor under the curve it is measuring would be the one
-  // thing on the graph that had to be hunted for.
+  // Over everything, so a cursor is never hidden under the curve it measures.
   const ImU32 cursor_base = ImGui::GetColorU32(ImGuiCol_FrameBgActive);
   for (int i = drawn_count - 1; i >= 0; --i) {
     draw_voice_cursor(
