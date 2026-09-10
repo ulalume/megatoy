@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "file_manager.hpp"
+#include "patch_tree_view.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
@@ -64,8 +65,10 @@ void entry_context_menu(PatchSelectorContext &context,
       entry.relative_path == context.session.current_patch_selection_path();
   const bool is_patch = !entry.is_directory;
 
+  // A bank or package lists its instruments like a folder, but it is a file:
+  // nothing can be created inside it.
   const bool writable_folder =
-      entry.is_directory &&
+      entry.is_directory && entry.format.empty() &&
       context.session.can_create_patch_in(entry.full_path);
   const bool can_create_patch = writable_folder && context.create_patch_in;
   const bool can_create_folder = writable_folder && context.create_folder_in;
@@ -114,6 +117,8 @@ void entry_context_menu(PatchSelectorContext &context,
       context.create_patch_in(entry.full_path);
     }
     if (can_create_folder && ImGui::MenuItem("New folder...")) {
+      // Open now, so the new folder is in view once it exists.
+      open_tree_directory(entry.relative_path);
       context.create_folder_in(entry.full_path);
     }
     if (can_save_current) {
