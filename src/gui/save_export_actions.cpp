@@ -93,16 +93,8 @@ void render_save_as_menu(patches::PatchSession &session,
     return;
   }
 
-  std::optional<std::string> download_extension;
+  const auto download_extension = download_format_menu(session);
   bool save_to_storage = false;
-  if (ImGui::BeginMenu("Download...")) {
-    for (const auto &format : session.save_formats()) {
-      if (ImGui::MenuItem(format.display_name().c_str())) {
-        download_extension = format.extension;
-      }
-    }
-    ImGui::EndMenu();
-  }
   if (ImGui::MenuItem("Save to browser storage...")) {
     save_to_storage = true;
   }
@@ -169,6 +161,20 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
         session.repository().to_relative_path(result.path));
   }
   announce_save(session, result);
+}
+
+std::optional<std::string>
+download_format_menu(const patches::PatchSession &session) {
+  std::optional<std::string> extension;
+  if (ImGui::BeginMenu("Download")) {
+    for (const auto &format : session.save_formats()) {
+      if (ImGui::MenuItem(format.display_name().c_str())) {
+        extension = format.extension;
+      }
+    }
+    ImGui::EndMenu();
+  }
+  return extension;
 }
 
 void request_save_to_storage(SaveExportState &state) {

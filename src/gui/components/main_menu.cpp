@@ -262,6 +262,23 @@ void render_main_menu(MainMenuContext &context) {
     if (ImGui::BeginMenu("File")) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
       const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
+#if defined(MEGATOY_PLATFORM_WEB)
+      // The two ways out of the editor, as the patch tree names them. The
+      // shortcuts offer the same two at the pointer, so neither row shows one.
+      if (is_user_patch) {
+        ImGui::BeginDisabled(save_disabled);
+        if (ImGui::MenuItem(save_label_for(session, true), save_shortcut)) {
+          trigger_save(session, context.save_state);
+        }
+        ImGui::EndDisabled();
+      }
+      if (const auto extension = download_format_menu(session)) {
+        download_current_patch(session, *extension);
+      }
+      if (ImGui::MenuItem("Save to browser storage...")) {
+        request_save_to_storage(context.save_state);
+      }
+#else
       const char *save_label = save_label_for(session, is_user_patch);
       if (save_disabled)
         ImGui::BeginDisabled(true);
@@ -280,6 +297,7 @@ void render_main_menu(MainMenuContext &context) {
       if (is_user_patch && ImGui::MenuItem("Save As...", save_as_shortcut)) {
         request_save_as(context.save_state);
       }
+#endif
 
       {
         ImGui::Separator();
