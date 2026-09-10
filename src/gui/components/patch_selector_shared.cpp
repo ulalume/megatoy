@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 #include <imgui.h>
+#include <optional>
 
 namespace ui::selector_detail {
 
@@ -50,6 +51,24 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
   ImGui::SetTooltip("%s", tooltip.c_str());
 }
 
+namespace {
+
+/// The formats a patch can leave in. Returns the one picked, if any.
+std::optional<std::string> download_format_menu(PatchSelectorContext &context) {
+  std::optional<std::string> extension;
+  if (ImGui::BeginMenu("Download...")) {
+    for (const auto &format : context.session.save_formats()) {
+      if (ImGui::MenuItem(format.display_name().c_str())) {
+        extension = format.extension;
+      }
+    }
+    ImGui::EndMenu();
+  }
+  return extension;
+}
+
+} // namespace
+
 void entry_context_menu(PatchSelectorContext &context,
                         const patches::PatchEntry &entry,
                         bool allow_remove_folder) {
@@ -60,75 +79,116 @@ void entry_context_menu(PatchSelectorContext &context,
   const bool is_current =
       !entry.is_directory &&
       entry.relative_path == context.session.current_patch_selection_path();
+  const bool is_patch = !entry.is_directory;
 
   const bool can_create_patch =
       entry.is_directory && context.create_patch_in &&
       context.session.can_create_patch_in(entry.full_path);
-  if (can_create_patch && ImGui::MenuItem("New Patch...")) {
-    context.create_patch_in(entry.full_path);
-  }
+  const bool can_save_current = is_current &&
+                                context.session.current_patch_is_user_patch() &&
+                                context.save_current_patch;
+  // A folder leaves as a ZIP, a patch in one of the formats it can be
+  // written in.
+  const bool can_download_folder = entry.is_directory && context.download_entry;
+  const bool can_download_patch =
+      is_patch &&
+      (is_current ? static_cast<bool>(context.download_current_patch)
+                  : static_cast<bool>(context.download_patch_entry));
+  const bool can_save_as =
+      is_current &&
+      (context.save_current_patch_to_storage || context.save_current_patch_as);
+  const bool can_duplicate = is_patch && !is_current && context.duplicate_patch;
 
-  if (is_current) {
-    const bool can_primary_save = context.session.current_patch_is_user_patch();
-    if (can_primary_save && context.save_current_patch) {
-      const bool disabled = !context.session.is_modified();
-      ImGui::BeginDisabled(disabled);
+  const bool protected_folder = context.folder_is_protected &&
+                                context.folder_is_protected(entry.full_path);
+  const bool can_rename = context.rename_patch && !protected_folder &&
+                          context.repository.can_rename_patch(entry);
+  const bool can_delete =
+      context.delete_patch && context.repository.can_delete_patch(entry);
+  const bool can_remove_folder =
+      allow_remove_folder && context.remove_folder && !protected_folder;
+
+  // Separators sit between groups, so one is drawn only once the group above
+  // it has something in it.
+  bool anything_drawn = false;
+  auto begin_group = [&anything_drawn](bool has_items) {
+    if (!has_items) {
+      return false;
+    }
+    if (anything_drawn) {
+      ImGui::Separator();
+    }
+    anything_drawn = true;
+    return true;
+  };
+
+  if (begin_group(can_create_patch || can_save_current || can_download_folder ||
+                  can_download_patch || can_save_as || can_duplicate)) {
+    if (can_create_patch && ImGui::MenuItem("New Patch...")) {
+      context.create_patch_in(entry.full_path);
+    }
+    if (can_save_current) {
+      ImGui::BeginDisabled(!context.session.is_modified());
       if (ImGui::MenuItem(context.session.save_label_for(true))) {
         context.pending_menu_action = PendingMenuAction::SaveCurrent;
       }
       ImGui::EndDisabled();
     }
-    if (context.save_current_patch_as && ImGui::MenuItem("Save As...")) {
-      context.save_current_patch_as();
+    if (can_download_folder && ImGui::MenuItem("Download")) {
+      context.download_entry(entry);
     }
-  }
-
-  // A single patch leaves through Save As, which names the file and the
-  // format; only a whole folder is downloaded from here.
-  const bool can_download = entry.is_directory && context.download_entry;
-  if (can_download && ImGui::MenuItem("Download")) {
-    context.download_entry(entry);
-  }
-
-  if (can_create_patch || is_current || can_download) {
-    ImGui::Separator();
+    std::optional<std::string> download_extension;
+    if (can_download_patch) {
+      download_extension = download_format_menu(context);
+    }
+    if (can_save_as) {
+      if (context.save_current_patch_to_storage) {
+        if (ImGui::MenuItem("Save to browser storage...")) {
+          context.save_current_patch_to_storage();
+        }
+      } else if (ImGui::MenuItem("Save As...")) {
+        context.save_current_patch_as();
+      }
+    }
+    if (can_duplicate && ImGui::MenuItem("Duplicate...")) {
+      context.duplicate_patch(entry);
+    }
+    if (download_extension) {
+      if (is_current) {
+        context.download_current_patch(*download_extension);
+      } else {
+        context.download_patch_entry(entry, *download_extension);
+      }
+    }
   }
 
   // Whether a file manager exists is the composition root's call -- the
   // callback is simply absent on platforms without one.
-  if (context.reveal_in_file_manager) {
+  if (begin_group(static_cast<bool>(context.reveal_in_file_manager))) {
     if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
       context.reveal_in_file_manager(
           context.repository.to_absolute_path(entry.relative_path));
     }
-    ImGui::Separator();
   }
 
-  const bool protected_folder = context.folder_is_protected &&
-                                context.folder_is_protected(entry.full_path);
-
-  const bool can_rename =
-      context.repository.can_rename_patch(entry) && !protected_folder;
-  const bool can_delete = context.repository.can_delete_patch(entry);
-  if (can_rename || can_delete) {
-    if (can_rename && context.rename_patch && ImGui::MenuItem("Rename...")) {
+  if (begin_group(can_rename || can_delete)) {
+    if (can_rename && ImGui::MenuItem("Rename...")) {
       context.rename_patch(entry);
     }
-    if (can_delete && context.delete_patch && ImGui::MenuItem("Delete...")) {
+    if (can_delete && ImGui::MenuItem("Delete...")) {
       context.delete_patch(entry);
     }
-    ImGui::Separator();
   }
 
-  if (allow_remove_folder && context.remove_folder && !protected_folder) {
+  if (begin_group(can_remove_folder)) {
     const char *label =
         megatoy::platform::is_web() ? "Delete Folder..." : "Remove Folder";
     if (ImGui::MenuItem(label)) {
       context.pending_remove_folder = entry.full_path;
     }
-    ImGui::Separator();
   }
 
+  begin_group(true);
   if (ImGui::MenuItem("Refresh repository")) {
     context.pending_menu_action = PendingMenuAction::Refresh;
   }

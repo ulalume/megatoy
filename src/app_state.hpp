@@ -2,6 +2,7 @@
 
 #include "formats/patch_registry.hpp"
 #include "gui/components/operator_commands.hpp"
+#include "gui/patch_save_dialog.hpp"
 #include "gui/save_export_state.hpp"
 #include "input_state.hpp"
 #include "patches/patch_repository.hpp"
@@ -196,6 +197,18 @@ struct UIState {
       on_confirm = {};
     }
   } new_patch_prompt_state;
+
+  /**
+   * The tree's "Duplicate": the copy waits here for the dialog that names it.
+   *
+   * The patch is held rather than reloaded, so the copy is the one that was
+   * clicked however the tree changes meanwhile. Unused where a native save
+   * dialog does the asking.
+   */
+  struct PatchDuplicateState {
+    ui::PatchSaveDialogState dialog;
+    ym2612::Patch patch;
+  } patch_duplicate_state;
 
   ui::SaveExportState save_export_state;
 };
