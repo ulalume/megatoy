@@ -1,4 +1,5 @@
 #include "save_as_dialog.hpp"
+#include "patches/filename_utils.hpp"
 
 #include <algorithm>
 
@@ -32,6 +33,20 @@ save_as_folder_choices(const megatoy::workspace::Workspace &workspace) {
     }
   }
   return choices;
+}
+
+std::filesystem::path save_as_target_path(const std::filesystem::path &folder,
+                                          std::string_view stem,
+                                          std::string_view extension) {
+  // The same name the storage builds, so both agree on what already exists.
+  const std::string name = patches::sanitize_filename(
+      stem.empty() ? std::string("patch") : std::string(stem));
+  return folder / (name + std::string(extension));
+}
+
+bool save_as_shows_folder_choice(
+    const std::vector<megatoy::workspace::Folder> &choices) {
+  return choices.size() > 1;
 }
 
 } // namespace ui
