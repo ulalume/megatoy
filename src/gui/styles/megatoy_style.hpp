@@ -17,6 +17,8 @@ enum class MegatoyCol : int {
   PianoWhiteKeyPressed,
   PianoBlackKey,
   PianoBlackKeyPressed,
+  /// Behind a modal dialog. Menus, combos and tooltips take ImGuiCol_PopupBg.
+  ModalBg,
   COUNT
 };
 

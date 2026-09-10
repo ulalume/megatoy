@@ -1,5 +1,6 @@
 #include "modal.hpp"
 #include "common.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 
 #include <algorithm>
@@ -56,9 +57,13 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss, float width,
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(width, height)),
                            ImGuiCond_Always);
   center_next_window();
-  if (!ImGui::BeginPopupModal(title, nullptr,
-                              ImGuiWindowFlags_NoMove |
-                                  ImGuiWindowFlags_NoResize)) {
+  // A dialog keeps the window colour while menus take the brighter popup one.
+  ImGui::PushStyleColor(ImGuiCol_PopupBg,
+                        styles::color(styles::MegatoyCol::ModalBg));
+  const bool open = ImGui::BeginPopupModal(
+      title, nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+  ImGui::PopStyleColor();
+  if (!open) {
     return scope;
   }
 

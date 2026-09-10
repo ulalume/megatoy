@@ -107,6 +107,8 @@ inline void apply() {
       ImVec4(0.10f, 0.12f, 0.20f, 1.0f);
   palette.colors[static_cast<int>(MegatoyCol::PianoBlackKeyPressed)] =
       ImVec4(0.45f, 0.65f, 0.95f, 1.00f);
+  palette.colors[static_cast<int>(MegatoyCol::ModalBg)] =
+      colors[ImGuiCol_PopupBg];
 }
 
 } // namespace ui::styles::megatoy_light
