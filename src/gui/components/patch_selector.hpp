@@ -47,6 +47,8 @@ struct PatchSelectorContext {
   /// Ask for a new patch in this folder. Only offered on a folder the
   /// session says it can write into.
   std::function<void(const std::filesystem::path &)> create_patch_in;
+  /// Ask for a new folder in this folder. Offered where create_patch_in is.
+  std::function<void(const std::filesystem::path &)> create_folder_in;
   std::optional<std::filesystem::path> pending_remove_folder;
   std::optional<PendingMenuAction> pending_menu_action;
 

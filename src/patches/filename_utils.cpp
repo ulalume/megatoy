@@ -56,4 +56,38 @@ std::string new_patch_name_error(const std::string &stem,
   return {};
 }
 
+std::string unused_folder_name(const std::vector<std::string> &existing_names,
+                               std::string_view base) {
+  auto taken = [&existing_names](std::string_view name) {
+    return std::any_of(existing_names.begin(), existing_names.end(),
+                       [name](const std::string &existing) {
+                         return equals_case_insensitive(existing, name);
+                       });
+  };
+  std::string candidate(base);
+  for (int suffix = 2; taken(candidate); ++suffix) {
+    candidate = std::string(base) + " " + std::to_string(suffix);
+  }
+  return candidate;
+}
+
+std::string new_folder_name_error(const std::string &name,
+                                  const std::filesystem::path &parent) {
+  if (name.empty()) {
+    return "Folder name cannot be empty.";
+  }
+  if (sanitize_filename(name) != name) {
+    return "Folder name contains invalid characters.";
+  }
+
+  std::error_code error;
+  if (std::filesystem::exists(parent / name, error)) {
+    return "\"" + name + "\" already exists.";
+  }
+  if (error) {
+    return "Could not check the name.";
+  }
+  return {};
+}
+
 } // namespace patches

@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace patches {
 
@@ -57,5 +58,17 @@ std::filesystem::path append_extension_if_missing(std::filesystem::path path,
 std::string new_patch_name_error(const std::string &stem,
                                  std::string_view extension,
                                  const std::filesystem::path &folder);
+
+/**
+ * `base`, or the first of `base 2`, `base 3`, ... that is not among
+ * `existing_names`. Names are compared ignoring case, as some filesystems do.
+ */
+std::string unused_folder_name(const std::vector<std::string> &existing_names,
+                               std::string_view base);
+
+/// Why `name` cannot name a new folder inside `parent`, or an empty string
+/// when it can.
+std::string new_folder_name_error(const std::string &name,
+                                  const std::filesystem::path &parent);
 
 } // namespace patches

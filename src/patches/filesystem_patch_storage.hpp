@@ -103,7 +103,9 @@ private:
   ScanObserver scan_observer_;
   mutable bool scan_aborted_ = false;
 
-  void scan_directory(const std::filesystem::path &dir_path,
+  /// Appends what `dir_path` lists, and returns true when it holds nothing
+  /// but dotfiles.
+  bool scan_directory(const std::filesystem::path &dir_path,
                       std::vector<PatchEntry> &tree,
                       const std::string &relative_path = "") const;
   static std::string detect_format(const std::filesystem::path &file_path);

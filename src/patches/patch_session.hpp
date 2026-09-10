@@ -138,6 +138,13 @@ public:
   SaveResult create_patch_in(const std::filesystem::path &folder,
                              const std::string &stem,
                              std::string_view extension);
+  /**
+   * Create the folder `name` inside `parent`, under the same conditions as
+   * create_patch_in(), and refresh the repository. The editor is left as it
+   * is.
+   */
+  SaveResult create_folder_in(const std::filesystem::path &parent,
+                              const std::string &name);
   bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
   std::optional<SaveFormatInfo>
   find_save_format(const std::string &extension) const;

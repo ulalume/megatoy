@@ -22,8 +22,10 @@ struct TreeRow {
  * The rows visible under the given filters and expansion state, in draw order.
  *
  * A directory is listed when a file anywhere below it passes both filters, or
- * -- while searching -- when the directory itself matches the query. Its
- * children follow only when its relative_path is in `open_directories`.
+ * -- while searching -- when the directory itself matches the query. With no
+ * filter active, a directory holding nothing on disk is listed as well, and
+ * keeps the directories above it listed. Its children follow only when its
+ * relative_path is in `open_directories`.
  *
  * The returned rows point into `tree`, so they stay valid only as long as the
  * repository does not rebuild it.

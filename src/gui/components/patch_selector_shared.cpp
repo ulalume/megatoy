@@ -64,9 +64,11 @@ void entry_context_menu(PatchSelectorContext &context,
       entry.relative_path == context.session.current_patch_selection_path();
   const bool is_patch = !entry.is_directory;
 
-  const bool can_create_patch =
-      entry.is_directory && context.create_patch_in &&
+  const bool writable_folder =
+      entry.is_directory &&
       context.session.can_create_patch_in(entry.full_path);
+  const bool can_create_patch = writable_folder && context.create_patch_in;
+  const bool can_create_folder = writable_folder && context.create_folder_in;
   const bool can_save_current = is_current &&
                                 context.session.current_patch_is_user_patch() &&
                                 context.save_current_patch;
@@ -105,10 +107,14 @@ void entry_context_menu(PatchSelectorContext &context,
     return true;
   };
 
-  if (begin_group(can_create_patch || can_save_current || can_download_folder ||
-                  can_download_patch || can_save_as || can_duplicate)) {
-    if (can_create_patch && ImGui::MenuItem("New Patch...")) {
+  if (begin_group(can_create_patch || can_create_folder || can_save_current ||
+                  can_download_folder || can_download_patch || can_save_as ||
+                  can_duplicate)) {
+    if (can_create_patch && ImGui::MenuItem("New patch...")) {
       context.create_patch_in(entry.full_path);
+    }
+    if (can_create_folder && ImGui::MenuItem("New folder...")) {
+      context.create_folder_in(entry.full_path);
     }
     if (can_save_current) {
       ImGui::BeginDisabled(!context.session.is_modified());
