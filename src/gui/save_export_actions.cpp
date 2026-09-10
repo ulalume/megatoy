@@ -69,8 +69,6 @@ std::string save_as_stem_suggestion(const patches::PatchSession &session) {
 
 constexpr const char *kSaveAsMenuId = "##save_as_menu";
 constexpr const char *kSaveToStorageTitle = "Save to browser storage";
-/// Share of the first row the name takes; the format combo takes the rest.
-constexpr float kSaveAsNameShare = 0.55f;
 
 std::string save_as_filename_error(const std::string &stem) {
   if (stem.empty()) {
@@ -193,14 +191,26 @@ void render_save_to_storage_dialog(patches::PatchSession &session,
 
   // Escape cancels, but only once the text field has let go of it -- see
   // escape_pressed() in modal.cpp.
-  auto modal = begin_modal(kSaveToStorageTitle, ModalDismiss::Escape);
+  // Wider than the other dialogs: the name shares its row with the format.
+  auto modal = begin_modal(kSaveToStorageTitle, ModalDismiss::Escape,
+                           kDialogWidth * 1.25f);
   bool cancelled = modal.dismissed;
   bool save = false;
   bool overwrites = false;
   if (modal.visible) {
     const float fields_width = save_as_fields_width();
     const float row_width = fields_width - ImGui::GetStyle().ItemSpacing.x;
-    const float name_width = row_width * kSaveAsNameShare;
+    const auto formats = session.save_formats();
+    // The format combo is as wide as its longest name, so none is cut short;
+    // the name field takes what is left.
+    float format_width = 0.0f;
+    for (const auto &format : formats) {
+      format_width = std::max(
+          format_width, ImGui::CalcTextSize(format.display_name().c_str()).x);
+    }
+    format_width += ImGui::GetStyle().FramePadding.x * 2.0f +
+                    ImGui::GetFrameHeight();
+    const float name_width = std::max(row_width - format_width, row_width * 0.3f);
 
     char input[512];
     std::strncpy(input, dialog.stem.c_str(), sizeof(input) - 1);
@@ -215,7 +225,6 @@ void render_save_to_storage_dialog(patches::PatchSession &session,
                              ImGuiInputTextFlags_AutoSelectAll);
     dialog.stem = input;
 
-    const auto formats = session.save_formats();
     std::string format_preview = dialog.extension;
     for (const auto &format : formats) {
       if (format.extension == dialog.extension) {
