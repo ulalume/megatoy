@@ -53,6 +53,24 @@ void test_a_name_the_storage_would_change_is_changed_here_too() {
             (patches::sanitize_filename("a/b") + ".gin"));
 }
 
+void test_a_copy_is_named_after_what_it_copies() {
+  CHECK(ui::duplicate_stem("init") == "init copy");
+  CHECK(ui::duplicate_stem("Lead 2") == "Lead 2 copy");
+  // Nothing to name it after: the same fallback the target path uses.
+  CHECK(ui::duplicate_stem("") == "patch copy");
+}
+
+void test_the_dialog_opens_on_a_folder_it_offers() {
+  const std::vector<megatoy::workspace::Folder> choices{
+      {fs::path("/patches/first"), "first"},
+      {fs::path("/patches/last"), "last"}};
+  CHECK(ui::save_as_initial_folder(choices, fs::path("/patches/last")) ==
+        fs::path("/patches/last"));
+  CHECK(ui::save_as_initial_folder(choices, fs::path("/patches/elsewhere")) ==
+        fs::path("/patches/first"));
+  CHECK(ui::save_as_initial_folder({}, fs::path("/patches/first")).empty());
+}
+
 void test_the_folder_row_appears_only_when_there_is_a_choice() {
   const std::vector<megatoy::workspace::Folder> one{
       {fs::path("/patches/only"), "only"}};
@@ -102,6 +120,8 @@ int main() {
   test_a_read_only_source_falls_back_to_the_default_folder();
   test_the_target_is_the_folder_the_name_and_the_format();
   test_a_name_the_storage_would_change_is_changed_here_too();
+  test_a_copy_is_named_after_what_it_copies();
+  test_the_dialog_opens_on_a_folder_it_offers();
   test_the_folder_row_appears_only_when_there_is_a_choice();
   test_only_writable_folders_are_offered_in_order(root);
 

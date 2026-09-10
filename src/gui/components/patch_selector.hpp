@@ -7,6 +7,7 @@
 #include <functional>
 #include <imgui.h>
 #include <optional>
+#include <string>
 
 namespace ui {
 
@@ -23,8 +24,16 @@ struct PatchSelectorContext {
   std::function<void(const patches::PatchEntry &)> safe_load_patch;
   std::function<void(const std::filesystem::path &)> reveal_in_file_manager;
   std::function<void(const patches::PatchEntry &)> download_entry;
+  /// Download one entry's patch in the named format. Absent where there is
+  /// nowhere to download to.
+  std::function<void(const patches::PatchEntry &, const std::string &)>
+      download_patch_entry;
+  /// The same for the editor's patch, which may differ from its file.
+  std::function<void(const std::string &)> download_current_patch;
   std::function<void()> save_current_patch;
   std::function<void()> save_current_patch_as;
+  /// Where Save As has no file dialog to open: the browser's own dialog.
+  std::function<void()> save_current_patch_to_storage;
   /// True when the workspace has no folders, so the browser can offer to add
   /// one instead of showing an empty tree.
   bool workspace_is_empty = false;
@@ -33,6 +42,8 @@ struct PatchSelectorContext {
   std::function<void(const std::filesystem::path &)> remove_folder;
   std::function<void(const patches::PatchEntry &)> rename_patch;
   std::function<void(const patches::PatchEntry &)> delete_patch;
+  /// Copy the entry's patch to a new file, leaving the editor alone.
+  std::function<void(const patches::PatchEntry &)> duplicate_patch;
   /// Ask for a new patch in this folder. Only offered on a folder the
   /// session says it can write into.
   std::function<void(const std::filesystem::path &)> create_patch_in;

@@ -17,6 +17,12 @@ namespace ui {
 /// The format offered when the patch's own is not one megatoy can write.
 inline constexpr std::string_view kFallbackSaveAsExtension = ".dmp";
 
+/// The name used when there is none to start from.
+inline constexpr std::string_view kFallbackSaveAsStem = "patch";
+
+/// The name a copy of `stem` opens with.
+std::string duplicate_stem(std::string_view stem);
+
 /// The format the dialog opens on: the patch's own when it is writable.
 std::string
 default_save_as_extension(std::string_view current_extension,
@@ -35,6 +41,11 @@ save_as_folder_choices(const megatoy::workspace::Workspace &workspace);
 std::filesystem::path save_as_target_path(const std::filesystem::path &folder,
                                           std::string_view stem,
                                           std::string_view extension);
+
+/// The folder the dialog opens on, limited to the ones it can offer.
+std::filesystem::path
+save_as_initial_folder(const std::vector<megatoy::workspace::Folder> &choices,
+                       const std::filesystem::path &preferred);
 
 /// Whether the folder is worth asking about.
 bool save_as_shows_folder_choice(

@@ -106,6 +106,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/patch_tree_flatten.cpp
   src/gui/components/patch_tree_view.cpp
   src/gui/components/preferences.cpp
+  src/gui/patch_save_dialog.cpp
   src/gui/save_as_dialog.cpp
   src/gui/save_export_actions.cpp
   src/gui/components/status_toasts.cpp

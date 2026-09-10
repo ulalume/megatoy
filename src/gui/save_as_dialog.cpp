@@ -5,6 +5,10 @@
 
 namespace ui {
 
+std::string duplicate_stem(std::string_view stem) {
+  return std::string(stem.empty() ? kFallbackSaveAsStem : stem) + " copy";
+}
+
 std::string
 default_save_as_extension(std::string_view current_extension,
                           const std::vector<formats::SaveFormatInfo> &formats) {
@@ -40,8 +44,21 @@ std::filesystem::path save_as_target_path(const std::filesystem::path &folder,
                                           std::string_view extension) {
   // The same name the storage builds, so both agree on what already exists.
   const std::string name = patches::sanitize_filename(
-      stem.empty() ? std::string("patch") : std::string(stem));
+      std::string(stem.empty() ? kFallbackSaveAsStem : stem));
   return folder / (name + std::string(extension));
+}
+
+std::filesystem::path
+save_as_initial_folder(const std::vector<megatoy::workspace::Folder> &choices,
+                       const std::filesystem::path &preferred) {
+  const bool offered =
+      std::any_of(choices.begin(), choices.end(),
+                  [&](const auto &folder) { return folder.path == preferred; });
+  if (offered) {
+    return preferred;
+  }
+  // Empty when there is nowhere to write: the save itself says so.
+  return choices.empty() ? std::filesystem::path{} : choices.front().path;
 }
 
 bool save_as_shows_folder_choice(

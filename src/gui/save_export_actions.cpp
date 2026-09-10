@@ -12,12 +12,10 @@
 #include <string>
 #include <string_view>
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "gui/patch_save_dialog.hpp"
 #include "gui/save_as_dialog.hpp"
-#include "gui/styles/megatoy_style.hpp"
 #include "platform/web/web_storage_bootstrap.hpp"
 #include "platform/web/web_workspace_download.hpp"
-#include <algorithm>
-#include <cstring>
 #endif
 
 namespace ui {
@@ -70,27 +68,6 @@ std::string save_as_stem_suggestion(const patches::PatchSession &session) {
 constexpr const char *kSaveAsMenuId = "##save_as_menu";
 constexpr const char *kSaveToStorageTitle = "Save to browser storage";
 
-std::string save_as_filename_error(const std::string &stem) {
-  if (stem.empty()) {
-    return "Filename cannot be empty.";
-  }
-  if (patches::sanitize_filename(stem) != stem) {
-    return "Filename contains invalid characters.";
-  }
-  return {};
-}
-
-/// Both rows, each starting at the left edge so the labels ImGui puts to
-/// their right line up too.
-float save_as_fields_width() {
-  float label_width = 0.0f;
-  for (const char *label : {"Filename", "Folder"}) {
-    label_width = std::max(label_width, ImGui::CalcTextSize(label).x);
-  }
-  return ImGui::GetContentRegionAvail().x - label_width -
-         ImGui::GetStyle().ItemInnerSpacing.x;
-}
-
 void open_save_to_storage_dialog(patches::PatchSession &session,
                                  SaveExportState &state) {
   auto &dialog = state.save_as_dialog;
@@ -99,29 +76,11 @@ void open_save_to_storage_dialog(patches::PatchSession &session,
       std::filesystem::path(session.current_patch_path()).extension().string(),
       session.save_formats());
 
-  const auto choices = save_as_folder_choices(session.repository().workspace());
-  const auto preferred =
+  dialog.folder = save_as_initial_folder(
+      save_as_folder_choices(session.repository().workspace()),
       default_save_as_folder(session.writable_source_folder(),
-                             platform::web::default_workspace_folder());
-  const bool offered =
-      std::any_of(choices.begin(), choices.end(),
-                  [&](const auto &folder) { return folder.path == preferred; });
-  // Empty when there is nowhere to write: the save itself says so.
-  dialog.folder = choices.empty() ? std::filesystem::path{}
-                  : offered       ? preferred
-                                  : choices.front().path;
-  dialog.open = true;
-  ImGui::OpenPopup(kSaveToStorageTitle);
-}
-
-void download_current_patch(patches::PatchSession &session,
-                            const std::string &extension) {
-  if (platform::web::download_patch(session.current_patch(), extension,
-                                    save_as_stem_suggestion(session))) {
-    megatoy::status::success("Download started.");
-  } else {
-    megatoy::status::error("Failed to prepare " + extension + " download.");
-  }
+                             platform::web::default_workspace_folder()));
+  dialog.requested = true;
 }
 
 /// The two ways out of the editor, under the button that asked for them.
@@ -160,163 +119,20 @@ void render_save_as_menu(patches::PatchSession &session,
 /// Write the patch, with the Overwrite Confirmation carrying the folder when
 /// the name turns out to be taken after all.
 void save_as_into(patches::PatchSession &session, SaveExportState &state,
-                  bool overwrite) {
-  const auto &dialog = state.save_as_dialog;
-  auto result = overwrite ? session.save_current_patch_as_in_forced(
-                                dialog.folder, dialog.extension, dialog.stem)
-                          : session.save_current_patch_as_in(
-                                dialog.folder, dialog.extension, dialog.stem);
+                  const std::filesystem::path &folder, const std::string &stem,
+                  const std::string &extension, bool overwrite) {
+  auto result =
+      overwrite
+          ? session.save_current_patch_as_in_forced(folder, extension, stem)
+          : session.save_current_patch_as_in(folder, extension, stem);
   if (result.is_duplicated()) {
-    state.pending_save_as_extension = dialog.extension;
-    state.pending_save_as_stem = dialog.stem;
-    state.pending_save_as_folder = dialog.folder;
+    state.pending_save_as_extension = extension;
+    state.pending_save_as_stem = stem;
+    state.pending_save_as_folder = folder;
     state.overwrite_confirmation_pending = true;
     return;
   }
   announce_save(session, result);
-}
-
-/**
- * Name, format and folder for one patch kept in browser storage.
- *
- * The browser has no file dialog to fall back on, so everything the desktop
- * one would ask is asked here instead.
- */
-void render_save_to_storage_dialog(patches::PatchSession &session,
-                                   SaveExportState &state) {
-  auto &dialog = state.save_as_dialog;
-  if (!dialog.open) {
-    return;
-  }
-
-  // Escape cancels, but only once the text field has let go of it -- see
-  // escape_pressed() in modal.cpp.
-  // Wider than the other dialogs: the name shares its row with the format.
-  auto modal = begin_modal(kSaveToStorageTitle, ModalDismiss::Escape,
-                           kDialogWidth * 1.25f);
-  bool cancelled = modal.dismissed;
-  bool save = false;
-  bool overwrites = false;
-  if (modal.visible) {
-    const float fields_width = save_as_fields_width();
-    const float row_width = fields_width - ImGui::GetStyle().ItemSpacing.x;
-    const auto formats = session.save_formats();
-    // The format combo is as wide as its longest name, so none is cut short;
-    // the name field takes what is left.
-    float format_width = 0.0f;
-    for (const auto &format : formats) {
-      format_width = std::max(
-          format_width, ImGui::CalcTextSize(format.display_name().c_str()).x);
-    }
-    format_width += ImGui::GetStyle().FramePadding.x * 2.0f +
-                    ImGui::GetFrameHeight();
-    const float name_width = std::max(row_width - format_width, row_width * 0.3f);
-
-    char input[512];
-    std::strncpy(input, dialog.stem.c_str(), sizeof(input) - 1);
-    input[sizeof(input) - 1] = '\0';
-    if (ImGui::IsWindowAppearing()) {
-      ImGui::SetKeyboardFocusHere();
-    }
-    ImGui::SetNextItemWidth(name_width);
-    const bool entered =
-        ImGui::InputText("##save_as_stem", input, sizeof(input),
-                         ImGuiInputTextFlags_EnterReturnsTrue |
-                             ImGuiInputTextFlags_AutoSelectAll);
-    dialog.stem = input;
-
-    std::string format_preview = dialog.extension;
-    for (const auto &format : formats) {
-      if (format.extension == dialog.extension) {
-        format_preview = format.display_name();
-        break;
-      }
-    }
-    // The label belongs to the row, so it rides on the last field in it.
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(row_width - name_width);
-    if (ImGui::BeginCombo("Filename", format_preview.c_str())) {
-      for (const auto &format : formats) {
-        const bool selected = format.extension == dialog.extension;
-        if (ImGui::Selectable(format.display_name().c_str(), selected)) {
-          dialog.extension = format.extension;
-        }
-        if (selected) {
-          ImGui::SetItemDefaultFocus();
-        }
-      }
-      ImGui::EndCombo();
-    }
-
-    const auto choices =
-        save_as_folder_choices(session.repository().workspace());
-    if (save_as_shows_folder_choice(choices)) {
-      std::string folder_preview = dialog.folder.filename().string();
-      for (const auto &folder : choices) {
-        if (folder.path == dialog.folder) {
-          folder_preview = folder.name;
-          break;
-        }
-      }
-      ImGui::SetNextItemWidth(fields_width);
-      if (ImGui::BeginCombo("Folder", folder_preview.c_str())) {
-        for (const auto &folder : choices) {
-          // Two folders can carry the same display name.
-          ImGui::PushID(folder.path.string().c_str());
-          const bool selected = folder.path == dialog.folder;
-          if (ImGui::Selectable(folder.name.c_str(), selected)) {
-            dialog.folder = folder.path;
-          }
-          if (selected) {
-            ImGui::SetItemDefaultFocus();
-          }
-          ImGui::PopID();
-        }
-        ImGui::EndCombo();
-      }
-    }
-
-    const std::string error = save_as_filename_error(dialog.stem);
-    overwrites = error.empty() && !dialog.folder.empty() &&
-                 std::filesystem::exists(save_as_target_path(
-                     dialog.folder, dialog.stem, dialog.extension));
-    const ImVec4 warning = styles::color(styles::MegatoyCol::StatusWarning);
-    if (!error.empty()) {
-      ImGui::TextColored(warning, "%s", error.c_str());
-    } else if (overwrites) {
-      ImGui::TextColored(warning, "%s",
-                         "A patch with this name exists and will be "
-                         "overwritten.");
-    }
-    save = entered && error.empty();
-
-    ImGui::Spacing();
-    const float width = dialog_button_width();
-    align_buttons_right({width, width});
-    if (ImGui::Button("Cancel", ImVec2(width, 0))) {
-      cancelled = true;
-    }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!error.empty());
-    if (ImGui::Button(overwrites ? "Overwrite" : "Save", ImVec2(width, 0))) {
-      save = true;
-    }
-    ImGui::EndDisabled();
-
-    if (save || (cancelled && !modal.dismissed)) {
-      ImGui::CloseCurrentPopup();
-    }
-    end_modal();
-  }
-
-  if (!save && !cancelled) {
-    return;
-  }
-  dialog.open = false;
-  if (cancelled) {
-    return;
-  }
-  save_as_into(session, state, overwrites);
 }
 
 #endif
@@ -328,6 +144,18 @@ void clear_pending_save_as(SaveExportState &state) {
 }
 
 } // namespace
+
+#if defined(MEGATOY_PLATFORM_WEB)
+void download_current_patch(patches::PatchSession &session,
+                            const std::string &extension) {
+  if (platform::web::download_patch(session.current_patch(), extension,
+                                    save_as_stem_suggestion(session))) {
+    megatoy::status::success("Download started.");
+  } else {
+    megatoy::status::error("Failed to prepare " + extension + " download.");
+  }
+}
+#endif
 
 void trigger_save(patches::PatchSession &session, SaveExportState &state,
                   std::string_view extension_override) {
@@ -341,6 +169,14 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
         session.repository().to_relative_path(result.path));
   }
   announce_save(session, result);
+}
+
+void request_save_to_storage(SaveExportState &state) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  state.save_to_storage_requested = true;
+#else
+  (void)state;
+#endif
 }
 
 void request_save_as(SaveExportState &state) {
@@ -358,6 +194,12 @@ void render_save_export_popups(patches::PatchSession &session,
     ImGui::OpenPopup("Overwrite Confirmation");
     state.overwrite_confirmation_pending = false;
   }
+#if defined(MEGATOY_PLATFORM_WEB)
+  if (state.save_to_storage_requested) {
+    state.save_to_storage_requested = false;
+    open_save_to_storage_dialog(session, state);
+  }
+#endif
   if (state.save_as_requested) {
 #if defined(MEGATOY_PLATFORM_WEB)
     ImGui::OpenPopup(kSaveAsMenuId);
@@ -369,7 +211,14 @@ void render_save_export_popups(patches::PatchSession &session,
 
 #if defined(MEGATOY_PLATFORM_WEB)
   render_save_as_menu(session, state);
-  render_save_to_storage_dialog(session, state);
+  render_patch_save_dialog(
+      kSaveToStorageTitle, "Save", state.save_as_dialog, session.save_formats(),
+      session.repository().workspace(),
+      [&session, &state](const std::filesystem::path &folder,
+                         const std::string &stem, const std::string &extension,
+                         bool overwrite) {
+        save_as_into(session, state, folder, stem, extension, overwrite);
+      });
 #else
   std::optional<std::string> selected_extension;
   if (ImGui::BeginPopup("Save As...")) {

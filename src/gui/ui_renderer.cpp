@@ -1,6 +1,7 @@
 #include "ui_renderer.hpp"
 #include "core/status.hpp"
 #include "drop_actions.hpp"
+#include "gui/components/common.hpp"
 #include "gui/components/confirmation_dialog.hpp"
 #include "gui/components/file_manager.hpp"
 #include "gui/components/folder_scan_dialog.hpp"
@@ -14,17 +15,22 @@
 #include "gui/components/preferences.hpp"
 #include "gui/components/status_toasts.hpp"
 #include "gui/components/waveform.hpp"
+#include "gui/patch_save_dialog.hpp"
+#include "gui/save_as_dialog.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/window_title.hpp"
 #include "history/snapshot_entry.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
 #include "patches/filename_utils.hpp"
+#include "patches/patch_write.hpp"
+#include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #include "platform/web/web_folder_delete.hpp"
 #include "platform/web/web_folder_import.hpp"
 #include "platform/web/web_storage_flush.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_storage_bootstrap.hpp"
 #include "platform/web/web_workspace_download.hpp"
 #include "system/path_service.hpp"
 #include "workspace/path_policy.hpp"
@@ -32,6 +38,7 @@
 #include <cassert>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -371,6 +378,148 @@ void request_new_patch(AppContext &ctx, const std::filesystem::path &folder) {
       });
 }
 
+/// The name a copy or a download starts from: the file's own stem, or the
+/// instrument's name inside a bank, which has no file of its own.
+std::string entry_stem(const patches::PatchEntry &entry) {
+  const bool bank_instrument =
+      !entry.source_relative_path.empty() && entry.container_item_id.empty();
+  if (bank_instrument) {
+    const auto sanitized = patches::sanitize_filename(entry.name);
+    if (!sanitized.empty()) {
+      return sanitized;
+    }
+  }
+  return entry.full_path.stem().string();
+}
+
+/// The entry's own folder, when a copy may be written into it.
+std::optional<std::filesystem::path>
+writable_entry_folder(AppContext &ctx, const patches::PatchEntry &entry) {
+  const auto folder = entry.full_path.parent_path();
+  const auto *owner =
+      ctx.services.preference_manager.workspace().owner_of(folder);
+  if (owner == nullptr || !owner->writable) {
+    return std::nullopt;
+  }
+  return folder;
+}
+
+void announce_saved_patch(AppContext &ctx, const std::filesystem::path &path) {
+  const auto relative =
+      ctx.services.patch_session.repository().to_relative_path(path);
+  megatoy::status::success("Saved " +
+                           display_preset_path(relative.generic_string()));
+}
+
+#if defined(MEGATOY_PLATFORM_WEB)
+/// Hand one tree entry's patch to the browser, in the chosen format.
+void download_patch_entry(AppContext &ctx, const patches::PatchEntry &entry,
+                          const std::string &extension) {
+  ym2612::Patch patch;
+  if (!ctx.services.patch_session.repository().load_patch(entry, patch)) {
+    megatoy::status::error("Could not read \"" + entry.name + "\".");
+    return;
+  }
+  if (platform::web::download_patch(patch, extension, entry_stem(entry))) {
+    megatoy::status::success("Download started.");
+  } else {
+    megatoy::status::error("Failed to prepare " + extension + " download.");
+  }
+}
+#endif
+
+/// Copy the entry's patch to a new file. The editor is left as it is.
+void request_patch_duplicate(AppContext &ctx,
+                             const patches::PatchEntry &entry) {
+  auto &session = ctx.services.patch_session;
+  ym2612::Patch patch;
+  if (!session.repository().load_patch(entry, patch)) {
+    megatoy::status::error("Could not read \"" + entry.name + "\".");
+    return;
+  }
+  const std::string stem = duplicate_stem(entry_stem(entry));
+  const std::string extension = default_save_as_extension(
+      entry.full_path.extension().string(), session.save_formats());
+  const auto source_folder = writable_entry_folder(ctx, entry);
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  // No file dialog to name the copy, so the dialog at the top level does.
+  auto &duplicate = ctx.ui_state().patch_duplicate_state;
+  duplicate.patch = std::move(patch);
+  duplicate.dialog.stem = stem;
+  duplicate.dialog.extension = extension;
+  duplicate.dialog.folder = save_as_initial_folder(
+      save_as_folder_choices(session.repository().workspace()),
+      default_save_as_folder(source_folder,
+                             platform::web::default_workspace_folder()));
+  duplicate.dialog.requested = true;
+#else
+  const auto start_directory = default_save_as_folder(
+      source_folder, ctx.services.preference_manager.last_save_directory());
+  const auto format = session.find_save_format(extension);
+  const std::vector<platform::file_dialog::FileFilter> filters{
+      {format ? format->label : "megatoy", {extension.substr(1)}},
+      {"All Files", {"*"}}};
+
+  std::filesystem::path selected;
+  const auto dialog = platform::file_dialog::save_file(
+      start_directory, stem + extension, filters, selected);
+  if (dialog == platform::file_dialog::DialogResult::Cancelled) {
+    return;
+  }
+  if (dialog != platform::file_dialog::DialogResult::Ok) {
+    megatoy::status::error("Failed to save patch");
+    return;
+  }
+
+  selected =
+      patches::append_extension_if_missing(std::move(selected), extension);
+  patch.name = selected.stem().string();
+  if (!patches::write_patch(patch, selected)) {
+    megatoy::status::error("Failed to write " + selected.string());
+    return;
+  }
+  ctx.services.preference_manager.set_last_save_directory(
+      selected.parent_path());
+  session.repository().refresh();
+  announce_saved_patch(ctx, selected);
+#endif
+}
+
+/// The copy's name, format and folder, asked for outside the browser window
+/// the menu item was clicked in.
+void render_patch_duplicate_dialog(AppContext &ctx) {
+  auto &duplicate = ctx.ui_state().patch_duplicate_state;
+  if (!duplicate.dialog.requested && !duplicate.dialog.open) {
+    return;
+  }
+  auto &session = ctx.services.patch_session;
+  render_patch_save_dialog(
+      "Duplicate", "Duplicate", duplicate.dialog, session.save_formats(),
+      session.repository().workspace(),
+      [&ctx](const std::filesystem::path &folder, const std::string &stem,
+             const std::string &extension, bool overwrite) {
+        auto &patch_session = ctx.services.patch_session;
+        const auto result = patch_session.repository().save_patch_in(
+            folder, ctx.ui_state().patch_duplicate_state.patch, stem, overwrite,
+            extension);
+        switch (result.status) {
+        case patches::SavePatchResult::Status::Success:
+          announce_saved_patch(ctx, result.path);
+          break;
+        case patches::SavePatchResult::Status::Duplicate:
+          megatoy::status::error("A patch named \"" + stem +
+                                 "\" already exists.");
+          break;
+        default:
+          megatoy::status::error(result.error_message.empty()
+                                     ? "Failed to save patch"
+                                     : result.error_message);
+          break;
+        }
+      });
+}
+
 MainMenuContext make_main_menu_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
@@ -501,7 +650,15 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
           megatoy::status::error("Failed to prepare download.");
         }
       },
+      [&ctx](const patches::PatchEntry &entry, const std::string &extension) {
+        download_patch_entry(ctx, entry, extension);
+      },
+      [&ctx](const std::string &extension) {
+        download_current_patch(ctx.services.patch_session, extension);
+      },
 #else
+      {},
+      {},
       {},
 #endif
       [&ctx]() {
@@ -511,6 +668,13 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       [&ctx]() {
         request_save_as(ctx.app_state().ui_state().save_export_state);
       },
+#if defined(MEGATOY_PLATFORM_WEB)
+      [&ctx]() {
+        request_save_to_storage(ctx.app_state().ui_state().save_export_state);
+      },
+#else
+      {},
+#endif
       ctx.services.preference_manager.workspace().empty(),
       [&ctx]() { ctx.app_state().ui_state().open_add_folder_dialog = true; },
       [&ctx](const std::filesystem::path &path) {
@@ -525,6 +689,9 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_deletion(ctx, entry);
+      },
+      [&ctx](const patches::PatchEntry &entry) {
+        request_patch_duplicate(ctx, entry);
       },
       [&ctx](const std::filesystem::path &folder) {
         request_new_patch(ctx, folder);
@@ -675,6 +842,7 @@ void render_all(AppContext &ctx) {
   render_main_menu(contexts.main_menu);
   render_patch_drop_feedback(contexts.patch_drop);
   render_confirmation_dialog(contexts.confirmation);
+  render_patch_duplicate_dialog(ctx);
 #if defined(MEGATOY_PLATFORM_WEB)
   platform::web::render_folder_import_ui();
   platform::web::render_folder_delete_ui();
