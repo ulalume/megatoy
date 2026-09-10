@@ -343,7 +343,14 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
   announce_save(session, result);
 }
 
-void request_save_as(SaveExportState &state) { state.save_as_requested = true; }
+void request_save_as(SaveExportState &state) {
+  state.save_as_requested = true;
+#if defined(MEGATOY_PLATFORM_WEB)
+  // Under the button only when the button asked; a shortcut or a menu puts
+  // it at the pointer, which is on screen however far the editor is scrolled.
+  state.save_as_menu_anchor.reset();
+#endif
+}
 
 void render_save_export_popups(patches::PatchSession &session,
                                SaveExportState &state) {

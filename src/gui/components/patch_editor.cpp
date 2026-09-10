@@ -58,14 +58,11 @@ void render_save_export_buttons(PatchEditorContext &context,
       trigger_save(patch_session, state);
     } else {
       request_save_as(state);
+#if defined(MEGATOY_PLATFORM_WEB)
+      state.save_as_menu_anchor = menu_anchor_below_last_item();
+#endif
     }
   }
-#if defined(MEGATOY_PLATFORM_WEB)
-  // This button reads Save As... when the patch has nowhere of its own.
-  if (!is_user_patch) {
-    state.save_as_menu_anchor = menu_anchor_below_last_item();
-  }
-#endif
 
   // for hover
   if (save_button_is_disabled) {
@@ -97,10 +94,10 @@ void render_save_export_buttons(PatchEditorContext &context,
     ImGui::SameLine();
     if (ImGui::Button("Save As...")) {
       request_save_as(state);
-    }
 #if defined(MEGATOY_PLATFORM_WEB)
-    state.save_as_menu_anchor = menu_anchor_below_last_item();
+      state.save_as_menu_anchor = menu_anchor_below_last_item();
 #endif
+    }
   }
 
   ImGui::SameLine();
