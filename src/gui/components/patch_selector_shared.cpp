@@ -68,12 +68,6 @@ void entry_context_menu(PatchSelectorContext &context,
     context.create_patch_in(entry.full_path);
   }
 
-  if (!entry.is_directory && !is_current && context.safe_load_patch) {
-    if (ImGui::MenuItem("Open")) {
-      context.safe_load_patch(entry);
-    }
-  }
-
   if (is_current) {
     const bool can_primary_save = context.session.current_patch_is_user_patch();
     if (can_primary_save && context.save_current_patch) {
@@ -96,8 +90,7 @@ void entry_context_menu(PatchSelectorContext &context,
     context.download_entry(entry);
   }
 
-  if (can_create_patch || (!entry.is_directory && !is_current) || is_current ||
-      can_download) {
+  if (can_create_patch || is_current || can_download) {
     ImGui::Separator();
   }
 
