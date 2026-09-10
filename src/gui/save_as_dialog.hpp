@@ -31,4 +31,13 @@ std::filesystem::path default_save_as_folder(
 std::vector<megatoy::workspace::Folder>
 save_as_folder_choices(const megatoy::workspace::Workspace &workspace);
 
+/// Where Save writes, so the dialog can tell that the name is taken.
+std::filesystem::path save_as_target_path(const std::filesystem::path &folder,
+                                          std::string_view stem,
+                                          std::string_view extension);
+
+/// Whether the folder is worth asking about.
+bool save_as_shows_folder_choice(
+    const std::vector<megatoy::workspace::Folder> &choices);
+
 } // namespace ui

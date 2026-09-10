@@ -11,7 +11,8 @@ constexpr std::string_view kEnvelopeDetails[] = {
 };
 
 constexpr ChangelogItem kItems_0_9_3[] = {
-    {"Save As on the web picks the folder and format, or downloads instead",
+    {"Save As on the web: Download in any format, or save to browser storage "
+     "by name, format and folder",
      {}},
 };
 
