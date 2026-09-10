@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "file_manager.hpp"
+#include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
 
@@ -50,24 +51,6 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
 
   ImGui::SetTooltip("%s", tooltip.c_str());
 }
-
-namespace {
-
-/// The formats a patch can leave in. Returns the one picked, if any.
-std::optional<std::string> download_format_menu(PatchSelectorContext &context) {
-  std::optional<std::string> extension;
-  if (ImGui::BeginMenu("Download...")) {
-    for (const auto &format : context.session.save_formats()) {
-      if (ImGui::MenuItem(format.display_name().c_str())) {
-        extension = format.extension;
-      }
-    }
-    ImGui::EndMenu();
-  }
-  return extension;
-}
-
-} // namespace
 
 void entry_context_menu(PatchSelectorContext &context,
                         const patches::PatchEntry &entry,
@@ -139,7 +122,7 @@ void entry_context_menu(PatchSelectorContext &context,
     }
     std::optional<std::string> download_extension;
     if (can_download_patch) {
-      download_extension = download_format_menu(context);
+      download_extension = ui::download_format_menu(context.session);
     }
     if (can_save_as) {
       if (context.save_current_patch_to_storage) {
