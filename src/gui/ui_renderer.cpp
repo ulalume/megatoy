@@ -378,6 +378,33 @@ void request_new_patch(AppContext &ctx, const std::filesystem::path &folder) {
       });
 }
 
+/// Ask for a name, then create the folder. The editor is left as it is.
+void request_new_folder(AppContext &ctx, const std::filesystem::path &parent) {
+  if (!ctx.services.patch_session.can_create_patch_in(parent)) {
+    return;
+  }
+  std::vector<std::string> existing;
+  for (const auto &item :
+       ctx.services.path_service.file_system().read_directory(parent)) {
+    existing.push_back(item.path.filename().string());
+  }
+  ctx.ui_state().text_prompt_state.request(
+      "New Folder", "Folder name",
+      patches::unused_folder_name(existing, "New folder"), "Create",
+      [&ctx, parent](const std::string &name) {
+        const auto result =
+            ctx.services.patch_session.create_folder_in(parent, name);
+        if (result.is_success()) {
+          megatoy::status::success("Created \"" + name + "\".");
+        } else {
+          megatoy::status::error(result.error_message);
+        }
+      },
+      [parent](const std::string &name) {
+        return patches::new_folder_name_error(name, parent);
+      });
+}
+
 /// The name a copy or a download starts from: the file's own stem, or the
 /// instrument's name inside a bank, which has no file of its own.
 std::string entry_stem(const patches::PatchEntry &entry) {
@@ -695,6 +722,9 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       },
       [&ctx](const std::filesystem::path &folder) {
         request_new_patch(ctx, folder);
+      },
+      [&ctx](const std::filesystem::path &folder) {
+        request_new_folder(ctx, folder);
       }};
 }
 

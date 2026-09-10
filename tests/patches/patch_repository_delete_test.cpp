@@ -8,7 +8,10 @@
 #include "workspace/workspace.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -23,6 +26,17 @@ find_entry(const std::vector<patches::PatchEntry> &entries,
     }
     if (const auto *found = find_entry(entry.children, full_path)) {
       return found;
+    }
+  }
+  return nullptr;
+}
+
+const patches::PatchEntry *
+find_named(const std::vector<patches::PatchEntry> &entries,
+           const std::string &name) {
+  for (const auto &entry : entries) {
+    if (entry.name == name) {
+      return &entry;
     }
   }
   return nullptr;
@@ -201,6 +215,43 @@ void test_repository_revision_tracks_refresh(const fs::path &root) {
   CHECK(repository.revision() == after_refresh);
 }
 
+void test_scan_lists_folders_that_hold_nothing(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto folder = root / "scan";
+  fs::create_directories(folder / "fresh");
+  fs::create_directories(folder / "finder");
+  std::ofstream(folder / "finder" / ".DS_Store") << "x";
+  fs::create_directories(folder / "samples");
+  std::ofstream(folder / "samples" / "a.wav") << "RIFF";
+  const auto empty_root = root / "empty root";
+  fs::create_directories(empty_root);
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(folder));
+  CHECK(workspace.add(empty_root));
+  patches::PatchRepository repository(file_system, workspace);
+
+  const auto *scanned = find_named(repository.tree(), "scan");
+  CHECK(scanned != nullptr);
+  CHECK(!scanned->holds_nothing);
+
+  // Nothing on disk, or nothing but dotfiles: listed, and flagged.
+  const auto *fresh = find_named(scanned->children, "fresh");
+  CHECK(fresh != nullptr);
+  CHECK(fresh->is_directory);
+  CHECK(fresh->holds_nothing);
+  const auto *finder = find_named(scanned->children, "finder");
+  CHECK(finder != nullptr);
+  CHECK(finder->holds_nothing);
+
+  // Only files megatoy does not read: left out.
+  CHECK(find_named(scanned->children, "samples") == nullptr);
+
+  const auto *empty = find_named(repository.tree(), "empty root");
+  CHECK(empty != nullptr);
+  CHECK(empty->holds_nothing);
+}
+
 } // namespace
 
 int main() {
@@ -214,6 +265,7 @@ int main() {
   test_duplicate_save_requires_overwrite(root);
   test_container_parse_cache_invalidates_on_change(root);
   test_repository_revision_tracks_refresh(root);
+  test_scan_lists_folders_that_hold_nothing(root);
 
   fs::remove_all(root);
   std::cout << "All patch repository delete tests passed\n";

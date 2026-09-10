@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "file_manager.hpp"
+#include "patch_tree_view.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
@@ -64,9 +65,13 @@ void entry_context_menu(PatchSelectorContext &context,
       entry.relative_path == context.session.current_patch_selection_path();
   const bool is_patch = !entry.is_directory;
 
-  const bool can_create_patch =
-      entry.is_directory && context.create_patch_in &&
+  // A bank or package lists its instruments like a folder, but it is a file:
+  // nothing can be created inside it.
+  const bool writable_folder =
+      entry.is_directory && entry.format.empty() &&
       context.session.can_create_patch_in(entry.full_path);
+  const bool can_create_patch = writable_folder && context.create_patch_in;
+  const bool can_create_folder = writable_folder && context.create_folder_in;
   const bool can_save_current = is_current &&
                                 context.session.current_patch_is_user_patch() &&
                                 context.save_current_patch;
@@ -105,10 +110,16 @@ void entry_context_menu(PatchSelectorContext &context,
     return true;
   };
 
-  if (begin_group(can_create_patch || can_save_current || can_download_folder ||
-                  can_download_patch || can_save_as || can_duplicate)) {
-    if (can_create_patch && ImGui::MenuItem("New Patch...")) {
+  if (begin_group(can_create_patch || can_create_folder || can_save_current ||
+                  can_download_folder || can_download_patch || can_save_as ||
+                  can_duplicate)) {
+    if (can_create_patch && ImGui::MenuItem("New patch...")) {
       context.create_patch_in(entry.full_path);
+    }
+    if (can_create_folder && ImGui::MenuItem("New folder...")) {
+      // Open now, so the new folder is in view once it exists.
+      open_tree_directory(entry.relative_path);
+      context.create_folder_in(entry.full_path);
     }
     if (can_save_current) {
       ImGui::BeginDisabled(!context.session.is_modified());

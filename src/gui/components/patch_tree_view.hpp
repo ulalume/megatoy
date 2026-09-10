@@ -18,4 +18,7 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
                        PatchSelectorContext &context,
                        const std::string &query_lower, int min_star_rating);
 
+/// Expand a folder of the tree, by its relative path.
+void open_tree_directory(const std::string &relative_path);
+
 } // namespace ui::selector_detail

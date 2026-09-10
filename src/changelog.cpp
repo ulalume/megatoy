@@ -14,6 +14,7 @@ constexpr ChangelogItem kItems_0_9_3[] = {
     {"Save As on the web: Download in any format, or save to browser storage "
      "by name, format and folder",
      {}},
+    {"New folders from the patch tree's context menu", {}},
 };
 
 constexpr ChangelogItem kItems_0_9_2[] = {

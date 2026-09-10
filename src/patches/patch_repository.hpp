@@ -24,6 +24,8 @@ struct PatchEntry {
   std::filesystem::path full_path;
   std::string format;
   bool is_directory;
+  /// A directory with nothing on disk but dotfiles.
+  bool holds_nothing = false;
   std::vector<PatchEntry> children;
 
   // Metadata (only valid for files, not directories)

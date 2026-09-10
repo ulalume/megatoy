@@ -67,7 +67,8 @@ void FilesystemPatchStorage::append_entries(
   // An added folder is listed even when it is empty or missing, so the user
   // can see it is part of the workspace and remove it again.
   if (vfs_.is_directory(root_)) {
-    scan_directory(root_, root_entry.children, root_label_);
+    root_entry.holds_nothing =
+        scan_directory(root_, root_entry.children, root_label_);
   }
   // An aborted walk never reached the rest of the tree, so its record of what
   // is still on disk is not one to evict from.
@@ -402,14 +403,18 @@ std::optional<std::filesystem::path> FilesystemPatchStorage::to_absolute_path(
   return std::nullopt;
 }
 
-void FilesystemPatchStorage::scan_directory(
+bool FilesystemPatchStorage::scan_directory(
     const std::filesystem::path &dir_path, std::vector<PatchEntry> &tree,
     const std::string &relative_path) const {
   if (!vfs_.is_directory(dir_path)) {
-    return;
+    return false;
   }
 
   auto entries = vfs_.read_directory(dir_path);
+  const bool holds_nothing =
+      std::all_of(entries.begin(), entries.end(), [](const auto &entry) {
+        return entry.path.filename().string().starts_with(".");
+      });
   std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) {
     const std::string filename_a = a.path.filename().string();
     const std::string filename_b = b.path.filename().string();
@@ -444,17 +449,20 @@ void FilesystemPatchStorage::scan_directory(
     if (entry.is_directory) {
       info.is_directory = true;
       info.format = "";
-      scan_directory(path, info.children, info.relative_path);
-      if (!info.children.empty()) {
+      info.holds_nothing =
+          scan_directory(path, info.children, info.relative_path);
+      // An empty folder is kept so a new one can be seen; one holding only
+      // files megatoy does not read is not.
+      if (!info.children.empty() || info.holds_nothing) {
         tree.push_back(std::move(info));
       }
       if (scan_aborted_) {
-        return;
+        return false;
       }
     } else if (entry.is_regular_file) {
       if (scan_observer_.on_file && !scan_observer_.on_file(path)) {
         scan_aborted_ = true;
-        return;
+        return false;
       }
 
       std::string extension = path.extension().string();
@@ -624,6 +632,7 @@ void FilesystemPatchStorage::scan_directory(
       tree.push_back(std::move(info));
     }
   }
+  return holds_nothing;
 }
 
 std::string

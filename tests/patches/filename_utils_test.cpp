@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <string>
 
 namespace fs = std::filesystem;
 
@@ -57,6 +58,46 @@ void test_new_patch_name_error(const fs::path &root) {
   fs::remove_all(folder);
 }
 
+void test_unused_folder_name() {
+  using patches::unused_folder_name;
+
+  CHECK(unused_folder_name({}, "New folder") == "New folder");
+  CHECK(unused_folder_name({"bass.gin", "Drums"}, "New folder") ==
+        "New folder");
+  CHECK(unused_folder_name({"New folder"}, "New folder") == "New folder 2");
+  CHECK(unused_folder_name({"New folder", "New folder 2"}, "New folder") ==
+        "New folder 3");
+  // The first free number, not one past the highest.
+  CHECK(unused_folder_name({"New folder", "New folder 3"}, "New folder") ==
+        "New folder 2");
+  // Case does not make a name free on a filesystem that ignores it.
+  CHECK(unused_folder_name({"new FOLDER"}, "New folder") == "New folder 2");
+}
+
+void test_new_folder_name_error(const fs::path &root) {
+  using patches::new_folder_name_error;
+
+  const auto parent = root / "parent";
+  fs::create_directories(parent);
+
+  CHECK(new_folder_name_error("Drums", parent).empty());
+  CHECK(new_folder_name_error("", parent) == "Folder name cannot be empty.");
+  for (const std::string name :
+       {"bad/name", "bad:name", " padded", "trail.", ".hidden"}) {
+    CHECK(new_folder_name_error(name, parent) ==
+          "Folder name contains invalid characters.");
+  }
+
+  fs::create_directories(parent / "Drums");
+  CHECK(new_folder_name_error("Drums", parent) == "\"Drums\" already exists.");
+  // A file in the way is taken too.
+  std::ofstream(parent / "lead.gin") << "{}";
+  CHECK(new_folder_name_error("lead.gin", parent) ==
+        "\"lead.gin\" already exists.");
+
+  fs::remove_all(parent);
+}
+
 } // namespace
 
 int main() {
@@ -66,6 +107,8 @@ int main() {
 
   test_append_extension_if_missing();
   test_new_patch_name_error(root);
+  test_unused_folder_name();
+  test_new_folder_name_error(root);
 
   fs::remove_all(root);
   std::cout << "All filename utility tests passed\n";

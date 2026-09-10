@@ -468,6 +468,30 @@ SaveResult PatchSession::create_patch_in(const std::filesystem::path &folder,
   return SaveResult::success(target);
 }
 
+SaveResult PatchSession::create_folder_in(const std::filesystem::path &parent,
+                                          const std::string &name) {
+  if (!can_create_patch_in(parent)) {
+    return SaveResult::error("Cannot write into \"" +
+                             parent.filename().string() + "\".");
+  }
+  if (const auto problem = new_folder_name_error(name, parent);
+      !problem.empty()) {
+    return SaveResult::error(problem);
+  }
+
+  const auto target = parent / name;
+  std::error_code error;
+  if (!std::filesystem::create_directory(target, error)) {
+    return SaveResult::error("Could not create \"" + name + "\".");
+  }
+
+  repository_->refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::request_storage_persist();
+#endif
+  return SaveResult::success(target);
+}
+
 std::optional<SaveFormatInfo>
 PatchSession::find_save_format(const std::string &extension) const {
   auto formats = formats::PatchRegistry::instance().save_formats();

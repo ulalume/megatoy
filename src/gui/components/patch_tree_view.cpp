@@ -147,10 +147,25 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
 
 } // namespace
 
+namespace {
+
+/// One tree is on screen, so one cache: the context menu reaches it to open
+/// the folder a new one is made in.
+PatchTreeCache &tree_cache() {
+  static PatchTreeCache cache;
+  return cache;
+}
+
+} // namespace
+
+void open_tree_directory(const std::string &relative_path) {
+  tree_cache().set_open(relative_path, true);
+}
+
 bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
                        PatchSelectorContext &context,
                        const std::string &query_lower, int min_star_rating) {
-  static PatchTreeCache cache;
+  PatchTreeCache &cache = tree_cache();
   const auto &rows = cache.get(tree, context.repository.revision(), query_lower,
                                min_star_rating);
   if (rows.empty()) {
