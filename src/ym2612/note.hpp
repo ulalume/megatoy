@@ -15,38 +15,40 @@ struct NoteFrequency {
   uint8_t block;
 };
 
-inline constexpr uint16_t kCanonicalFnumMin = 322;
+inline constexpr uint16_t kCanonicalFnumMin = 644;
 inline constexpr uint16_t kCanonicalFnumEnd = kCanonicalFnumMin * 2;
 inline constexpr uint16_t kHardwareFnumMax = 0x7ff;
 
+// F-number of each note. With block = octave, MIDI 60 (C4) is middle C at
+// F-num 644, block 4.
 inline uint16_t fnote_from_key(Key key) {
   switch (key) {
   case Key::C:
-    return 322;
+    return 644;
   case Key::C_SHARP:
-    return 341;
+    return 682;
   case Key::D:
-    return 361;
+    return 723;
   case Key::D_SHARP:
-    return 383;
+    return 766;
   case Key::E:
-    return 406;
+    return 811;
   case Key::F:
-    return 430;
+    return 859;
   case Key::F_SHARP:
-    return 455;
+    return 910;
   case Key::G:
-    return 482;
+    return 965;
   case Key::G_SHARP:
-    return 511;
+    return 1022;
   case Key::A:
-    return 541;
+    return 1083;
   case Key::A_SHARP:
-    return 574;
+    return 1147;
   case Key::B:
-    return 608;
+    return 1215;
   }
-  return 322;
+  return 644;
 }
 
 struct Note {
