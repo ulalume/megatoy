@@ -105,7 +105,7 @@ void render_patch_save_dialog(
       ImGui::EndCombo();
     }
 
-    const auto choices = save_as_folder_choices(workspace);
+    const auto choices = save_as_folder_choices(workspace.folders());
     if (save_as_shows_folder_choice(choices)) {
       std::string folder_preview = state.folder.filename().string();
       for (const auto &folder : choices) {

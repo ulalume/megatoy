@@ -476,7 +476,7 @@ void request_patch_duplicate(AppContext &ctx,
   duplicate.dialog.stem = stem;
   duplicate.dialog.extension = extension;
   duplicate.dialog.folder = save_as_initial_folder(
-      save_as_folder_choices(session.repository().workspace()),
+      save_as_folder_choices(session.repository().workspace().folders()),
       default_save_as_folder(source_folder,
                              platform::web::default_workspace_folder()));
   duplicate.dialog.requested = true;
