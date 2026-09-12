@@ -35,7 +35,7 @@ std::filesystem::path default_save_as_folder(
 
 /// The folders Save can write into, in the order the browser lists them.
 std::vector<megatoy::workspace::Folder>
-save_as_folder_choices(const megatoy::workspace::Workspace &workspace);
+save_as_folder_choices(const std::vector<megatoy::workspace::Folder> &folders);
 
 /// Where Save writes, so the dialog can tell that the name is taken.
 std::filesystem::path save_as_target_path(const std::filesystem::path &folder,

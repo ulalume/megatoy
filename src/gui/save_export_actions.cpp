@@ -77,7 +77,7 @@ void open_save_to_storage_dialog(patches::PatchSession &session,
       session.save_formats());
 
   dialog.folder = save_as_initial_folder(
-      save_as_folder_choices(session.repository().workspace()),
+      save_as_folder_choices(session.repository().workspace().folders()),
       default_save_as_folder(session.writable_source_folder(),
                              platform::web::default_workspace_folder()));
   dialog.requested = true;

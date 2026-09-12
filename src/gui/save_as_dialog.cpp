@@ -29,9 +29,9 @@ std::filesystem::path default_save_as_folder(
 }
 
 std::vector<megatoy::workspace::Folder>
-save_as_folder_choices(const megatoy::workspace::Workspace &workspace) {
+save_as_folder_choices(const std::vector<megatoy::workspace::Folder> &folders) {
   std::vector<megatoy::workspace::Folder> choices;
-  for (const auto &folder : workspace.folders()) {
+  for (const auto &folder : folders) {
     if (folder.writable) {
       choices.push_back(folder);
     }

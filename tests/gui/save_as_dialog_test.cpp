@@ -82,38 +82,20 @@ void test_the_folder_row_appears_only_when_there_is_a_choice() {
   CHECK(ui::save_as_shows_folder_choice(two));
 }
 
-fs::path make_root() {
-  auto root = fs::temp_directory_path() / "megatoy_save_as_dialog_test";
-  fs::remove_all(root);
-  fs::create_directories(root / "first");
-  fs::create_directories(root / "locked");
-  fs::create_directories(root / "last");
-  return fs::weakly_canonical(root);
-}
-
-void test_only_writable_folders_are_offered_in_order(const fs::path &root) {
-  fs::permissions(root / "locked", fs::perms::owner_write,
-                  fs::perm_options::remove);
-
-  megatoy::workspace::Workspace workspace;
-  workspace.set_paths({root / "first", root / "locked", root / "last"});
-  CHECK(workspace.folders().size() == 3);
-  CHECK(!workspace.folders()[1].writable);
-
-  const auto choices = ui::save_as_folder_choices(workspace);
+void test_only_writable_folders_are_offered_in_order() {
+  const std::vector<megatoy::workspace::Folder> folders{
+      {fs::path("/patches/first"), "first", true, true},
+      {fs::path("/patches/locked"), "locked", true, false},
+      {fs::path("/patches/last"), "last", true, true}};
+  const auto choices = ui::save_as_folder_choices(folders);
   CHECK(choices.size() == 2);
-  CHECK(choices[0].path == root / "first");
-  CHECK(choices[1].path == root / "last");
-
-  fs::permissions(root / "locked", fs::perms::owner_write,
-                  fs::perm_options::add);
+  CHECK(choices[0].path == fs::path("/patches/first"));
+  CHECK(choices[1].path == fs::path("/patches/last"));
 }
 
 } // namespace
 
 int main() {
-  const auto root = make_root();
-
   test_a_writable_extension_is_kept();
   test_anything_else_falls_back();
   test_the_patch_folder_wins_when_it_is_writable();
@@ -123,9 +105,8 @@ int main() {
   test_a_copy_is_named_after_what_it_copies();
   test_the_dialog_opens_on_a_folder_it_offers();
   test_the_folder_row_appears_only_when_there_is_a_choice();
-  test_only_writable_folders_are_offered_in_order(root);
+  test_only_writable_folders_are_offered_in_order();
 
-  fs::remove_all(root);
   std::cout << "All Save As dialog tests passed\n";
   return 0;
 }
