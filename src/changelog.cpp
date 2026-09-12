@@ -10,11 +10,16 @@ constexpr std::string_view kEnvelopeDetails[] = {
     "Played notes show where they are on the envelope",
 };
 
+constexpr std::string_view kFormatDetails[] = {
+    ".spat, .tyi, .y12, .dat and .ins",
+    ".spat, .tyi and .y12 can also be saved",
+};
+
 constexpr ChangelogItem kItems_0_9_3[] = {
-    {"Save As on the web: Download in any format, or save to browser storage "
-     "by name, format and folder",
-     {}},
-    {"New folders from the patch tree's context menu", {}},
+    {"Drag the dots on the envelope graph to shape the envelope", {}},
+    {"New folders and duplicates from the patch browser's context menu", {}},
+    {"Notes play at standard pitch, with key scaling as on hardware", {}},
+    {"Added 5 patch formats", kFormatDetails},
 };
 
 constexpr ChangelogItem kItems_0_9_2[] = {
