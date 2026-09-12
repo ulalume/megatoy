@@ -179,12 +179,14 @@ void test_nuked_idle_stretch_holds_its_level() {
   std::vector<float> idle(static_cast<size_t>(idle_frames) * 2, 0.0f);
   device.render(idle_frames, idle.data());
 
-  // The second half of the stretch is entirely past the release.
+  // The second half of the stretch is entirely past the release. The output
+  // filter settles to within its rounding of the offset, from whichever side
+  // the release comes; a step at the pause would be the whole offset.
   float largest_step = 0.0f;
   for (size_t i = idle.size() / 2; i < idle.size(); ++i) {
     largest_step = std::max(largest_step, std::abs(idle[i] - kIdleLevel));
   }
-  CHECK(largest_step == 0.0f);
+  CHECK(largest_step < 1.0f / (32768.0f * 32.0f));
 
   channel.write_key_on(true, true, true, true);
   std::vector<float> again(static_cast<size_t>(kSampleRate) / 20 * 2, 0.0f);

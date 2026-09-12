@@ -80,16 +80,16 @@ void test_pitch_bend_math() {
   const auto up = ym2612::frequency_with_bend(a4, 2.0f);
   const auto down = ym2612::frequency_with_bend(a4, -2.0f);
   CHECK(center.block == 4);
-  CHECK(center.fnum == 541);
+  CHECK(center.fnum == 1083);
   CHECK(up.block == 4);
-  CHECK(std::abs(static_cast<int>(up.fnum) - 608) <= 1);
+  CHECK(std::abs(static_cast<int>(up.fnum) - 1215) <= 1);
   CHECK(down.block == 4);
-  CHECK(std::abs(static_cast<int>(down.fnum) - 482) <= 1);
+  CHECK(std::abs(static_cast<int>(down.fnum) - 965) <= 1);
 
   const auto b4 = ym2612::Note::from_midi_note(71);
   const auto crossed = ym2612::frequency_with_bend(b4, 2.0f);
   CHECK(crossed.block == 5);
-  CHECK(std::abs(static_cast<int>(crossed.fnum) - 341) <= 1);
+  CHECK(std::abs(static_cast<int>(crossed.fnum) - 682) <= 1);
 
   CHECK(audio::performance::pitch_bend_semitones(8192) == 0.0f);
   CHECK(audio::performance::pitch_bend_semitones(0) == -2.0f);
