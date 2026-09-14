@@ -498,19 +498,21 @@ void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
 
 /// The single warning, bottom left. Wrapped rather than clipped: it is a
 /// little wider than the graph at the smallest UI scale.
-void draw_warning(ImDrawList *draw_list, const char *warning,
+void draw_warning(ImDrawList *draw_list, const std::string &warning,
                   const PlotArea &plot) {
-  if (warning == nullptr) {
+  if (warning.empty()) {
     return;
   }
+  const char *text = warning.c_str();
+  const char *text_end = text + warning.size();
   const float inset = ui::scale::px(3.0f);
   const float wrap_width = plot.width() - inset * 2.0f;
-  const ImVec2 size = ImGui::CalcTextSize(warning, nullptr, false, wrap_width);
+  const ImVec2 size = ImGui::CalcTextSize(text, text_end, false, wrap_width);
   const ImVec2 pos(plot.min.x + inset, plot.max.y - size.y - inset);
   draw_list->AddText(
       ImGui::GetFont(), ImGui::GetFontSize(), pos,
-      color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha),
-      warning, nullptr, wrap_width);
+      color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha), text,
+      text_end, wrap_width);
 }
 
 } // namespace
