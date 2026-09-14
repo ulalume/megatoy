@@ -14,7 +14,6 @@
 #include <cstddef>
 #include <cstdio>
 #include <imgui.h>
-#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -38,6 +37,7 @@ using ui::envelope::kFullScale;
 using ui::envelope::PlotArea;
 using ui::envelope::to_imvec;
 using ui::envelope::to_point;
+using ui::envelope::TraceVertex;
 using ui::envelope::VoiceCurveCache;
 
 /// The wash under the release.
@@ -45,22 +45,15 @@ constexpr float kFillAlpha = 0.30f;
 /// A handle is a hint until it is wanted: dimmer than the line it sits on
 /// until the pointer is on it, when it takes the stretch's own colour.
 constexpr float kHandleIdleAlpha = 0.55f;
-/// The dot, the box it is grabbed by, and the room a sustain has to have
-/// before it can carry one -- an SL of 15 leaves a sliver.
-constexpr float kHandleRadiusPx = 3.0f;
-constexpr float kHandleGrabPx = 6.0f;
-constexpr float kMinSustainHeightPx = 6.0f;
-constexpr float kMinSustainWidthPx = 8.0f;
 /// The warning line is a footnote, not an alert.
 constexpr float kWarningAlpha = 0.6f;
 
 /// How a sounding voice is drawn: the ghost curve well below the reference
 /// curve's weight, the cursor well above it, each older voice in a chord
-/// fainter than the last, and a finished voice fading out over kVoiceFadeMs.
+/// fainter than the last, and a finished voice fading out.
 constexpr float kVoiceCurveAlpha = 0.30f;
 constexpr float kVoiceCursorAlpha = 0.85f;
 constexpr float kVoiceRecencyFalloff = 0.65f;
-constexpr double kVoiceFadeMs = 400.0;
 /// Below this a voice is not worth the draw calls.
 constexpr float kVoiceMinAlpha = 0.02f;
 
@@ -82,15 +75,13 @@ int &voice_build_budget() {
   return budget;
 }
 
-/// Which parameter owns a stretch of the curve. The boundaries are the curve's
-/// own markers rather than anything re-derived from the registers.
-enum SegmentIndex {
-  kAttack = 0,
-  kDecay = 1,
-  kSustain = 2,
-  kRelease = 3,
-  kSegmentCount = 4,
-};
+/// The colour each stretch of the curve is drawn in, indexed by the phase
+/// that owns it.
+using PhaseColors = std::array<ImU32, 4>;
+
+ImU32 phase_color(const PhaseColors &colors, ym2612_eg::EgPhase phase) {
+  return colors[static_cast<size_t>(phase)];
+}
 
 /// Time constant, in seconds, of the axis' exponential approach to a new width.
 constexpr float kAxisTimeConstantSec = 0.12f;
@@ -168,36 +159,6 @@ ImU32 color_from_slider_state(
              : ImGui::GetColorU32(ImGuiCol_FrameBgActive);
 }
 
-/// The instants the held line changes hands. A marker is negative when the
-/// segment never happened, and the segment before it runs on, so each boundary
-/// is pinned to the one before. No key-off here: the sustain owns everything
-/// past the decay.
-struct SegmentBounds {
-  double attack_end = 0.0;
-  double decay_end = 0.0;
-
-  int index_at(double ms) const {
-    if (ms < attack_end) {
-      return kAttack;
-    }
-    if (ms < decay_end) {
-      return kDecay;
-    }
-    return kSustain;
-  }
-};
-
-SegmentBounds segment_bounds(const EnvelopeCurve &curve) {
-  constexpr double kNever = std::numeric_limits<double>::infinity();
-  SegmentBounds bounds;
-  bounds.attack_end =
-      curve.attack_end_ms >= 0.0 ? curve.attack_end_ms : kNever;
-  bounds.decay_end =
-      std::max(curve.decay_end_ms >= 0.0 ? curve.decay_end_ms : kNever,
-               bounds.attack_end);
-  return bounds;
-}
-
 void format_ms(char (&out)[16], double ms) {
   std::snprintf(out, sizeof(out), "%dms", static_cast<int>(ms + 0.5));
 }
@@ -254,107 +215,37 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
   }
 }
 
-/**
- * One trace turned into the polyline that is actually drawn: entered at
- * `from_ms`, stopped at `limit_ms`, and slid along the axis by `shift_ms`. The
- * edge straddling either end is cut there because x_of() clamps, so an uncut
- * edge would smear down the last column. The path is continued past the
- * trace's last point along `slope` -- the curve's own -- so a line never stops
- * in mid-air; zero continues it flat.
- */
+/// A trace as ym2612_eg cuts it to the axis, and the same vertices in pixels.
 struct TracePath {
-  /// The polyline in pixels.
+  std::vector<TraceVertex> vertices;
   std::vector<ImVec2> pixels;
-  /// Where on the trace each vertex sits, so a drawer can ask which parameter
-  /// owns the edge starting there. Same length as `pixels`.
-  std::vector<double> at_ms;
-
-  size_t edges() const { return pixels.size() < 2 ? 0 : pixels.size() - 1; }
 };
-
-void build_trace_path(TracePath &path,
-                      const std::vector<ym2612_eg::CurvePoint> &points,
-                      const PlotArea &plot, double slope, double from_ms,
-                      double limit_ms, double shift_ms) {
-  path.pixels.clear();
-  path.at_ms.clear();
-  if (points.empty()) {
-    return;
-  }
-  // Everything below is in the trace's own time; the shift is applied once, on
-  // the way to pixels.
-  const double limit = std::min(limit_ms, plot.span_ms) - shift_ms;
-  if (!(limit > from_ms)) {
-    return;
-  }
-
-  // The tail: one more piece of curve past the last simulated point, cut short
-  // if the slope would carry it off the top or the bottom of the plot.
-  const ym2612_eg::CurvePoint &last = points.back();
-  double tail_ms = limit;
-  double tail_out = last.out;
-  bool has_tail = last.ms < limit;
-  if (has_tail && slope > 0.0) {
-    tail_ms = std::min(tail_ms, last.ms + (kFullScale - last.out) / slope);
-  } else if (has_tail && slope < 0.0) {
-    tail_ms = std::min(tail_ms, last.ms + (0.0 - last.out) / slope);
-  }
-  if (has_tail) {
-    tail_out =
-        std::clamp(last.out + slope * (tail_ms - last.ms), 0.0, kFullScale);
-    has_tail = tail_ms > last.ms;
-  }
-
-  const size_t edges = points.size() - 1 + (has_tail ? 1 : 0);
-  path.pixels.reserve(edges + 1);
-  path.at_ms.reserve(edges + 1);
-
-  for (size_t i = 0; i < edges; ++i) {
-    double ms0 = points[std::min(i, points.size() - 1)].ms;
-    double out0 = points[std::min(i, points.size() - 1)].out;
-    double ms1 = tail_ms;
-    double out1 = tail_out;
-    if (i + 1 < points.size()) {
-      ms1 = points[i + 1].ms;
-      out1 = points[i + 1].out;
-    }
-    if (ms1 <= from_ms) {
-      continue; // still before the point the trace is entered at
-    }
-    if (ms0 >= limit) {
-      break; // past the end of what may be drawn
-    }
-    if (ms0 < from_ms) {
-      // Start exactly where the trace is entered, between the two straddling
-      // points, rather than at whichever vertex happens to follow.
-      const double dt = ms1 - ms0;
-      const double t = dt > 0.0 ? (from_ms - ms0) / dt : 0.0;
-      out0 = out0 + (out1 - out0) * t;
-      ms0 = from_ms;
-    }
-    if (ms1 > limit) {
-      const double dt = ms1 - ms0;
-      const double t = dt > 0.0 ? (limit - ms0) / dt : 0.0;
-      out1 = out0 + (out1 - out0) * t;
-      ms1 = limit;
-    }
-    if (path.pixels.empty()) {
-      path.pixels.push_back(to_imvec(plot.at(ms0 + shift_ms, out0)));
-      path.at_ms.push_back(ms0);
-    }
-    path.pixels.push_back(to_imvec(plot.at(ms1 + shift_ms, out1)));
-    path.at_ms.push_back(ms1);
-    if (ms1 >= limit) {
-      break;
-    }
-  }
-}
 
 /// The scratch the paths are built into. One graph is drawn at a time, so a
 /// single buffer serves every drawer and allocates once for the process.
 TracePath &trace_scratch() {
   static TracePath path;
   return path;
+}
+
+void to_pixels(TracePath &path, const PlotArea &plot) {
+  path.pixels.clear();
+  path.pixels.reserve(path.vertices.size());
+  for (const TraceVertex &vertex : path.vertices) {
+    path.pixels.push_back(to_imvec(plot.at(vertex.ms, vertex.out)));
+  }
+}
+
+/// The path as one line, in one colour.
+void stroke_path(ImDrawList *draw_list, TracePath &path, const PlotArea &plot,
+                 ImU32 color) {
+  if (path.vertices.size() < 2) {
+    return;
+  }
+  to_pixels(path, plot);
+  draw_list->AddPolyline(path.pixels.data(),
+                         static_cast<int>(path.pixels.size()), color,
+                         ImDrawFlags_None, ui::scale::px(1.0f));
 }
 
 /**
@@ -371,12 +262,13 @@ void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
     return;
   }
   TracePath &path = trace_scratch();
-  build_trace_path(path, points, plot, curve.release_tail_slope, 0.0,
-                   plot.span_ms, 0.0);
+  ui::envelope::build_trace_path(path.vertices, curve.release,
+                                 curve.release_tail_slope, plot.span_ms);
+  to_pixels(path, plot);
   const ImU32 fill = color_with_alpha(color, kFillAlpha);
   const ImDrawListFlags saved_flags = draw_list->Flags;
   draw_list->Flags &= ~ImDrawListFlags_AntiAliasedFill;
-  const size_t edges = path.edges();
+  const size_t edges = path.pixels.size() < 2 ? 0 : path.pixels.size() - 1;
   for (size_t i = 0; i < edges; ++i) {
     const ImVec2 &a = path.pixels[i];
     const ImVec2 &b = path.pixels[i + 1];
@@ -393,31 +285,25 @@ void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
 /// is coloured by the parameter that owns the instant it starts at; the tail
 /// past the last simulated point belongs to whatever was happening there.
 void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
-                    const PlotArea &plot, const SegmentBounds &bounds,
-                    const ImU32 (&colors)[kSegmentCount]) {
-  const auto &points = curve.held.points;
-  if (points.empty()) {
+                    const PlotArea &plot, const PhaseColors &colors) {
+  if (curve.held.points.empty()) {
     return;
   }
   TracePath &path = trace_scratch();
-  build_trace_path(path, points, plot, curve.held_tail_slope, 0.0, plot.span_ms,
-                   0.0);
+  ui::envelope::build_trace_path(path.vertices, curve.held,
+                                 curve.held_tail_slope, plot.span_ms);
+  to_pixels(path, plot);
   const float thickness = ui::scale::px(1.0f);
-  const size_t edges = path.edges();
-  // One polyline per stretch of one colour: the boundaries are the segment
-  // markers, so there are three runs at most however many thousand vertices an
-  // SSG trace carries.
-  size_t run_start = 0;
-  while (run_start < edges) {
-    const int owner = bounds.index_at(path.at_ms[run_start]);
-    size_t run_end = run_start + 1;
-    while (run_end < edges && bounds.index_at(path.at_ms[run_end]) == owner) {
-      ++run_end;
-    }
-    draw_list->AddPolyline(&path.pixels[run_start],
-                           static_cast<int>(run_end - run_start + 1),
-                           colors[owner], ImDrawFlags_None, thickness);
-    run_start = run_end;
+  // One polyline per stretch of one colour, three at most however many
+  // thousand vertices an SSG trace carries.
+  const ui::envelope::PhaseRuns runs =
+      ui::envelope::held_phase_runs(curve, path.vertices);
+  for (int i = 0; i < runs.count; ++i) {
+    const ui::envelope::PhaseRun &run = runs.items[static_cast<size_t>(i)];
+    draw_list->AddPolyline(&path.pixels[run.first],
+                           static_cast<int>(run.count),
+                           phase_color(colors, run.phase), ImDrawFlags_None,
+                           thickness);
   }
 }
 
@@ -445,11 +331,6 @@ void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
 /// got to on its own envelope.
 void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
                        ImU32 color) {
-  // A voice past the end of the axis leaves the graph rather than parking on
-  // its edge, where it would read as "the envelope stopped here".
-  if (ms < 0.0 || ms > plot.span_ms) {
-    return;
-  }
   const float x = plot.x_of(ms);
   draw_list->AddLine(ImVec2(x, plot.min.y), ImVec2(x, plot.max.y), color,
                      ui::scale::px(1.0f));
@@ -460,18 +341,14 @@ void draw_voice_cursor(ImDrawList *draw_list, const PlotArea &plot, double ms,
 /// drawn separately, from where the key actually came up.
 void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
                       const PlotArea &plot, double to_ms, ImU32 color) {
-  const std::vector<ym2612_eg::CurvePoint> &points = curve.held.points;
-  if (points.size() < 2) {
+  if (curve.held.points.size() < 2) {
     return;
   }
   TracePath &path = trace_scratch();
-  build_trace_path(path, points, plot, curve.held_tail_slope, 0.0, to_ms, 0.0);
-  if (path.pixels.size() < 2) {
-    return;
-  }
-  draw_list->AddPolyline(path.pixels.data(),
-                         static_cast<int>(path.pixels.size()), color,
-                         ImDrawFlags_None, ui::scale::px(1.0f));
+  ui::envelope::build_trace_path(path.vertices, curve.held,
+                                 curve.held_tail_slope, plot.span_ms, 0.0,
+                                 to_ms);
+  stroke_path(draw_list, path, plot, color);
 }
 
 /// The release this voice is actually taking: the drawn release trace entered
@@ -480,20 +357,15 @@ void draw_voice_curve(ImDrawList *draw_list, const EnvelopeCurve &curve,
 void draw_voice_release_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
                              const PlotArea &plot, double from_ms,
                              double origin_ms, double to_ms, ImU32 color) {
-  const std::vector<ym2612_eg::CurvePoint> &points = curve.release.points;
-  if (from_ms < 0.0 || origin_ms < 0.0 || points.size() < 2) {
+  if (from_ms < 0.0 || origin_ms < 0.0 || curve.release.points.size() < 2) {
     return;
   }
   TracePath &path = trace_scratch();
   // The release keeps its shape and is slid along to where the key came up.
-  build_trace_path(path, points, plot, curve.release_tail_slope, from_ms, to_ms,
-                   origin_ms - from_ms);
-  if (path.pixels.size() < 2) {
-    return;
-  }
-  draw_list->AddPolyline(path.pixels.data(),
-                         static_cast<int>(path.pixels.size()), color,
-                         ImDrawFlags_None, ui::scale::px(1.0f));
+  ui::envelope::build_trace_path(path.vertices, curve.release,
+                                 curve.release_tail_slope, plot.span_ms,
+                                 from_ms, to_ms, origin_ms - from_ms);
+  stroke_path(draw_list, path, plot, color);
 }
 
 /// The single warning, bottom left. Wrapped rather than clipped: it is a
@@ -522,9 +394,6 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   const double rate =
       frame.sample_rate > 0 ? static_cast<double>(frame.sample_rate) : 44100.0;
   const double ms_per_sample = 1000.0 / rate;
-  // Past this a released voice has nothing left on any graph: the release is
-  // only ever simulated this far, and the fade is over well before then.
-  const double keep_ms = ui::envelope::release_max_ms() + kVoiceFadeMs;
 
   // `now` is never behind a stamp, but saturating keeps the arithmetic safe
   // across an engine restart, which puts the clock back to zero.
@@ -558,7 +427,7 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
     item.since_key_on_ms = elapsed_ms(voice.key_on_sample);
     item.since_key_off_ms =
         voice.held ? -1.0 : elapsed_ms(voice.key_off_sample);
-    if (item.since_key_off_ms > keep_ms) {
+    if (ui::envelope::voice_expired(item.since_key_off_ms)) {
       continue;
     }
     item.recency = recency;
@@ -649,7 +518,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
 
   draw_time_grid(draw_list, plot, label_baseline, note_x - ui::scale::px(6.0f));
 
-  const ImU32 colors[kSegmentCount] = {
+  const PhaseColors colors = {
       color_from_slider_state(state.attack_rate),
       color_from_slider_state(state.decay_rate),
       color_from_slider_state(state.sustain_rate),
@@ -660,6 +529,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   struct DrawnVoice {
     const EnvelopeCurve *curve;
     ui::envelope::VoiceCursor cursor;
+    bool cursor_on_axis;
     float alpha;
   };
   // While a slider is being dragged the registers move under the cache every
@@ -684,20 +554,20 @@ render_envelope_image(const ym2612::OperatorSettings &op,
     const ui::envelope::VoiceCursor cursor =
         ui::envelope::cursor_for_voice(*voice_curve, voice.since_key_on_ms,
                                        voice.since_key_off_ms, plot.span_ms);
-    // A voice that has gone quiet fades out rather than vanishing on the
-    // frame its release ends.
-    const float fade = static_cast<float>(
-        std::clamp(1.0 - cursor.silent_for_ms / kVoiceFadeMs, 0.0, 1.0));
-    const float alpha = voice.recency * fade;
-    if (alpha < kVoiceMinAlpha) {
-      // Faded out for good rather than merely quiet: the silence a released
-      // voice sits in only ever gets older, so nothing can bring it back.
-      if (cursor.released && cursor.silent_for_ms >= kVoiceFadeMs) {
-        remember_finished(slot, voice.sequence);
-      }
+    const ui::envelope::VoiceVisibility shown =
+        ui::envelope::voice_visibility(cursor, plot.span_ms);
+    if (shown.finished) {
+      // The silence a released voice sits in only ever gets older, so nothing
+      // can bring it back.
+      remember_finished(slot, voice.sequence);
       continue;
     }
-    drawn[drawn_count++] = DrawnVoice{voice_curve, cursor, alpha};
+    const float alpha = voice.recency * static_cast<float>(shown.fade);
+    if (alpha < kVoiceMinAlpha) {
+      continue;
+    }
+    drawn[drawn_count++] =
+        DrawnVoice{voice_curve, cursor, shown.cursor_on_axis, alpha};
   }
 
   // Ghost curves oldest first, so the newest is the one on top of the others
@@ -723,12 +593,16 @@ render_envelope_image(const ym2612::OperatorSettings &op,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
 
-  draw_release_area(draw_list, curve, plot, colors[kRelease]);
-  draw_held_line(draw_list, curve, plot, segment_bounds(curve), colors);
+  draw_release_area(draw_list, curve, plot,
+                    phase_color(colors, ym2612_eg::EgPhase::Release));
+  draw_held_line(draw_list, curve, plot, colors);
   draw_level_markers(draw_list, curve, state, plot);
   // Over everything, so a cursor is never hidden under the curve it measures.
   const ImU32 cursor_base = ImGui::GetColorU32(ImGuiCol_FrameBgActive);
   for (int i = drawn_count - 1; i >= 0; --i) {
+    if (!drawn[i].cursor_on_axis) {
+      continue;
+    }
     draw_voice_cursor(
         draw_list, plot, drawn[i].cursor.ms,
         color_with_alpha(cursor_base, drawn[i].alpha * kVoiceCursorAlpha));
@@ -743,11 +617,12 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   if (!wanted) {
     return {};
   }
+  const ui::envelope::HandleMetrics unscaled;
   const ui::envelope::HandleMetrics metrics{
-      ui::scale::px(kHandleRadiusPx),
-      ui::scale::px(kHandleGrabPx),
-      ui::scale::px(kMinSustainHeightPx),
-      ui::scale::px(kMinSustainWidthPx),
+      ui::scale::px(unscaled.radius),
+      ui::scale::px(unscaled.grab),
+      ui::scale::px(unscaled.min_sustain_height),
+      ui::scale::px(unscaled.min_sustain_width),
   };
   return ui::envelope::handle_layout(curve, plot, op.ssg_enable, metrics);
 }
