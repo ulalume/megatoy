@@ -19,6 +19,7 @@ using ym2612_eg::graph::EnvelopeHandle;
 using ym2612_eg::graph::EnvelopeHandles;
 using ym2612_eg::graph::HandleEdit;
 using ym2612_eg::graph::HandleField;
+using ym2612_eg::graph::HandleFields;
 using ym2612_eg::graph::HandleGrab;
 using ym2612_eg::graph::HandleIndex;
 using ym2612_eg::graph::HandleMetrics;
@@ -33,6 +34,7 @@ using ym2612_eg::graph::kSustainHandle;
 
 using ym2612_eg::graph::drag_handle;
 using ym2612_eg::graph::grab_handle;
+using ym2612_eg::graph::handle_fields;
 using ym2612_eg::graph::handle_layout;
 using ym2612_eg::graph::nearest_handle;
 

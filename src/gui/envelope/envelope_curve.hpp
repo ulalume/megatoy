@@ -17,12 +17,19 @@
 namespace ui::envelope {
 
 using ym2612_eg::graph::EnvelopeCurve;
+using ym2612_eg::graph::PhaseRun;
+using ym2612_eg::graph::PhaseRuns;
+using ym2612_eg::graph::TraceVertex;
 using ym2612_eg::graph::VoiceCursor;
+using ym2612_eg::graph::VoiceVisibility;
 
+using ym2612_eg::graph::build_trace_path;
 using ym2612_eg::graph::cursor_for_voice;
 using ym2612_eg::graph::grid_step_ms;
-using ym2612_eg::graph::release_max_ms;
+using ym2612_eg::graph::held_phase_runs;
 using ym2612_eg::graph::same_envelope;
+using ym2612_eg::graph::voice_expired;
+using ym2612_eg::graph::voice_visibility;
 
 /// The single reference note every envelope graph is drawn at, and the only
 /// place the note is decided: everything downstream asks reference_pitch(),

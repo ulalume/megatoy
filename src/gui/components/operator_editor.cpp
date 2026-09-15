@@ -257,15 +257,8 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
   }
 }
 
-/**
- * The two parameters a handle stands for: the one it drags along the time
- * axis and the one it drags up and down. Either may be absent, and both are
- * one undo entry -- a drag that moves the peak moves TL and AR together.
- */
 struct HandleSpec {
   ui::envelope::HandleIndex handle;
-  std::optional<ym2612::OperatorField> across;
-  std::optional<ym2612::OperatorField> down;
   const char *name;
   /// Also the button's ID, which lives in the graph's own window and so
   /// cannot collide with the slider's.
@@ -274,15 +267,33 @@ struct HandleSpec {
 
 /// In the order the parameters they stand for run.
 constexpr HandleSpec kHandleSpecs[] = {
-    {ui::envelope::kAttackHandle, ym2612::OperatorField::AttackRate,
-     ym2612::OperatorField::TotalLevel, "Attack Peak", "attack_peak"},
-    {ui::envelope::kDecayHandle, ym2612::OperatorField::DecayRate,
-     ym2612::OperatorField::SustainLevel, "Decay Knee", "decay_knee"},
-    {ui::envelope::kSustainHandle, std::nullopt,
-     ym2612::OperatorField::SustainRate, "Sustain Rate", "sustain_rate"},
-    {ui::envelope::kReleaseHandle, ym2612::OperatorField::ReleaseRate,
-     std::nullopt, "Release Rate", "release_rate"},
+    {ui::envelope::kAttackHandle, "Attack Peak", "attack_peak"},
+    {ui::envelope::kDecayHandle, "Decay Knee", "decay_knee"},
+    {ui::envelope::kSustainHandle, "Sustain Rate", "sustain_rate"},
+    {ui::envelope::kReleaseHandle, "Release Rate", "release_rate"},
 };
+
+/**
+ * The two parameters a handle stands for: the one it drags along the time
+ * axis and the one it drags up and down. Either may be absent, and both are
+ * one undo entry -- a drag that moves the peak moves TL and AR together.
+ */
+struct HandleAxes {
+  std::optional<ym2612::OperatorField> across;
+  std::optional<ym2612::OperatorField> down;
+};
+
+HandleAxes axes_of(ui::envelope::HandleIndex handle) {
+  const ui::envelope::HandleFields fields = ui::envelope::handle_fields(handle);
+  HandleAxes axes;
+  if (fields.across) {
+    axes.across = ui::envelope::field_of(*fields.across);
+  }
+  if (fields.down) {
+    axes.down = ui::envelope::field_of(*fields.down);
+  }
+  return axes;
+}
 
 /// What a drag remembers between frames. ImGui has one active item, so there
 /// is one of these however many graphs are on screen.
@@ -374,6 +385,7 @@ HandleTouch operator_handle(OperatorWidget &widget,
 
   auto &state = widget.editor.operator_edit;
   HandleDrag &drag = handle_drag();
+  const HandleAxes axes = axes_of(spec.handle);
   const ui::envelope::PlotArea &plot = handles.plot;
   const float grab = handles.metrics.grab;
   // The box stays inside the plot: half of one hanging over the edge is half
@@ -394,13 +406,13 @@ HandleTouch operator_handle(OperatorWidget &widget,
     drag.id = id;
     drag.grab_mouse = ImGui::GetIO().MousePos;
     drag.grab = ui::envelope::grab_handle(handles, spec.handle);
-    if (spec.across) {
+    if (axes.across) {
       ym2612::capture_operator_baseline(drag.across, widget.instrument,
-                                        *spec.across, widget.slot);
+                                        *axes.across, widget.slot);
     }
-    if (spec.down) {
+    if (axes.down) {
       ym2612::capture_operator_baseline(drag.down, widget.instrument,
-                                        *spec.down, widget.slot);
+                                        *axes.down, widget.slot);
     }
   }
 
@@ -425,9 +437,9 @@ HandleTouch operator_handle(OperatorWidget &widget,
       const ym2612::OperatorField field =
           ui::envelope::field_of(edit.writes[i].field);
       const ym2612::OperatorEditBaseline *baseline = nullptr;
-      if (spec.across && field == *spec.across) {
+      if (axes.across && field == *axes.across) {
         baseline = &drag.across;
-      } else if (spec.down && field == *spec.down) {
+      } else if (axes.down && field == *axes.down) {
         baseline = &drag.down;
       }
       if (baseline == nullptr) {
@@ -445,7 +457,7 @@ HandleTouch operator_handle(OperatorWidget &widget,
   update_slider_state(touch.lit);
   // Both of a handle's parameters light up together: they are the two halves
   // of the one point being pointed at.
-  for (const auto &field : {spec.across, spec.down}) {
+  for (const auto &field : {axes.across, axes.down}) {
     if (!field) {
       continue;
     }
