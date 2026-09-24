@@ -111,6 +111,9 @@ enable_testing()
 add_executable(random_utils_test tests/core/random_utils_test.cpp src/core/random_utils.cpp)
 target_include_directories(random_utils_test PRIVATE src)
 add_test(NAME random_utils_test COMMAND random_utils_test)
+add_executable(scale_test tests/core/scale_test.cpp)
+target_link_libraries(scale_test PRIVATE megatoy_core)
+add_test(NAME scale_test COMMAND scale_test)
 add_executable(patch_registry_test tests/core/patch_registry_test.cpp)
 target_include_directories(patch_registry_test PRIVATE src)
 target_link_libraries(patch_registry_test PRIVATE megatoy_core)
@@ -248,7 +251,7 @@ add_test(NAME platform_macro_include_test
 
 # Convenience target to build and run tests
 add_custom_target(check
-  DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test
+  DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test scale_test
           subsystem_tests ym2612_render_test analyzer_test command_queue_test
           performance_test load_meter_test
           ginpkg_history_test patch_write_test status_test
