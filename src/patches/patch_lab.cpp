@@ -1,5 +1,6 @@
 #include "patch_lab.hpp"
 #include "core/random_utils.hpp"
+#include "formats/ym2612_format_adapter.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <array>
@@ -166,6 +167,16 @@ std::vector<CategoryChoice> category_choices() {
   return result;
 }
 
+// The register encoding is sign-magnitude, so interpolating it directly is not
+// monotonic in pitch. Rounding is done on the signed offset.
+uint8_t blend_detune(uint8_t a, uint8_t b, float t) {
+  constexpr int kLinearZero = 3;
+  const int signed_a = formats::adapter::detune_to_linear(a) - kLinearZero;
+  const int signed_b = formats::adapter::detune_to_linear(b) - kLinearZero;
+  return formats::adapter::detune_from_linear(
+      lerp_value(signed_a, signed_b, t) + kLinearZero);
+}
+
 void blend_operator(const ym2612::OperatorSettings &src,
                     ym2612::OperatorSettings &dst,
                     const ym2612::OperatorSettings &other, float t,
@@ -186,7 +197,7 @@ void blend_operator(const ym2612::OperatorSettings &src,
       static_cast<uint8_t>(lerp_value(src.key_scale, other.key_scale, t));
   dst.multiple =
       static_cast<uint8_t>(lerp_value(src.multiple, other.multiple, t));
-  dst.detune = static_cast<uint8_t>(lerp_value(src.detune, other.detune, t));
+  dst.detune = blend_detune(src.detune, other.detune, t);
   dst.ssg_type_envelope_control = src.ssg_type_envelope_control;
 
   const float threshold = static_cast<float>(operator_index + 1) / 4.0f;

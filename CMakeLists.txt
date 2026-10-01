@@ -150,6 +150,10 @@ add_executable(patch_write_test tests/patches/patch_write_test.cpp)
 target_include_directories(patch_write_test PRIVATE src)
 target_link_libraries(patch_write_test PRIVATE megatoy_core)
 add_test(NAME patch_write_test COMMAND patch_write_test)
+add_executable(patch_lab_test tests/patches/patch_lab_test.cpp)
+target_include_directories(patch_lab_test PRIVATE src)
+target_link_libraries(patch_lab_test PRIVATE megatoy_core)
+add_test(NAME patch_lab_test COMMAND patch_lab_test)
 add_executable(filename_utils_test tests/patches/filename_utils_test.cpp)
 target_include_directories(filename_utils_test PRIVATE src)
 target_link_libraries(filename_utils_test PRIVATE megatoy_core)
@@ -251,7 +255,7 @@ add_custom_target(check
   DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test
           subsystem_tests ym2612_render_test analyzer_test command_queue_test
           performance_test load_meter_test
-          ginpkg_history_test patch_write_test status_test
+          ginpkg_history_test patch_write_test patch_lab_test status_test
           filename_utils_test utf8_utils_test
           patch_repository_delete_test patch_repository_rename_test
           folder_metadata_test patch_tree_flatten_test
