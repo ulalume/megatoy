@@ -4,6 +4,7 @@
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <array>
+#include <initializer_list>
 #include <random>
 #include <string_view>
 
@@ -215,20 +216,32 @@ void blend_operator(const ym2612::OperatorSettings &src,
   }
 }
 
-void clamp_carrier_levels(ym2612::ChannelInstrument &instrument,
-                          int max_total_level) {
-  auto modulator_count =
-      ym2612::algorithm_modulator_count[instrument.algorithm];
-  for (int i = modulator_count; i < 4; ++i) {
-    auto &op = instrument.operators[i];
-    if (op.total_level > max_total_level) {
-      op.total_level = static_cast<uint8_t>(max_total_level);
+using Sources = std::initializer_list<const ym2612::ChannelInstrument *>;
+
+// Limits a carrier's TL to `cap`, or to its higher TL as a carrier in one of
+// the sources. A former modulator's TL is therefore brought down, while a
+// carrier that was already silenced stays silent.
+void limit_carrier_level(ym2612::ChannelInstrument &instrument, int index,
+                         int cap, Sources sources) {
+  if (index < ym2612::algorithm_modulator_count[instrument.algorithm]) {
+    return;
+  }
+  int limit = cap;
+  for (const auto *source : sources) {
+    if (index >= ym2612::algorithm_modulator_count[source->algorithm]) {
+      limit = std::max<int>(limit, source->operators[index].total_level);
     }
+  }
+  auto &op = instrument.operators[index];
+  if (op.total_level > limit) {
+    op.total_level = static_cast<uint8_t>(limit);
   }
 }
 
 void normalize_patch_volume(ym2612::Patch &patch, int max_carrier_level) {
-  clamp_carrier_levels(patch.instrument, max_carrier_level);
+  for (int i = 0; i < 4; ++i) {
+    limit_carrier_level(patch.instrument, i, max_carrier_level, {});
+  }
 }
 
 int apply_variation(int value, const Range &range, int amount,
@@ -461,12 +474,10 @@ OperationResult merge(const ym2612::Patch &a, const ym2612::Patch &b,
       random_bool(rng) ? a.instrument.algorithm : b.instrument.algorithm;
 
   for (int i = 0; i < 4; ++i) {
-    patch.instrument.operators[i] = random_bool(rng)
-                                        ? a.instrument.operators[i]
-                                        : b.instrument.operators[i];
+    const auto &source = random_bool(rng) ? a.instrument : b.instrument;
+    patch.instrument.operators[i] = source.operators[i];
+    limit_carrier_level(patch.instrument, i, 42, {&source});
   }
-
-  normalize_patch_volume(patch, 42);
 
   result.patch = std::move(patch);
   return result;
@@ -528,6 +539,12 @@ OperationResult morph(const ym2612::Patch &a, const ym2612::Patch &b,
 
   const float mix = std::clamp(options.mix, 0.0f, 1.0f);
 
+  if (mix <= 0.0f || mix >= 1.0f) {
+    result.patch = mix <= 0.0f ? a : b;
+    result.patch.name.clear();
+    return result;
+  }
+
   ym2612::Patch patch = a;
   patch.name.clear();
 
@@ -563,10 +580,11 @@ OperationResult morph(const ym2612::Patch &a, const ym2612::Patch &b,
   for (int i = 0; i < 4; ++i) {
     blend_operator(a.instrument.operators[i], patch.instrument.operators[i],
                    b.instrument.operators[i], mix, i);
+    limit_carrier_level(patch.instrument, i, 40,
+                        {&a.instrument, &b.instrument});
   }
 
   result.patch = std::move(patch);
-  normalize_patch_volume(result.patch, 40);
   return result;
 }
 
@@ -575,6 +593,7 @@ MutateResult mutate_in_place(ym2612::Patch &patch,
   MutateResult result;
   auto rng = make_rng(options.seed, result.seed);
 
+  const ym2612::ChannelInstrument original = patch.instrument;
   std::bernoulli_distribution mutate(options.probability);
 
   if (mutate(rng)) {
@@ -615,9 +634,9 @@ MutateResult mutate_in_place(ym2612::Patch &patch,
 
   for (int i = 0; i < 4; ++i) {
     mutate_operator(patch.instrument.operators[i], rng, options);
+    limit_carrier_level(patch.instrument, i, 42, {&original});
   }
 
-  normalize_patch_volume(patch, 42);
   return result;
 }
 
