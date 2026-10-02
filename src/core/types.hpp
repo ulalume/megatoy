@@ -195,8 +195,8 @@ inline std::vector<Key> keys_from_scale_and_key(Scale scale, Key key) {
         shift_key(Key::D, static_cast<uint8_t>(key)),
         shift_key(Key::D_SHARP, static_cast<uint8_t>(key)),
         shift_key(Key::E, static_cast<uint8_t>(key)),
-        shift_key(Key::G_SHARP, static_cast<uint8_t>(key)),
-        shift_key(Key::A_SHARP, static_cast<uint8_t>(key)),
+        shift_key(Key::G, static_cast<uint8_t>(key)),
+        shift_key(Key::A, static_cast<uint8_t>(key)),
     };
   case Scale::MINOR_BLUES:
     return {
