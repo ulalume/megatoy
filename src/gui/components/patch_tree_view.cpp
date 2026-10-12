@@ -61,7 +61,94 @@ struct PatchTreeCache {
     }
     ++open_revision;
   }
+
+  void follow(const std::string &from, const std::string &to) {
+    const std::string prefix = from + "/";
+    std::vector<std::string> followed;
+    for (const auto &path : open_directories) {
+      if (path == from || path.rfind(prefix, 0) == 0) {
+        followed.push_back(to + path.substr(from.size()));
+      }
+    }
+    open_directories.insert(followed.begin(), followed.end());
+    ++open_revision;
+  }
 };
+
+constexpr const char *kEntryPayload = "MEGATOY_PATCH_ENTRY";
+
+const patches::PatchEntry *
+find_by_relative_path(const std::vector<patches::PatchEntry> &entries,
+                      const std::string &relative_path) {
+  for (const auto &entry : entries) {
+    if (entry.relative_path == relative_path) {
+      return &entry;
+    }
+    if (relative_path.rfind(entry.relative_path + "/", 0) == 0) {
+      return find_by_relative_path(entry.children, relative_path);
+    }
+  }
+  return nullptr;
+}
+
+/// Lets the last drawn item be dragged onto a folder. Workspace folders and
+/// anything that cannot be renamed stay put.
+void entry_drag_source(const PatchSelectorContext &context,
+                       const patches::PatchEntry &entry, int depth) {
+  if (!context.move_patch || depth == 0 || !ImGui::IsItemActive() ||
+      !entry_can_rename(context, entry)) {
+    return;
+  }
+  if (ImGui::BeginDragDropSource()) {
+    ImGui::SetDragDropPayload(kEntryPayload, entry.relative_path.data(),
+                              entry.relative_path.size());
+    ImGui::TextUnformatted(entry.name.c_str());
+    ImGui::EndDragDropSource();
+  }
+}
+
+/// Makes the last drawn folder row accept the entries it can take.
+void folder_drop_target(PatchSelectorContext &context,
+                        const patches::PatchEntry &folder) {
+  if (!context.move_patch || !ImGui::BeginDragDropTarget()) {
+    return;
+  }
+  const ImGuiPayload *payload = ImGui::GetDragDropPayload();
+  if (payload != nullptr && payload->IsDataType(kEntryPayload)) {
+    const std::string relative_path(
+        static_cast<const char *>(payload->Data),
+        static_cast<std::size_t>(payload->DataSize));
+    const auto *source =
+        find_by_relative_path(context.repository.tree(), relative_path);
+    if (source != nullptr && context.session.can_move_patch(*source, folder) &&
+        ImGui::AcceptDragDropPayload(kEntryPayload) != nullptr) {
+      context.pending_move = PendingMove{*source, folder};
+    }
+  }
+  ImGui::EndDragDropTarget();
+}
+
+/// F2 renames and Delete or Backspace deletes the focused row, wherever its
+/// context menu would offer the same.
+void handle_row_keys(PatchSelectorContext &context,
+                     const patches::PatchEntry &entry) {
+  if (!ImGui::IsItemFocused() || ImGui::GetIO().WantTextInput ||
+      !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
+      ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId |
+                                      ImGuiPopupFlags_AnyPopupLevel)) {
+    return;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
+    if (entry_can_rename(context, entry)) {
+      context.rename_patch(entry);
+    }
+  } else if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) ||
+             ImGui::IsKeyPressed(ImGuiKey_Backspace, false)) {
+    if (entry_can_delete(context, entry)) {
+      context.delete_patch(entry);
+    }
+  }
+}
 
 /**
  * Reproduces the layout of the recursion this list replaced: each level used
@@ -99,6 +186,9 @@ void render_directory_row(PatchSelectorContext &context, const TreeRow &row,
   entry_context_menu(context, item,
                      row.depth == 0 &&
                          item.relative_path != kBuiltinPresetRoot);
+  entry_drag_source(context, item, row.depth);
+  folder_drop_target(context, item);
+  handle_row_keys(context, item);
   if (open != row.is_open) {
     cache.set_open(item.relative_path, open);
   }
@@ -126,6 +216,8 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
   }
   entry_context_menu(context, item);
   show_patch_tooltip(item);
+  entry_drag_source(context, item, row.depth);
+  handle_row_keys(context, item);
 
   ImGui::SameLine();
   const ImVec4 format_color =
@@ -137,6 +229,8 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
   ImGui::PopStyleColor();
   entry_context_menu(context, item);
   show_patch_tooltip(item);
+  entry_drag_source(context, item, row.depth);
+  handle_row_keys(context, item);
 
   if ((name_clicked || format_clicked) && context.safe_load_patch) {
     context.safe_load_patch(item);
@@ -160,6 +254,10 @@ PatchTreeCache &tree_cache() {
 
 void open_tree_directory(const std::string &relative_path) {
   tree_cache().set_open(relative_path, true);
+}
+
+void follow_tree_directory(const std::string &from, const std::string &to) {
+  tree_cache().follow(from, to);
 }
 
 bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,

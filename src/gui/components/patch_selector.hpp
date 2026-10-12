@@ -17,6 +17,11 @@ enum class SortOrder { Ascending, Descending };
 
 enum class PendingMenuAction { Refresh, SaveCurrent };
 
+struct PendingMove {
+  patches::PatchEntry entry;
+  patches::PatchEntry destination;
+};
+
 struct PatchSelectorContext {
   patches::PatchRepository &repository;
   patches::PatchSession &session;
@@ -42,6 +47,9 @@ struct PatchSelectorContext {
   std::function<void(const std::filesystem::path &)> remove_folder;
   std::function<void(const patches::PatchEntry &)> rename_patch;
   std::function<void(const patches::PatchEntry &)> delete_patch;
+  /// Move an entry into a folder.
+  std::function<void(const patches::PatchEntry &, const patches::PatchEntry &)>
+      move_patch;
   /// Copy the entry's patch to a new file, leaving the editor alone.
   std::function<void(const patches::PatchEntry &)> duplicate_patch;
   /// Ask for a new patch in this folder. Only offered on a folder the
@@ -51,6 +59,8 @@ struct PatchSelectorContext {
   std::function<void(const std::filesystem::path &)> create_folder_in;
   std::optional<std::filesystem::path> pending_remove_folder;
   std::optional<PendingMenuAction> pending_menu_action;
+  /// A drop in the tree, carried out once the tree is no longer being drawn.
+  std::optional<PendingMove> pending_move;
 
   TableSortColumn get_sort_column() const {
     return static_cast<TableSortColumn>(prefs.patch_sort_column);

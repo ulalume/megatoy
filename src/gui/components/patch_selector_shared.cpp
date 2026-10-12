@@ -53,6 +53,19 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
   ImGui::SetTooltip("%s", tooltip.c_str());
 }
 
+bool entry_can_rename(const PatchSelectorContext &context,
+                      const patches::PatchEntry &entry) {
+  const bool protected_folder = context.folder_is_protected &&
+                                context.folder_is_protected(entry.full_path);
+  return context.rename_patch && !protected_folder &&
+         context.repository.can_rename_patch(entry);
+}
+
+bool entry_can_delete(const PatchSelectorContext &context,
+                      const patches::PatchEntry &entry) {
+  return context.delete_patch && context.repository.can_delete_patch(entry);
+}
+
 void entry_context_menu(PatchSelectorContext &context,
                         const patches::PatchEntry &entry,
                         bool allow_remove_folder) {
@@ -89,10 +102,8 @@ void entry_context_menu(PatchSelectorContext &context,
 
   const bool protected_folder = context.folder_is_protected &&
                                 context.folder_is_protected(entry.full_path);
-  const bool can_rename = context.rename_patch && !protected_folder &&
-                          context.repository.can_rename_patch(entry);
-  const bool can_delete =
-      context.delete_patch && context.repository.can_delete_patch(entry);
+  const bool can_rename = entry_can_rename(context, entry);
+  const bool can_delete = entry_can_delete(context, entry);
   const bool can_remove_folder =
       allow_remove_folder && context.remove_folder && !protected_folder;
 

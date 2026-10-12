@@ -19,6 +19,12 @@ extern const std::array<std::string_view, 6> kStarLabelsMini;
 /// Tooltip with format, path and metadata for the last drawn item.
 void show_patch_tooltip(const patches::PatchEntry &entry);
 
+/// Whether the entry offers Rename and Delete, in its menu and by key.
+bool entry_can_rename(const PatchSelectorContext &context,
+                      const patches::PatchEntry &entry);
+bool entry_can_delete(const PatchSelectorContext &context,
+                      const patches::PatchEntry &entry);
+
 /// Right-click menu for the last drawn item.
 void entry_context_menu(PatchSelectorContext &context,
                         const patches::PatchEntry &entry,

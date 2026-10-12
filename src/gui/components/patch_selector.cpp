@@ -9,6 +9,7 @@
 #include <IconsFontAwesome7.h>
 #include <imgui.h>
 #include <string>
+#include <utility>
 
 namespace ui {
 
@@ -102,6 +103,17 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     const auto folder = *context.pending_remove_folder;
     context.pending_remove_folder.reset();
     context.remove_folder(folder);
+  }
+
+  if (context.pending_move && context.move_patch) {
+    const auto move = std::move(*context.pending_move);
+    context.pending_move.reset();
+    if (move.entry.is_directory) {
+      follow_tree_directory(move.entry.relative_path,
+                            move.destination.relative_path + "/" +
+                                move.entry.full_path.filename().string());
+    }
+    context.move_patch(move.entry, move.destination);
   }
 
   if (context.pending_menu_action) {

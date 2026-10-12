@@ -38,6 +38,7 @@
 #include <cassert>
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -245,52 +246,126 @@ std::size_t count_patches(const patches::PatchEntry &entry) {
   return total;
 }
 
-/// Rename, and on the web wait for browser storage: IndexedDB keys files by
-/// path, so renaming a folder rewrites every patch under it.
-void perform_patch_rename(AppContext &ctx, const patches::PatchEntry &entry,
-                          const std::string &new_stem) {
-  auto &session = ctx.services.patch_session;
+/// Run `action`, on the web only once a folder big enough to keep browser
+/// storage busy for a while has been confirmed.
+void confirm_large_folder_change(AppContext &ctx,
+                                 const patches::PatchEntry &entry,
+                                 const std::string &title,
+                                 const std::string &consequence,
+                                 const std::string &button,
+                                 std::function<void()> action) {
 #if defined(MEGATOY_PLATFORM_WEB)
-  auto &preferences = ctx.services.preference_manager;
+  constexpr std::size_t kWarnThreshold = 200;
+  const std::size_t patches = count_patches(entry);
+  if (entry.is_directory && patches >= kWarnThreshold) {
+    ctx.ui_state().danger_confirmation_state.request(
+        title,
+        "\"" + entry.name + "\" holds " + std::to_string(patches) +
+            " patches.\n\n" + consequence,
+        button, std::move(action));
+    return;
+  }
+#else
+  (void)ctx;
+  (void)entry;
+  (void)title;
+  (void)consequence;
+  (void)button;
+#endif
+  action();
+}
+
+/// After a folder changed path, report once browser storage has it: IndexedDB
+/// keys files by path, so every patch under the folder is rewritten. Elsewhere
+/// the change is already on disk.
+void report_folder_change(AppContext &ctx, const patches::PatchEntry &entry,
+                          const std::filesystem::path &new_path,
+                          const std::string &progress,
+                          const std::string &success,
+                          const std::string &failure,
+                          const std::string &undone) {
+#if defined(MEGATOY_PLATFORM_WEB)
   const auto old_path = entry.full_path;
   const bool was_workspace_folder =
-      entry.is_directory && preferences.workspace().find(old_path) != nullptr;
+      ctx.services.preference_manager.workspace().find(new_path) != nullptr;
+  const bool started = platform::web::begin_awaited_flush(
+      progress, "Saving the change to browser storage.",
+      [&ctx, new_path, old_path, was_workspace_folder, success, failure,
+       undone](bool ok, std::string error) {
+        if (ok) {
+          megatoy::status::success(success);
+          return;
+        }
+        // Storage kept the old path, so the workspace has to point there
+        // again or a reload finds the folder missing.
+        if (was_workspace_folder) {
+          ctx.services.preference_manager.rename_workspace_folder(new_path,
+                                                                  old_path);
+        }
+        megatoy::status::error(failure + ": " + error + " -- " + undone);
+      });
+  if (!started) {
+    megatoy::status::warning("Another storage operation is in progress.");
+  }
+#else
+  (void)ctx;
+  (void)entry;
+  (void)new_path;
+  (void)progress;
+  (void)failure;
+  (void)undone;
+  megatoy::status::success(success);
 #endif
+}
 
-  if (!session.rename_patch(entry, new_stem)) {
+void perform_patch_rename(AppContext &ctx, const patches::PatchEntry &entry,
+                          const std::string &new_stem) {
+  if (!ctx.services.patch_session.rename_patch(entry, new_stem)) {
     megatoy::status::error("Could not rename \"" + entry.name + "\".");
     return;
   }
-
-#if defined(MEGATOY_PLATFORM_WEB)
-  if (entry.is_directory) {
-    const auto new_path = old_path.parent_path() / new_stem;
-    const bool started = platform::web::begin_awaited_flush(
-        "Renaming \"" + entry.name + "\"...",
-        "Saving the change to browser storage.",
-        [&ctx, new_stem, new_path, old_path,
-         was_workspace_folder](bool ok, std::string error) {
-          if (ok) {
-            megatoy::status::success("Renamed to \"" + new_stem + "\".");
-            return;
-          }
-          // Storage kept the old name, so the workspace has to point there
-          // again or a reload finds the folder missing.
-          if (was_workspace_folder) {
-            ctx.services.preference_manager.rename_workspace_folder(new_path,
-                                                                    old_path);
-          }
-          megatoy::status::error("Could not save the rename: " + error +
-                                 " -- the old name comes back after a reload.");
-        });
-    if (!started) {
-      megatoy::status::warning("Another storage operation is in progress.");
-    }
+  const std::string success = "Renamed to \"" + new_stem + "\".";
+  if (!entry.is_directory) {
+    megatoy::status::success(success);
     return;
   }
-#endif
+  report_folder_change(ctx, entry, entry.full_path.parent_path() / new_stem,
+                       "Renaming \"" + entry.name + "\"...", success,
+                       "Could not save the rename",
+                       "the old name comes back after a reload.");
+}
 
-  megatoy::status::success("Renamed to \"" + new_stem + "\".");
+void perform_patch_move(AppContext &ctx, const patches::PatchEntry &entry,
+                        const patches::PatchEntry &destination) {
+  const auto target = destination.full_path / entry.full_path.filename();
+  std::error_code error;
+  if (std::filesystem::exists(target, error)) {
+    megatoy::status::error("\"" + destination.name + "\" already has \"" +
+                           entry.name + "\".");
+    return;
+  }
+  if (error || !ctx.services.patch_session.move_patch(entry, destination)) {
+    megatoy::status::error("Could not move \"" + entry.name + "\".");
+    return;
+  }
+  const std::string success =
+      "Moved \"" + entry.name + "\" to \"" + destination.name + "\".";
+  if (!entry.is_directory) {
+    megatoy::status::success(success);
+    return;
+  }
+  report_folder_change(ctx, entry, target, "Moving \"" + entry.name + "\"...",
+                       success, "Could not save the move",
+                       "it moves back after a reload.");
+}
+
+void request_patch_move(AppContext &ctx, const patches::PatchEntry &entry,
+                        const patches::PatchEntry &destination) {
+  confirm_large_folder_change(ctx, entry, "Move Folder?",
+                              "Moving may take a while.", "Move",
+                              [&ctx, entry, destination]() {
+                                perform_patch_move(ctx, entry, destination);
+                              });
 }
 
 void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
@@ -309,23 +384,11 @@ void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
   ctx.ui_state().text_prompt_state.request(
       title, label, initial, "Rename",
       [&ctx, entry](const std::string &new_stem) {
-#if defined(MEGATOY_PLATFORM_WEB)
-        // Browser storage rewrites every patch under the folder, so a big one
-        // is worth warning about first.
-        constexpr std::size_t kWarnThreshold = 200;
-        const std::size_t patches = count_patches(entry);
-        if (entry.is_directory && patches >= kWarnThreshold) {
-          ctx.ui_state().danger_confirmation_state.request(
-              "Rename Folder?",
-              "\"" + entry.name + "\" holds " + std::to_string(patches) +
-                  " patches.\n\nRenaming may take a while.",
-              "Rename", [&ctx, entry, new_stem]() {
-                perform_patch_rename(ctx, entry, new_stem);
-              });
-          return;
-        }
-#endif
-        perform_patch_rename(ctx, entry, new_stem);
+        confirm_large_folder_change(
+            ctx, entry, "Rename Folder?", "Renaming may take a while.",
+            "Rename", [&ctx, entry, new_stem]() {
+              perform_patch_rename(ctx, entry, new_stem);
+            });
       },
       [entry, is_directory](const std::string &new_stem) {
         if (new_stem.empty()) {
@@ -716,6 +779,10 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_deletion(ctx, entry);
+      },
+      [&ctx](const patches::PatchEntry &entry,
+             const patches::PatchEntry &destination) {
+        request_patch_move(ctx, entry, destination);
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_duplicate(ctx, entry);

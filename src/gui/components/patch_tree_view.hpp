@@ -21,4 +21,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 /// Expand a folder of the tree, by its relative path.
 void open_tree_directory(const std::string &relative_path);
 
+/// Expand at `to` whatever is expanded at or below `from`, for a folder about
+/// to move there. What stays expanded at `from` is harmless if it does move.
+void follow_tree_directory(const std::string &from, const std::string &to);
+
 } // namespace ui::selector_detail
