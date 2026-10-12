@@ -48,6 +48,10 @@ public:
   bool delete_patch(const PatchEntry &entry) override;
   bool rename_patch(const PatchEntry &entry,
                     const std::string &new_stem) override;
+  bool can_move_patch(const PatchEntry &entry,
+                      const PatchEntry &destination) const override;
+  bool move_patch(const PatchEntry &entry,
+                  const PatchEntry &destination) override;
   bool can_edit_metadata(const PatchEntry &entry) const override;
   bool is_writable() const override { return writable_; }
   std::string_view label() const override { return label_; }
@@ -116,6 +120,8 @@ private:
   /// Strip the root label so metadata keys stay relative to the folder.
   std::string metadata_key(const std::string &relative_path) const;
   bool owns_relative_path(const std::string &relative_path) const;
+  /// The entry's path on disk is the one its relative path maps to.
+  bool maps_to_own_path(const PatchEntry &entry) const;
 };
 
 } // namespace patches

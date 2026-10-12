@@ -97,6 +97,11 @@ public:
   bool can_rename_patch(const PatchEntry &entry) const;
   bool delete_patch(const PatchEntry &entry);
   bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
+  /// Moves stay inside one workspace folder: the storage that owns `entry`
+  /// has to own `destination` too.
+  bool can_move_patch(const PatchEntry &entry,
+                      const PatchEntry &destination) const;
+  bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
   bool can_edit_metadata(const PatchEntry &entry) const;
 
   // Batch operations

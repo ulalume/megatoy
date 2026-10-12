@@ -609,77 +609,107 @@ std::filesystem::path rebase(const std::filesystem::path &path,
 
 } // namespace
 
-bool PatchSession::rename_patch(const PatchEntry &entry,
-                                const std::string &new_stem) {
-  const auto old_path = entry.full_path;
+std::optional<PatchSession::Relocation>
+PatchSession::prepare_relocation(const PatchEntry &entry,
+                                 std::filesystem::path to) const {
+  Relocation relocation;
+  relocation.from = entry.full_path;
+  relocation.to = std::move(to);
 
-  // A folder is registered in the workspace by path, so a renamed one has to
-  // be followed there too or it comes back missing on the next launch. Looked
-  // up before the rename: once the directory is gone its old path no longer
-  // resolves to what is stored.
-  std::optional<std::filesystem::path> workspace_folder;
+  // A folder is registered in the workspace by path, so a relocated one has
+  // to be followed there too or it comes back missing on the next launch.
+  // Looked up before the change: once the directory is gone its old path no
+  // longer resolves to what is stored.
   if (entry.is_directory) {
-    if (const auto *folder = preferences_.workspace().find(old_path)) {
+    if (const auto *folder = preferences_.workspace().find(relocation.from)) {
       if (preferences_.workspace_folder_is_protected(folder->path)) {
-        return false;
+        return std::nullopt;
       }
-      workspace_folder = folder->path;
+      relocation.workspace_folder = folder->path;
     }
   }
 
-  // Resolved before the rename as well, because every relative path under the
-  // renamed entry is about to change.
-  std::optional<std::filesystem::path> current_absolute;
   if (!current_patch_path_.empty()) {
     auto resolved = repository_->to_absolute_path(current_patch_path_);
     if (resolved.is_absolute()) {
-      current_absolute = std::move(resolved);
+      relocation.current_absolute = std::move(resolved);
+    }
+    if (current_patch_selection_path_.rfind(current_patch_path_, 0) == 0) {
+      relocation.selection_suffix =
+          current_patch_selection_path_.substr(current_patch_path_.size());
     }
   }
-  std::string selection_suffix;
-  if (!current_patch_path_.empty() &&
-      current_patch_selection_path_.rfind(current_patch_path_, 0) == 0) {
-    selection_suffix =
-        current_patch_selection_path_.substr(current_patch_path_.size());
-  }
+  return relocation;
+}
 
-  const bool is_directory = entry.is_directory;
-  const auto target =
-      old_path.parent_path() /
-      (is_directory ? new_stem : new_stem + old_path.extension().string());
-
-  if (!repository_->rename_patch(entry, new_stem)) {
-    return false;
-  }
-
-  if (workspace_folder) {
-    preferences_.rename_workspace_folder(*workspace_folder, target);
+void PatchSession::follow_relocation(const Relocation &relocation,
+                                     bool renamed) {
+  if (relocation.workspace_folder) {
+    preferences_.rename_workspace_folder(*relocation.workspace_folder,
+                                         relocation.to);
     repository_->sync_workspace();
   }
 
-  if (!current_absolute) {
-    return true;
+  if (!relocation.current_absolute) {
+    return;
   }
 
   // Follow the current patch to wherever it ended up, if it was inside what
-  // was renamed at all. Anything else keeps the path it already had -- which
+  // changed at all. Anything else keeps the path it already had -- which
   // includes patches from outside the workspace entirely.
-  const auto moved = rebase(*current_absolute, old_path, target);
-  if (moved == *current_absolute) {
-    return true;
+  const auto moved =
+      rebase(*relocation.current_absolute, relocation.from, relocation.to);
+  if (moved == *relocation.current_absolute) {
+    return;
   }
 
   const auto relative = repository_->to_relative_path(moved);
   if (relative.is_absolute()) {
     set_current_patch_path({});
-    return true;
+    return;
   }
   set_current_patch_path(relative);
-  if (!selection_suffix.empty()) {
+  if (!relocation.selection_suffix.empty()) {
     set_current_patch_selection_path(relative.generic_string() +
-                                     selection_suffix);
+                                     relocation.selection_suffix);
   }
-  set_file_identity(moved);
+  if (renamed) {
+    set_file_identity(moved);
+  }
+}
+
+bool PatchSession::rename_patch(const PatchEntry &entry,
+                                const std::string &new_stem) {
+  const auto &old_path = entry.full_path;
+  auto relocation = prepare_relocation(
+      entry,
+      old_path.parent_path() /
+          (entry.is_directory ? new_stem
+                              : new_stem + old_path.extension().string()));
+  if (!relocation || !repository_->rename_patch(entry, new_stem)) {
+    return false;
+  }
+  follow_relocation(*relocation, /*renamed=*/true);
+  return true;
+}
+
+bool PatchSession::can_move_patch(const PatchEntry &entry,
+                                  const PatchEntry &destination) const {
+  if (entry.is_directory &&
+      preferences_.workspace_folder_is_protected(entry.full_path)) {
+    return false;
+  }
+  return repository_->can_move_patch(entry, destination);
+}
+
+bool PatchSession::move_patch(const PatchEntry &entry,
+                              const PatchEntry &destination) {
+  auto relocation = prepare_relocation(entry, destination.full_path /
+                                                  entry.full_path.filename());
+  if (!relocation || !repository_->move_patch(entry, destination)) {
+    return false;
+  }
+  follow_relocation(*relocation, /*renamed=*/false);
   return true;
 }
 

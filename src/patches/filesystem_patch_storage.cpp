@@ -223,9 +223,69 @@ bool FilesystemPatchStorage::can_rename_patch(const PatchEntry &entry) const {
     return false;
   }
 
+  return maps_to_own_path(entry);
+}
+
+bool FilesystemPatchStorage::maps_to_own_path(const PatchEntry &entry) const {
   const auto mapped = to_absolute_path(entry.relative_path);
   return mapped &&
          mapped->lexically_normal() == entry.full_path.lexically_normal();
+}
+
+bool FilesystemPatchStorage::can_move_patch(
+    const PatchEntry &entry, const PatchEntry &destination) const {
+  if (!can_rename_patch(entry) || entry.relative_path == root_label_) {
+    return false;
+  }
+  // Only a plain folder takes entries; a bank or package lists its
+  // instruments like one but is a file.
+  if (!destination.is_directory || !destination.format.empty() ||
+      !destination.source_relative_path.empty() ||
+      !destination.container_item_id.empty() ||
+      !owns_relative_path(destination.relative_path) ||
+      !maps_to_own_path(destination) ||
+      !vfs_.is_directory(destination.full_path)) {
+    return false;
+  }
+  if (destination.relative_path == entry.relative_path ||
+      destination.relative_path.rfind(entry.relative_path + "/", 0) == 0) {
+    return false;
+  }
+  return std::filesystem::path(entry.relative_path)
+             .parent_path()
+             .generic_string() != destination.relative_path;
+}
+
+bool FilesystemPatchStorage::move_patch(const PatchEntry &entry,
+                                        const PatchEntry &destination) {
+  if (!can_move_patch(entry, destination)) {
+    return false;
+  }
+
+  const auto target = destination.full_path / entry.full_path.filename();
+  std::error_code ec;
+  if (std::filesystem::exists(target, ec) || ec) {
+    return false;
+  }
+
+  std::filesystem::rename(entry.full_path, target, ec);
+  if (ec) {
+    return false;
+  }
+
+  if (metadata_) {
+    const auto moved_relative =
+        std::filesystem::path(destination.relative_path) /
+        entry.full_path.filename();
+    if (!metadata_->rename_key_prefix(
+            metadata_key(entry.relative_path),
+            metadata_key(moved_relative.generic_string()))) {
+      std::error_code rollback_error;
+      std::filesystem::rename(target, entry.full_path, rollback_error);
+      return false;
+    }
+  }
+  return true;
 }
 
 bool FilesystemPatchStorage::can_delete_patch(const PatchEntry &entry) const {

@@ -146,6 +146,14 @@ public:
   SaveResult create_folder_in(const std::filesystem::path &parent,
                               const std::string &name);
   bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
+  /**
+   * Move `entry` into the folder `destination`, within one workspace folder.
+   * The current patch follows when it was the entry or inside it, as does a
+   * workspace folder registered at the moved path.
+   */
+  bool can_move_patch(const PatchEntry &entry,
+                      const PatchEntry &destination) const;
+  bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
   std::optional<SaveFormatInfo>
   find_save_format(const std::string &extension) const;
   std::vector<SaveFormatInfo> save_formats() const;
@@ -207,6 +215,20 @@ private:
                                         bool overwrite,
                                         const std::filesystem::path &folder);
   void set_file_identity(const std::filesystem::path &path);
+
+  /// What has to follow an entry when it changes path, captured before it
+  /// does: every relative path under it is about to change.
+  struct Relocation {
+    std::filesystem::path from;
+    std::filesystem::path to;
+    std::optional<std::filesystem::path> workspace_folder;
+    std::optional<std::filesystem::path> current_absolute;
+    std::string selection_suffix;
+  };
+  /// Empty when the entry is a workspace folder that may not be relocated.
+  std::optional<Relocation> prepare_relocation(const PatchEntry &entry,
+                                               std::filesystem::path to) const;
+  void follow_relocation(const Relocation &relocation, bool renamed);
 
   megatoy::system::PathService &directories_;
   PreferenceManager &preferences_;

@@ -276,6 +276,32 @@ bool PatchRepository::rename_patch(const PatchEntry &entry,
   return false;
 }
 
+bool PatchRepository::can_move_patch(const PatchEntry &entry,
+                                     const PatchEntry &destination) const {
+  return std::any_of(storages_.begin(), storages_.end(),
+                     [&](const auto &storage) {
+                       return storage->can_move_patch(entry, destination);
+                     });
+}
+
+bool PatchRepository::move_patch(const PatchEntry &entry,
+                                 const PatchEntry &destination) {
+  for (const auto &storage : storages_) {
+    if (!storage->can_move_patch(entry, destination)) {
+      continue;
+    }
+    if (!storage->move_patch(entry, destination)) {
+      return false;
+    }
+    refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+    platform::web::request_storage_persist();
+#endif
+    return true;
+  }
+  return false;
+}
+
 bool PatchRepository::can_edit_metadata(const PatchEntry &entry) const {
   return std::any_of(
       storages_.begin(), storages_.end(),
