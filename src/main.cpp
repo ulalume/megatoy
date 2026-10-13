@@ -91,7 +91,7 @@ bool run_frame(RuntimeContext &runtime) {
   runtime.midi->poll();
   runtime.midi->dispatch(*runtime.app_context);
 
-  services.gui_manager.begin_frame();
+  services.gui_manager.begin_frame(app_state.ui_state().prefs);
   services.history().handle_shortcuts(*runtime.app_context);
   // The envelope graphs are drawn at this note. Pushed in before the frame
   // rather than compared against the saved preferences after it, because the

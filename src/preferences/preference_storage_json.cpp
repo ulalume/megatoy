@@ -127,6 +127,9 @@ public:
       if (j.contains("last_seen_version")) {
         data.last_seen_version = j["last_seen_version"].get<std::string>();
       }
+      if (j.contains("layout") && j["layout"].is_string()) {
+        data.layout = j["layout"].get<std::string>();
+      }
 
       if (j.contains("show_builtin_presets")) {
         data.show_builtin_presets = j["show_builtin_presets"].get<bool>();
@@ -294,6 +297,7 @@ public:
       j["open_patches"] = std::move(open_patches);
       j["active_open_patch"] = data.active_open_patch;
       j["last_seen_version"] = data.last_seen_version;
+      j["layout"] = data.layout;
       j["show_builtin_presets"] = data.show_builtin_presets;
       j["theme"] = ui::styles::storage_key(data.theme);
 

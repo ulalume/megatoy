@@ -220,6 +220,10 @@ add_executable(ui_scale_test tests/gui/ui_scale_test.cpp src/gui/ui_scale.cpp)
 target_include_directories(ui_scale_test PRIVATE src)
 target_link_libraries(ui_scale_test PRIVATE imgui_lib)
 add_test(NAME ui_scale_test COMMAND ui_scale_test)
+add_executable(layouts_test tests/gui/layouts_test.cpp)
+target_include_directories(layouts_test PRIVATE src)
+target_link_libraries(layouts_test PRIVATE megatoy_core)
+add_test(NAME layouts_test COMMAND layouts_test)
 add_executable(snapshot_entry_test tests/history/snapshot_entry_test.cpp)
 target_include_directories(snapshot_entry_test PRIVATE src)
 add_test(NAME snapshot_entry_test COMMAND snapshot_entry_test)
@@ -282,7 +286,7 @@ add_custom_target(check
           operator_layout_test operator_edit_test operator_selection_test
           note_test
           envelope_curve_test
-          ui_scale_test save_as_dialog_test
+          ui_scale_test layouts_test save_as_dialog_test
           snapshot_entry_test document_history_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})

@@ -140,6 +140,8 @@ struct PreferenceData {
    * soon as the decision is made, so ignoring the notice still counts.
    */
   std::string last_seen_version;
+  /// Name of the window layout in use; empty means the default one.
+  std::string layout;
   bool show_builtin_presets = true;
 
   // Runtime-only flag set while adopting a pre-workspace patch folder.

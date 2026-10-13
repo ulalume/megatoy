@@ -8,6 +8,7 @@
 #include "gui/window_title.hpp"
 #include "platform/platform_config.hpp"
 #include <filesystem>
+#include <fstream>
 #include <imgui.h>
 #if defined(MEGATOY_PLATFORM_WEB)
 #define IMGUI_IMPL_OPENGL_ES3 1
@@ -16,8 +17,8 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_internal.h>
 #include <iostream>
+#include <iterator>
 #include <string>
-#include <string_view>
 
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
@@ -212,10 +213,12 @@ bool GuiManager::get_should_close() const { return !window_ || should_close_; }
 
 void GuiManager::set_should_close(bool value) { should_close_ = value; }
 
-void GuiManager::begin_frame() {
+void GuiManager::begin_frame(UIPreferences &window_prefs) {
   if (!initialized_) {
     return;
   }
+
+  apply_pending_layout(window_prefs);
 
   // Start the Dear ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
@@ -239,44 +242,71 @@ void GuiManager::setup_default_layout(unsigned int dockspace_id) {
   ImGui::DockBuilderRemoveNode(dockspace_id);
   ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
   ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
-
-  auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
-                            std::string(ui::PATCH_EDITOR_TITLE);
-
-  ImGuiID dock_main_id = dockspace_id;
-
-  ImGuiID doc_id_down = ImGui::DockBuilderSplitNode(
-      dock_main_id, ImGuiDir_Down, 0.23f, nullptr, &dock_main_id);
-
-  ImGuiID doc_id_down_left = ImGui::DockBuilderSplitNode(
-      doc_id_down, ImGuiDir_Left, 0.20f, nullptr, &doc_id_down);
-
-  ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
-      dock_main_id, ImGuiDir_Left, 0.35f, nullptr, &dock_main_id);
-
-  // This ImGui version clears DockOrder in DockBuilderDockWindow; render_all
-  // submits these windows in the same editor-then-Preferences tab order.
-  ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
-  // The other documents' editor windows join the first as tabs.
-  const std::string editor_id = std::string("###") + ui::PATCH_EDITOR_TITLE;
-  for (const ImGuiWindow *window : GImGui->Windows) {
-    const std::string_view name(window->Name);
-    if (name.find(editor_id) != std::string_view::npos &&
-        name.substr(name.find(editor_id)) != editor_id) {
-      ImGui::DockBuilderDockWindow(window->Name, dock_main_id);
-    }
-  }
-  ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, dock_main_id);
-  ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
-
-  ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);
-  ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, doc_id_down);
-  ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
-
-  ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, doc_id_down_left);
-
-  // Finish the dockspace
+  ui::layouts::definition(current_layout_).build(dockspace_id);
   ImGui::DockBuilderFinish(dockspace_id);
+}
+
+void GuiManager::switch_layout(ui::layouts::LayoutId layout) {
+  if (layout == current_layout_ && !pending_layout_) {
+    return;
+  }
+  pending_layout_ = layout;
+}
+
+// Runs between frames: ImGui's settings are only replaced outside
+// NewFrame/Render, and the dockspace is rebuilt from them by the
+// DockSpaceOverViewport that follows.
+void GuiManager::apply_pending_layout(UIPreferences &window_prefs) {
+  if (pending_layout_ && *pending_layout_ != current_layout_) {
+    store_layout_ini();
+    current_layout_ = *pending_layout_;
+    preferences_.set_layout(
+        std::string(ui::layouts::definition(current_layout_).name));
+    ImGui::ClearIniSettings();
+    sync_imgui_ini();
+    const bool loaded = load_layout_ini();
+    first_frame_ = !loaded;
+    web_layout_loaded_ = megatoy::platform::is_web() && loaded;
+    pending_window_visibility_ = true;
+  }
+  pending_layout_.reset();
+
+  if (pending_window_visibility_) {
+    pending_window_visibility_ = false;
+    ui::layouts::apply_windows(
+        ui::layouts::definition(current_layout_).windows, window_prefs);
+  }
+}
+
+void GuiManager::store_layout_ini() {
+  if (megatoy::platform::is_web()) {
+    if (web_ini_loaded_) {
+      ui::save_web_layout_ini(ui::layouts::definition(current_layout_).name,
+                              /*immediately=*/true);
+    }
+    return;
+  }
+  if (!imgui_ini_file_path_.empty()) {
+    ImGui::SaveIniSettingsToDisk(imgui_ini_file_path_.c_str());
+  }
+}
+
+bool GuiManager::load_layout_ini() {
+  if (megatoy::platform::is_web()) {
+    return ui::load_web_layout_ini(
+        ui::layouts::definition(current_layout_).name);
+  }
+  if (imgui_ini_file_path_.empty()) {
+    return false;
+  }
+  std::ifstream file(imgui_ini_file_path_, std::ios::binary);
+  const std::string text((std::istreambuf_iterator<char>(file)),
+                         std::istreambuf_iterator<char>());
+  if (text.empty()) {
+    return false;
+  }
+  ImGui::LoadIniSettingsFromMemory(text.c_str(), text.size());
+  return true;
 }
 
 void GuiManager::end_frame() {
@@ -291,7 +321,10 @@ void GuiManager::end_frame() {
     return;
   }
 
-  save_web_imgui_ini_if_needed();
+  if (web_ini_loaded_) {
+    ui::save_web_layout_ini(ui::layouts::definition(current_layout_).name,
+                            /*immediately=*/false);
+  }
 
   // Rendering
   ImGui::Render();
@@ -361,7 +394,10 @@ bool GuiManager::poll_events(int timeout_ms) {
 }
 
 void GuiManager::sync_imgui_ini() {
-  const auto ini_path = preferences_.get_imgui_ini_file();
+  current_layout_ = ui::layouts::resolve_layout(preferences_.layout());
+  const auto ini_path = ui::layouts::ini_file_path(
+      preferences_.get_imgui_ini_file(),
+      ui::layouts::definition(current_layout_).name);
   set_imgui_ini_file(ini_path.generic_string());
 }
 
@@ -373,6 +409,7 @@ void GuiManager::apply_theme() {
 void GuiManager::reset_layout() {
   first_frame_ = true;
   web_layout_loaded_ = false;
+  pending_window_visibility_ = true;
 }
 
 void GuiManager::set_window_title(const std::string &title) {
@@ -488,9 +525,12 @@ void GuiManager::set_drop_callback(void *user_pointer,
 }
 
 void GuiManager::sync_web_imgui_ini() {
-  ui::sync_web_imgui_ini(first_frame_, web_ini_loaded_, web_layout_loaded_);
-}
-
-void GuiManager::save_web_imgui_ini_if_needed() {
-  ui::save_web_imgui_ini_if_needed(web_ini_loaded_);
+  if (!megatoy::platform::is_web() || web_ini_loaded_ ||
+      ImGui::GetCurrentContext() == nullptr) {
+    return;
+  }
+  web_layout_loaded_ =
+      ui::load_web_layout_ini(ui::layouts::definition(current_layout_).name);
+  first_frame_ = !web_layout_loaded_;
+  web_ini_loaded_ = true;
 }
