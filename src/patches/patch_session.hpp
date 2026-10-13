@@ -2,6 +2,7 @@
 
 #include "channel_allocator.hpp"
 #include "formats/patch_registry.hpp"
+#include "patch_document.hpp"
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
 #include "preferences/preference_manager.hpp"
@@ -14,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // Forward declaration
 class AudioManager;
@@ -58,6 +60,47 @@ public:
   PatchSession(megatoy::system::PathService &directories,
                PreferenceManager &preferences, AudioManager &audio,
                PersistentParseCache *persistent_cache = nullptr);
+
+  using PatchSnapshot = PatchDocument::Snapshot;
+
+  /**
+   * The open documents, in the order they were opened. There is always at
+   * least one. The active one is what plays, and what every call below that
+   * does not name a document acts on.
+   */
+  const std::vector<std::unique_ptr<PatchDocument>> &documents() const;
+  PatchDocument &active_document();
+  const PatchDocument &active_document() const;
+  DocumentId active_document_id() const;
+  PatchDocument *find_document(DocumentId id);
+  const PatchDocument *find_document(DocumentId id) const;
+  /// The open document showing this repository entry, if any.
+  std::optional<DocumentId>
+  find_document_by_selection_path(const std::filesystem::path &path) const;
+  /// False when no document has that id.
+  bool activate(DocumentId id);
+  /**
+   * Open `patch` as a new document, as set_current_patch() would load it,
+   * without activating it. `selection_path` overrides the entry the source
+   * path selects, as for a version inside a package.
+   */
+  DocumentId open_document(const ym2612::Patch &patch,
+                           const std::filesystem::path &source_path,
+                           const std::filesystem::path &selection_path = {},
+                           bool pinned = true);
+  /// A new document holding default_patch(), as a fresh launch opens it.
+  DocumentId open_default_document(bool pinned = true);
+  /// A new document loaded from `entry`; empty when it cannot be read.
+  std::optional<DocumentId> open_entry(const PatchEntry &entry,
+                                       bool pinned = true);
+  /**
+   * Close a document. The last one cannot be closed. Closing the active one
+   * activates its neighbour, the next one when there is one.
+   */
+  bool close_document(DocumentId id);
+  bool any_document_modified() const;
+  std::size_t modified_document_count() const;
+  void mark_all_clean();
 
   // Patch access
   ym2612::Patch &current_patch();
@@ -147,9 +190,14 @@ public:
                               const std::string &name);
   bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
   /**
+   * Delete `entry` from the repository. Every document showing it, or
+   * something inside it, loses its path and becomes an unsaved patch.
+   */
+  bool delete_patch(const PatchEntry &entry);
+  /**
    * Move `entry` into the folder `destination`, within one workspace folder.
-   * The current patch follows when it was the entry or inside it, as does a
-   * workspace folder registered at the moved path.
+   * Every open document follows when it was the entry or inside it, as does
+   * a workspace folder registered at the moved path. Renaming does the same.
    */
   bool can_move_patch(const PatchEntry &entry,
                       const PatchEntry &destination) const;
@@ -171,19 +219,10 @@ public:
   VoiceActivityFrame voice_activity() const;
 
   // Snapshot functionality for undo/redo
-  struct PatchSnapshot {
-    ym2612::Patch original_patch;
-    ym2612::Patch patch;
-    std::string path;
-    std::string selection_path;
-    bool operator==(const PatchSnapshot &other) const {
-      return patch == other.patch && path == other.path &&
-             selection_path == other.selection_path;
-    }
-  };
-
   PatchSnapshot capture_snapshot() const;
   void restore_snapshot(const PatchSnapshot &snapshot);
+  /// Restore into one document; nothing happens once it has been closed.
+  void restore_snapshot(DocumentId id, const PatchSnapshot &snapshot);
 
   /**
    * True when Save writes straight back to the current file. False means the
@@ -208,13 +247,27 @@ private:
   };
   DefaultPatch default_patch_source() const;
 
+  bool is_active(const PatchDocument &document) const;
+  PatchDocument &create_document(bool pinned);
+  /// What set_current_patch() does to the document, short of audio.
+  void assign_patch(PatchDocument &document, const ym2612::Patch &patch,
+                    const std::filesystem::path &source_path,
+                    RememberPatchPath remember);
+  void assign_default_patch(PatchDocument &document);
+  /// The preference only follows the active document.
+  void set_document_path(PatchDocument &document,
+                         const std::filesystem::path &path,
+                         RememberPatchPath remember = RememberPatchPath::Yes);
+  void set_document_selection_path(PatchDocument &document,
+                                   const std::filesystem::path &path);
+  std::string selection_key(const std::filesystem::path &path) const;
+
   /// `folder` names one workspace folder to write into; empty means the
   /// repository's own default target.
   SaveResult save_current_patch_as_impl(std::string_view preferred_extension,
                                         std::string_view filename_stem,
                                         bool overwrite,
                                         const std::filesystem::path &folder);
-  void set_file_identity(const std::filesystem::path &path);
 
   /// What has to follow an entry when it changes path, captured before it
   /// does: every relative path under it is about to change.
@@ -222,8 +275,12 @@ private:
     std::filesystem::path from;
     std::filesystem::path to;
     std::optional<std::filesystem::path> workspace_folder;
-    std::optional<std::filesystem::path> current_absolute;
-    std::string selection_suffix;
+    struct Follower {
+      DocumentId id;
+      std::filesystem::path absolute;
+      std::string selection_suffix;
+    };
+    std::vector<Follower> documents;
   };
   /// Empty when the entry is a workspace folder that may not be relocated.
   std::optional<Relocation> prepare_relocation(const PatchEntry &entry,
@@ -234,12 +291,12 @@ private:
   PreferenceManager &preferences_;
   AudioManager &audio_;
   std::unique_ptr<PatchRepository> repository_;
-  ym2612::Patch current_patch_;
+  std::vector<std::unique_ptr<PatchDocument>> documents_;
+  DocumentId active_id_ = 0;
+  DocumentId next_id_ = 1;
+  /// What the chip has, whichever document it came from.
   ym2612::Patch last_applied_;
   bool has_applied_patch_ = false;
-  std::string current_patch_path_;
-  std::string current_patch_selection_path_;
-  ym2612::Patch original_patch_; // For tracking modifications
 };
 
 } // namespace patches

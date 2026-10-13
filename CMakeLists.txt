@@ -250,6 +250,10 @@ add_test(NAME background_folder_scan_test COMMAND background_folder_scan_test)
 add_executable(version_test tests/update/version_test.cpp src/update/version.cpp)
 target_include_directories(version_test PRIVATE src)
 add_test(NAME version_test COMMAND version_test)
+add_executable(patch_document_test tests/patches/patch_document_test.cpp)
+target_include_directories(patch_document_test PRIVATE src)
+target_link_libraries(patch_document_test PRIVATE megatoy_core)
+add_test(NAME patch_document_test COMMAND patch_document_test)
 add_executable(workspace_test tests/workspace/workspace_test.cpp)
 target_include_directories(workspace_test PRIVATE src)
 target_link_libraries(workspace_test PRIVATE megatoy_core)
@@ -266,7 +270,7 @@ add_custom_target(check
           ginpkg_history_test patch_write_test patch_lab_test status_test
           filename_utils_test utf8_utils_test
           patch_repository_delete_test patch_repository_rename_test
-          patch_repository_move_test
+          patch_repository_move_test patch_document_test
           folder_metadata_test patch_tree_flatten_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           version_test import_pipeline_test persistent_parse_cache_test

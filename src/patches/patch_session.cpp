@@ -16,6 +16,7 @@
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <iterator>
 #include <string_view>
 #include <utility>
 
@@ -29,56 +30,208 @@ PatchSession::PatchSession(megatoy::system::PathService &directories,
           directories_.file_system(), preferences_.workspace(),
           directories_.paths().builtin_presets_root, persistent_cache)) {
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
+  active_id_ = create_document(/*pinned=*/true).id();
 }
 
-ym2612::Patch &PatchSession::current_patch() { return current_patch_; }
+const std::vector<std::unique_ptr<PatchDocument>> &
+PatchSession::documents() const {
+  return documents_;
+}
+
+PatchDocument &PatchSession::active_document() {
+  return *find_document(active_id_);
+}
+
+const PatchDocument &PatchSession::active_document() const {
+  return *find_document(active_id_);
+}
+
+DocumentId PatchSession::active_document_id() const { return active_id_; }
+
+PatchDocument *PatchSession::find_document(DocumentId id) {
+  for (auto &document : documents_) {
+    if (document->id() == id) {
+      return document.get();
+    }
+  }
+  return nullptr;
+}
+
+const PatchDocument *PatchSession::find_document(DocumentId id) const {
+  for (const auto &document : documents_) {
+    if (document->id() == id) {
+      return document.get();
+    }
+  }
+  return nullptr;
+}
+
+std::optional<DocumentId> PatchSession::find_document_by_selection_path(
+    const std::filesystem::path &path) const {
+  const auto key = selection_key(path);
+  if (key.empty()) {
+    return std::nullopt;
+  }
+  for (const auto &document : documents_) {
+    if (document->selection_path() == key) {
+      return document->id();
+    }
+  }
+  return std::nullopt;
+}
+
+bool PatchSession::activate(DocumentId id) {
+  auto *document = find_document(id);
+  if (document == nullptr) {
+    return false;
+  }
+  if (id == active_id_) {
+    return true;
+  }
+  active_id_ = id;
+  preferences_.set_last_patch_path(document->path());
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(document->patch());
+#endif
+  return true;
+}
+
+DocumentId PatchSession::open_document(
+    const ym2612::Patch &patch, const std::filesystem::path &source_path,
+    const std::filesystem::path &selection_path, bool pinned) {
+  auto &document = create_document(pinned);
+  assign_patch(document, patch, source_path, RememberPatchPath::No);
+  if (!selection_path.empty()) {
+    set_document_selection_path(document, selection_path);
+  }
+  return document.id();
+}
+
+DocumentId PatchSession::open_default_document(bool pinned) {
+  auto &document = create_document(pinned);
+  assign_default_patch(document);
+  return document.id();
+}
+
+std::optional<DocumentId> PatchSession::open_entry(const PatchEntry &entry,
+                                                   bool pinned) {
+  ym2612::Patch patch;
+  if (!repository_->load_patch(entry, patch)) {
+    return std::nullopt;
+  }
+  return open_document(patch,
+                       entry.source_relative_path.empty()
+                           ? entry.relative_path
+                           : entry.source_relative_path,
+                       entry.relative_path, pinned);
+}
+
+bool PatchSession::close_document(DocumentId id) {
+  if (documents_.size() <= 1) {
+    return false;
+  }
+  const auto it =
+      std::find_if(documents_.begin(), documents_.end(),
+                   [id](const auto &document) { return document->id() == id; });
+  if (it == documents_.end()) {
+    return false;
+  }
+  if (id == active_id_) {
+    const auto neighbour =
+        std::next(it) != documents_.end() ? std::next(it) : std::prev(it);
+    activate((*neighbour)->id());
+  }
+  documents_.erase(it);
+  return true;
+}
+
+bool PatchSession::any_document_modified() const {
+  return modified_document_count() > 0;
+}
+
+std::size_t PatchSession::modified_document_count() const {
+  return static_cast<std::size_t>(std::count_if(
+      documents_.begin(), documents_.end(),
+      [](const auto &document) { return document->is_modified(); }));
+}
+
+void PatchSession::mark_all_clean() {
+  for (auto &document : documents_) {
+    document->mark_as_clean();
+  }
+}
+
+ym2612::Patch &PatchSession::current_patch() {
+  return active_document().patch();
+}
 
 const ym2612::Patch &PatchSession::current_patch() const {
-  return current_patch_;
+  return active_document().patch();
 }
 
 const std::string &PatchSession::current_patch_path() const {
-  return current_patch_path_;
+  return active_document().path();
 }
 
 void PatchSession::set_current_patch_path(const std::filesystem::path &path,
                                           RememberPatchPath remember) {
-  if (path.empty()) {
-    current_patch_path_.clear();
-    current_patch_selection_path_.clear();
-  } else if (!path.is_absolute()) {
-    current_patch_path_ = path.generic_string();
-    current_patch_selection_path_ = current_patch_path_;
-    if (path.extension() == ".ginpkg") {
-      current_patch_selection_path_ += "/latest";
-    }
-  } else {
-    const auto relative = repository_->to_relative_path(path);
-    current_patch_path_ = relative.generic_string();
-    current_patch_selection_path_ = current_patch_path_;
-    if (path.extension() == ".ginpkg") {
-      current_patch_selection_path_ += "/latest";
-    }
-  }
-
-  if (remember == RememberPatchPath::Yes) {
-    preferences_.set_last_patch_path(current_patch_path_);
-  }
+  set_document_path(active_document(), path, remember);
 }
 
 const std::string &PatchSession::current_patch_selection_path() const {
-  return current_patch_selection_path_;
+  return active_document().selection_path();
 }
 
 void PatchSession::set_current_patch_selection_path(
     const std::filesystem::path &path) {
+  set_document_selection_path(active_document(), path);
+}
+
+bool PatchSession::is_active(const PatchDocument &document) const {
+  return document.id() == active_id_;
+}
+
+PatchDocument &PatchSession::create_document(bool pinned) {
+  documents_.push_back(std::make_unique<PatchDocument>(next_id_++));
+  documents_.back()->set_pinned(pinned);
+  return *documents_.back();
+}
+
+void PatchSession::set_document_path(PatchDocument &document,
+                                     const std::filesystem::path &path,
+                                     RememberPatchPath remember) {
   if (path.empty()) {
-    current_patch_selection_path_.clear();
-    return;
+    document.set_path({});
+    document.set_selection_path({});
+  } else {
+    const auto stored =
+        (path.is_absolute() ? repository_->to_relative_path(path) : path)
+            .generic_string();
+    auto selection = stored;
+    if (path.extension() == ".ginpkg") {
+      selection += "/latest";
+    }
+    document.set_path(stored);
+    document.set_selection_path(std::move(selection));
   }
-  current_patch_selection_path_ =
-      (path.is_absolute() ? repository_->to_relative_path(path) : path)
-          .generic_string();
+
+  if (remember == RememberPatchPath::Yes && is_active(document)) {
+    preferences_.set_last_patch_path(document.path());
+  }
+}
+
+std::string
+PatchSession::selection_key(const std::filesystem::path &path) const {
+  if (path.empty()) {
+    return {};
+  }
+  return (path.is_absolute() ? repository_->to_relative_path(path) : path)
+      .generic_string();
+}
+
+void PatchSession::set_document_selection_path(
+    PatchDocument &document, const std::filesystem::path &path) {
+  document.set_selection_path(selection_key(path));
 }
 
 PatchRepository &PatchSession::repository() { return *repository_; }
@@ -86,9 +239,9 @@ PatchRepository &PatchSession::repository() { return *repository_; }
 const PatchRepository &PatchSession::repository() const { return *repository_; }
 
 bool PatchSession::is_modified() const {
-  return original_patch_ != current_patch_;
+  return active_document().is_modified();
 }
-void PatchSession::mark_as_clean() { original_patch_ = current_patch_; }
+void PatchSession::mark_as_clean() { active_document().mark_as_clean(); }
 
 PatchSession::DefaultPatch PatchSession::default_patch_source() const {
   const auto &paths = directories_.paths();
@@ -136,43 +289,54 @@ ym2612::Patch PatchSession::default_patch() const {
 }
 
 void PatchSession::initialize_patch_defaults() {
+  assign_default_patch(active_document());
+}
+
+void PatchSession::assign_default_patch(PatchDocument &document) {
   auto starting_point = default_patch_source();
-  current_patch_ = std::move(starting_point.patch);
+  document.patch() = std::move(starting_point.patch);
   if (starting_point.source.empty()) {
-    set_current_patch_path({}, RememberPatchPath::No);
-    mark_as_clean();
+    set_document_path(document, {}, RememberPatchPath::No);
+    document.mark_as_clean();
     return;
   }
-  set_current_patch_path(starting_point.source, RememberPatchPath::No);
-  set_file_identity(starting_point.source);
-  mark_as_clean();
+  set_document_path(document, starting_point.source, RememberPatchPath::No);
+  document.set_file_identity(starting_point.source);
+  document.mark_as_clean();
 }
 
 void PatchSession::sync_workspace() {
-  std::optional<std::filesystem::path> absolute_patch_path;
-  if (!current_patch_path_.empty()) {
-    auto resolved = repository_->to_absolute_path(current_patch_path_);
-    if (resolved.is_absolute()) {
-      absolute_patch_path = std::move(resolved);
+  // Resolved before the repository changes: a relabelled folder changes the
+  // relative path a file is known by.
+  std::vector<std::pair<PatchDocument *, std::optional<std::filesystem::path>>>
+      resolved_paths;
+  for (auto &document : documents_) {
+    if (document->path().empty()) {
+      continue;
     }
+    std::optional<std::filesystem::path> absolute;
+    auto resolved = repository_->to_absolute_path(document->path());
+    if (resolved.is_absolute()) {
+      absolute = std::move(resolved);
+    }
+    resolved_paths.emplace_back(document.get(), std::move(absolute));
   }
 
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
   repository_->sync_workspace();
 
-  if (current_patch_path_.empty()) {
-    return;
+  for (auto &[document, absolute] : resolved_paths) {
+    if (!absolute) {
+      set_document_path(*document, {});
+      continue;
+    }
+    const auto relative = repository_->to_relative_path(*absolute);
+    if (relative.is_absolute()) {
+      set_document_path(*document, {});
+      continue;
+    }
+    set_document_path(*document, relative);
   }
-  if (!absolute_patch_path) {
-    set_current_patch_path({});
-    return;
-  }
-  const auto relative = repository_->to_relative_path(*absolute_patch_path);
-  if (relative.is_absolute()) {
-    set_current_patch_path({});
-    return;
-  }
-  set_current_patch_path(relative);
 }
 
 bool PatchSession::load_patch_from_entry(const PatchEntry &entry) {
@@ -222,54 +386,63 @@ bool PatchSession::restore_patch(const std::filesystem::path &relative_path) {
 void PatchSession::set_current_patch(const ym2612::Patch &patch,
                                      const std::filesystem::path &source_path,
                                      RememberPatchPath remember) {
-  current_patch_ = patch;
-  set_current_patch_path(source_path, remember);
+  assign_patch(active_document(), patch, source_path, remember);
+  apply_patch_to_audio();
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(current_patch());
+#endif
+}
+
+void PatchSession::assign_patch(PatchDocument &document,
+                                const ym2612::Patch &patch,
+                                const std::filesystem::path &source_path,
+                                RememberPatchPath remember) {
+  document.patch() = patch;
+  set_document_path(document, source_path, remember);
   if (!source_path.empty()) {
     const auto format = formats::adapter::format_for_extension(
         lowercase_extension(source_path));
     if (!format || !formats::adapter::is_multi_patch(*format)) {
-      set_file_identity(source_path);
+      document.set_file_identity(source_path);
     }
   }
-  mark_as_clean(); // New patch loaded, not modified yet
-  apply_patch_to_audio();
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(current_patch_);
-#endif
+  document.mark_as_clean(); // New patch loaded, not modified yet
 }
 
 void PatchSession::apply_patch_to_audio() {
   // Patch edits take the same route as notes so that a slider drag cannot
   // rewrite registers underneath the renderer.
+  const auto &patch = current_patch();
   if (audio_.submit(audio::AudioCommand::apply_patch(
-          current_patch_.global, current_patch_.channel,
-          current_patch_.instrument))) {
-    last_applied_ = current_patch_;
+          patch.global, patch.channel, patch.instrument))) {
+    last_applied_ = patch;
     has_applied_patch_ = true;
   }
 }
 
 bool PatchSession::apply_patch_to_audio_if_changed() {
+  const auto &patch = current_patch();
   const bool audio_settings_changed =
-      !has_applied_patch_ || current_patch_.global != last_applied_.global ||
-      current_patch_.channel != last_applied_.channel ||
-      current_patch_.instrument != last_applied_.instrument;
+      !has_applied_patch_ || patch.global != last_applied_.global ||
+      patch.channel != last_applied_.channel ||
+      patch.instrument != last_applied_.instrument;
   if (!audio_settings_changed) {
     return false;
   }
 
   apply_patch_to_audio();
-  return has_applied_patch_ && current_patch_.global == last_applied_.global &&
-         current_patch_.channel == last_applied_.channel &&
-         current_patch_.instrument == last_applied_.instrument;
+  return has_applied_patch_ && patch.global == last_applied_.global &&
+         patch.channel == last_applied_.channel &&
+         patch.instrument == last_applied_.instrument;
 }
 
 std::optional<std::filesystem::path>
 PatchSession::writable_source_folder() const {
-  if (current_patch_path_.empty()) {
+  const auto &path = current_patch_path();
+  if (path.empty()) {
     return std::nullopt;
   }
-  const auto absolute = repository_->to_absolute_path(current_patch_path_);
+  const auto absolute = repository_->to_absolute_path(path);
   if (absolute.empty() || !absolute.is_absolute()) {
     return std::nullopt;
   }
@@ -287,12 +460,12 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
   // format sitting in a folder we may write to. Everything else -- read-only
   // formats, instrument banks, the built-in presets -- goes through Save As.
   if (const auto folder = writable_source_folder()) {
-    const auto absolute = repository_->to_absolute_path(current_patch_path_);
+    const auto absolute = repository_->to_absolute_path(current_patch_path());
     if (patches::can_overwrite_in_place(absolute)) {
-      auto patch_to_write = current_patch_;
+      auto patch_to_write = current_patch();
       patch_to_write.name = absolute.stem().string();
       if (patches::write_patch(patch_to_write, absolute)) {
-        current_patch_.name = patch_to_write.name;
+        current_patch().name = patch_to_write.name;
         mark_as_clean();
         repository_->refresh();
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -340,7 +513,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
     std::string_view preferred_extension, std::string_view filename_stem,
     bool overwrite, const std::filesystem::path &folder) {
   std::string suggested_name =
-      filename_stem.empty() ? current_patch_.name : std::string(filename_stem);
+      filename_stem.empty() ? current_patch().name : std::string(filename_stem);
   const std::string sanitized_name =
       sanitize_filename(suggested_name.empty() ? "patch" : suggested_name);
 
@@ -353,7 +526,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
   }
 
   if (megatoy::platform::is_web()) {
-    auto patch_to_write = current_patch_;
+    auto patch_to_write = current_patch();
     patch_to_write.name = sanitized_name;
     auto result =
         folder.empty()
@@ -367,7 +540,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
           loaded.patches.size() == 1) {
         set_current_patch(loaded.patches.front(), result.path);
       } else {
-        current_patch_.name = sanitized_name;
+        current_patch().name = sanitized_name;
         set_current_patch_path(result.path);
         mark_as_clean();
       }
@@ -405,7 +578,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
   }
 
   selected = append_extension_if_missing(std::move(selected), extension);
-  auto patch_to_write = current_patch_;
+  auto patch_to_write = current_patch();
   patch_to_write.name = selected.stem().string();
   if (!patches::write_patch(patch_to_write, selected)) {
     return SaveResult::error("Failed to write " + selected.string());
@@ -417,7 +590,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
       loaded.patches.size() == 1) {
     set_current_patch(loaded.patches.front(), selected);
   } else {
-    current_patch_.name = selected.stem().string();
+    current_patch().name = selected.stem().string();
     set_current_patch_path(selected);
     mark_as_clean();
   }
@@ -548,24 +721,25 @@ VoiceActivityFrame PatchSession::voice_activity() const {
 }
 
 PatchSession::PatchSnapshot PatchSession::capture_snapshot() const {
-  PatchSnapshot snapshot;
-  snapshot.original_patch = original_patch_;
-  snapshot.patch = current_patch_;
-  snapshot.path = current_patch_path_;
-  snapshot.selection_path = current_patch_selection_path_;
-  return snapshot;
+  return active_document().capture_snapshot();
 }
 
 void PatchSession::restore_snapshot(const PatchSnapshot &snapshot) {
-  current_patch_ = snapshot.patch;
-  original_patch_ = snapshot.original_patch;
-  if (snapshot.path.empty()) {
-    set_current_patch_path({});
-  } else {
-    set_current_patch_path(snapshot.path);
+  restore_snapshot(active_id_, snapshot);
+}
+
+void PatchSession::restore_snapshot(DocumentId id,
+                                    const PatchSnapshot &snapshot) {
+  auto *document = find_document(id);
+  if (document == nullptr) {
+    return;
   }
-  set_current_patch_selection_path(snapshot.selection_path);
-  apply_patch_to_audio();
+  document->restore_contents(snapshot);
+  set_document_path(*document, snapshot.path);
+  set_document_selection_path(*document, snapshot.selection_path);
+  if (is_active(*document)) {
+    apply_patch_to_audio();
+  }
 }
 
 bool PatchSession::can_save_in_place() const {
@@ -574,20 +748,14 @@ bool PatchSession::can_save_in_place() const {
     return false;
   }
   return patches::can_overwrite_in_place(
-      repository_->to_absolute_path(current_patch_path_));
+      repository_->to_absolute_path(current_patch_path()));
 }
 
 bool PatchSession::current_patch_is_user_patch() const {
-  if (current_patch_path_.empty()) {
+  if (current_patch_path().empty()) {
     return false;
   }
   return can_save_in_place();
-}
-
-void PatchSession::set_file_identity(const std::filesystem::path &path) {
-  const auto stem = path.stem().string();
-  current_patch_.name = stem;
-  original_patch_.name = stem;
 }
 
 namespace {
@@ -629,15 +797,21 @@ PatchSession::prepare_relocation(const PatchEntry &entry,
     }
   }
 
-  if (!current_patch_path_.empty()) {
-    auto resolved = repository_->to_absolute_path(current_patch_path_);
-    if (resolved.is_absolute()) {
-      relocation.current_absolute = std::move(resolved);
+  for (const auto &document : documents_) {
+    const auto &path = document->path();
+    if (path.empty()) {
+      continue;
     }
-    if (current_patch_selection_path_.rfind(current_patch_path_, 0) == 0) {
-      relocation.selection_suffix =
-          current_patch_selection_path_.substr(current_patch_path_.size());
+    auto resolved = repository_->to_absolute_path(path);
+    if (!resolved.is_absolute()) {
+      continue;
     }
+    Relocation::Follower follower{document->id(), std::move(resolved), {}};
+    const auto &selection = document->selection_path();
+    if (selection.rfind(path, 0) == 0) {
+      follower.selection_suffix = selection.substr(path.size());
+    }
+    relocation.documents.push_back(std::move(follower));
   }
   return relocation;
 }
@@ -650,31 +824,33 @@ void PatchSession::follow_relocation(const Relocation &relocation,
     repository_->sync_workspace();
   }
 
-  if (!relocation.current_absolute) {
-    return;
-  }
-
-  // Follow the current patch to wherever it ended up, if it was inside what
+  // Follow each document to wherever it ended up, if it was inside what
   // changed at all. Anything else keeps the path it already had -- which
   // includes patches from outside the workspace entirely.
-  const auto moved =
-      rebase(*relocation.current_absolute, relocation.from, relocation.to);
-  if (moved == *relocation.current_absolute) {
-    return;
-  }
+  for (const auto &follower : relocation.documents) {
+    auto *document = find_document(follower.id);
+    if (document == nullptr) {
+      continue;
+    }
+    const auto moved =
+        rebase(follower.absolute, relocation.from, relocation.to);
+    if (moved == follower.absolute) {
+      continue;
+    }
 
-  const auto relative = repository_->to_relative_path(moved);
-  if (relative.is_absolute()) {
-    set_current_patch_path({});
-    return;
-  }
-  set_current_patch_path(relative);
-  if (!relocation.selection_suffix.empty()) {
-    set_current_patch_selection_path(relative.generic_string() +
-                                     relocation.selection_suffix);
-  }
-  if (renamed) {
-    set_file_identity(moved);
+    const auto relative = repository_->to_relative_path(moved);
+    if (relative.is_absolute()) {
+      set_document_path(*document, {});
+      continue;
+    }
+    set_document_path(*document, relative);
+    if (!follower.selection_suffix.empty()) {
+      set_document_selection_path(*document, relative.generic_string() +
+                                                 follower.selection_suffix);
+    }
+    if (renamed) {
+      document->set_file_identity(moved);
+    }
   }
 }
 
@@ -690,6 +866,37 @@ bool PatchSession::rename_patch(const PatchEntry &entry,
     return false;
   }
   follow_relocation(*relocation, /*renamed=*/true);
+  return true;
+}
+
+namespace {
+
+bool selection_belongs_to_entry(const std::string &selection,
+                                const PatchEntry &entry) {
+  if (selection == entry.relative_path) {
+    return true;
+  }
+  const std::string prefix = entry.relative_path + "/";
+  return selection.rfind(prefix, 0) == 0;
+}
+
+} // namespace
+
+bool PatchSession::delete_patch(const PatchEntry &entry) {
+  std::vector<DocumentId> showing;
+  for (const auto &document : documents_) {
+    if (selection_belongs_to_entry(document->selection_path(), entry)) {
+      showing.push_back(document->id());
+    }
+  }
+  if (!repository_->delete_patch(entry)) {
+    return false;
+  }
+  for (const auto id : showing) {
+    if (auto *document = find_document(id)) {
+      set_document_path(*document, {});
+    }
+  }
   return true;
 }
 
@@ -718,8 +925,8 @@ const char *PatchSession::save_label_for(bool is_user_patch) const {
     return "Save As...";
   }
   // Saving a .ginpkg adds a version rather than replacing the file.
-  return current_patch_path_.ends_with(".ginpkg") ? "Save Version"
-                                                  : "Overwrite";
+  return current_patch_path().ends_with(".ginpkg") ? "Save Version"
+                                                   : "Overwrite";
 }
 
 } // namespace patches

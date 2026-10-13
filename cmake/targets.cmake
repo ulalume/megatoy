@@ -128,6 +128,7 @@ set(MEGATOY_CORE_SOURCES
   src/drop_actions.cpp
   src/midi/midi_input_manager.cpp
 
+  src/patches/patch_document.cpp
   src/patches/patch_session.cpp
   src/patches/filename_utils.cpp
   src/workspace/path_policy.cpp

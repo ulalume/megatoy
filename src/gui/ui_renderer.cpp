@@ -199,15 +199,6 @@ void request_workspace_folder_removal(AppContext &ctx,
 #endif
 }
 
-bool selection_belongs_to_entry(const std::string &selection,
-                                const patches::PatchEntry &entry) {
-  if (selection == entry.relative_path) {
-    return true;
-  }
-  const std::string prefix = entry.relative_path + "/";
-  return selection.rfind(prefix, 0) == 0;
-}
-
 void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
   if (!ctx.services.patch_session.repository().can_delete_patch(entry)) {
     return;
@@ -220,15 +211,9 @@ void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
       "Delete \"" + entry.name + "\"?\n\nThis permanently deletes it " +
           location + ". This cannot be undone.",
       "Delete", [&ctx, entry]() {
-        auto &session = ctx.services.patch_session;
-        const bool clear_selection = selection_belongs_to_entry(
-            session.current_patch_selection_path(), entry);
-        if (!session.repository().delete_patch(entry)) {
+        if (!ctx.services.patch_session.delete_patch(entry)) {
           megatoy::status::error("Could not delete \"" + entry.name + "\".");
           return;
-        }
-        if (clear_selection) {
-          session.set_current_patch_path({});
         }
         megatoy::status::success("Deleted \"" + entry.name + "\".");
       });
