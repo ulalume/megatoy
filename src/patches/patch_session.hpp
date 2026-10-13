@@ -94,8 +94,36 @@ public:
   std::optional<DocumentId> open_entry(const PatchEntry &entry,
                                        bool pinned = true);
   /**
-   * Close a document. The last one cannot be closed. Closing the active one
-   * activates its neighbour, the next one when there is one.
+   * Show `entry` and make its document the active one. A document already
+   * showing it is activated. Otherwise the preview document takes it when it
+   * has no unsaved changes; a preview with changes is pinned and a new
+   * document opens instead. `pinned` keeps the result open when the next one
+   * is opened. Empty when the entry cannot be read.
+   */
+  std::optional<DocumentId> open_or_activate(const PatchEntry &entry,
+                                             bool pinned);
+  /**
+   * The same for a patch read from `source_path` outside the browser, such
+   * as a dropped file. A document opened from that file that still holds the
+   * same sound is activated instead.
+   */
+  DocumentId open_or_activate_patch(const ym2612::Patch &patch,
+                                    const std::filesystem::path &source_path,
+                                    bool pinned);
+  /// open_or_activate() for the repository entry at `path`; empty when the
+  /// browser does not list it.
+  std::optional<DocumentId> open_path(const std::filesystem::path &path,
+                                      bool pinned);
+  /// The document open as a preview, if any. There is at most one.
+  std::optional<DocumentId> preview_document_id() const;
+  /// Keep a preview document open; false when no document has that id.
+  bool pin(DocumentId id);
+  /// Pin every preview document that has been edited.
+  void pin_modified_documents();
+  /**
+   * Close a document. Closing the active one activates its neighbour, the
+   * next one when there is one. Closing the last one leaves a fresh default
+   * document in its place, as a preview.
    */
   bool close_document(DocumentId id);
   bool any_document_modified() const;
@@ -122,6 +150,19 @@ public:
   // Repository access
   PatchRepository &repository();
   const PatchRepository &repository() const;
+
+  /**
+   * Remember the open documents that have a file, with the active one, so
+   * the next launch can open them again. Unsaved changes are not kept.
+   */
+  void remember_open_documents();
+  /**
+   * Reopen what remember_open_documents() last kept, in order, skipping
+   * files that are gone, and activate the one that was active. The document
+   * the session started with is closed once any of them opened. False when
+   * nothing was reopened.
+   */
+  bool restore_open_documents();
 
   // Initialization and workspace management
   void initialize_patch_defaults();
@@ -230,13 +271,19 @@ public:
    * a read-only folder, or is one instrument out of a bank.
    */
   bool can_save_in_place() const;
+  bool can_save_in_place(const PatchDocument &document) const;
 
   bool current_patch_is_user_patch() const;
+  bool is_user_patch(const PatchDocument &document) const;
   const char *save_label_for(bool is_user_patch) const;
+  const char *save_label_for(const PatchDocument &document,
+                             bool is_user_patch) const;
 
   /// The workspace folder holding the current patch, when it may be written
   /// to. Empty for a new patch, the built-in presets, or a read-only folder.
   std::optional<std::filesystem::path> writable_source_folder() const;
+  std::optional<std::filesystem::path>
+  writable_source_folder(const PatchDocument &document) const;
 
 private:
   /// default_patch() together with the file it came from, empty when the
@@ -261,6 +308,17 @@ private:
   void set_document_selection_path(PatchDocument &document,
                                    const std::filesystem::path &path);
   std::string selection_key(const std::filesystem::path &path) const;
+  /// The browser's entry for a repository-relative path: the entry itself,
+  /// or failing that the first one read from that file.
+  const PatchEntry *find_entry(const std::string &relative_path) const;
+  /**
+   * Put `patch` in the preview document, or in a new one when there is no
+   * preview or it has unsaved changes, and activate it.
+   */
+  DocumentId place_document(const ym2612::Patch &patch,
+                            const std::filesystem::path &source_path,
+                            const std::filesystem::path &selection_path,
+                            bool pinned);
 
   /// `folder` names one workspace folder to write into; empty means the
   /// repository's own default target.

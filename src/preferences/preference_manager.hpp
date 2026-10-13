@@ -61,6 +61,9 @@ public:
   void set_last_save_directory(const std::filesystem::path &path);
   const std::string &last_patch_path() const;
   void set_last_patch_path(const std::string &path);
+  const std::vector<OpenPatchRecord> &open_patches() const;
+  int active_open_patch() const;
+  void set_open_patches(std::vector<OpenPatchRecord> patches, int active);
 
   /// The version whose change log the user has already been offered.
   const std::string &last_seen_version() const;
@@ -100,6 +103,8 @@ private:
   megatoy::workspace::Workspace workspace_;
   std::filesystem::path last_save_directory_;
   std::string last_patch_path_;
+  std::vector<OpenPatchRecord> open_patches_;
+  int active_open_patch_ = -1;
   std::string last_seen_version_;
   bool show_builtin_presets_ = true;
   bool legacy_workspace_migration_complete_ = false;

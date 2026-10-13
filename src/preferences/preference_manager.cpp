@@ -209,6 +209,22 @@ void PreferenceManager::set_last_patch_path(const std::string &path) {
   save_preferences();
 }
 
+const std::vector<OpenPatchRecord> &PreferenceManager::open_patches() const {
+  return open_patches_;
+}
+
+int PreferenceManager::active_open_patch() const { return active_open_patch_; }
+
+void PreferenceManager::set_open_patches(std::vector<OpenPatchRecord> patches,
+                                         int active) {
+  if (patches == open_patches_ && active == active_open_patch_) {
+    return;
+  }
+  open_patches_ = std::move(patches);
+  active_open_patch_ = active;
+  save_preferences();
+}
+
 const std::string &PreferenceManager::last_seen_version() const {
   return last_seen_version_;
 }
@@ -340,6 +356,8 @@ PreferenceData PreferenceManager::to_data() const {
   data.workspace_folders = workspace_.paths();
   data.last_save_directory = last_save_directory_;
   data.last_patch_path = last_patch_path_;
+  data.open_patches = open_patches_;
+  data.active_open_patch = active_open_patch_;
   data.last_seen_version = last_seen_version_;
   data.show_builtin_presets = show_builtin_presets_;
   data.legacy_workspace_migration_complete =
@@ -354,6 +372,8 @@ void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
   workspace_.set_paths(data.workspace_folders);
   last_save_directory_ = data.last_save_directory;
   last_patch_path_ = data.last_patch_path;
+  open_patches_ = data.open_patches;
+  active_open_patch_ = data.active_open_patch;
   last_seen_version_ = data.last_seen_version;
   show_builtin_presets_ = data.show_builtin_presets;
   legacy_workspace_migration_complete_ =

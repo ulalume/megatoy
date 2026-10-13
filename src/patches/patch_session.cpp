@@ -30,7 +30,7 @@ PatchSession::PatchSession(megatoy::system::PathService &directories,
           directories_.file_system(), preferences_.workspace(),
           directories_.paths().builtin_presets_root, persistent_cache)) {
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
-  active_id_ = create_document(/*pinned=*/true).id();
+  active_id_ = create_document(/*pinned=*/false).id();
 }
 
 const std::vector<std::unique_ptr<PatchDocument>> &
@@ -126,16 +126,186 @@ std::optional<DocumentId> PatchSession::open_entry(const PatchEntry &entry,
                        entry.relative_path, pinned);
 }
 
-bool PatchSession::close_document(DocumentId id) {
-  if (documents_.size() <= 1) {
+namespace {
+
+/// Two patches the chip would play the same way, whatever they are called.
+bool same_sound(const ym2612::Patch &a, const ym2612::Patch &b) {
+  return a.global == b.global && a.channel == b.channel &&
+         a.instrument == b.instrument;
+}
+
+std::filesystem::path source_of(const PatchEntry &entry) {
+  return entry.source_relative_path.empty() ? entry.relative_path
+                                            : entry.source_relative_path;
+}
+
+} // namespace
+
+std::optional<DocumentId> PatchSession::preview_document_id() const {
+  for (const auto &document : documents_) {
+    if (!document->pinned()) {
+      return document->id();
+    }
+  }
+  return std::nullopt;
+}
+
+bool PatchSession::pin(DocumentId id) {
+  auto *document = find_document(id);
+  if (document == nullptr) {
     return false;
+  }
+  document->set_pinned(true);
+  return true;
+}
+
+void PatchSession::pin_modified_documents() {
+  for (auto &document : documents_) {
+    if (!document->pinned() && document->is_modified()) {
+      document->set_pinned(true);
+    }
+  }
+}
+
+DocumentId PatchSession::place_document(
+    const ym2612::Patch &patch, const std::filesystem::path &source_path,
+    const std::filesystem::path &selection_path, bool pinned) {
+  PatchDocument *target = nullptr;
+  if (const auto preview = preview_document_id()) {
+    auto *document = find_document(*preview);
+    if (document->is_modified()) {
+      document->set_pinned(true);
+    } else {
+      target = document;
+    }
+  }
+  if (target == nullptr) {
+    target = &create_document(pinned);
+  }
+  target->set_pinned(pinned);
+  activate(target->id());
+  assign_patch(*target, patch, source_path, RememberPatchPath::Yes);
+  if (!selection_path.empty()) {
+    set_document_selection_path(*target, selection_path);
+  }
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(target->patch());
+#endif
+  return target->id();
+}
+
+std::optional<DocumentId>
+PatchSession::open_or_activate(const PatchEntry &entry, bool pinned) {
+  if (const auto open = find_document_by_selection_path(entry.relative_path)) {
+    activate(*open);
+    if (pinned) {
+      pin(*open);
+    }
+    return open;
+  }
+  ym2612::Patch patch;
+  if (!repository_->load_patch(entry, patch)) {
+    return std::nullopt;
+  }
+  return place_document(patch, source_of(entry), entry.relative_path, pinned);
+}
+
+DocumentId
+PatchSession::open_or_activate_patch(const ym2612::Patch &patch,
+                                     const std::filesystem::path &source_path,
+                                     bool pinned) {
+  const auto key = selection_key(source_path);
+  if (!key.empty()) {
+    for (const auto &document : documents_) {
+      if (document->path() == key &&
+          same_sound(document->original_patch(), patch)) {
+        activate(document->id());
+        if (pinned) {
+          document->set_pinned(true);
+        }
+        return document->id();
+      }
+    }
+  }
+  return place_document(patch, source_path, {}, pinned);
+}
+
+std::optional<DocumentId>
+PatchSession::open_path(const std::filesystem::path &path, bool pinned) {
+  const auto *entry = find_entry(selection_key(path));
+  if (entry == nullptr) {
+    return std::nullopt;
+  }
+  return open_or_activate(*entry, pinned);
+}
+
+void PatchSession::remember_open_documents() {
+  std::vector<OpenPatchRecord> records;
+  int active = -1;
+  for (const auto &document : documents_) {
+    if (document->path().empty() || document->selection_path().empty()) {
+      continue;
+    }
+    if (document->id() == active_id_) {
+      active = static_cast<int>(records.size());
+    }
+    records.push_back({document->selection_path(), document->pinned()});
+  }
+  preferences_.set_open_patches(std::move(records), active);
+}
+
+bool PatchSession::restore_open_documents() {
+  const auto records = preferences_.open_patches();
+  const int active = preferences_.active_open_patch();
+  const auto initial = active_id_;
+  std::optional<DocumentId> first;
+  std::optional<DocumentId> to_activate;
+  bool have_preview = false;
+  for (std::size_t i = 0; i < records.size(); ++i) {
+    const auto *entry = find_entry(records[i].path);
+    ym2612::Patch patch;
+    if (entry == nullptr || !repository_->load_patch(*entry, patch)) {
+      continue;
+    }
+    const bool pinned = records[i].pinned || have_preview;
+    have_preview = have_preview || !pinned;
+    const auto id =
+        open_document(patch, source_of(*entry), entry->relative_path, pinned);
+    if (!first) {
+      first = id;
+    }
+    if (static_cast<int>(i) == active) {
+      to_activate = id;
+    }
+  }
+  if (!first) {
+    return false;
+  }
+  activate(to_activate.value_or(*first));
+  const auto *active_document = find_document(active_id_);
+  preferences_.set_last_patch_path(active_document->path());
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(
+      active_document->patch());
+#endif
+  close_document(initial);
+  return true;
+}
+
+bool PatchSession::close_document(DocumentId id) {
+  const auto found =
+      std::find_if(documents_.begin(), documents_.end(),
+                   [id](const auto &document) { return document->id() == id; });
+  if (found == documents_.end()) {
+    return false;
+  }
+  if (documents_.size() == 1) {
+    const auto replacement = open_default_document(/*pinned=*/false);
+    activate(replacement);
   }
   const auto it =
       std::find_if(documents_.begin(), documents_.end(),
                    [id](const auto &document) { return document->id() == id; });
-  if (it == documents_.end()) {
-    return false;
-  }
   if (id == active_id_) {
     const auto neighbour =
         std::next(it) != documents_.end() ? std::next(it) : std::prev(it);
@@ -364,23 +534,34 @@ bool PatchSession::restore_patch(const std::filesystem::path &relative_path) {
     return false;
   }
 
-  const auto find_entry =
-      [&](const auto &self,
-          const std::vector<PatchEntry> &entries) -> const PatchEntry * {
+  const auto *entry = find_entry(relative_string);
+  return entry != nullptr && load_patch_from_entry(*entry);
+}
+
+const PatchEntry *
+PatchSession::find_entry(const std::string &relative_path) const {
+  if (relative_path.empty()) {
+    return nullptr;
+  }
+  const auto search = [&](const auto &self,
+                          const std::vector<PatchEntry> &entries,
+                          bool by_source) -> const PatchEntry * {
     for (const auto &entry : entries) {
       if (!entry.is_directory &&
-          (entry.relative_path == relative_string ||
-           entry.source_relative_path == relative_string)) {
+          (by_source ? entry.source_relative_path == relative_path
+                     : entry.relative_path == relative_path)) {
         return &entry;
       }
-      if (const auto *found = self(self, entry.children)) {
+      if (const auto *found = self(self, entry.children, by_source)) {
         return found;
       }
     }
     return nullptr;
   };
-  const auto *entry = find_entry(find_entry, repository_->tree());
-  return entry != nullptr && load_patch_from_entry(*entry);
+  if (const auto *exact = search(search, repository_->tree(), false)) {
+    return exact;
+  }
+  return search(search, repository_->tree(), true);
 }
 
 void PatchSession::set_current_patch(const ym2612::Patch &patch,
@@ -438,7 +619,12 @@ bool PatchSession::apply_patch_to_audio_if_changed() {
 
 std::optional<std::filesystem::path>
 PatchSession::writable_source_folder() const {
-  const auto &path = current_patch_path();
+  return writable_source_folder(active_document());
+}
+
+std::optional<std::filesystem::path>
+PatchSession::writable_source_folder(const PatchDocument &document) const {
+  const auto &path = document.path();
   if (path.empty()) {
     return std::nullopt;
   }
@@ -635,8 +821,8 @@ SaveResult PatchSession::create_patch_in(const std::filesystem::path &folder,
   // does not have it, the file still exists -- open it directly rather than
   // leave the editor on the previous patch.
   const auto relative = repository_->to_relative_path(target);
-  if (relative.is_absolute() || !restore_patch(relative)) {
-    set_current_patch(patch, target);
+  if (relative.is_absolute() || !open_path(relative, /*pinned=*/true)) {
+    place_document(patch, target, {}, /*pinned=*/true);
   }
   return SaveResult::success(target);
 }
@@ -743,19 +929,27 @@ void PatchSession::restore_snapshot(DocumentId id,
 }
 
 bool PatchSession::can_save_in_place() const {
-  const auto folder = writable_source_folder();
+  return can_save_in_place(active_document());
+}
+
+bool PatchSession::can_save_in_place(const PatchDocument &document) const {
+  const auto folder = writable_source_folder(document);
   if (!folder) {
     return false;
   }
   return patches::can_overwrite_in_place(
-      repository_->to_absolute_path(current_patch_path()));
+      repository_->to_absolute_path(document.path()));
 }
 
 bool PatchSession::current_patch_is_user_patch() const {
-  if (current_patch_path().empty()) {
+  return is_user_patch(active_document());
+}
+
+bool PatchSession::is_user_patch(const PatchDocument &document) const {
+  if (document.path().empty()) {
     return false;
   }
-  return can_save_in_place();
+  return can_save_in_place(document);
 }
 
 namespace {
@@ -921,12 +1115,16 @@ bool PatchSession::move_patch(const PatchEntry &entry,
 }
 
 const char *PatchSession::save_label_for(bool is_user_patch) const {
+  return save_label_for(active_document(), is_user_patch);
+}
+
+const char *PatchSession::save_label_for(const PatchDocument &document,
+                                         bool is_user_patch) const {
   if (!is_user_patch) {
     return "Save As...";
   }
   // Saving a .ginpkg adds a version rather than replacing the file.
-  return current_patch_path().ends_with(".ginpkg") ? "Save Version"
-                                                   : "Overwrite";
+  return document.path().ends_with(".ginpkg") ? "Save Version" : "Overwrite";
 }
 
 } // namespace patches

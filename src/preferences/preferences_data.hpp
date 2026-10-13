@@ -114,6 +114,14 @@ struct UIPreferences {
   }
 };
 
+/// One patch left open in the editor: its browser entry, and whether it was
+/// kept open or only previewed.
+struct OpenPatchRecord {
+  std::string path;
+  bool pinned = true;
+  bool operator==(const OpenPatchRecord &) const = default;
+};
+
 struct PreferenceData {
   /// Patch folders the user has added, in browser order.
   std::vector<std::filesystem::path> workspace_folders;
@@ -122,6 +130,10 @@ struct PreferenceData {
   std::filesystem::path last_save_directory;
   /// Repository-relative source path of the patch selected most recently.
   std::string last_patch_path;
+  /// The patches open in the editor, in tab order, and which one was active
+  /// (-1 for none).
+  std::vector<OpenPatchRecord> open_patches;
+  int active_open_patch = -1;
   /**
    * The version whose change log the user has already been offered. Empty on
    * a fresh install and on builds that predate the change log. Written as

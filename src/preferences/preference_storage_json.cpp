@@ -106,6 +106,24 @@ public:
       if (j.contains("last_patch_path")) {
         data.last_patch_path = j["last_patch_path"].get<std::string>();
       }
+      if (j.contains("open_patches") && j["open_patches"].is_array()) {
+        for (const auto &item : j["open_patches"]) {
+          if (!item.is_object() || !item.contains("path") ||
+              !item["path"].is_string()) {
+            continue;
+          }
+          OpenPatchRecord record;
+          record.path = item["path"].get<std::string>();
+          if (item.contains("pinned") && item["pinned"].is_boolean()) {
+            record.pinned = item["pinned"].get<bool>();
+          }
+          data.open_patches.push_back(std::move(record));
+        }
+      }
+      if (j.contains("active_open_patch") &&
+          j["active_open_patch"].is_number_integer()) {
+        data.active_open_patch = j["active_open_patch"].get<int>();
+      }
       if (j.contains("last_seen_version")) {
         data.last_seen_version = j["last_seen_version"].get<std::string>();
       }
@@ -268,6 +286,13 @@ public:
       j["workspace_folders"] = std::move(folders);
       j["last_save_directory"] = data.last_save_directory.string();
       j["last_patch_path"] = data.last_patch_path;
+      nlohmann::json open_patches = nlohmann::json::array();
+      for (const auto &record : data.open_patches) {
+        open_patches.push_back(
+            {{"path", record.path}, {"pinned", record.pinned}});
+      }
+      j["open_patches"] = std::move(open_patches);
+      j["active_open_patch"] = data.active_open_patch;
       j["last_seen_version"] = data.last_seen_version;
       j["show_builtin_presets"] = data.show_builtin_presets;
       j["theme"] = ui::styles::storage_key(data.theme);
