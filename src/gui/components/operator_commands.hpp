@@ -11,8 +11,6 @@ namespace ui {
 struct OperatorEditState {
   OperatorSelection selection;
   ym2612::OperatorEditBaseline baseline;
-  /// Survives a patch switch on purpose; the selection does not.
-  ym2612::OperatorClipboard clipboard;
   /// The patch the selection was made in. Loading another one drops it.
   std::string selection_patch_path;
   /// Shared frame height so the four borders line up. Measured while drawing,
@@ -27,13 +25,16 @@ struct OperatorEditState {
 struct OperatorCommandContext {
   ym2612::ChannelInstrument &instrument;
   OperatorEditState &state;
+  /// Survives a patch switch on purpose; the selection does not.
+  ym2612::OperatorClipboard &clipboard;
   /// Opens one undo step; empty merge key, so two pastes stay two steps.
   std::function<void(const std::string &label)> begin_history;
   std::function<void()> commit_history;
 };
 
 bool can_copy_operator(const OperatorEditState &state);
-bool can_paste_operator(const OperatorEditState &state);
+bool can_paste_operator(const OperatorEditState &state,
+                        const ym2612::OperatorClipboard &clipboard);
 bool can_swap_operators(const OperatorEditState &state);
 
 /// Labels naming the target: "Copy OP2", "Paste to OP1, OP3", "Swap OP1 and

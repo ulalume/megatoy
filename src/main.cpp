@@ -58,9 +58,10 @@ bool run_frame(RuntimeContext &runtime) {
   auto &app_state = runtime.app_context->state;
 
   if (services.gui_manager.get_should_close()) {
-    if (services.patch_session.is_modified()) {
+    if (const auto modified =
+            services.patch_session.modified_document_count()) {
       app_state.ui_state().confirmation_state =
-          UIState::ConfirmationState::exit();
+          UIState::ConfirmationState::exit(modified);
       services.gui_manager.set_should_close(false);
     } else {
       runtime.running = false;
@@ -91,7 +92,7 @@ bool run_frame(RuntimeContext &runtime) {
   runtime.midi->dispatch(*runtime.app_context);
 
   services.gui_manager.begin_frame();
-  services.history.handle_shortcuts(*runtime.app_context);
+  services.history().handle_shortcuts(*runtime.app_context);
   // The envelope graphs are drawn at this note. Pushed in before the frame
   // rather than compared against the saved preferences after it, because the
   // frame that changes the setting is the last one an idle app draws: read

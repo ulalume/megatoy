@@ -50,8 +50,8 @@ namespace {
 struct HistoryActions {
   AppContext &ctx;
 
-  void undo() const { ctx.services.history.undo(ctx); }
-  void redo() const { ctx.services.history.redo(ctx); }
+  void undo() const { ctx.services.history().undo(ctx); }
+  void redo() const { ctx.services.history().redo(ctx); }
 };
 
 struct PatchHistoryActions {
@@ -59,26 +59,10 @@ struct PatchHistoryActions {
 
   void begin_snapshot(const std::string &label,
                       const std::string &merge_key) const {
-    auto before_snapshot = ctx.services.patch_session.capture_snapshot();
-    auto label_copy = label;
-    auto key_copy = merge_key;
-    ctx.services.history.begin_transaction(
-        label_copy, key_copy,
-        [label_copy = std::move(label_copy), key_copy = std::move(key_copy),
-         before_snapshot](AppContext &context) mutable {
-          auto &patch_session = context.services.patch_session;
-          auto after_snapshot = patch_session.capture_snapshot();
-          return history::make_snapshot_entry<
-              patches::PatchSession::PatchSnapshot>(
-              label_copy, key_copy, before_snapshot, after_snapshot,
-              [](AppContext &context,
-                 const patches::PatchSession::PatchSnapshot &snapshot) {
-                context.services.patch_session.restore_snapshot(snapshot);
-              });
-        });
+    patch_actions::begin_change(ctx, label, merge_key);
   }
 
-  void commit() const { ctx.services.history.commit_transaction(ctx); }
+  void commit() const { patch_actions::commit_change(ctx); }
 };
 
 struct PatchActions {
@@ -125,6 +109,20 @@ drop_actions::Environment make_drop_environment(AppContext &ctx) {
       [&ctx](const ym2612::Patch &patch, const std::filesystem::path &path) {
         patch_actions::load_dropped_patch(ctx, patch, path);
       }};
+}
+
+UIState::DocumentUi &active_document_ui(AppContext &ctx) {
+  return ctx.ui_state().document_ui(
+      ctx.services.patch_session.active_document_id());
+}
+
+/// Drop what closed documents kept: their undo history and editor state.
+void prune_closed_documents(AppContext &ctx) {
+  const auto &session = ctx.services.patch_session;
+  ctx.services.prune_histories();
+  ctx.ui_state().prune_documents([&session](patches::DocumentId id) {
+    return session.find_document(id) != nullptr;
+  });
 }
 
 PatchLabState &patch_lab_state() {
@@ -600,29 +598,33 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
   auto &ui_state = state.ui_state();
   auto history_actions = HistoryActions{ctx};
   auto patch_history = PatchHistoryActions{ctx};
-  return {ctx.services.history,
-          ctx.services.gui_manager,
-          ctx.services.preference_manager,
-          ui_state.prefs,
-          ui_state.open_add_folder_dialog,
-          [&ctx]() { ctx.services.patch_session.sync_workspace(); },
-          [&ctx](const std::filesystem::path &path) {
-            request_workspace_folder_removal(ctx, path);
-          },
-          ctx.services.patch_session,
-          ui_state.save_export_state,
-          [history_actions]() { history_actions.undo(); },
-          [history_actions]() { history_actions.redo(); },
-          ui_state.operator_edit,
-          [patch_history](const std::string &label) {
-            // Empty merge key: two operator commands in a row stay two
-            // separate undo steps.
-            patch_history.begin_snapshot(label, {});
-          },
-          [patch_history]() { patch_history.commit(); },
-          ctx.services.audio_manager.load_meter(),
-          ui_state.open_sound_preferences,
-          ctx.services.audio_manager.default_buffer_frames()};
+  return {
+      [&ctx]() -> history::HistoryManager & { return ctx.services.history(); },
+      ctx.services.gui_manager,
+      ctx.services.preference_manager,
+      ui_state.prefs,
+      ui_state.open_add_folder_dialog,
+      [&ctx]() { ctx.services.patch_session.sync_workspace(); },
+      [&ctx](const std::filesystem::path &path) {
+        request_workspace_folder_removal(ctx, path);
+      },
+      ctx.services.patch_session,
+      ui_state.save_export_state,
+      [history_actions]() { history_actions.undo(); },
+      [history_actions]() { history_actions.redo(); },
+      [&ctx]() -> OperatorEditState & {
+        return active_document_ui(ctx).operator_edit;
+      },
+      ui_state.operator_clipboard,
+      [patch_history](const std::string &label) {
+        // Empty merge key: two operator commands in a row stay two
+        // separate undo steps.
+        patch_history.begin_snapshot(label, {});
+      },
+      [patch_history]() { patch_history.commit(); },
+      ctx.services.audio_manager.load_meter(),
+      ui_state.open_sound_preferences,
+      ctx.services.audio_manager.default_buffer_frames()};
 }
 
 void render_save_export_popup_host(AppContext &ctx) {
@@ -669,7 +671,7 @@ ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
           },
           [&ctx]() {
             ctx.services.gui_manager.set_should_close(true);
-            ctx.services.patch_session.mark_as_clean();
+            ctx.services.patch_session.mark_all_clean();
           }};
 }
 
@@ -679,8 +681,8 @@ PatchEditorContext make_patch_editor_context(AppContext &ctx) {
   auto patch_history = PatchHistoryActions{ctx};
   return {ctx.services.patch_session,
           ui_state.prefs,
-          ui_state.envelope_states,
-          ui_state.operator_edit,
+          [&ctx]() -> UIState::DocumentUi & { return active_document_ui(ctx); },
+          ui_state.operator_clipboard,
           [patch_history](const std::string &label,
                           const std::string &merge_key, const ym2612::Patch &) {
             patch_history.begin_snapshot(label, merge_key);
@@ -897,6 +899,8 @@ void render_all(AppContext &ctx) {
   static FrameContexts contexts(ctx);
   // The cache is only valid for the AppContext it captured.
   assert(contexts.owner == &ctx);
+
+  prune_closed_documents(ctx);
 
   static auto next_workspace_refresh = std::chrono::steady_clock::time_point{};
   const auto now = std::chrono::steady_clock::now();

@@ -9,27 +9,66 @@
 #include "patches/patch_session.hpp"
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string>
 
 namespace patch_actions {
 namespace detail {
-inline void record_change(AppContext &context, const std::string &label,
-                          const patches::PatchSession::PatchSnapshot &before,
-                          const patches::PatchSession::PatchSnapshot &after) {
-  context.services.history.begin_transaction(
-      label, {}, [label, before, after](AppContext &ctx) {
-        return history::make_snapshot_entry<
-            patches::PatchSession::PatchSnapshot>(
-            label, std::string{}, before, after,
-            [](AppContext &ctx,
-               const patches::PatchSession::PatchSnapshot &snapshot) {
-              ctx.services.patch_session.restore_snapshot(snapshot);
-              std::cout << "Patch restored" << std::endl;
-            });
+using Snapshot = patches::PatchSession::PatchSnapshot;
+
+/// An undo step that restores into the document it was recorded in.
+inline std::unique_ptr<history::HistoryEntry>
+make_entry(const std::string &label, const std::string &merge_key,
+           patches::DocumentId document, const Snapshot &before,
+           const Snapshot &after, bool announce) {
+  return history::make_snapshot_entry<Snapshot>(
+      label, merge_key, before, after,
+      [document, announce](AppContext &ctx, const Snapshot &snapshot) {
+        ctx.services.patch_session.restore_snapshot(document, snapshot);
+        if (announce) {
+          std::cout << "Patch restored" << std::endl;
+        }
       });
-  context.services.history.commit_transaction(context);
+}
+
+inline void record_change(AppContext &context, const std::string &label,
+                          const Snapshot &before, const Snapshot &after) {
+  const auto document = context.services.patch_session.active_document_id();
+  context.services.history().begin_transaction(
+      label, {}, [label, document, before, after](AppContext &) {
+        return make_entry(label, {}, document, before, after,
+                          /*announce=*/true);
+      });
+  context.services.history().commit_transaction(context);
 }
 } // namespace detail
+
+/**
+ * Open one undo step on the active document: the state now is what undo
+ * returns to, the state at commit_change() what redo restores.
+ */
+inline void begin_change(AppContext &context, const std::string &label,
+                         const std::string &merge_key) {
+  auto &session = context.services.patch_session;
+  const auto document = session.active_document_id();
+  auto before = session.capture_snapshot();
+  context.services.history().begin_transaction(
+      label, merge_key,
+      [label, merge_key, document, before = std::move(before)](
+          AppContext &ctx) -> std::unique_ptr<history::HistoryEntry> {
+        const auto *open = ctx.services.patch_session.find_document(document);
+        if (open == nullptr) {
+          return nullptr;
+        }
+        return detail::make_entry(label, merge_key, document, before,
+                                  open->capture_snapshot(),
+                                  /*announce=*/false);
+      });
+}
+
+inline void commit_change(AppContext &context) {
+  context.services.history().commit_transaction(context);
+}
 
 inline bool load(AppContext &context, const patches::PatchEntry &patch_info) {
   auto &patch_session = context.services.patch_session;

@@ -10,6 +10,7 @@
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -34,6 +35,12 @@ struct AppServices {
   GuiManager gui_manager;
   std::unique_ptr<patches::PersistentParseCache> persistent_parse_cache;
   patches::PatchSession patch_session;
-  history::HistoryManager history;
+  /// Undo history, one per open document.
+  std::map<patches::DocumentId, history::HistoryManager> histories;
   audio::SpectrumAnalyzer spectrum_analyzer;
+
+  /// The active document's undo history.
+  history::HistoryManager &history();
+  /// Drop the histories of documents that are no longer open.
+  void prune_histories();
 };

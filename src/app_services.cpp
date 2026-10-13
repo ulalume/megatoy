@@ -135,7 +135,17 @@ void AppServices::initialize_app(AppState &state) {
   input.midi_keyboard_settings.key = clamp_key(prefs.midi_keyboard_key);
   input.keyboard_typing_octave =
       static_cast<uint8_t>(std::clamp(prefs.midi_keyboard_typing_octave, 0, 7));
-  history.clear();
+  histories.clear();
+}
+
+history::HistoryManager &AppServices::history() {
+  return histories[patch_session.active_document_id()];
+}
+
+void AppServices::prune_histories() {
+  std::erase_if(histories, [this](const auto &entry) {
+    return patch_session.find_document(entry.first) == nullptr;
+  });
 }
 
 void AppServices::shutdown_app() {

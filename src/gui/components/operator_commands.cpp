@@ -15,8 +15,9 @@ bool can_copy_operator(const OperatorEditState &state) {
   return state.selection.primary >= 0;
 }
 
-bool can_paste_operator(const OperatorEditState &state) {
-  return state.clipboard.has_value && !state.selection.empty();
+bool can_paste_operator(const OperatorEditState &state,
+                        const ym2612::OperatorClipboard &clipboard) {
+  return clipboard.has_value && !state.selection.empty();
 }
 
 bool can_swap_operators(const OperatorEditState &state) {
@@ -53,13 +54,13 @@ void copy_operator_command(OperatorCommandContext &context) {
     return;
   }
 
-  context.state.clipboard = ym2612::copy_operator(context.instrument, primary);
+  context.clipboard = ym2612::copy_operator(context.instrument, primary);
   megatoy::status::info("Copied " + operator_slot_label(primary) + ".");
 }
 
 void paste_operator_command(OperatorCommandContext &context) {
   auto &state = context.state;
-  if (!state.clipboard.has_value) {
+  if (!context.clipboard.has_value) {
     megatoy::status::warning("Copy an operator first.");
     return;
   }
@@ -75,7 +76,7 @@ void paste_operator_command(OperatorCommandContext &context) {
     context.begin_history(label);
   }
   for (int slot : targets) {
-    ym2612::paste_operator(context.instrument, slot, state.clipboard);
+    ym2612::paste_operator(context.instrument, slot, context.clipboard);
   }
   if (context.commit_history) {
     context.commit_history();
@@ -121,12 +122,12 @@ void render_operator_command_items(OperatorCommandContext &context) {
 
   if (ImGui::MenuItem(paste_operator_label(state).c_str(),
                       mac_behavior ? "Cmd+V" : "Ctrl+V", false,
-                      can_paste_operator(state))) {
+                      can_paste_operator(state, context.clipboard))) {
     paste_operator_command(context);
   }
-  if (!can_paste_operator(state) &&
+  if (!can_paste_operator(state, context.clipboard) &&
       ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-    ImGui::SetTooltip(state.clipboard.has_value
+    ImGui::SetTooltip(context.clipboard.has_value
                           ? "Select the operators to paste into."
                           : "Copy an operator first.");
   }

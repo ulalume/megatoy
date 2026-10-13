@@ -223,6 +223,10 @@ add_test(NAME ui_scale_test COMMAND ui_scale_test)
 add_executable(snapshot_entry_test tests/history/snapshot_entry_test.cpp)
 target_include_directories(snapshot_entry_test PRIVATE src)
 add_test(NAME snapshot_entry_test COMMAND snapshot_entry_test)
+add_executable(document_history_test tests/history/document_history_test.cpp)
+target_include_directories(document_history_test PRIVATE src)
+target_link_libraries(document_history_test PRIVATE megatoy_core)
+add_test(NAME document_history_test COMMAND document_history_test)
 add_executable(changelog_gate_test tests/core/changelog_gate_test.cpp
   src/changelog_gate.cpp src/update/version.cpp)
 target_include_directories(changelog_gate_test PRIVATE src)
@@ -279,7 +283,7 @@ add_custom_target(check
           note_test
           envelope_curve_test
           ui_scale_test save_as_dialog_test
-          snapshot_entry_test changelog_gate_test
+          snapshot_entry_test document_history_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

@@ -12,7 +12,8 @@
 namespace ui {
 
 struct MainMenuContext {
-  history::HistoryManager &history;
+  /// The active document's undo history.
+  std::function<history::HistoryManager &()> history;
   GuiManager &gui;
   PreferenceManager &preferences;
   PreferenceManager::UIPreferences &ui_prefs;
@@ -23,7 +24,9 @@ struct MainMenuContext {
   SaveExportState &save_state;
   std::function<void()> undo;
   std::function<void()> redo;
-  OperatorEditState &operator_edit;
+  /// The active document's operator selection.
+  std::function<OperatorEditState &()> operator_edit;
+  ym2612::OperatorClipboard &operator_clipboard;
   /// Opens and closes one undo step around an operator command.
   std::function<void(const std::string &label)> begin_patch_history;
   std::function<void()> commit_patch_history;

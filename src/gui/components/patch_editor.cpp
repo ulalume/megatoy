@@ -220,27 +220,27 @@ void render_operator_section(PatchEditorContext &context,
 
   // The four frames share one height so their borders line up; each operator
   // reports what it needed and the tallest wins the next frame.
-  context.operator_edit.pending_frame_height = 0.0f;
-  context.operator_edit.click_claimed = false;
+  context.operator_edit().pending_frame_height = 0.0f;
+  context.operator_edit().click_claimed = false;
   // Read once, so all four graphs draw the same instant -- and so the audio
   // thread's publication is sampled once a frame rather than four times.
   const EnvelopeVoices voices =
       collect_envelope_voices(context.session.voice_activity());
   for (int slot = 0; slot < 4; slot++) {
-    render_operator_editor(context, patch, slot, context.envelope_states[slot],
+    render_operator_editor(context, patch, slot, context.envelope_state(slot),
                            space_for_feedbacks[slot], voices);
 
     ImGui::Spacing();
     ImGui::NextColumn();
   }
-  context.operator_edit.frame_height =
-      context.operator_edit.pending_frame_height;
+  context.operator_edit().frame_height =
+      context.operator_edit().pending_frame_height;
   ImGui::Columns(1);
 }
 
 OperatorCommandContext make_operator_commands(PatchEditorContext &context,
                                               ym2612::Patch &patch) {
-  return {patch.instrument, context.operator_edit,
+  return {patch.instrument, context.operator_edit(), context.operator_clipboard,
           [&context](const std::string &label) {
             if (context.begin_history) {
               // Empty merge key: two pastes in a row stay two undo steps.
@@ -293,7 +293,7 @@ void handle_operator_shortcuts(PatchEditorContext &context,
  * accounts for them: a click inside an operator is a click on something.
  */
 void handle_operator_deselect(PatchEditorContext &context) {
-  auto &selection = context.operator_edit.selection;
+  auto &selection = context.operator_edit().selection;
   if (selection.empty()) {
     return;
   }
@@ -309,7 +309,7 @@ void handle_operator_deselect(PatchEditorContext &context) {
   // An operator's own background is not "nothing": the click that selected
   // it looks exactly like a click on the window behind it, so the operators
   // say when one was theirs.
-  if (!context.operator_edit.click_claimed &&
+  if (!context.operator_edit().click_claimed &&
       ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
       ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
       !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive()) {
@@ -331,10 +331,10 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
   // user is still working on the operators they picked. The clipboard is
   // deliberately untouched, so an operator can be carried across.
   const auto &selection_path = context.session.current_patch_selection_path();
-  if (context.operator_edit.selection_patch_path != selection_path) {
-    context.operator_edit.selection_patch_path = selection_path;
-    context.operator_edit.selection.clear();
-    context.operator_edit.baseline.clear();
+  if (context.operator_edit().selection_patch_path != selection_path) {
+    context.operator_edit().selection_patch_path = selection_path;
+    context.operator_edit().selection.clear();
+    context.operator_edit().baseline.clear();
   }
 
   if (!context.prefs.show_patch_editor) {

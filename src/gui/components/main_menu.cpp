@@ -368,7 +368,7 @@ void render_main_menu(MainMenuContext &context) {
     }
 
     if (ImGui::BeginMenu("Edit")) {
-      auto &history = context.history;
+      auto &history = context.history();
       const ImGuiIO &io = ImGui::GetIO();
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
       const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
@@ -411,8 +411,9 @@ void render_main_menu(MainMenuContext &context) {
       // The items name their target the way the undo entries above do, which
       // saves the menu a section heading.
       OperatorCommandContext operator_commands{
-          session.current_patch().instrument, context.operator_edit,
-          context.begin_patch_history, context.commit_patch_history};
+          session.current_patch().instrument, context.operator_edit(),
+          context.operator_clipboard, context.begin_patch_history,
+          context.commit_patch_history};
       render_operator_command_items(operator_commands);
 
       ImGui::EndMenu();

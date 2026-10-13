@@ -202,7 +202,7 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
                      UIState::EnvelopeState::SliderState *slider_state,
                      UIState::EnvelopeState::SliderState handle_lit =
                          UIState::EnvelopeState::SliderState::None) {
-  auto &state = widget.editor.operator_edit;
+  auto &state = widget.editor.operator_edit();
   auto &op = ym2612::operator_at(widget.instrument, widget.slot);
   const auto range = ym2612::operator_field_range(field);
   const auto labels = field_labels(field);
@@ -340,7 +340,7 @@ slider_state_for(UIState::EnvelopeState::HandleLit &states,
 void write_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
                         const ym2612::OperatorEditBaseline &baseline,
                         int value) {
-  auto &state = widget.editor.operator_edit;
+  auto &state = widget.editor.operator_edit();
   const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
   if (value == ym2612::read_operator_field(op, field)) {
     return;
@@ -384,7 +384,7 @@ HandleTouch operator_handle(OperatorWidget &widget,
     return idle;
   }
 
-  auto &state = widget.editor.operator_edit;
+  auto &state = widget.editor.operator_edit();
   HandleDrag &drag = handle_drag();
   const HandleAxes axes = axes_of(spec.handle);
   const ui::envelope::PlotArea &plot = handles.plot;
@@ -505,7 +505,7 @@ bool render_envelope_handles(OperatorWidget &widget,
  */
 void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
                        bool ym2612::OperatorSettings::*flag, bool spread) {
-  auto &state = widget.editor.operator_edit;
+  auto &state = widget.editor.operator_edit();
   auto &op = ym2612::operator_at(widget.instrument, widget.slot);
 
   bool value = op.*flag;
@@ -703,7 +703,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                               int slot, UIState::EnvelopeState &envelope_state,
                               bool space_for_feedback,
                               const EnvelopeVoices &voices) {
-  auto &state = context.operator_edit;
+  auto &state = context.operator_edit();
   auto &instrument = patch.instrument;
   auto &op = ym2612::operator_at(instrument, slot);
   OperatorWidget widget{context, instrument, slot};
@@ -848,7 +848,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
                             bool space_for_feedback,
                             const EnvelopeVoices &voices) {
-  auto &state = context.operator_edit;
+  auto &state = context.operator_edit();
   OperatorWidget widget{context, patch.instrument, slot};
 
   ImGui::PushID(slot);
@@ -920,7 +920,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
   if (ImGui::BeginPopup("##operator_menu")) {
     OperatorCommandContext commands{
-        patch.instrument, state,
+        patch.instrument, state, context.operator_clipboard,
         [&context](const std::string &label) {
           if (context.begin_history) {
             context.begin_history(label, {}, context.session.current_patch());

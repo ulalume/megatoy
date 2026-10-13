@@ -5,11 +5,14 @@
 #include "gui/patch_save_dialog.hpp"
 #include "gui/save_export_state.hpp"
 #include "input_state.hpp"
+#include "patches/patch_document.hpp"
 #include "patches/patch_repository.hpp"
 #include "preferences/preference_manager.hpp"
 #include "ym2612/patch.hpp"
+#include <cstddef>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -56,9 +59,24 @@ struct UIState {
     /// A handle on the graph is being dragged, which holds the time axis
     /// still.
     bool handle_active = false;
-  } envelope_states[4];
+  };
 
-  ui::OperatorEditState operator_edit;
+  /// What the patch editor keeps for each open document.
+  struct DocumentUi {
+    EnvelopeState envelope_states[4];
+    ui::OperatorEditState operator_edit;
+  };
+  std::map<patches::DocumentId, DocumentUi> documents;
+  /// Shared by every document, so an operator can be carried across.
+  ym2612::OperatorClipboard operator_clipboard;
+
+  DocumentUi &document_ui(patches::DocumentId id) { return documents[id]; }
+  /// Drop the entries of documents `is_open` no longer accepts.
+  template <typename IsOpen> void prune_documents(IsOpen &&is_open) {
+    std::erase_if(documents, [&is_open](const auto &entry) {
+      return !is_open(entry.first);
+    });
+  }
 
   struct ConfirmationState {
     bool show_unsaved_changes_dialog = false;
@@ -89,11 +107,16 @@ struct UIState {
       state.operation = UIState::ConfirmationState::Operation::Drop;
       return state;
     }
-    static ConfirmationState exit() {
+    static ConfirmationState exit(std::size_t modified_documents = 1) {
       ConfirmationState state;
       state.show_unsaved_changes_dialog = true;
       state.dialog_message =
-          "You have unsaved changes. Do you want to discard them and exit?";
+          modified_documents > 1
+              ? std::to_string(modified_documents) +
+                    " patches have unsaved changes. Do you want to discard "
+                    "them and exit?"
+              : "You have unsaved changes. Do you want to discard them and "
+                "exit?";
       state.operation = UIState::ConfirmationState::Operation::Exit;
       return state;
     }

@@ -14,12 +14,20 @@ using PatchEditorState = SaveExportState;
 struct PatchEditorContext {
   patches::PatchSession &session;
   PreferenceManager::UIPreferences &prefs;
-  UIState::EnvelopeState (&envelope_states)[4];
-  OperatorEditState &operator_edit;
+  /// The active document's editor state.
+  std::function<UIState::DocumentUi &()> document_ui;
+  ym2612::OperatorClipboard &operator_clipboard;
   std::function<void(const std::string &label, const std::string &merge_key,
                      const ym2612::Patch &before)>
       begin_history;
   std::function<void()> commit_history;
+
+  OperatorEditState &operator_edit() const {
+    return document_ui().operator_edit;
+  }
+  UIState::EnvelopeState &envelope_state(int slot) const {
+    return document_ui().envelope_states[slot];
+  }
 };
 
 void track_patch_history(PatchEditorContext &context, const std::string &label,
