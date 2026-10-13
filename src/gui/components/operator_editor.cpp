@@ -1,5 +1,6 @@
 #include "operator_editor.hpp"
 #include "envelope_image.hpp"
+#include "core/status.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/envelope/envelope_handles.hpp"
@@ -525,10 +526,39 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
   }
 }
 
+constexpr const char *kOperatorPayload = "MEGATOY_OPERATOR";
+
+struct OperatorHeader {
+  /// Where the frame's top border can pick up again.
+  float end_x;
+  /// The name takes clicks for dragging, so it reports them to select with.
+  bool name_clicked;
+};
+
+/// The operator's name is the handle that drags it onto another operator.
+/// Only the name: the frame's background selects, and the sliders and the
+/// envelope graph have drags of their own.
+bool operator_name_drag_source(int slot) {
+  if (!ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    const bool hovered = ImGui::IsItemHovered();
+    if (hovered) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+    return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  }
+  ImGui::SetDragDropPayload(kOperatorPayload, &slot, sizeof(slot));
+  ImGui::TextUnformatted(operator_slot_label(slot).c_str());
+  ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors
+                          ? "Drop to swap, Option to copy"
+                          : "Drop to swap, Alt to copy");
+  ImGui::EndDragDropSource();
+  return false;
+}
+
 /// The operator's enable checkbox and name, sitting in the frame's top
-/// border. Returns the x where the border can pick up again.
-float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
-                             const ImVec2 &header_min) {
+/// border.
+OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
+                                      const ImVec2 &header_min) {
   const int slot = widget.slot;
   // Carriers reach the output; modulators only feed other operators. Which
   // is which moves with the algorithm, so it is worth saying on every one.
@@ -546,8 +576,51 @@ float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
     ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive),
                        "%s (Carrier)", operator_slot_label(slot).c_str());
   }
+  const bool name_clicked = operator_name_drag_source(slot);
   ImGui::EndGroup();
-  return ImGui::GetItemRectMax().x;
+  return {ImGui::GetItemRectMax().x, name_clicked};
+}
+
+/// The whole frame takes an operator dropped from another one: swapped, or
+/// copied over this one while Option/Alt is held.
+void operator_drop_target(PatchEditorContext &context,
+                          ym2612::ChannelInstrument &instrument, int slot,
+                          const ImVec2 &min, const ImVec2 &max) {
+  const ImGuiPayload *pending = ImGui::GetDragDropPayload();
+  if (pending == nullptr || !pending->IsDataType(kOperatorPayload) ||
+      *static_cast<const int *>(pending->Data) == slot) {
+    return;
+  }
+  if (!ImGui::BeginDragDropTargetCustom(ImRect(min, max),
+                                        ImGui::GetID("##operator_drop"))) {
+    return;
+  }
+  if (const ImGuiPayload *payload =
+          ImGui::AcceptDragDropPayload(kOperatorPayload)) {
+    const int source = *static_cast<const int *>(payload->Data);
+    const bool copy = ImGui::GetIO().KeyAlt;
+    const std::string from = operator_slot_label(source);
+    const std::string to = operator_slot_label(slot);
+    const std::string label =
+        copy ? "Copy " + from + " to " + to
+             : "Swap " + operator_slot_label(std::min(source, slot)) +
+                   " and " + operator_slot_label(std::max(source, slot));
+    if (context.begin_history) {
+      context.begin_history(label, {}, context.session.current_patch());
+    }
+    if (copy) {
+      ym2612::paste_operator(instrument, slot,
+                             ym2612::copy_operator(instrument, source));
+    } else {
+      ym2612::swap_operators(instrument, source, slot);
+    }
+    if (context.commit_history) {
+      context.commit_history();
+    }
+    megatoy::status::success(copy ? "Copied " + from + " to " + to + "."
+                                  : label + ".");
+  }
+  ImGui::EndDragDropTarget();
 }
 
 /**
@@ -789,10 +862,10 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // sections above rather than indented into the frame.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
-  const float header_end =
+  const OperatorHeader header =
       render_operator_header(widget, patch.instrument.algorithm, block_min);
   const float top_resume_x =
-      std::min(header_end + header_gap(), frame_min.x + frame_width);
+      std::min(header.end_x + header_gap(), frame_min.x + frame_width);
   const float left_resume_y = block_min.y + header_height + header_gap();
 
   ImGui::SetCursorScreenPos(
@@ -829,10 +902,13 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // does not light up the operator it passes over.
   const bool background_hovered = on_background && !ImGui::IsAnyItemActive();
 
-  if (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+  if (header.name_clicked ||
+      (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left))) {
     note_operator_click(state.selection, slot);
     state.click_claimed = true;
   }
+
+  operator_drop_target(context, patch.instrument, slot, block_min, frame_max);
 
   // Anywhere in the frame, including on a slider, which ignores right-click.
   if (frame_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
