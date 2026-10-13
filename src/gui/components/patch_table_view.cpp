@@ -298,13 +298,14 @@ void render_patch_table(PatchSelectorContext &context) {
           ImGui::PushStyleColor(
               ImGuiCol_Text, styles::color(styles::MegatoyCol::TextHighlight));
         }
-        const bool name_selected =
-            ImGui::Selectable(entry->name.c_str(), false);
+        const bool name_selected = ImGui::Selectable(
+            entry->name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
         if (is_current) {
           ImGui::PopStyleColor();
         }
-        if (name_selected && context.safe_load_patch) {
-          context.safe_load_patch(*entry);
+        if (name_selected && context.open_patch) {
+          context.open_patch(
+              *entry, ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left));
         }
         entry_context_menu(context, *entry);
 

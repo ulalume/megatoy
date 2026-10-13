@@ -299,6 +299,16 @@ void render_main_menu(MainMenuContext &context) {
       }
 #endif
 
+      ImGui::Separator();
+      // The browser keeps Ctrl+W for closing its own tab.
+      const char *close_shortcut = megatoy::platform::is_web()
+                                       ? nullptr
+                                       : (mac_behavior ? "Cmd+W" : "Ctrl+W");
+      if (ImGui::MenuItem("Close Patch", close_shortcut) &&
+          context.close_patch) {
+        context.close_patch();
+      }
+
       {
         ImGui::Separator();
         // In the browser a folder is copied in rather than referenced, so it

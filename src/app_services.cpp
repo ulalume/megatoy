@@ -12,6 +12,7 @@
 #endif
 #include <algorithm>
 #include <iostream>
+#include <optional>
 #include <string>
 
 namespace {
@@ -79,18 +80,21 @@ void AppServices::initialize_app(AppState &state) {
   patches::background_folder_scan::configure(persistent_parse_cache.get());
 #endif
   patch_session.initialize_patch_defaults();
-  bool loaded_url_patch = false;
+  std::optional<ym2612::Patch> url_patch;
 #if defined(MEGATOY_PLATFORM_WEB)
+  // Read against the defaults, before anything else is opened.
   if (auto patch = platform::web::patch_url::load_patch_from_current_url(
           patch_session.current_patch())) {
-    patch_session.set_current_patch(
-        *patch, {}, patches::PatchSession::RememberPatchPath::No);
-    loaded_url_patch = true;
+    url_patch = std::move(*patch);
   }
 #endif
-  if (!loaded_url_patch) {
+  if (!patch_session.restore_open_documents() && !url_patch) {
     patch_session.restore_patch(preference_manager.last_patch_path());
   }
+  if (url_patch) {
+    patch_session.open_or_activate_patch(*url_patch, {}, /*pinned=*/false);
+  }
+  state.ui_state().reveal_document = patch_session.active_document_id();
 
   if (!audio_manager.initialize(
           SampleRate,

@@ -45,7 +45,7 @@ void handle_file_drop(void *user_pointer, int count, const char **paths) {
     drop_actions::Environment env{context->services, context->ui_state(),
                                   [context](const ym2612::Patch &patch,
                                             const std::filesystem::path &path) {
-                                    patch_actions::load_dropped_patch(
+                                    patch_actions::open_dropped_patch(
                                         *context, patch, path);
                                   }};
 

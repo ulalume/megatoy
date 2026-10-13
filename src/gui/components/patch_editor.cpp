@@ -7,9 +7,14 @@
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
 #include "platform/platform_config.hpp"
+#include <algorithm>
 #include <filesystem>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace ui {
 
@@ -39,11 +44,12 @@ ImVec2 menu_anchor_below_last_item() {
 #endif
 
 void render_save_export_buttons(PatchEditorContext &context,
-                                PatchEditorState &state) {
+                                patches::PatchDocument &document,
+                                PatchEditorState &state, bool is_active) {
   auto &patch_session = context.session;
 
-  auto is_user_patch = patch_session.current_patch_is_user_patch();
-  auto is_patch_modified = patch_session.is_modified();
+  const bool is_user_patch = patch_session.is_user_patch(document);
+  const bool is_patch_modified = document.is_modified();
 
   auto save_button_is_disabled = is_user_patch && !is_patch_modified;
 
@@ -51,9 +57,11 @@ void render_save_export_buttons(PatchEditorContext &context,
     ImGui::BeginDisabled(true);
   }
 
-  const char *save_label = save_label_for(patch_session, is_user_patch);
+  const char *save_label =
+      patch_session.save_label_for(document, is_user_patch);
   ImVec2 pos = ImGui::GetCursorPos();
   if (ImGui::Button(save_label)) {
+    context.activate(document.id());
     if (is_user_patch) {
       trigger_save(patch_session, state);
     } else {
@@ -76,7 +84,7 @@ void render_save_export_buttons(PatchEditorContext &context,
   }
   if (ImGui::IsItemHovered()) {
     if (!is_user_patch) {
-      const auto &path = patch_session.current_patch_path();
+      const auto &path = document.path();
       if (path.ends_with(".ginpkg")) {
         ImGui::SetTooltip("Save version to %s", path.c_str());
       } else {
@@ -93,6 +101,7 @@ void render_save_export_buttons(PatchEditorContext &context,
   if (is_user_patch) {
     ImGui::SameLine();
     if (ImGui::Button("Save As...")) {
+      context.activate(document.id());
       request_save_as(state);
 #if defined(MEGATOY_PLATFORM_WEB)
       state.save_as_menu_anchor = menu_anchor_below_last_item();
@@ -101,18 +110,15 @@ void render_save_export_buttons(PatchEditorContext &context,
   }
 
   ImGui::SameLine();
-  auto relative_path = patch_session.repository().to_relative_path(
-      patch_session.current_patch_path());
+  auto relative_path =
+      patch_session.repository().to_relative_path(document.path());
   ImGui::Text("%s", display_preset_path(relative_path).c_str());
 
   // Render popups in the same window/ID stack as the actions that open them.
-  render_save_export_popups(patch_session, state);
-}
-
-void render_patch_metadata(PatchEditorContext &context,
-                           PatchEditorState &state) {
-  render_save_export_buttons(context, state);
-  ImGui::Spacing();
+  // They act on the active document, so only its window holds them.
+  if (is_active) {
+    render_save_export_popups(patch_session, state);
+  }
 }
 
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
@@ -198,8 +204,8 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::Spacing();
 }
 
-void render_operator_section(PatchEditorContext &context,
-                             ym2612::Patch &patch) {
+void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
+                             const EnvelopeVoices &voices) {
 
   const auto avail_width = ImGui::GetContentRegionAvail().x;
   bool space_for_feedbacks[4] = {false};
@@ -222,10 +228,6 @@ void render_operator_section(PatchEditorContext &context,
   // reports what it needed and the tallest wins the next frame.
   context.operator_edit().pending_frame_height = 0.0f;
   context.operator_edit().click_claimed = false;
-  // Read once, so all four graphs draw the same instant -- and so the audio
-  // thread's publication is sampled once a frame rather than four times.
-  const EnvelopeVoices voices =
-      collect_envelope_voices(context.session.voice_activity());
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_state(slot),
                            space_for_feedbacks[slot], voices);
@@ -317,43 +319,175 @@ void handle_operator_deselect(PatchEditorContext &context) {
   }
 }
 
-} // namespace
+/// How a preview document's label is drawn on its tab and title bar, told
+/// apart from a document that is kept open. Pushed before Begin(), which
+/// records it for the tab, and popped right after.
+void push_preview_label_style() {
+  ImGui::PushStyleColor(
+      ImGuiCol_Text,
+      color_with_alpha_vec4(ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f));
+}
 
-// Function to render instrument settings panel
-void render_patch_editor(const char *title, PatchEditorContext &context,
-                         PatchEditorState &state) {
-  auto &patch = context.session.current_patch();
-  auto is_modified = context.session.is_modified();
+void pop_preview_label_style() { ImGui::PopStyleColor(); }
 
-  // The selection belongs to the patch it was made in, so loading another
-  // one -- or undoing a load back to the previous one -- drops it. Patch Lab
-  // results keep it: they replace the contents of the same slot, and the
-  // user is still working on the operators they picked. The clipboard is
-  // deliberately untouched, so an operator can be carried across.
-  const auto &selection_path = context.session.current_patch_selection_path();
-  if (context.operator_edit().selection_patch_path != selection_path) {
-    context.operator_edit().selection_patch_path = selection_path;
-    context.operator_edit().selection.clear();
-    context.operator_edit().baseline.clear();
+/// Select the current window's tab in its dock node, or raise it when it is
+/// not docked, without taking the keyboard from another window. False while
+/// the node has not built its tabs yet, as on the first frame.
+bool bring_current_window_forward() {
+  ImGuiWindow *window = ImGui::GetCurrentWindow();
+  if (ImGuiDockNode *node = window->DockNode) {
+    if (node->TabBar == nullptr) {
+      return node->Windows.Size <= 1;
+    }
+    node->TabBar->NextSelectedTabId = window->TabId;
+    return true;
   }
-
-  if (!context.prefs.show_patch_editor) {
-    return;
+  if (window->DockId != 0) {
+    return false;
   }
+  ImGui::BringWindowToDisplayFront(window);
+  return true;
+}
 
+bool is_patch_editor_window(const ImGuiWindow *window) {
+  return window != nullptr &&
+         std::string_view(window->Name)
+                 .find(std::string("###") + PATCH_EDITOR_TITLE) !=
+             std::string_view::npos;
+}
+
+/// Give every document a window slot, the lowest number no other open
+/// document holds.
+void assign_window_slots(PatchEditorContext &context) {
+  std::vector<int> taken;
+  for (const auto &document : context.session.documents()) {
+    const int slot = context.document_ui(document->id()).window_slot;
+    if (slot > 0) {
+      taken.push_back(slot);
+    }
+  }
+  for (const auto &document : context.session.documents()) {
+    auto &ui = context.document_ui(document->id());
+    if (ui.window_slot > 0) {
+      continue;
+    }
+    int slot = 1;
+    while (std::find(taken.begin(), taken.end(), slot) != taken.end()) {
+      ++slot;
+    }
+    ui.window_slot = slot;
+    taken.push_back(slot);
+  }
+}
+
+struct EditorFrame {
+  EnvelopeVoices voices;
+  /// Some editor window had the keyboard as the frame began.
+  bool editor_focused = false;
+  /// The dock node of the window that had it.
+  const ImGuiDockNode *focused_node = nullptr;
+  /// The dock node of the first editor window drawn this frame.
+  ImGuiID first_dock_id = 0;
+  std::vector<patches::DocumentId> to_close;
+};
+
+void render_document_window(PatchEditorContext &context,
+                            PatchEditorState &state,
+                            patches::PatchDocument &document,
+                            EditorFrame &frame) {
+  const auto id = document.id();
+  context.document = id;
+  auto &ui = context.document_ui(id);
+  auto &session = context.session;
+
+  const auto title = patch_editor_window_title(
+      document_label(document), ui.window_slot, document.is_modified());
+  const ImGuiWindow *existing = ImGui::FindWindowByName(title.c_str());
+  ImGuiDockNode *node = existing != nullptr ? existing->DockNode : nullptr;
+
+  // A document's window opens beside the one the user was working in. The
+  // slot may have been another document's before, so its scroll goes too.
+  if (!ui.window_placed) {
+    ui.window_placed = true;
+    for (const ImGuiID dock_id :
+         {static_cast<ImGuiID>(context.editor_dock_id), frame.first_dock_id}) {
+      if (dock_id == 0) {
+        continue;
+      }
+      if (ImGuiDockNode *target =
+              ImGui::DockContextFindNodeByID(GImGui, dock_id)) {
+        ImGui::SetNextWindowDockID(dock_id, ImGuiCond_Always);
+        node = target;
+        break;
+      }
+    }
+    ImGui::SetNextWindowScroll(ImVec2(0.0f, 0.0f));
+  }
   ImGui::SetNextWindowPos(ui::scale::px(ImVec2(400, 50)),
                           ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 600)),
                            ImGuiCond_FirstUseEver);
 
-  auto title_with_id = patch_editor_window_title(
-      title, context.session.current_patch_path(), is_modified);
-  // Match the waveform panel: no tab bar while this window is docked alone.
-  ImGuiWindowClass window_class;
-  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
-  ImGui::SetNextWindowClass(&window_class);
-  if (ImGui::Begin(title_with_id.c_str(), &context.prefs.show_patch_editor)) {
-    render_patch_metadata(context, state);
+  // Brought forward with the keyboard only when another editor window, or a
+  // window sharing its dock node, has it -- a focused tab keeps its node
+  // showing it. Otherwise whatever the user was typing into keeps the keys.
+  const bool reveal = context.reveal_document == id;
+  const bool take_focus =
+      reveal &&
+      (frame.editor_focused || (node != nullptr && frame.focused_node == node));
+  if (take_focus) {
+    ImGui::SetNextWindowFocus();
+  }
+
+  const bool preview = !document.pinned();
+  bool open = true;
+  if (preview) {
+    push_preview_label_style();
+  }
+  const bool visible = ImGui::Begin(title.c_str(), &open,
+                                    ImGuiWindowFlags_NoFocusOnAppearing |
+                                        ImGuiWindowFlags_NoCollapse);
+  if (preview) {
+    pop_preview_label_style();
+  }
+  // Right after Begin() the last item is the window's tab, or its title bar
+  // when it is not docked: a double click there keeps the preview open.
+  if (preview && ImGui::IsItemHovered() &&
+      ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    session.pin(id);
+  }
+  if (reveal && (take_focus || bring_current_window_forward())) {
+    context.reveal_document.reset();
+  }
+  if (frame.first_dock_id == 0) {
+    frame.first_dock_id = ImGui::GetWindowDockID();
+  }
+
+  // The window the user turns to is the active document: focusing it, or
+  // clicking into it before the focus has moved.
+  const bool focused =
+      ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+  const bool clicked = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+                       (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+                        ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
+                        ImGui::IsMouseClicked(ImGuiMouseButton_Middle));
+  if ((focused && !ui.window_focused) || clicked) {
+    context.activate(id);
+  }
+  ui.window_focused = focused;
+
+  const bool is_active = id == session.active_document_id();
+  if (is_active) {
+    context.editor_dock_id = ImGui::GetWindowDockID();
+  }
+
+  if (visible) {
+    auto &patch = document.patch();
+    // Keyed by document, so a window slot that showed another document
+    // keeps nothing of it.
+    ImGui::PushID(static_cast<int>(id));
+    render_save_export_buttons(context, document, state, is_active);
+    ImGui::Spacing();
 
     const auto available_width = ImGui::GetContentRegionAvail().x;
     ImGui::Columns(available_width > ui::scale::px(800.0f) ? 2 : 1,
@@ -362,13 +496,71 @@ void render_patch_editor(const char *title, PatchEditorContext &context,
     ImGui::NextColumn();
     render_channel_section(context, patch);
     ImGui::Columns(1);
-    render_operator_section(context, patch);
+    // Only the active document is what the chip is playing.
+    render_operator_section(context, patch,
+                            is_active ? frame.voices : EnvelopeVoices{});
     handle_operator_deselect(context);
     handle_operator_shortcuts(context, patch);
+    ImGui::PopID();
+  }
+  ImGui::End();
+
+  if (!open) {
+    frame.to_close.push_back(id);
+  }
+}
+
+} // namespace
+
+bool patch_editor_has_focus() {
+  const ImGuiWindow *focused = GImGui->NavWindow;
+  return focused != nullptr && is_patch_editor_window(focused->RootWindow);
+}
+
+void render_patch_editors(PatchEditorContext &context,
+                          PatchEditorState &state) {
+  auto &session = context.session;
+  assign_window_slots(context);
+
+  // The selection belongs to the patch it was made in, so loading another
+  // one -- or undoing a load back to the previous one -- drops it. Patch Lab
+  // results keep it: they replace the contents of the same slot, and the
+  // user is still working on the operators they picked. The clipboard is
+  // deliberately untouched, so an operator can be carried across.
+  for (const auto &document : session.documents()) {
+    auto &edit = context.document_ui(document->id()).operator_edit;
+    if (edit.selection_patch_path != document->selection_path()) {
+      edit.selection_patch_path = document->selection_path();
+      edit.selection.clear();
+      edit.baseline.clear();
+    }
   }
 
-  ImGui::End();
-  context.session.apply_patch_to_audio_if_changed();
+  if (!context.prefs.show_patch_editor) {
+    return;
+  }
+
+  EditorFrame frame;
+  // Read once, so all four graphs draw the same instant -- and so the audio
+  // thread's publication is sampled once a frame rather than four times.
+  frame.voices = collect_envelope_voices(session.voice_activity());
+  frame.editor_focused = patch_editor_has_focus();
+  if (const ImGuiWindow *focused = GImGui->NavWindow) {
+    frame.focused_node = focused->RootWindow->DockNode;
+  }
+
+  std::vector<patches::DocumentId> ids;
+  for (const auto &document : session.documents()) {
+    ids.push_back(document->id());
+  }
+  for (const auto id : ids) {
+    if (auto *document = session.find_document(id)) {
+      render_document_window(context, state, *document, frame);
+    }
+  }
+  for (const auto id : frame.to_close) {
+    context.request_close(id);
+  }
 }
 
 } // namespace ui

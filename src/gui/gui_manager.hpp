@@ -92,6 +92,9 @@ public:
    */
   void reset_layout();
 
+  /// The title of the application's window; unchanged titles cost nothing.
+  void set_window_title(const std::string &title);
+
   /**
    * Fullscreen management
    */
@@ -148,6 +151,7 @@ private:
   bool first_end_frame_;
   bool pending_imgui_ini_update_;
   std::string imgui_ini_file_path_;
+  std::string window_title_;
   ui::styles::ThemeId theme_;
   float ui_scale_preference_ = ui::scale::kAuto;
   float ui_scale_ = 1.0f;

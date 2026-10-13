@@ -528,6 +528,13 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
 
 constexpr const char *kOperatorPayload = "MEGATOY_OPERATOR";
 
+/// An operator being dragged, and the document it belongs to: it is only
+/// dropped onto the operators of that same document.
+struct OperatorPayload {
+  patches::DocumentId document;
+  int slot;
+};
+
 struct OperatorHeader {
   /// Where the frame's top border can pick up again.
   float end_x;
@@ -538,7 +545,7 @@ struct OperatorHeader {
 /// The operator's name is the handle that drags it onto another operator.
 /// Only the name: the frame's background selects, and the sliders and the
 /// envelope graph have drags of their own.
-bool operator_name_drag_source(int slot) {
+bool operator_name_drag_source(patches::DocumentId document, int slot) {
   if (!ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
     const bool hovered = ImGui::IsItemHovered();
     if (hovered) {
@@ -546,7 +553,8 @@ bool operator_name_drag_source(int slot) {
     }
     return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
   }
-  ImGui::SetDragDropPayload(kOperatorPayload, &slot, sizeof(slot));
+  const OperatorPayload payload{document, slot};
+  ImGui::SetDragDropPayload(kOperatorPayload, &payload, sizeof(payload));
   ImGui::TextUnformatted(operator_slot_label(slot).c_str());
   ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors
                           ? "Drop to swap, Option to copy"
@@ -576,7 +584,8 @@ OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
     ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive),
                        "%s (Carrier)", operator_slot_label(slot).c_str());
   }
-  const bool name_clicked = operator_name_drag_source(slot);
+  const bool name_clicked =
+      operator_name_drag_source(widget.editor.document, slot);
   ImGui::EndGroup();
   return {ImGui::GetItemRectMax().x, name_clicked};
 }
@@ -587,8 +596,11 @@ void operator_drop_target(PatchEditorContext &context,
                           ym2612::ChannelInstrument &instrument, int slot,
                           const ImVec2 &min, const ImVec2 &max) {
   const ImGuiPayload *pending = ImGui::GetDragDropPayload();
-  if (pending == nullptr || !pending->IsDataType(kOperatorPayload) ||
-      *static_cast<const int *>(pending->Data) == slot) {
+  if (pending == nullptr || !pending->IsDataType(kOperatorPayload)) {
+    return;
+  }
+  const auto dragged = *static_cast<const OperatorPayload *>(pending->Data);
+  if (dragged.document != context.document || dragged.slot == slot) {
     return;
   }
   if (!ImGui::BeginDragDropTargetCustom(ImRect(min, max),
@@ -597,7 +609,8 @@ void operator_drop_target(PatchEditorContext &context,
   }
   if (const ImGuiPayload *payload =
           ImGui::AcceptDragDropPayload(kOperatorPayload)) {
-    const int source = *static_cast<const int *>(payload->Data);
+    const int source =
+        static_cast<const OperatorPayload *>(payload->Data)->slot;
     const bool copy = ImGui::GetIO().KeyAlt;
     const std::string from = operator_slot_label(source);
     const std::string to = operator_slot_label(slot);

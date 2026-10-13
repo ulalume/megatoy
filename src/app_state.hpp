@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,9 +29,6 @@ struct UIState {
     std::filesystem::path pending_instruments_path;
     std::vector<ym2612::Patch> instruments;
     int selected_instrument = 0;
-    bool show_drop_confirmation = false;
-    ym2612::Patch pending_dropped_patch;
-    std::filesystem::path pending_dropped_path;
   } drop_state;
 
   struct EnvelopeState {
@@ -65,8 +63,19 @@ struct UIState {
   struct DocumentUi {
     EnvelopeState envelope_states[4];
     ui::OperatorEditState operator_edit;
+    /// The editor window showing the document; 0 until it has one.
+    int window_slot = 0;
+    /// Whether that window had the focus last frame.
+    bool window_focused = false;
+    /// The window has been placed for this document.
+    bool window_placed = false;
   };
   std::map<patches::DocumentId, DocumentUi> documents;
+  /// The document whose editor window is brought to the front next frame.
+  std::optional<patches::DocumentId> reveal_document;
+  /// The dock node the active document's window was last drawn in; new
+  /// documents' windows open there.
+  unsigned int editor_dock_id = 0;
   /// Shared by every document, so an operator can be carried across.
   ym2612::OperatorClipboard operator_clipboard;
 
@@ -80,31 +89,21 @@ struct UIState {
 
   struct ConfirmationState {
     bool show_unsaved_changes_dialog = false;
-    patches::PatchEntry pending_patch_entry;
     std::string dialog_message;
     enum class Operation {
-      Load,
-      Drop,
+      Close,
       Exit,
-    } operation;
+    } operation = Operation::Exit;
+    /// The document a Close asks about.
+    patches::DocumentId pending_document = 0;
 
-    static ConfirmationState load(patches::PatchEntry patch_entry) {
+    static ConfirmationState close(patches::DocumentId document,
+                                   const std::string &name) {
       ConfirmationState state;
       state.show_unsaved_changes_dialog = true;
-      state.pending_patch_entry = patch_entry;
-      state.dialog_message =
-          "You have unsaved changes. Loading a new patch will discard "
-          "them.\n\nContinue?";
-      state.operation = UIState::ConfirmationState::Operation::Load;
-      return state;
-    }
-    static ConfirmationState drop() {
-      ConfirmationState state;
-      state.show_unsaved_changes_dialog = true;
-      state.dialog_message =
-          "You have unsaved changes. Dropping a new patch will discard "
-          "them.\n\nContinue?";
-      state.operation = UIState::ConfirmationState::Operation::Drop;
+      state.pending_document = document;
+      state.dialog_message = "Save changes to \"" + name + "\" before closing?";
+      state.operation = UIState::ConfirmationState::Operation::Close;
       return state;
     }
     static ConfirmationState exit(std::size_t modified_documents = 1) {

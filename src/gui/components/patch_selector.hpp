@@ -26,7 +26,9 @@ struct PatchSelectorContext {
   patches::PatchRepository &repository;
   patches::PatchSession &session;
   PreferenceManager::UIPreferences &prefs;
-  std::function<void(const patches::PatchEntry &)> safe_load_patch;
+  /// Open an entry in the editor; `pinned` keeps it open rather than
+  /// previewing it.
+  std::function<void(const patches::PatchEntry &, bool pinned)> open_patch;
   std::function<void(const std::filesystem::path &)> reveal_in_file_manager;
   std::function<void(const patches::PatchEntry &)> download_entry;
   /// Download one entry's patch in the named format. Absent where there is

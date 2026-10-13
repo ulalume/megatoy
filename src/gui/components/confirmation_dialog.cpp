@@ -129,44 +129,50 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     ImGui::TextWrapped("%s", confirmation_state.dialog_message.c_str());
     ImGui::Spacing();
 
-    // "Discard Changes" does not fit the standard width, so the row is
-    // measured rather than assumed.
-    const float cancel_width = button_width("Cancel");
-    const float discard_width = button_width("Discard Changes");
-    align_buttons_right({cancel_width, discard_width});
-    if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
+    const bool closing = confirmation_state.operation ==
+                         UIState::ConfirmationState::Operation::Close;
+    const auto finish = [&confirmation_state]() {
       confirmation_state.show_unsaved_changes_dialog = false;
       ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Discard Changes", ImVec2(discard_width, 0))) {
-      // Handle different confirmation types
-
-      switch (confirmation_state.operation) {
-      case UIState::ConfirmationState::Operation::Load:
-        if (context.load_patch_entry) {
-          context.load_patch_entry(confirmation_state.pending_patch_entry);
+    };
+    // The labels do not all fit the standard width, so the row is measured
+    // rather than assumed.
+    const float cancel_width = button_width("Cancel");
+    if (closing) {
+      const float discard_width = button_width("Don't Save");
+      const float save_width =
+          std::max(dialog_button_width(), button_width("Save"));
+      align_buttons_right({discard_width, cancel_width, save_width});
+      const auto document = confirmation_state.pending_document;
+      if (ImGui::Button("Don't Save", ImVec2(discard_width, 0))) {
+        finish();
+        if (context.discard_and_close) {
+          context.discard_and_close(document);
         }
-        confirmation_state.show_unsaved_changes_dialog = false;
-        ImGui::CloseCurrentPopup();
-        break;
-      case UIState::ConfirmationState::Operation::Drop: {
-        if (context.apply_dropped_patch) {
-          context.apply_dropped_patch(context.drop_state.pending_dropped_patch,
-                                      context.drop_state.pending_dropped_path);
-        }
-        confirmation_state.show_unsaved_changes_dialog = false;
-        ImGui::CloseCurrentPopup();
-        break;
       }
-      case UIState::ConfirmationState::Operation::Exit:
+      ImGui::SameLine();
+      if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
+        finish();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Save", ImVec2(save_width, 0))) {
+        finish();
+        if (context.save_and_close) {
+          context.save_and_close(document);
+        }
+      }
+    } else {
+      const float discard_width = button_width("Discard Changes");
+      align_buttons_right({cancel_width, discard_width});
+      if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
+        finish();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Discard Changes", ImVec2(discard_width, 0))) {
+        finish();
         if (context.confirm_exit) {
           context.confirm_exit();
         }
-        confirmation_state.show_unsaved_changes_dialog = false;
-        ImGui::CloseCurrentPopup();
-        break;
       }
     }
 

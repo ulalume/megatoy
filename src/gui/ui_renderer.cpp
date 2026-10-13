@@ -39,6 +39,7 @@
 #include <chrono>
 #include <filesystem>
 #include <functional>
+#include <imgui_internal.h>
 #include <optional>
 #include <string>
 #include <utility>
@@ -63,23 +64,6 @@ struct PatchHistoryActions {
   }
 
   void commit() const { patch_actions::commit_change(ctx); }
-};
-
-struct PatchActions {
-  AppContext &ctx;
-
-  bool load(const patches::PatchEntry &entry) const {
-    return patch_actions::load(ctx, entry);
-  }
-
-  void safe_load(const patches::PatchEntry &entry) const {
-    patch_actions::safe_load(ctx, entry);
-  }
-
-  void load_dropped(const ym2612::Patch &patch,
-                    const std::filesystem::path &path) const {
-    patch_actions::load_dropped_patch(ctx, patch, path);
-  }
 };
 
 struct MidiActions {
@@ -107,8 +91,83 @@ drop_actions::Environment make_drop_environment(AppContext &ctx) {
   return {
       ctx.services, ctx.ui_state(),
       [&ctx](const ym2612::Patch &patch, const std::filesystem::path &path) {
-        patch_actions::load_dropped_patch(ctx, patch, path);
+        patch_actions::open_dropped_patch(ctx, patch, path);
       }};
+}
+
+void close_document_now(AppContext &ctx, patches::DocumentId id) {
+  auto &session = ctx.services.patch_session;
+  if (session.find_document(id) == nullptr) {
+    return;
+  }
+  const bool was_active = id == session.active_document_id();
+  if (was_active) {
+    ctx.services.history().cancel_transaction();
+  }
+  session.close_document(id);
+  if (was_active) {
+    patch_actions::reveal_document(ctx, session.active_document_id());
+  }
+}
+
+/// Close a document, asking first when it has unsaved changes.
+void request_close_document(AppContext &ctx, patches::DocumentId id) {
+  const auto *document = ctx.services.patch_session.find_document(id);
+  if (document == nullptr) {
+    return;
+  }
+  if (!document->is_modified()) {
+    close_document_now(ctx, id);
+    return;
+  }
+  ctx.ui_state().confirmation_state =
+      UIState::ConfirmationState::close(id, document_label(*document));
+}
+
+/**
+ * Save a document and close it. One that has to be saved through Save As is
+ * activated and the dialog started instead; it stays open, to be closed
+ * again once saved.
+ */
+void save_and_close_document(AppContext &ctx, patches::DocumentId id) {
+  auto &session = ctx.services.patch_session;
+  if (session.find_document(id) == nullptr) {
+    return;
+  }
+  patch_actions::activate_document(ctx, id);
+  patch_actions::reveal_document(ctx, id);
+  auto &save_state = ctx.ui_state().save_export_state;
+  if (!session.can_save_in_place()) {
+    request_save_as(save_state);
+    return;
+  }
+  trigger_save(session, save_state);
+  const auto *document = session.find_document(id);
+  if (document != nullptr && !document->is_modified()) {
+    close_document_now(ctx, id);
+  }
+}
+
+/// Cmd/Ctrl+W closes the active document while an editor window or the
+/// browser has the keyboard. The browser keeps the key for its own tab.
+void handle_close_shortcut(AppContext &ctx) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  (void)ctx;
+#else
+  const ImGuiIO &io = ImGui::GetIO();
+  if (io.WantTextInput || !(io.KeyCtrl || io.KeySuper) || io.KeyShift ||
+      io.KeyAlt || !ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+    return;
+  }
+  const ImGuiWindow *focused = GImGui->NavWindow;
+  const bool browser_focused =
+      focused != nullptr &&
+      focused->RootWindow == ImGui::FindWindowByName(PATCH_BROWSER_TITLE);
+  if (!browser_focused && !patch_editor_has_focus()) {
+    return;
+  }
+  request_close_document(ctx, ctx.services.patch_session.active_document_id());
+#endif
 }
 
 UIState::DocumentUi &active_document_ui(AppContext &ctx) {
@@ -414,6 +473,8 @@ void request_new_patch(AppContext &ctx, const std::filesystem::path &folder) {
         const auto result =
             patch_session.create_patch_in(folder, name, extension);
         if (result.is_success()) {
+          patch_actions::reveal_document(ctx,
+                                         patch_session.active_document_id());
           megatoy::status::success("Created \"" +
                                    result.path.filename().string() + "\".");
         } else {
@@ -484,6 +545,20 @@ void announce_saved_patch(AppContext &ctx, const std::filesystem::path &path) {
                            display_preset_path(relative.generic_string()));
 }
 
+/// Open a copy just written, kept open. `patch` is what was written, for a
+/// copy outside the workspace that the browser does not list.
+void open_duplicate(AppContext &ctx, const std::filesystem::path &path,
+                    const ym2612::Patch &patch) {
+  auto &session = ctx.services.patch_session;
+  ctx.services.history().cancel_transaction();
+  auto document = session.open_path(session.repository().to_relative_path(path),
+                                    /*pinned=*/true);
+  if (!document) {
+    document = session.open_or_activate_patch(patch, path, /*pinned=*/true);
+  }
+  patch_actions::reveal_document(ctx, *document);
+}
+
 #if defined(MEGATOY_PLATFORM_WEB)
 /// Hand one tree entry's patch to the browser, in the chosen format.
 void download_patch_entry(AppContext &ctx, const patches::PatchEntry &entry,
@@ -501,7 +576,7 @@ void download_patch_entry(AppContext &ctx, const patches::PatchEntry &entry,
 }
 #endif
 
-/// Copy the entry's patch to a new file. The editor is left as it is.
+/// Copy the entry's patch to a new file and open the copy.
 void request_patch_duplicate(AppContext &ctx,
                              const patches::PatchEntry &entry) {
   auto &session = ctx.services.patch_session;
@@ -556,6 +631,7 @@ void request_patch_duplicate(AppContext &ctx,
       selected.parent_path());
   session.repository().refresh();
   announce_saved_patch(ctx, selected);
+  open_duplicate(ctx, selected, patch);
 #endif
 }
 
@@ -579,6 +655,8 @@ void render_patch_duplicate_dialog(AppContext &ctx) {
         switch (result.status) {
         case patches::SavePatchResult::Status::Success:
           announce_saved_patch(ctx, result.path);
+          open_duplicate(ctx, result.path,
+                         ctx.ui_state().patch_duplicate_state.patch);
           break;
         case patches::SavePatchResult::Status::Duplicate:
           megatoy::status::error("A patch named \"" + stem +
@@ -624,7 +702,11 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
       [patch_history]() { patch_history.commit(); },
       ctx.services.audio_manager.load_meter(),
       ui_state.open_sound_preferences,
-      ctx.services.audio_manager.default_buffer_frames()};
+      ctx.services.audio_manager.default_buffer_frames(),
+      [&ctx]() {
+        request_close_document(ctx,
+                               ctx.services.patch_session.active_document_id());
+      }};
 }
 
 void render_save_export_popup_host(AppContext &ctx) {
@@ -656,38 +738,38 @@ PatchDropContext make_patch_drop_context(AppContext &ctx) {
 ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  auto patch_actions_facade = PatchActions{ctx};
   return {ui_state.confirmation_state,
           ui_state.danger_confirmation_state,
           ui_state.text_prompt_state,
           ui_state.new_patch_prompt_state,
-          ui_state.drop_state,
-          [patch_actions_facade](const patches::PatchEntry &entry) {
-            patch_actions_facade.load(entry);
-          },
-          [patch_actions_facade](const ym2612::Patch &patch,
-                                 const std::filesystem::path &path) {
-            patch_actions_facade.load_dropped(patch, path);
-          },
+          [&ctx](patches::DocumentId id) { close_document_now(ctx, id); },
+          [&ctx](patches::DocumentId id) { save_and_close_document(ctx, id); },
           [&ctx]() {
             ctx.services.gui_manager.set_should_close(true);
             ctx.services.patch_session.mark_all_clean();
           }};
 }
 
+/// The undo step opens on the document whose window is being drawn, which
+/// the context names only once it exists; FrameContexts sets begin_history.
 PatchEditorContext make_patch_editor_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
   auto patch_history = PatchHistoryActions{ctx};
   return {ctx.services.patch_session,
           ui_state.prefs,
-          [&ctx]() -> UIState::DocumentUi & { return active_document_ui(ctx); },
-          ui_state.operator_clipboard,
-          [patch_history](const std::string &label,
-                          const std::string &merge_key, const ym2612::Patch &) {
-            patch_history.begin_snapshot(label, merge_key);
+          [&ctx](patches::DocumentId id) -> UIState::DocumentUi & {
+            return ctx.ui_state().document_ui(id);
           },
-          [patch_history]() { patch_history.commit(); }};
+          ui_state.operator_clipboard,
+          {},
+          [patch_history]() { patch_history.commit(); },
+          [&ctx](patches::DocumentId id) {
+            patch_actions::activate_document(ctx, id);
+          },
+          [&ctx](patches::DocumentId id) { request_close_document(ctx, id); },
+          ui_state.reveal_document,
+          ui_state.editor_dock_id};
 }
 
 PatchLabContext make_patch_lab_context(AppContext &ctx) {
@@ -705,12 +787,11 @@ PatchLabContext make_patch_lab_context(AppContext &ctx) {
 PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  auto patch_actions_facade = PatchActions{ctx};
   return {
       ctx.services.patch_session.repository(), ctx.services.patch_session,
       ui_state.prefs,
-      [patch_actions_facade](const patches::PatchEntry &entry) {
-        patch_actions_facade.safe_load(entry);
+      [&ctx](const patches::PatchEntry &entry, bool pinned) {
+        patch_actions::open_entry(ctx, entry, pinned);
       },
       // No file manager exists in a browser; the context menu keys off
       // the callback's absence.
@@ -878,7 +959,14 @@ struct FrameContexts {
         midi_keyboard(make_midi_keyboard_context(ctx)),
         mml_console(make_mml_console_context(ctx)),
         patch_lab(make_patch_lab_context(ctx)),
-        waveform(make_waveform_context(ctx)) {}
+        waveform(make_waveform_context(ctx)) {
+    patch_editor.begin_history = [&ctx, this](const std::string &label,
+                                              const std::string &merge_key,
+                                              const ym2612::Patch &) {
+      patch_actions::activate_document(ctx, patch_editor.document);
+      patch_actions::begin_change(ctx, label, merge_key);
+    };
+  }
 
   AppContext *owner;
   MainMenuContext main_menu;
@@ -901,6 +989,7 @@ void render_all(AppContext &ctx) {
   assert(contexts.owner == &ctx);
 
   prune_closed_documents(ctx);
+  ctx.services.patch_session.pin_modified_documents();
 
   static auto next_workspace_refresh = std::chrono::steady_clock::time_point{};
   const auto now = std::chrono::steady_clock::now();
@@ -936,8 +1025,8 @@ void render_all(AppContext &ctx) {
 #else
   render_folder_scan_dialog();
 #endif
-  render_patch_editor(PATCH_EDITOR_TITLE, contexts.patch_editor,
-                      ctx.app_state().ui_state().save_export_state);
+  render_patch_editors(contexts.patch_editor,
+                       ctx.app_state().ui_state().save_export_state);
   render_patch_selector(PATCH_BROWSER_TITLE, contexts.patch_selector);
   render_preferences_window(PREFERENCES_TITLE, contexts.preferences);
   render_midi_keyboard(SOFT_KEYBOARD_TITLE, contexts.midi_keyboard);
@@ -947,6 +1036,14 @@ void render_all(AppContext &ctx) {
 
   render_save_export_popup_host(ctx);
   render_status_toasts();
+
+  handle_close_shortcut(ctx);
+  auto &session = ctx.services.patch_session;
+  session.apply_patch_to_audio_if_changed();
+  session.remember_open_documents();
+  const auto &active = session.active_document();
+  ctx.services.gui_manager.set_window_title(
+      app_window_title(document_label(active), active.is_modified()));
 }
 
 } // namespace ui

@@ -210,7 +210,8 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
   // Name and dimmed format label, either of which loads the patch. The
   // context menu and tooltip attach to whichever was drawn last, so both
   // are registered after each selectable.
-  const bool name_clicked = ImGui::Selectable(item.name.c_str(), false);
+  const bool name_clicked = ImGui::Selectable(
+      item.name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
   if (is_current) {
     ImGui::PopStyleColor();
   }
@@ -225,15 +226,18 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
                  : ImGui::GetStyleColorVec4(ImGuiCol_Text);
   ImGui::PushStyleColor(ImGuiCol_Text,
                         color_with_alpha_vec4(format_color, 0.5f));
-  const bool format_clicked = ImGui::Selectable(item.format.c_str(), false);
+  const bool format_clicked = ImGui::Selectable(
+      item.format.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
   ImGui::PopStyleColor();
   entry_context_menu(context, item);
   show_patch_tooltip(item);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
 
-  if ((name_clicked || format_clicked) && context.safe_load_patch) {
-    context.safe_load_patch(item);
+  // A click previews the patch, a double click keeps it open.
+  if ((name_clicked || format_clicked) && context.open_patch) {
+    context.open_patch(item,
+                       ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left));
   }
 
   ImGui::PopID();
