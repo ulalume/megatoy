@@ -407,6 +407,7 @@ void render_document_window(PatchEditorContext &context,
 
   // A document's window opens beside the one the user was working in. The
   // slot may have been another document's before, so its scroll goes too.
+  bool docking = false;
   if (!ui.window_placed) {
     ui.window_placed = true;
     for (const ImGuiID dock_id :
@@ -418,15 +419,19 @@ void render_document_window(PatchEditorContext &context,
               ImGui::DockContextFindNodeByID(GImGui, dock_id)) {
         ImGui::SetNextWindowDockID(dock_id, ImGuiCond_Always);
         node = target;
+        docking = true;
         break;
       }
     }
     ImGui::SetNextWindowScroll(ImVec2(0.0f, 0.0f));
   }
-  ImGui::SetNextWindowPos(ui::scale::px(ImVec2(400, 50)),
-                          ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 600)),
-                           ImGuiCond_FirstUseEver);
+  // A position given to a window that has none yet undocks it.
+  if (!docking) {
+    ImGui::SetNextWindowPos(ui::scale::px(ImVec2(400, 50)),
+                            ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 600)),
+                             ImGuiCond_FirstUseEver);
+  }
 
   // Brought forward with the keyboard only when another editor window, or a
   // window sharing its dock node, has it -- a focused tab keeps its node

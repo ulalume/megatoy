@@ -231,6 +231,19 @@ PatchSession::open_or_activate_patch(const ym2612::Patch &patch,
 }
 
 std::optional<DocumentId>
+PatchSession::find_document_with_sound(const ym2612::Patch &patch) const {
+  if (same_sound(active_document().patch(), patch)) {
+    return active_id_;
+  }
+  for (const auto &document : documents_) {
+    if (same_sound(document->patch(), patch)) {
+      return document->id();
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<DocumentId>
 PatchSession::open_path(const std::filesystem::path &path, bool pinned) {
   const auto *entry = find_entry(selection_key(path));
   if (entry == nullptr) {

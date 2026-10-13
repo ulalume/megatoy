@@ -15,6 +15,9 @@ struct ConfirmationDialogContext {
   std::function<void(patches::DocumentId)> discard_and_close;
   /// Save a document, then close it once it has nothing left unsaved.
   std::function<void(patches::DocumentId)> save_and_close;
+  /// Keep a document open after its close was cancelled, with its tab in
+  /// front again.
+  std::function<void(patches::DocumentId)> keep_open;
   std::function<void()> confirm_exit;
 };
 

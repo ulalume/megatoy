@@ -576,6 +576,26 @@ void test_nothing_to_restore() {
 
 } // namespace
 
+void test_find_document_with_sound() {
+  TestEnvironment env;
+  auto &session = env.session;
+  const auto second = session.open_document(make_patch(5), {});
+  const auto third = session.open_document(make_patch(6), {});
+
+  CHECK(session.find_document_with_sound(make_patch(6)) == third);
+  CHECK(session.find_document_with_sound(make_patch(5)) == second);
+  CHECK(!session.find_document_with_sound(make_patch(7)));
+
+  // An edit changes what the document plays.
+  session.find_document(third)->patch().instrument.feedback = 4;
+  CHECK(!session.find_document_with_sound(make_patch(6)));
+
+  // The active document wins when two play alike.
+  const auto twin = session.open_document(make_patch(5), {});
+  session.activate(twin);
+  CHECK(session.find_document_with_sound(make_patch(5)) == twin);
+}
+
 int main() {
   test_open_activate_close();
   test_activation_reaches_the_chip();
@@ -594,5 +614,6 @@ int main() {
   test_new_patch_opens_pinned();
   test_open_documents_round_trip();
   test_nothing_to_restore();
+  test_find_document_with_sound();
   return 0;
 }

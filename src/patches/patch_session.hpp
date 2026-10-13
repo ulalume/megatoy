@@ -118,6 +118,9 @@ public:
   std::optional<DocumentId> preview_document_id() const;
   /// Keep a preview document open; false when no document has that id.
   bool pin(DocumentId id);
+  /// An open document that plays like `patch`, the active one first.
+  std::optional<DocumentId>
+  find_document_with_sound(const ym2612::Patch &patch) const;
   /// Pin every preview document that has been edited.
   void pin_modified_documents();
   /**

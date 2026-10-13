@@ -744,6 +744,9 @@ ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
           ui_state.new_patch_prompt_state,
           [&ctx](patches::DocumentId id) { close_document_now(ctx, id); },
           [&ctx](patches::DocumentId id) { save_and_close_document(ctx, id); },
+          [&ctx](patches::DocumentId id) {
+            patch_actions::reveal_document(ctx, id);
+          },
           [&ctx]() {
             ctx.services.gui_manager.set_should_close(true);
             ctx.services.patch_session.mark_all_clean();

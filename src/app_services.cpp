@@ -92,7 +92,13 @@ void AppServices::initialize_app(AppState &state) {
     patch_session.restore_patch(preference_manager.last_patch_path());
   }
   if (url_patch) {
-    patch_session.open_or_activate_patch(*url_patch, {}, /*pinned=*/false);
+    // The URL follows the active patch, so a reload finds the document it
+    // came from already open.
+    if (const auto open = patch_session.find_document_with_sound(*url_patch)) {
+      patch_session.activate(*open);
+    } else {
+      patch_session.open_or_activate_patch(*url_patch, {}, /*pinned=*/false);
+    }
   }
   state.ui_state().reveal_document = patch_session.active_document_id();
 

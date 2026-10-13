@@ -124,6 +124,11 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     // The flag has to go with it: the reopen at the bottom of this function
     // would otherwise put the dialog straight back up.
     confirmation_state.show_unsaved_changes_dialog = false;
+    if (confirmation_state.operation ==
+            UIState::ConfirmationState::Operation::Close &&
+        context.keep_open) {
+      context.keep_open(confirmation_state.pending_document);
+    }
   }
   if (unsaved.visible) {
     ImGui::TextWrapped("%s", confirmation_state.dialog_message.c_str());
@@ -153,6 +158,9 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
       ImGui::SameLine();
       if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
         finish();
+        if (context.keep_open) {
+          context.keep_open(document);
+        }
       }
       ImGui::SameLine();
       if (ImGui::Button("Save", ImVec2(save_width, 0))) {
