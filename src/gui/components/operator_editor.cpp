@@ -542,9 +542,20 @@ struct OperatorHeader {
   bool name_clicked;
 };
 
-/// The operator's name is the handle that drags it onto another operator.
-/// Only the name: the frame's background selects, and the sliders and the
-/// envelope graph have drags of their own.
+/// Inside an open drag source: what is carried and the tooltip that follows
+/// the pointer.
+void carry_operator(patches::DocumentId document, int slot) {
+  const OperatorPayload payload{document, slot};
+  ImGui::SetDragDropPayload(kOperatorPayload, &payload, sizeof(payload));
+  ImGui::TextUnformatted(operator_slot_label(slot).c_str());
+  ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors
+                          ? "Drop to swap, Option to copy"
+                          : "Drop to swap, Alt to copy");
+}
+
+/// The operator's name drags it onto another operator. So does the frame's
+/// background (see drag_from_background); the sliders and the envelope graph
+/// keep drags of their own.
 bool operator_name_drag_source(patches::DocumentId document, int slot) {
   if (!ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
     const bool hovered = ImGui::IsItemHovered();
@@ -553,14 +564,33 @@ bool operator_name_drag_source(patches::DocumentId document, int slot) {
     }
     return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
   }
-  const OperatorPayload payload{document, slot};
-  ImGui::SetDragDropPayload(kOperatorPayload, &payload, sizeof(payload));
-  ImGui::TextUnformatted(operator_slot_label(slot).c_str());
-  ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors
-                          ? "Drop to swap, Option to copy"
-                          : "Drop to swap, Alt to copy");
+  carry_operator(document, slot);
   ImGui::EndDragDropSource();
   return false;
+}
+
+/// A press on the frame's own background, once the pointer moves, drags the
+/// operator. The envelope graph is a child window, so a press there is not
+/// on the frame itself.
+void drag_from_background(OperatorEditState &state,
+                          patches::DocumentId document, int slot,
+                          bool pressed_on_background) {
+  if (pressed_on_background &&
+      GImGui->HoveredWindow == ImGui::GetCurrentWindow()) {
+    state.background_press_slot = slot;
+  }
+  if (state.background_press_slot != slot) {
+    return;
+  }
+  if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+    state.background_press_slot = -1;
+    return;
+  }
+  if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
+      ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceExtern)) {
+    carry_operator(document, slot);
+    ImGui::EndDragDropSource();
+  }
 }
 
 /// The operator's enable checkbox and name, sitting in the frame's top
@@ -920,6 +950,9 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     note_operator_click(state.selection, slot);
     state.click_claimed = true;
   }
+  drag_from_background(
+      state, context.document, slot,
+      on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left));
 
   operator_drop_target(context, patch.instrument, slot, block_min, frame_max);
 

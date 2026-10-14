@@ -20,6 +20,9 @@ struct OperatorEditState {
   /// Set when an operator acts on a click, so "clicked on nothing" can tell
   /// an operator's background from a real miss. Both look alike to ImGui.
   bool click_claimed = false;
+  /// The operator whose frame background was pressed, which a drag from
+  /// there picks up; -1 when none.
+  int background_press_slot = -1;
 };
 
 struct OperatorCommandContext {
