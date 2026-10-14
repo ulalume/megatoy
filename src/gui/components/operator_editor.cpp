@@ -671,6 +671,8 @@ void operator_drop_target(PatchEditorContext &context,
     if (context.commit_history) {
       context.commit_history();
     }
+    // The change happened here, so the keys (Undo among them) follow it.
+    ImGui::SetWindowFocus();
     megatoy::status::success(copy ? "Copied " + from + " to " + to + "."
                                   : label + ".");
   }
