@@ -551,6 +551,7 @@ void carry_operator(patches::DocumentId document, int slot) {
   ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors
                           ? "Drop to swap, Option to copy"
                           : "Drop to swap, Alt to copy");
+  ImGui::TextDisabled("Onto another patch: copy");
 }
 
 /// The operator's name drags it onto another operator. So does the frame's
@@ -621,7 +622,8 @@ OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
 }
 
 /// The whole frame takes an operator dropped from another one: swapped, or
-/// copied over this one while Option/Alt is held.
+/// copied over this one while Option/Alt is held. One from another patch is
+/// always copied, leaving that patch as it was.
 void operator_drop_target(PatchEditorContext &context,
                           ym2612::ChannelInstrument &instrument, int slot,
                           const ImVec2 &min, const ImVec2 &max) {
@@ -630,7 +632,11 @@ void operator_drop_target(PatchEditorContext &context,
     return;
   }
   const auto dragged = *static_cast<const OperatorPayload *>(pending->Data);
-  if (dragged.document != context.document || dragged.slot == slot) {
+  const bool from_other_patch = dragged.document != context.document;
+  const auto *source_document =
+      from_other_patch ? context.session.find_document(dragged.document)
+                       : nullptr;
+  if (from_other_patch ? source_document == nullptr : dragged.slot == slot) {
     return;
   }
   if (!ImGui::BeginDragDropTargetCustom(ImRect(min, max),
@@ -641,19 +647,24 @@ void operator_drop_target(PatchEditorContext &context,
           ImGui::AcceptDragDropPayload(kOperatorPayload)) {
     const int source =
         static_cast<const OperatorPayload *>(payload->Data)->slot;
-    const bool copy = ImGui::GetIO().KeyAlt;
-    const std::string from = operator_slot_label(source);
+    const bool copy = from_other_patch || ImGui::GetIO().KeyAlt;
+    const std::string from =
+        operator_slot_label(source) +
+        (from_other_patch ? " of " + source_document->patch().name : "");
     const std::string to = operator_slot_label(slot);
     const std::string label =
         copy ? "Copy " + from + " to " + to
              : "Swap " + operator_slot_label(std::min(source, slot)) +
                    " and " + operator_slot_label(std::max(source, slot));
+    // Taken before the step opens: opening it makes this patch the active one.
+    const auto copied = ym2612::copy_operator(
+        from_other_patch ? source_document->patch().instrument : instrument,
+        source);
     if (context.begin_history) {
       context.begin_history(label, {}, context.session.current_patch());
     }
     if (copy) {
-      ym2612::paste_operator(instrument, slot,
-                             ym2612::copy_operator(instrument, source));
+      ym2612::paste_operator(instrument, slot, copied);
     } else {
       ym2612::swap_operators(instrument, source, slot);
     }
