@@ -200,6 +200,10 @@ add_executable(operator_edit_test tests/ym2612/operator_edit_test.cpp)
 target_include_directories(operator_edit_test PRIVATE src)
 target_link_libraries(operator_edit_test PRIVATE megatoy_core)
 add_test(NAME operator_edit_test COMMAND operator_edit_test)
+add_executable(operator_text_test tests/ym2612/operator_text_test.cpp)
+target_include_directories(operator_text_test PRIVATE src)
+target_link_libraries(operator_text_test PRIVATE megatoy_core)
+add_test(NAME operator_text_test COMMAND operator_text_test)
 add_executable(operator_selection_test tests/gui/operator_selection_test.cpp
   src/gui/components/operator_selection.cpp)
 target_include_directories(operator_selection_test PRIVATE src)
@@ -283,7 +287,8 @@ add_custom_target(check
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           version_test import_pipeline_test persistent_parse_cache_test
           background_folder_scan_test
-          operator_layout_test operator_edit_test operator_selection_test
+          operator_layout_test operator_edit_test operator_text_test
+          operator_selection_test
           note_test
           envelope_curve_test
           ui_scale_test layouts_test save_as_dialog_test

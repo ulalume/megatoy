@@ -154,6 +154,7 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
   src/ym2612/operator_edit.cpp
+  src/ym2612/operator_text.cpp
   src/ym2612/nuked_chip.cpp
   src/ym2612/ymfm_chip.cpp
 )
