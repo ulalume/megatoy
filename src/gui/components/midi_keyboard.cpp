@@ -6,6 +6,7 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "util.hpp"
+#include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chord_detector.h>
@@ -446,6 +447,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   }
   ImGui::EndChild();
 
+  view_patch_drop_target();
   ImGui::End();
 };
 

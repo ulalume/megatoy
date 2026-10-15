@@ -369,6 +369,23 @@ void test_preview_is_reused() {
   CHECK(session.preview_document_id() == preview);
 }
 
+void test_open_beside_preview() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  const auto warm = session.open_or_activate(env.entry_at(fixture.warm), false);
+  CHECK(warm.has_value());
+
+  const auto cold = session.open_or_activate(env.entry_at(fixture.cold), true,
+                                             /*reuse_preview=*/false);
+  CHECK(cold.has_value() && *cold != *warm);
+  CHECK(session.documents().size() == 2);
+  CHECK(session.active_document_id() == *cold);
+  CHECK(session.find_document(*cold)->pinned());
+  CHECK(session.preview_document_id() == warm);
+  CHECK(session.find_document(*warm)->path() == env.relative(fixture.warm));
+}
+
 void test_open_entry_activates_open_document() {
   BrowserFixture fixture;
   auto &env = fixture.env;
@@ -606,6 +623,7 @@ int main() {
   test_workspace_relabel_follows_inactive_documents();
   test_snapshot_per_document();
   test_preview_is_reused();
+  test_open_beside_preview();
   test_open_entry_activates_open_document();
   test_modified_preview_is_kept();
   test_pinning();

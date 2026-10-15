@@ -169,9 +169,10 @@ void PatchSession::pin_modified_documents() {
 
 DocumentId PatchSession::place_document(
     const ym2612::Patch &patch, const std::filesystem::path &source_path,
-    const std::filesystem::path &selection_path, bool pinned) {
+    const std::filesystem::path &selection_path, bool pinned,
+    bool reuse_preview) {
   PatchDocument *target = nullptr;
-  if (const auto preview = preview_document_id()) {
+  if (const auto preview = preview_document_id(); preview && reuse_preview) {
     auto *document = find_document(*preview);
     if (document->is_modified()) {
       document->set_pinned(true);
@@ -195,7 +196,8 @@ DocumentId PatchSession::place_document(
 }
 
 std::optional<DocumentId>
-PatchSession::open_or_activate(const PatchEntry &entry, bool pinned) {
+PatchSession::open_or_activate(const PatchEntry &entry, bool pinned,
+                               bool reuse_preview) {
   if (const auto open = find_document_by_selection_path(entry.relative_path)) {
     activate(*open);
     if (pinned) {
@@ -207,7 +209,8 @@ PatchSession::open_or_activate(const PatchEntry &entry, bool pinned) {
   if (!repository_->load_patch(entry, patch)) {
     return std::nullopt;
   }
-  return place_document(patch, source_of(entry), entry.relative_path, pinned);
+  return place_document(patch, source_of(entry), entry.relative_path, pinned,
+                        reuse_preview);
 }
 
 DocumentId

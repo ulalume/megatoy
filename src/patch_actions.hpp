@@ -89,6 +89,23 @@ inline bool open_entry(AppContext &context, const patches::PatchEntry &entry,
   return true;
 }
 
+/// Open a browser entry, kept open, in the dock node `dock_id`; 0 places it
+/// as open_entry() does. The preview, wherever it is, stays.
+inline bool open_entry_in_dock(AppContext &context,
+                               const patches::PatchEntry &entry,
+                               unsigned int dock_id) {
+  context.services.history().cancel_transaction();
+  const auto document = context.services.patch_session.open_or_activate(
+      entry, /*pinned=*/true, /*reuse_preview=*/false);
+  if (!document) {
+    megatoy::status::error("Failed to load \"" + entry.name + "\"");
+    return false;
+  }
+  reveal_document(context, *document);
+  context.state.ui_state().document_ui(*document).dock_target = dock_id;
+  return true;
+}
+
 /// Open a patch read from a file outside the browser, as a preview.
 inline void open_dropped_patch(AppContext &context, const ym2612::Patch &patch,
                                const std::filesystem::path &source_path) {

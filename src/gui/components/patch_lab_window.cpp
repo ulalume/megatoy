@@ -6,6 +6,7 @@
 #include "imgui_internal.h"
 #include "patch_selector.hpp"
 #include "patches/patch_lab.hpp"
+#include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <cctype>
@@ -519,6 +520,7 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   }
   ImGui::EndChild();
 
+  view_patch_drop_target();
   ImGui::End();
 }
 

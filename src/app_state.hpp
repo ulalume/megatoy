@@ -69,6 +69,8 @@ struct UIState {
     bool window_focused = false;
     /// The window has been placed for this document.
     bool window_placed = false;
+    /// A dock node to move the window into next frame; 0 for none.
+    unsigned int dock_target = 0;
   };
   std::map<patches::DocumentId, DocumentUi> documents;
   /// The document whose editor window is brought to the front next frame.

@@ -2,6 +2,7 @@
 #include "formats/ym2612_format_adapter.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/clipboard.hpp"
+#include "view_patch_drop.hpp"
 #include <cstring>
 #include <imgui.h>
 
@@ -33,6 +34,7 @@ void render_mml_console(const char *title, MmlConsoleContext &context) {
   ImGui::Text("%s", mml_c);
   ImGui::EndChild();
 
+  view_patch_drop_target();
   ImGui::End();
 };
 

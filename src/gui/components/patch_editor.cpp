@@ -7,6 +7,7 @@
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
 #include "platform/platform_config.hpp"
+#include "view_patch_drop.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <imgui.h>
@@ -14,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace ui {
@@ -405,13 +407,25 @@ void render_document_window(PatchEditorContext &context,
   const ImGuiWindow *existing = ImGui::FindWindowByName(title.c_str());
   ImGuiDockNode *node = existing != nullptr ? existing->DockNode : nullptr;
 
+  // A document dropped on a view goes into that view's dock node, and takes
+  // the keys there.
+  const ImGuiID dropped_on = std::exchange(ui.dock_target, 0u);
+  ImGuiDockNode *drop_node =
+      dropped_on != 0 ? ImGui::DockContextFindNodeByID(GImGui, dropped_on)
+                      : nullptr;
+  bool docking = false;
+  if (drop_node != nullptr && ui.window_placed) {
+    ImGui::SetNextWindowDockID(dropped_on, ImGuiCond_Always);
+    node = drop_node;
+    docking = true;
+  }
   // A document's window opens beside the one the user was working in. The
   // slot may have been another document's before, so its scroll goes too.
-  bool docking = false;
   if (!ui.window_placed) {
     ui.window_placed = true;
     for (const ImGuiID dock_id :
-         {static_cast<ImGuiID>(context.editor_dock_id), frame.first_dock_id}) {
+         {drop_node != nullptr ? dropped_on : 0u,
+          static_cast<ImGuiID>(context.editor_dock_id), frame.first_dock_id}) {
       if (dock_id == 0) {
         continue;
       }
@@ -438,8 +452,8 @@ void render_document_window(PatchEditorContext &context,
   // showing it. Otherwise whatever the user was typing into keeps the keys.
   const bool reveal = context.reveal_document == id;
   const bool take_focus =
-      reveal &&
-      (frame.editor_focused || (node != nullptr && frame.focused_node == node));
+      reveal && (drop_node != nullptr || frame.editor_focused ||
+                 (node != nullptr && frame.focused_node == node));
   if (take_focus) {
     ImGui::SetNextWindowFocus();
   }
@@ -508,6 +522,7 @@ void render_document_window(PatchEditorContext &context,
     handle_operator_shortcuts(context, patch);
     ImGui::PopID();
   }
+  view_patch_drop_target();
   ImGui::End();
 
   if (!open) {

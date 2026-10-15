@@ -101,10 +101,12 @@ public:
    * showing it is activated. Otherwise the preview document takes it when it
    * has no unsaved changes; a preview with changes is pinned and a new
    * document opens instead. `pinned` keeps the result open when the next one
-   * is opened. Empty when the entry cannot be read.
+   * is opened. Without `reuse_preview` a new document opens and the preview
+   * stays. Empty when the entry cannot be read.
    */
   std::optional<DocumentId> open_or_activate(const PatchEntry &entry,
-                                             bool pinned);
+                                             bool pinned,
+                                             bool reuse_preview = true);
   /**
    * The same for a patch read from `source_path` outside the browser, such
    * as a dropped file. A document opened from that file that still holds the
@@ -316,12 +318,13 @@ private:
   std::string selection_key(const std::filesystem::path &path) const;
   /**
    * Put `patch` in the preview document, or in a new one when there is no
-   * preview or it has unsaved changes, and activate it.
+   * preview, it has unsaved changes or `reuse_preview` is false, and
+   * activate it.
    */
   DocumentId place_document(const ym2612::Patch &patch,
                             const std::filesystem::path &source_path,
                             const std::filesystem::path &selection_path,
-                            bool pinned);
+                            bool pinned, bool reuse_preview = true);
 
   /// `folder` names one workspace folder to write into; empty means the
   /// repository's own default target.

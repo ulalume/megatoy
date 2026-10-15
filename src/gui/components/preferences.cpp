@@ -7,6 +7,7 @@
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
+#include "view_patch_drop.hpp"
 #include "ym2612/note.hpp"
 #include <algorithm>
 #include <array>
@@ -674,6 +675,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     }
   }
 
+  view_patch_drop_target();
   ImGui::End();
 
   // The flag is consumed by the main menu, which owns the single folder

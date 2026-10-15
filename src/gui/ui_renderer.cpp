@@ -14,6 +14,7 @@
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
 #include "gui/components/status_toasts.hpp"
+#include "gui/components/view_patch_drop.hpp"
 #include "gui/components/waveform.hpp"
 #include "gui/patch_save_dialog.hpp"
 #include "gui/save_as_dialog.hpp"
@@ -1036,6 +1037,12 @@ void render_all(AppContext &ctx) {
   render_mml_console(MML_CONSOLE_TITLE, contexts.mml_console);
   render_patch_lab(PATCH_LAB_TITLE, contexts.patch_lab, patch_lab_state());
   render_waveform(WAVEFORM_TITLE, contexts.waveform);
+  if (const auto drop = take_view_patch_drop()) {
+    if (const auto *entry =
+            ctx.services.patch_session.find_entry(drop->entry_path)) {
+      patch_actions::open_entry_in_dock(ctx, *entry, drop->dock_id);
+    }
+  }
 
   render_save_export_popup_host(ctx);
   render_status_toasts();
