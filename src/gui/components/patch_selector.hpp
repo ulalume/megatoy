@@ -22,6 +22,9 @@ struct PendingMove {
   patches::PatchEntry destination;
 };
 
+/// Drag payload of a browser entry: its repository-relative path.
+inline constexpr const char *kPatchEntryPayload = "MEGATOY_PATCH_ENTRY";
+
 struct PatchSelectorContext {
   patches::PatchRepository &repository;
   patches::PatchSession &session;

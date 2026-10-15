@@ -2,16 +2,20 @@
 
 #include "common.hpp"
 #include "gui/ui_scale.hpp"
+#include "gui/window_title.hpp"
 #include "imgui_internal.h"
+#include "patch_selector.hpp"
 #include "patches/patch_lab.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <imgui.h>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -56,119 +60,220 @@ build_entry_list(const patches::PatchRepository &repository) {
   return entries;
 }
 
-EntryPtr sanitize_selection(EntryPtr selection,
-                            const std::vector<EntryDisplay> &entries) {
-  const bool contains = std::any_of(entries.begin(), entries.end(),
-                                    [selection](const EntryDisplay &item) {
-                                      return item.entry == selection;
-                                    });
-  if (contains || entries.empty()) {
-    return contains ? selection : nullptr;
+bool matches_filter(const std::string &label, const std::string &filter) {
+  if (filter.empty()) {
+    return true;
   }
-  return entries.front().entry;
+  const auto same = [](unsigned char a, unsigned char b) {
+    return std::tolower(a) == std::tolower(b);
+  };
+  const auto it = std::search(label.begin(), label.end(), filter.begin(),
+                              filter.end(), same);
+  return it != label.end();
 }
 
-std::string combo_preview_label(EntryPtr selection,
-                                const std::vector<EntryDisplay> &entries) {
-  if (!selection) {
-    return "<select>";
+/// What a source is called and what it holds; false when its entry has gone.
+bool resolve_source(const patches::PatchSession &session,
+                    const PatchLabSource &source, std::string *label,
+                    ym2612::Patch *patch) {
+  if (source.patch) {
+    if (label != nullptr) {
+      *label = source.label;
+    }
+    if (patch != nullptr) {
+      *patch = *source.patch;
+    }
+    return true;
   }
-  auto it = std::find_if(entries.begin(), entries.end(),
-                         [selection](const EntryDisplay &item) {
-                           return item.entry == selection;
-                         });
-  if (it != entries.end()) {
-    return it->label;
+  const auto *entry = session.find_entry(source.entry_path);
+  if (entry == nullptr) {
+    return false;
   }
-  return "<missing>";
+  if (label != nullptr) {
+    *label = entry->name.empty() ? display_preset_path(entry->relative_path)
+                                 : entry->name;
+  }
+  return patch == nullptr || session.repository().load_patch(*entry, *patch);
 }
 
-bool render_patch_combo(const char *label,
+/// The list a source slot opens: the open documents first, then every patch
+/// in the browser.
+bool render_source_list(const patches::PatchSession &session,
                         const std::vector<EntryDisplay> &entries,
-                        EntryPtr &selection, std::string &filter_text,
-                        float &min_width) {
-  const std::string preview = combo_preview_label(selection, entries);
-  bool changed = false;
-  bool filter_active = !filter_text.empty();
-
-  // The list sizes itself to its widest row, so filtering it would pull it
-  // narrower while the user is still typing into it. The width from before
-  // the search is held as a floor until the list closes. The ceiling is for
-  // the other direction: one very long patch name would otherwise open a
-  // list wider than the window it is in.
-  ImGui::SetNextWindowSizeConstraints(
-      ImVec2(min_width, 0.0f),
-      ImVec2(ImGui::GetMainViewport()->WorkSize.x * 0.6f, FLT_MAX));
-
-  if (ImGui::BeginCombo(label, preview.c_str())) {
-    // -FLT_MIN, not -1.0f: a negative width is relative to what is
-    // available, so -1.0f makes this the widest content by one pixel less
-    // each frame, and the list creeps narrower for as long as it is open.
-    ImGui::SetNextItemWidth(-FLT_MIN);
-
-    // Use char buffer for ImGui compatibility
-    static char filter_buffer[256];
-    strncpy(filter_buffer, filter_text.c_str(), sizeof(filter_buffer) - 1);
-    filter_buffer[sizeof(filter_buffer) - 1] = '\0';
-
-    if (ImGui::InputTextWithHint("##filter",
-                                 ICON_FA_MAGNIFYING_GLASS " Search...",
-                                 filter_buffer, sizeof(filter_buffer))) {
-      filter_text = std::string(filter_buffer);
-      filter_active = !filter_text.empty();
-    }
-
-    // Auto-focus the filter input when combo opens
-    if (ImGui::IsWindowAppearing()) {
-      ImGui::SetKeyboardFocusHere(-1);
-    }
-
-    ImGui::Separator();
-
-    // Filter and display entries
-    for (const auto &item : entries) {
-      bool should_show = true;
-
-      if (filter_active) {
-        // Case-insensitive search
-        std::string item_lower = item.label;
-        std::string filter_lower = filter_text;
-        std::transform(item_lower.begin(), item_lower.end(), item_lower.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        std::transform(filter_lower.begin(), filter_lower.end(),
-                       filter_lower.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        should_show = item_lower.find(filter_lower) != std::string::npos;
-      }
-
-      if (should_show) {
-        const bool is_selected = selection == item.entry;
-        if (ImGui::Selectable(item.label.c_str(), is_selected)) {
-          selection = item.entry;
-          changed = true;
-          filter_text.clear();
-        }
-        if (is_selected) {
-          ImGui::SetItemDefaultFocus();
-        }
-      }
-    }
-
-    min_width = std::max(min_width, ImGui::GetWindowWidth());
-    ImGui::EndCombo();
-  } else {
-    // Closed: forget it, so the next open measures the list afresh.
-    min_width = 0.0f;
+                        PatchLabSource &source, std::string &filter_text) {
+  // -FLT_MIN, not -1.0f: a negative width is relative to what is available,
+  // so -1.0f makes this the widest content by one pixel less each frame.
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  static char filter_buffer[256];
+  std::snprintf(filter_buffer, sizeof(filter_buffer), "%s",
+                filter_text.c_str());
+  if (ImGui::InputTextWithHint("##filter",
+                               ICON_FA_MAGNIFYING_GLASS " Search...",
+                               filter_buffer, sizeof(filter_buffer))) {
+    filter_text = filter_buffer;
   }
+  if (ImGui::IsWindowAppearing()) {
+    ImGui::SetKeyboardFocusHere(-1);
+  }
+
+  bool changed = false;
+  const float max_height = ImGui::GetTextLineHeightWithSpacing() * 16.0f;
+  ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
+                                      ImVec2(FLT_MAX, max_height));
+  if (ImGui::BeginChild("##sources", ImVec2(0.0f, 0.0f),
+                        ImGuiChildFlags_AutoResizeY)) {
+    bool any_open = false;
+    for (const auto &document : session.documents()) {
+      const auto label = document_label(*document);
+      if (!matches_filter(label, filter_text)) {
+        continue;
+      }
+      if (!any_open) {
+        ImGui::SeparatorText("Open");
+        any_open = true;
+      }
+      ImGui::PushID(static_cast<int>(document->id()));
+      if (ImGui::Selectable(label.c_str())) {
+        source = {.patch = document->patch(), .label = label};
+        changed = true;
+      }
+      ImGui::PopID();
+    }
+    if (any_open) {
+      ImGui::SeparatorText("Patches");
+    }
+    for (const auto &item : entries) {
+      if (!matches_filter(item.label, filter_text)) {
+        continue;
+      }
+      const bool selected = source.entry_path == item.entry->relative_path;
+      if (ImGui::Selectable(item.label.c_str(), selected)) {
+        source = {.entry_path = item.entry->relative_path};
+        changed = true;
+      }
+      if (selected && ImGui::IsWindowAppearing()) {
+        ImGui::SetScrollHereY();
+      }
+    }
+  }
+  ImGui::EndChild();
   return changed;
 }
 
-bool load_patch_from_entry(const patches::PatchRepository &repository,
-                           EntryPtr entry, ym2612::Patch &out_patch) {
-  if (!entry) {
-    return false;
+/// A slot for one source: a click lists what it can take, and a patch
+/// dragged from the browser drops into it.
+void render_source_slot(const char *id, const char *caption,
+                        const patches::PatchSession &session,
+                        const std::vector<EntryDisplay> &entries,
+                        PatchLabSource &source, std::string &filter_text,
+                        float width) {
+  std::string name;
+  if (!source.empty() && !resolve_source(session, source, &name, nullptr)) {
+    source = {};
   }
-  return repository.load_patch(*entry, out_patch);
+
+  ImGui::PushID(id);
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const ImVec2 size(width, ImGui::GetTextLineHeight() * 2.0f +
+                               style.FramePadding.y * 2.0f +
+                               style.ItemInnerSpacing.y);
+  const bool clicked = ImGui::InvisibleButton("##slot", size);
+  const ImVec2 min = ImGui::GetItemRectMin();
+  const ImVec2 max = ImGui::GetItemRectMax();
+  const bool hovered = ImGui::IsItemHovered();
+  const bool held = ImGui::IsItemActive();
+
+  if (ImGui::BeginDragDropTarget()) {
+    const ImGuiPayload *payload = ImGui::GetDragDropPayload();
+    if (payload != nullptr && payload->IsDataType(kPatchEntryPayload)) {
+      const std::string path(static_cast<const char *>(payload->Data),
+                             static_cast<std::size_t>(payload->DataSize));
+      if (session.find_entry(path) != nullptr &&
+          ImGui::AcceptDragDropPayload(kPatchEntryPayload) != nullptr) {
+        source = {.entry_path = path};
+      }
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  const ImGuiID popup_id = ImGui::GetID("##source_list");
+  if (clicked) {
+    filter_text.clear();
+    ImGui::OpenPopupEx(popup_id);
+  }
+  const bool open = ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None);
+
+  auto *draw_list = ImGui::GetWindowDrawList();
+  const ImGuiCol background = held || open ? ImGuiCol_FrameBgActive
+                              : hovered    ? ImGuiCol_FrameBgHovered
+                                           : ImGuiCol_FrameBg;
+  draw_list->AddRectFilled(min, max, ImGui::GetColorU32(background),
+                           style.FrameRounding);
+  draw_list->AddRect(min, max, ImGui::GetColorU32(ImGuiCol_Border),
+                     style.FrameRounding);
+
+  const ImVec2 inner_min(min.x + style.FramePadding.x,
+                         min.y + style.FramePadding.y);
+  const ImVec2 inner_max(max.x - style.FramePadding.x,
+                         max.y - style.FramePadding.y);
+  const ImU32 dim = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+  if (source.empty()) {
+    const std::string text = std::string(ICON_FA_PLUS "  ") + caption;
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::RenderTextClipped(inner_min, inner_max, text.c_str(), nullptr,
+                             nullptr, ImVec2(0.5f, 0.5f));
+    ImGui::PopStyleColor();
+  } else {
+    draw_list->AddText(inner_min, dim, caption);
+    const float line = ImGui::GetTextLineHeight() + style.ItemInnerSpacing.y;
+    ImGui::RenderTextEllipsis(
+        draw_list, ImVec2(inner_min.x, inner_min.y + line), inner_max,
+        inner_max.x, name.c_str(), nullptr, nullptr);
+  }
+  if (hovered && !source.empty()) {
+    ImGui::SetTooltip("%s", name.c_str());
+  }
+
+  // Laid out as a combo's list, which opens above when there is no room
+  // below. A fixed width keeps the list from narrowing while it is filtered.
+  const float list_width =
+      std::min(std::max(width, ui::scale::px(320.0f)),
+               ImGui::GetMainViewport()->WorkSize.x * 0.6f);
+  ImGui::SetNextWindowSizeConstraints(ImVec2(list_width, 0.0f),
+                                      ImVec2(list_width, FLT_MAX));
+  if (ImGui::BeginComboPopup(popup_id, ImRect(min, max),
+                             ImGuiComboFlags_None)) {
+    if (render_source_list(session, entries, source, filter_text)) {
+      filter_text.clear();
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndCombo();
+  }
+  ImGui::PopID();
+}
+
+/// Patch A and Patch B side by side.
+void render_source_slots(PatchLabContext &context, PatchLabState &state,
+                         const std::vector<EntryDisplay> &entries) {
+  const float spacing = ImGui::GetStyle().ItemSpacing.x;
+  const float width = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
+  render_source_slot("a", "Patch A", context.session, entries, state.source_a,
+                     state.picker_filter, width);
+  ImGui::SameLine();
+  render_source_slot("b", "Patch B", context.session, entries, state.source_b,
+                     state.picker_filter, width);
+}
+
+/// Both sources' patches, or why they cannot be had.
+std::optional<std::string> load_sources(const PatchLabContext &context,
+                                        const PatchLabState &state,
+                                        ym2612::Patch &patch_a,
+                                        ym2612::Patch &patch_b) {
+  if (!resolve_source(context.session, state.source_a, nullptr, &patch_a) ||
+      !resolve_source(context.session, state.source_b, nullptr, &patch_b)) {
+    return "Failed to load one or both patches.";
+  }
+  return std::nullopt;
 }
 
 void apply_patch_result(PatchLabContext &context,
@@ -240,59 +345,37 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
       "Patch B.");
   ImGui::Spacing();
 
-  auto sanitized_a = sanitize_selection(state.source_a, entries);
-  auto sanitized_b = sanitize_selection(state.source_b, entries);
-  state.source_a = sanitized_a;
-  state.source_b = sanitized_b;
-
-  if (entries.empty()) {
-    ImGui::TextUnformatted("No patches available.");
-    ImGui::BeginDisabled(true);
-  }
-
-  render_patch_combo("Patch A", entries, state.source_a,
-                     state.combo_filter_patch_a, state.combo_width_patch_a);
-  render_patch_combo("Patch B", entries, state.source_b,
-                     state.combo_filter_patch_b, state.combo_width_patch_b);
+  render_source_slots(context, state, entries);
 
   ImGui::SetNextItemWidth(ui::scale::px(120.0f));
   ImGui::InputInt("Seed (auto = -1)##merge", &state.merge_seed);
 
-  if (!entries.empty()) {
-    if (ImGui::Button("Merge into current patch")) {
-      ym2612::Patch patch_a;
-      ym2612::Patch patch_b;
-      auto &repository = context.session.repository();
-      bool loaded_a =
-          load_patch_from_entry(repository, state.source_a, patch_a);
-      bool loaded_b =
-          load_patch_from_entry(repository, state.source_b, patch_b);
-      if (!loaded_a || !loaded_b) {
-        state.merge_error = "Failed to load one or both patches.";
-      } else {
-        patch_lab::MergeOptions options;
-        options.seed = state.merge_seed;
-        auto result = patch_lab::merge(patch_a, patch_b, options);
-        remember_result(state, "Mix", result.patch);
-        apply_patch_result(context, "Patch Lab Merge", result.patch.hash(),
-                           result.patch);
-        state.merge_last_seed = result.seed;
-        state.merge_has_result = true;
-        state.merge_error.clear();
-      }
+  ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
+  if (ImGui::Button("Merge into current patch")) {
+    ym2612::Patch patch_a;
+    ym2612::Patch patch_b;
+    if (auto error = load_sources(context, state, patch_a, patch_b)) {
+      state.merge_error = std::move(*error);
+    } else {
+      patch_lab::MergeOptions options;
+      options.seed = state.merge_seed;
+      auto result = patch_lab::merge(patch_a, patch_b, options);
+      remember_result(state, "Mix", result.patch);
+      apply_patch_result(context, "Patch Lab Merge", result.patch.hash(),
+                         result.patch);
+      state.merge_last_seed = result.seed;
+      state.merge_has_result = true;
+      state.merge_error.clear();
     }
   }
+  ImGui::EndDisabled();
 
-  if (!entries.empty()) {
-    if (state.merge_has_result) {
-      ImGui::Text("Last seed: %u", state.merge_last_seed);
-    }
-    if (!state.merge_error.empty()) {
-      ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%s",
-                         state.merge_error.c_str());
-    }
-  } else {
-    ImGui::EndDisabled();
+  if (state.merge_has_result) {
+    ImGui::Text("Last seed: %u", state.merge_last_seed);
+  }
+  if (!state.merge_error.empty()) {
+    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%s",
+                       state.merge_error.c_str());
   }
 }
 
@@ -303,59 +386,37 @@ void render_morph_section(PatchLabContext &context, PatchLabState &state,
       "smooth transitions.");
   ImGui::Spacing();
 
-  auto sanitized_a = sanitize_selection(state.source_a, entries);
-  auto sanitized_b = sanitize_selection(state.source_b, entries);
-  state.source_a = sanitized_a;
-  state.source_b = sanitized_b;
-
-  if (entries.empty()) {
-    ImGui::TextUnformatted("No patches available.");
-    ImGui::BeginDisabled(true);
-  }
-
-  render_patch_combo("Patch A##morph", entries, state.source_a,
-                     state.combo_filter_patch_a, state.combo_width_patch_a);
-  render_patch_combo("Patch B##morph", entries, state.source_b,
-                     state.combo_filter_patch_b, state.combo_width_patch_b);
+  render_source_slots(context, state, entries);
 
   ImGui::SliderFloat("Blend", &state.morph_mix, 0.0f, 1.0f);
   ImGui::Checkbox("Interpolate algorithm", &state.morph_interpolate_algorithm);
 
-  if (!entries.empty()) {
-    if (ImGui::Button("Morph into current patch")) {
-      ym2612::Patch patch_a;
-      ym2612::Patch patch_b;
-      auto &repository = context.session.repository();
-      bool loaded_a =
-          load_patch_from_entry(repository, state.source_a, patch_a);
-      bool loaded_b =
-          load_patch_from_entry(repository, state.source_b, patch_b);
-      if (!loaded_a || !loaded_b) {
-        state.morph_error = "Failed to load one or both patches.";
-      } else {
-        patch_lab::MorphOptions options;
-        options.mix = state.morph_mix;
-        options.interpolate_algorithm = state.morph_interpolate_algorithm;
+  ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
+  if (ImGui::Button("Morph into current patch")) {
+    ym2612::Patch patch_a;
+    ym2612::Patch patch_b;
+    if (auto error = load_sources(context, state, patch_a, patch_b)) {
+      state.morph_error = std::move(*error);
+    } else {
+      patch_lab::MorphOptions options;
+      options.mix = state.morph_mix;
+      options.interpolate_algorithm = state.morph_interpolate_algorithm;
 
-        auto result = patch_lab::morph(patch_a, patch_b, options);
-        const int percentage =
-            static_cast<int>(std::lround(state.morph_mix * 100.0f));
-        remember_result(state, "Morph " + std::to_string(percentage) + "%",
-                        result.patch);
-        apply_patch_result(context, "Patch Lab Morph", result.patch.hash(),
-                           result.patch);
-        state.morph_error.clear();
-      }
+      auto result = patch_lab::morph(patch_a, patch_b, options);
+      const int percentage =
+          static_cast<int>(std::lround(state.morph_mix * 100.0f));
+      remember_result(state, "Morph " + std::to_string(percentage) + "%",
+                      result.patch);
+      apply_patch_result(context, "Patch Lab Morph", result.patch.hash(),
+                         result.patch);
+      state.morph_error.clear();
     }
   }
+  ImGui::EndDisabled();
 
-  if (!entries.empty()) {
-    if (!state.morph_error.empty()) {
-      ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%s",
-                         state.morph_error.c_str());
-    }
-  } else {
-    ImGui::EndDisabled();
+  if (!state.morph_error.empty()) {
+    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%s",
+                       state.morph_error.c_str());
   }
 }
 

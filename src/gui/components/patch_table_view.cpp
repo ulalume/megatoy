@@ -308,6 +308,13 @@ void render_patch_table(PatchSelectorContext &context) {
               *entry, ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left));
         }
         entry_context_menu(context, *entry);
+        if (ImGui::IsItemActive() && ImGui::BeginDragDropSource()) {
+          ImGui::SetDragDropPayload(kPatchEntryPayload,
+                                    entry->relative_path.data(),
+                                    entry->relative_path.size());
+          ImGui::TextUnformatted(entry->name.c_str());
+          ImGui::EndDragDropSource();
+        }
 
         const bool can_edit_metadata =
             context.repository.can_edit_metadata(*entry);

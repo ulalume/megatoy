@@ -74,6 +74,9 @@ public:
   DocumentId active_document_id() const;
   PatchDocument *find_document(DocumentId id);
   const PatchDocument *find_document(DocumentId id) const;
+  /// The browser's entry for a repository-relative path: the entry itself,
+  /// or failing that the first one read from that file.
+  const PatchEntry *find_entry(const std::string &relative_path) const;
   /// The open document showing this repository entry, if any.
   std::optional<DocumentId>
   find_document_by_selection_path(const std::filesystem::path &path) const;
@@ -311,9 +314,6 @@ private:
   void set_document_selection_path(PatchDocument &document,
                                    const std::filesystem::path &path);
   std::string selection_key(const std::filesystem::path &path) const;
-  /// The browser's entry for a repository-relative path: the entry itself,
-  /// or failing that the first one read from that file.
-  const PatchEntry *find_entry(const std::string &relative_path) const;
   /**
    * Put `patch` in the preview document, or in a new one when there is no
    * preview or it has unsaved changes, and activate it.

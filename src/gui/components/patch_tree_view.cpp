@@ -75,8 +75,6 @@ struct PatchTreeCache {
   }
 };
 
-constexpr const char *kEntryPayload = "MEGATOY_PATCH_ENTRY";
-
 const patches::PatchEntry *
 find_by_relative_path(const std::vector<patches::PatchEntry> &entries,
                       const std::string &relative_path) {
@@ -91,16 +89,20 @@ find_by_relative_path(const std::vector<patches::PatchEntry> &entries,
   return nullptr;
 }
 
-/// Lets the last drawn item be dragged onto a folder. Workspace folders and
-/// anything that cannot be renamed stay put.
+/// Lets the last drawn item be dragged: any patch, to wherever takes one, and
+/// a folder that can be renamed, onto another folder. Workspace folders stay
+/// put.
 void entry_drag_source(const PatchSelectorContext &context,
                        const patches::PatchEntry &entry, int depth) {
-  if (!context.move_patch || depth == 0 || !ImGui::IsItemActive() ||
-      !entry_can_rename(context, entry)) {
+  if (depth == 0 || !ImGui::IsItemActive()) {
+    return;
+  }
+  if (entry.is_directory &&
+      (!context.move_patch || !entry_can_rename(context, entry))) {
     return;
   }
   if (ImGui::BeginDragDropSource()) {
-    ImGui::SetDragDropPayload(kEntryPayload, entry.relative_path.data(),
+    ImGui::SetDragDropPayload(kPatchEntryPayload, entry.relative_path.data(),
                               entry.relative_path.size());
     ImGui::TextUnformatted(entry.name.c_str());
     ImGui::EndDragDropSource();
@@ -114,14 +116,14 @@ void folder_drop_target(PatchSelectorContext &context,
     return;
   }
   const ImGuiPayload *payload = ImGui::GetDragDropPayload();
-  if (payload != nullptr && payload->IsDataType(kEntryPayload)) {
+  if (payload != nullptr && payload->IsDataType(kPatchEntryPayload)) {
     const std::string relative_path(
         static_cast<const char *>(payload->Data),
         static_cast<std::size_t>(payload->DataSize));
     const auto *source =
         find_by_relative_path(context.repository.tree(), relative_path);
     if (source != nullptr && context.session.can_move_patch(*source, folder) &&
-        ImGui::AcceptDragDropPayload(kEntryPayload) != nullptr) {
+        ImGui::AcceptDragDropPayload(kPatchEntryPayload) != nullptr) {
       context.pending_move = PendingMove{*source, folder};
     }
   }
