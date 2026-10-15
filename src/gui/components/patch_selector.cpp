@@ -8,6 +8,7 @@
 
 #include <IconsFontAwesome7.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <string>
 #include <utility>
 
@@ -26,14 +27,38 @@ void render_empty_workspace_prompt(PatchSelectorContext &context) {
   }
 }
 
-void render_add_folder_action(PatchSelectorContext &context) {
-  const char *label = PreferenceManager::folder_add_is_import()
-                          ? ICON_FA_FOLDER " Import Folder..."
-                          : ICON_FA_FOLDER " Add Folder...";
-  if (ImGui::Button(label)) {
+const char *add_folder_label() {
+  return PreferenceManager::folder_add_is_import() ? "Import Folder..."
+                                                   : "Add Folder...";
+}
+
+/// The labelled button, under the prompt shown while there are no folders.
+void render_add_folder_button(PatchSelectorContext &context) {
+  const std::string label = std::string(ICON_FA_FOLDER_PLUS " ") +
+                            add_folder_label();
+  if (ImGui::Button(label.c_str())) {
     context.add_folder();
   }
   ImGui::Separator();
+}
+
+/// The same action as an icon at the right end of the view tabs' row. Drawn
+/// before the tabs, which are kept clear of it; returns the width it takes.
+float render_add_folder_icon(PatchSelectorContext &context) {
+  const ImVec2 row = ImGui::GetCursorScreenPos();
+  const float size = ImGui::GetFrameHeight();
+  const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
+  ImGui::SetCursorScreenPos(ImVec2(right - size, row.y));
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+  if (ImGui::Button(ICON_FA_FOLDER_PLUS "##add_folder", ImVec2(size, size))) {
+    context.add_folder();
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%s", add_folder_label());
+  }
+  ImGui::SetCursorScreenPos(row);
+  return size + ImGui::GetStyle().ItemSpacing.x;
 }
 
 void render_tree_tab(PatchSelectorContext &context) {
@@ -81,12 +106,19 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
 
   if (context.workspace_is_empty && context.add_folder) {
     render_empty_workspace_prompt(context);
-  }
-  if (context.add_folder) {
-    render_add_folder_action(context);
+    render_add_folder_button(context);
   }
 
-  if (ImGui::BeginTabBar("##PatchViewMode")) {
+  // The tab bar spans the window's work rect as it begins; narrowing that for
+  // the call keeps the tabs off the icon and leaves the contents full width.
+  ImGuiWindow *window = ImGui::GetCurrentWindow();
+  const float work_right = window->WorkRect.Max.x;
+  if (context.add_folder) {
+    window->WorkRect.Max.x -= render_add_folder_icon(context);
+  }
+  const bool tabs = ImGui::BeginTabBar("##PatchViewMode");
+  window->WorkRect.Max.x = work_right;
+  if (tabs) {
     if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Tree view")) {
       render_tree_tab(context);
       ImGui::EndTabItem();
