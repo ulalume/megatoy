@@ -8,6 +8,7 @@
 #include "drop_actions.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/ui_renderer.hpp"
+#include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
 #include "platform/run_loop.hpp"
@@ -58,10 +59,21 @@ bool run_frame(RuntimeContext &runtime) {
   auto &app_state = runtime.app_context->state;
 
   if (services.gui_manager.get_should_close()) {
-    if (const auto modified =
-            services.patch_session.modified_document_count()) {
+    auto &session = services.patch_session;
+    if (const auto modified = session.modified_document_count()) {
+      const patches::PatchDocument *only = nullptr;
+      if (modified == 1) {
+        for (const auto &document : session.documents()) {
+          if (document->is_modified()) {
+            only = document.get();
+          }
+        }
+      }
+      using Confirmation = UIState::ConfirmationState;
       app_state.ui_state().confirmation_state =
-          UIState::ConfirmationState::exit(modified);
+          only != nullptr && session.can_save_in_place(*only)
+              ? Confirmation::exit_saving(only->id(), ui::document_label(*only))
+              : Confirmation::exit(modified);
       services.gui_manager.set_should_close(false);
     } else {
       runtime.running = false;

@@ -19,6 +19,8 @@ struct ConfirmationDialogContext {
   /// front again.
   std::function<void(patches::DocumentId)> keep_open;
   std::function<void()> confirm_exit;
+  /// Save a document, then exit once nothing is left unsaved.
+  std::function<void(patches::DocumentId)> save_and_exit;
 };
 
 void render_confirmation_dialog(ConfirmationDialogContext &context);

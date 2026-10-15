@@ -1,6 +1,7 @@
 #include "confirmation_dialog.hpp"
 #include "common.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 #include "modal.hpp"
 #include "patches/filename_utils.hpp"
 #include <algorithm>
@@ -141,45 +142,46 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
       ImGui::CloseCurrentPopup();
     };
     // The labels do not all fit the standard width, so the row is measured
-    // rather than assumed.
+    // rather than assumed. Discarding stands apart at the left, away from
+    // the answers that keep the changes.
+    const auto document = confirmation_state.pending_document;
+    const bool offers_save = closing || confirmation_state.exit_can_save;
+    const float discard_width = button_width("Discard Changes");
     const float cancel_width = button_width("Cancel");
-    if (closing) {
-      const float discard_width = button_width("Don't Save");
-      const float save_width =
-          std::max(dialog_button_width(), button_width("Save"));
-      align_buttons_right({discard_width, cancel_width, save_width});
-      const auto document = confirmation_state.pending_document;
-      if (ImGui::Button("Don't Save", ImVec2(discard_width, 0))) {
-        finish();
+    const float save_width =
+        std::max(dialog_button_width(), button_width("Save"));
+    if (ImGui::Button("Discard Changes", ImVec2(discard_width, 0))) {
+      finish();
+      if (closing) {
         if (context.discard_and_close) {
           context.discard_and_close(document);
         }
+      } else if (context.confirm_exit) {
+        context.confirm_exit();
       }
-      ImGui::SameLine();
-      if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
-        finish();
-        if (context.keep_open) {
-          context.keep_open(document);
-        }
+    }
+    ImGui::SameLine(0.0f, ui::scale::px(24.0f));
+    if (offers_save) {
+      align_buttons_right({cancel_width, save_width});
+    } else {
+      align_buttons_right({cancel_width});
+    }
+    if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
+      finish();
+      if (closing && context.keep_open) {
+        context.keep_open(document);
       }
+    }
+    if (offers_save) {
       ImGui::SameLine();
       if (ImGui::Button("Save", ImVec2(save_width, 0))) {
         finish();
-        if (context.save_and_close) {
-          context.save_and_close(document);
-        }
-      }
-    } else {
-      const float discard_width = button_width("Discard Changes");
-      align_buttons_right({cancel_width, discard_width});
-      if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
-        finish();
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("Discard Changes", ImVec2(discard_width, 0))) {
-        finish();
-        if (context.confirm_exit) {
-          context.confirm_exit();
+        if (closing) {
+          if (context.save_and_close) {
+            context.save_and_close(document);
+          }
+        } else if (context.save_and_exit) {
+          context.save_and_exit(document);
         }
       }
     }

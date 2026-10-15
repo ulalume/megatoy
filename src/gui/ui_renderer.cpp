@@ -149,6 +149,21 @@ void save_and_close_document(AppContext &ctx, patches::DocumentId id) {
   }
 }
 
+/// Save the one changed document in place and exit once it is clean; a save
+/// that does not finish, such as one waiting on an overwrite question,
+/// leaves the app open.
+void save_and_exit(AppContext &ctx, patches::DocumentId id) {
+  auto &session = ctx.services.patch_session;
+  if (session.find_document(id) == nullptr) {
+    return;
+  }
+  patch_actions::activate_document(ctx, id);
+  trigger_save(session, ctx.ui_state().save_export_state);
+  if (session.modified_document_count() == 0) {
+    ctx.services.gui_manager.set_should_close(true);
+  }
+}
+
 /// Cmd/Ctrl+W closes the active document while an editor window or the
 /// browser has the keyboard. The browser keeps the key for its own tab.
 void handle_close_shortcut(AppContext &ctx) {
@@ -751,7 +766,8 @@ ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
           [&ctx]() {
             ctx.services.gui_manager.set_should_close(true);
             ctx.services.patch_session.mark_all_clean();
-          }};
+          },
+          [&ctx](patches::DocumentId id) { save_and_exit(ctx, id); }};
 }
 
 /// The undo step opens on the document whose window is being drawn, which

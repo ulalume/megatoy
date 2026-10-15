@@ -96,8 +96,10 @@ struct UIState {
       Close,
       Exit,
     } operation = Operation::Exit;
-    /// The document a Close asks about.
+    /// The document a Close asks about, or the one an Exit can save.
     patches::DocumentId pending_document = 0;
+    /// An Exit with one changed document that saves to its own file.
+    bool exit_can_save = false;
 
     static ConfirmationState close(patches::DocumentId document,
                                    const std::string &name) {
@@ -119,6 +121,15 @@ struct UIState {
               : "You have unsaved changes. Do you want to discard them and "
                 "exit?";
       state.operation = UIState::ConfirmationState::Operation::Exit;
+      return state;
+    }
+    /// An Exit whose only changed document can be saved where it is.
+    static ConfirmationState exit_saving(patches::DocumentId document,
+                                         const std::string &name) {
+      ConfirmationState state = exit();
+      state.pending_document = document;
+      state.exit_can_save = true;
+      state.dialog_message = "Save changes to \"" + name + "\" before exiting?";
       return state;
     }
 
