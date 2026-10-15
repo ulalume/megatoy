@@ -13,6 +13,15 @@ std::string to_lower(const std::string &value) {
   return lowered;
 }
 
+std::string search_key(const std::string &query) {
+  const auto first = query.find_first_not_of(" \t");
+  if (first == std::string::npos) {
+    return {};
+  }
+  const auto last = query.find_last_not_of(" \t");
+  return to_lower(query.substr(first, last - first + 1));
+}
+
 bool contains_case_insensitive(const std::string &haystack,
                                const std::string &needle_lower) {
   if (needle_lower.empty()) {

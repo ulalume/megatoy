@@ -33,7 +33,7 @@ filtered_patches(PatchSelectorContext &context) {
   std::vector<const patches::PatchEntry *> all;
   collect_leaf_patches(context.repository.tree(), all);
 
-  const std::string query_lower = to_lower(context.prefs.metadata_search_query);
+  const std::string query_lower = search_key(context.prefs.metadata_search_query);
   const int star_filter = context.prefs.metadata_star_filter;
 
   std::vector<const patches::PatchEntry *> filtered;

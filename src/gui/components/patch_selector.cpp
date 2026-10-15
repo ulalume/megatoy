@@ -65,7 +65,7 @@ void render_tree_tab(PatchSelectorContext &context) {
   render_filter_bar(context);
   if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(), true)) {
     const std::string query_lower =
-        to_lower(context.prefs.metadata_search_query);
+        search_key(context.prefs.metadata_search_query);
     const bool rendered =
         render_patch_tree(context.repository.tree(), context, query_lower,
                           context.prefs.metadata_star_filter);

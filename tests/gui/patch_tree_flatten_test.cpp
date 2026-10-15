@@ -1,4 +1,5 @@
 #include "../test_check.hpp"
+#include "gui/components/patch_filter.hpp"
 #include "gui/components/patch_tree_flatten.hpp"
 
 #include <iostream>
@@ -234,6 +235,14 @@ void test_empty_tree_is_handled() {
 
 } // namespace
 
+void test_search_key_ignores_surrounding_spaces() {
+  using ui::selector_detail::search_key;
+  CHECK(search_key("  Acoustic Bass ") == "acoustic bass");
+  CHECK(search_key("bass\t") == "bass");
+  CHECK(search_key("   ").empty());
+  CHECK(search_key("").empty());
+}
+
 int main() {
   test_closed_tree_lists_visible_top_level_only();
   test_closed_ancestors_of_a_deep_match_are_listed();
@@ -244,6 +253,7 @@ int main() {
   test_a_directory_holding_nothing_is_listed_only_without_filters();
   test_a_directory_holding_only_an_empty_one_is_listed();
   test_empty_tree_is_handled();
+  test_search_key_ignores_surrounding_spaces();
 
   std::cout << "All patch tree flatten tests passed\n";
   return 0;
