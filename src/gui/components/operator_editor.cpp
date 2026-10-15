@@ -623,13 +623,14 @@ OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
 
 /// The whole frame takes an operator dropped from another one: swapped, or
 /// copied over this one while Option/Alt is held. One from another patch is
-/// always copied, leaving that patch as it was.
-void operator_drop_target(PatchEditorContext &context,
+/// always copied, leaving that patch as it was. True while one is held over
+/// it, for the frame's own border to show instead of ImGui's rectangle.
+bool operator_drop_target(PatchEditorContext &context,
                           ym2612::ChannelInstrument &instrument, int slot,
                           const ImVec2 &min, const ImVec2 &max) {
   const ImGuiPayload *pending = ImGui::GetDragDropPayload();
   if (pending == nullptr || !pending->IsDataType(kOperatorPayload)) {
-    return;
+    return false;
   }
   const auto dragged = *static_cast<const OperatorPayload *>(pending->Data);
   const bool from_other_patch = dragged.document != context.document;
@@ -637,14 +638,17 @@ void operator_drop_target(PatchEditorContext &context,
       from_other_patch ? context.session.find_document(dragged.document)
                        : nullptr;
   if (from_other_patch ? source_document == nullptr : dragged.slot == slot) {
-    return;
+    return false;
   }
   if (!ImGui::BeginDragDropTargetCustom(ImRect(min, max),
                                         ImGui::GetID("##operator_drop"))) {
-    return;
+    return false;
   }
-  if (const ImGuiPayload *payload =
-          ImGui::AcceptDragDropPayload(kOperatorPayload)) {
+  const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
+      kOperatorPayload, ImGuiDragDropFlags_AcceptBeforeDelivery |
+                            ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+  const bool receiving = payload != nullptr && payload->IsPreview();
+  if (payload != nullptr && payload->IsDelivery()) {
     const int source =
         static_cast<const OperatorPayload *>(payload->Data)->slot;
     const bool copy = from_other_patch || ImGui::GetIO().KeyAlt;
@@ -677,6 +681,7 @@ void operator_drop_target(PatchEditorContext &context,
                                   : label + ".");
   }
   ImGui::EndDragDropTarget();
+  return receiving;
 }
 
 /**
@@ -967,7 +972,8 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       state, context.document, slot,
       on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left));
 
-  operator_drop_target(context, patch.instrument, slot, block_min, frame_max);
+  const bool receiving = operator_drop_target(context, patch.instrument, slot,
+                                              block_min, frame_max);
 
   // Anywhere in the frame, including on a slider, which ignores right-click.
   if (frame_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
@@ -995,9 +1001,12 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   draw_operator_frame(frame_min, frame_max, top_resume_x, left_resume_y,
-                      operator_frame_color(state.selection.contains(slot),
-                                           state.selection.primary == slot,
-                                           background_hovered));
+                      receiving
+                          ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
+                          : operator_frame_color(
+                                state.selection.contains(slot),
+                                state.selection.primary == slot,
+                                background_hovered));
 
   ImGui::PopID();
 }

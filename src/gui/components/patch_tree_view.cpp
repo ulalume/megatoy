@@ -9,6 +9,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <imgui.h>
+#include <imgui_internal.h>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -109,27 +111,6 @@ void entry_drag_source(const PatchSelectorContext &context,
   }
 }
 
-/// Makes the last drawn folder row accept the entries it can take.
-void folder_drop_target(PatchSelectorContext &context,
-                        const patches::PatchEntry &folder) {
-  if (!context.move_patch || !ImGui::BeginDragDropTarget()) {
-    return;
-  }
-  const ImGuiPayload *payload = ImGui::GetDragDropPayload();
-  if (payload != nullptr && payload->IsDataType(kPatchEntryPayload)) {
-    const std::string relative_path(
-        static_cast<const char *>(payload->Data),
-        static_cast<std::size_t>(payload->DataSize));
-    const auto *source =
-        find_by_relative_path(context.repository.tree(), relative_path);
-    if (source != nullptr && context.session.can_move_patch(*source, folder) &&
-        ImGui::AcceptDragDropPayload(kPatchEntryPayload) != nullptr) {
-      context.pending_move = PendingMove{*source, folder};
-    }
-  }
-  ImGui::EndDragDropTarget();
-}
-
 /// F2 renames and Delete or Backspace deletes the focused row, wherever its
 /// context menu would offer the same.
 void handle_row_keys(PatchSelectorContext &context,
@@ -189,7 +170,6 @@ void render_directory_row(PatchSelectorContext &context, const TreeRow &row,
                      row.depth == 0 &&
                          item.relative_path != kBuiltinPresetRoot);
   entry_drag_source(context, item, row.depth);
-  folder_drop_target(context, item);
   handle_row_keys(context, item);
   if (open != row.is_open) {
     cache.set_open(item.relative_path, open);
@@ -256,6 +236,95 @@ PatchTreeCache &tree_cache() {
   return cache;
 }
 
+/// The folder a drop on row `index` goes into: the row itself when it is a
+/// folder, otherwise the folder it is listed under. npos at the top level.
+std::size_t drop_folder_index(const std::vector<TreeRow> &rows,
+                              std::size_t index) {
+  if (rows[index].is_directory) {
+    return index;
+  }
+  for (std::size_t i = index; i-- > 0;) {
+    if (rows[i].depth < rows[index].depth) {
+      return i;
+    }
+  }
+  return std::string::npos;
+}
+
+/// The last row listed under the folder on row `index`, or the row itself.
+std::size_t last_row_under(const std::vector<TreeRow> &rows,
+                           std::size_t index) {
+  std::size_t last = index;
+  while (last + 1 < rows.size() && rows[last + 1].depth > rows[index].depth) {
+    ++last;
+  }
+  return last;
+}
+
+/// A folder an entry is held over, and where the row under the mouse is.
+struct DropHover {
+  std::size_t folder = 0;
+  std::size_t row = 0;
+  float row_top = 0.0f;
+};
+
+/**
+ * Makes row `index`, across the whole width, take an entry for its folder.
+ * True with `hover` filled while one that folder can take is held over it.
+ */
+bool row_drop_target(PatchSelectorContext &context,
+                     const std::vector<TreeRow> &rows, std::size_t index,
+                     const ImRect &rect, DropHover &hover) {
+  const std::size_t folder_index = drop_folder_index(rows, index);
+  if (folder_index == std::string::npos) {
+    return false;
+  }
+  const ImGuiPayload *pending = ImGui::GetDragDropPayload();
+  if (pending == nullptr || !pending->IsDataType(kPatchEntryPayload)) {
+    return false;
+  }
+  const std::string relative_path(static_cast<const char *>(pending->Data),
+                                  static_cast<std::size_t>(pending->DataSize));
+  const auto *source =
+      find_by_relative_path(context.repository.tree(), relative_path);
+  const auto &folder = *rows[folder_index].entry;
+  if (source == nullptr || !context.session.can_move_patch(*source, folder)) {
+    return false;
+  }
+  if (!ImGui::BeginDragDropTargetCustom(
+          rect, ImGui::GetID(rows[index].entry->relative_path.c_str()))) {
+    return false;
+  }
+  bool held = false;
+  if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
+          kPatchEntryPayload, ImGuiDragDropFlags_AcceptBeforeDelivery |
+                                  ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+    if (payload->IsPreview()) {
+      hover = {folder_index, index, rect.Min.y};
+      held = true;
+    }
+    if (payload->IsDelivery()) {
+      context.pending_move = PendingMove{*source, folder};
+    }
+  }
+  ImGui::EndDragDropTarget();
+  return held;
+}
+
+/// The frame around the folder taking a drop and everything listed under it,
+/// as four strips so its edges stay sharp.
+void draw_drop_frame(const ImVec2 &min, const ImVec2 &max) {
+  const float t = ImGui::GetStyle().DragDropTargetBorderSize;
+  const ImU32 color = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  draw_list->AddRectFilled(min, ImVec2(max.x, min.y + t), color);
+  draw_list->AddRectFilled(ImVec2(min.x, max.y - t), max, color);
+  draw_list->AddRectFilled(ImVec2(min.x, min.y + t),
+                           ImVec2(min.x + t, max.y - t), color);
+  draw_list->AddRectFilled(ImVec2(max.x - t, min.y + t),
+                           ImVec2(max.x, max.y - t), color);
+}
+
 } // namespace
 
 void open_tree_directory(const std::string &relative_path) {
@@ -279,11 +348,18 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
   // Every row is exactly one text line high, which is what lets the clipper
   // skip the rows outside the view.
   const float indent_spacing = ImGui::GetStyle().IndentSpacing;
+  const float left = ImGui::GetCursorScreenPos().x;
+  const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
+  const bool can_drop = static_cast<bool>(context.move_patch);
+  std::optional<DropHover> hover;
+  float row_height = 0.0f;
   ImGuiListClipper clipper;
   clipper.Begin(static_cast<int>(rows.size()));
   while (clipper.Step()) {
     for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
-      const auto &row = rows[static_cast<std::size_t>(i)];
+      const auto index = static_cast<std::size_t>(i);
+      const auto &row = rows[index];
+      const float top = ImGui::GetCursorScreenPos().y;
       const float offset = row_indent(row, indent_spacing);
       if (offset > 0.0f) {
         ImGui::Indent(offset);
@@ -296,7 +372,31 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       if (offset > 0.0f) {
         ImGui::Unindent(offset);
       }
+      row_height = ImGui::GetCursorScreenPos().y - top;
+      DropHover held;
+      if (can_drop &&
+          row_drop_target(context, rows, index,
+                          ImRect(left, top, right, top + row_height), held)) {
+        hover = held;
+      }
     }
+  }
+
+  // Every row is the same height, so the folder's rows are found from the
+  // one under the mouse even where the clipper skipped them.
+  if (hover) {
+    const float folder_top =
+        hover->row_top -
+        static_cast<float>(hover->row - hover->folder) * row_height;
+    const float bottom =
+        hover->row_top +
+        static_cast<float>(last_row_under(rows, hover->folder) - hover->row +
+                           1) *
+            row_height;
+    draw_drop_frame(
+        ImVec2(left + row_indent(rows[hover->folder], indent_spacing),
+               folder_top),
+        ImVec2(right, bottom));
   }
 
   return true;
