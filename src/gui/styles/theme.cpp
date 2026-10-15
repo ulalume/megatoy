@@ -71,6 +71,7 @@ void apply_style(ThemeId id, float scale) {
   style.ScrollbarRounding = 0;
   style.ScrollbarPadding = 0;
   style.SeparatorTextBorderSize = 1;
+  style.DragDropTargetBorderSize = 1;
   style.FramePadding = ImVec2(4, 2);
 
   apply_theme(id);
