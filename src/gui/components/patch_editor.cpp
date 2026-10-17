@@ -463,9 +463,23 @@ void render_document_window(PatchEditorContext &context,
   if (preview) {
     push_preview_label_style();
   }
+  // ImGui dims a tab whose node does not have the keys, which the active
+  // document's often lacks: a click in the browser keeps them there. Its tab
+  // stays lit regardless, so it can be told from the others.
+  const bool was_active = id == session.active_document_id();
+  if (was_active) {
+    ImGui::PushStyleColor(ImGuiCol_TabDimmedSelected,
+                          ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
+    ImGui::PushStyleColor(
+        ImGuiCol_TabDimmedSelectedOverline,
+        ImGui::GetStyleColorVec4(ImGuiCol_TabSelectedOverline));
+  }
   const bool visible = ImGui::Begin(title.c_str(), &open,
                                     ImGuiWindowFlags_NoFocusOnAppearing |
                                         ImGuiWindowFlags_NoCollapse);
+  if (was_active) {
+    ImGui::PopStyleColor(2);
+  }
   if (preview) {
     pop_preview_label_style();
   }
