@@ -62,7 +62,9 @@ float render_add_folder_icon(PatchSelectorContext &context) {
 }
 
 void render_tree(PatchSelectorContext &context) {
-  if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(), true)) {
+  // Scrolls on its own, so the filter row above stays in place.
+  if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
+                        ImGuiChildFlags_None)) {
     const std::string query_lower =
         search_key(context.prefs.metadata_search_query);
     const bool rendered =
