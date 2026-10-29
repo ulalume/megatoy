@@ -4,7 +4,6 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_selector_shared.hpp"
-#include "patch_table_view.hpp"
 #include "patch_tree_view.hpp"
 
 #include <IconsFontAwesome7.h>
@@ -43,8 +42,8 @@ void render_add_folder_button(PatchSelectorContext &context) {
   ImGui::Separator();
 }
 
-/// The same action as an icon at the right end of the view tabs' row. Drawn
-/// before the tabs, which are kept clear of it; returns the width it takes.
+/// The same action as an icon at the right end of the filter row. Drawn
+/// before the row, which is kept clear of it; returns the width it takes.
 float render_add_folder_icon(PatchSelectorContext &context) {
   const ImVec2 row = ImGui::GetCursorScreenPos();
   const float size = ImGui::GetFrameHeight();
@@ -62,8 +61,7 @@ float render_add_folder_icon(PatchSelectorContext &context) {
   return size + ImGui::GetStyle().ItemSpacing.x;
 }
 
-void render_tree_tab(PatchSelectorContext &context) {
-  render_filter_bar(context);
+void render_tree(PatchSelectorContext &context) {
   if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(), true)) {
     const std::string query_lower =
         search_key(context.prefs.metadata_search_query);
@@ -105,27 +103,15 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     render_add_folder_button(context);
   }
 
-  // The tab bar spans the window's work rect as it begins; narrowing that for
-  // the call keeps the tabs off the icon and leaves the contents full width.
+  // The add-folder icon closes the filter row, which is kept clear of it.
   ImGuiWindow *window = ImGui::GetCurrentWindow();
   const float work_right = window->WorkRect.Max.x;
   if (context.add_folder) {
     window->WorkRect.Max.x -= render_add_folder_icon(context);
   }
-  const bool tabs = ImGui::BeginTabBar("##PatchViewMode");
+  render_filter_bar(context);
   window->WorkRect.Max.x = work_right;
-  if (tabs) {
-    if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Tree view")) {
-      render_tree_tab(context);
-      ImGui::EndTabItem();
-    }
-    if (ImGui::BeginTabItem(ICON_FA_TABLE " Table view")) {
-      render_filter_bar(context);
-      render_patch_table(context);
-      ImGui::EndTabItem();
-    }
-    ImGui::EndTabBar();
-  }
+  render_tree(context);
 
   if (context.pending_remove_folder && context.remove_folder) {
     const auto folder = *context.pending_remove_folder;
@@ -142,6 +128,14 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
                                 move.entry.full_path.filename().string());
     }
     context.move_patch(move.entry, move.destination);
+  }
+
+  if (context.pending_rating) {
+    const auto rating = std::move(*context.pending_rating);
+    context.pending_rating.reset();
+    if (const auto *entry = context.session.find_entry(rating.relative_path)) {
+      context.session.set_entry_rating(*entry, rating.stars);
+    }
   }
 
   if (context.pending_menu_action) {

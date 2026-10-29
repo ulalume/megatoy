@@ -446,6 +446,23 @@ void test_keeping_edits_over_an_outside_write() {
   CHECK(session.take_disk_versions().empty());
 }
 
+void test_rating_and_category_are_kept_with_the_entry() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  CHECK(session.set_entry_rating(env.entry_at(fixture.warm), 4));
+  CHECK(session.set_entry_category(env.entry_at(fixture.warm), "pad"));
+
+  const auto entry = env.entry_at(fixture.warm);
+  CHECK(entry.metadata.has_value());
+  CHECK(entry.metadata->star_rating == 4);
+  CHECK(entry.metadata->category == "pad");
+
+  CHECK(session.set_entry_rating(env.entry_at(fixture.warm), 0));
+  CHECK(env.entry_at(fixture.warm).metadata->star_rating == 0);
+  CHECK(env.entry_at(fixture.warm).metadata->category == "pad");
+}
+
 void test_open_entry_activates_open_document() {
   BrowserFixture fixture;
   auto &env = fixture.env;
@@ -687,6 +704,7 @@ int main() {
   test_outside_write_is_reported_once();
   test_own_save_is_not_reported();
   test_keeping_edits_over_an_outside_write();
+  test_rating_and_category_are_kept_with_the_entry();
   test_open_entry_activates_open_document();
   test_modified_preview_is_kept();
   test_pinning();

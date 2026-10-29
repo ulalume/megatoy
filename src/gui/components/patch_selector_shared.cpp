@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstring>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <optional>
 
 namespace ui::selector_detail {
@@ -22,14 +23,6 @@ const std::array<std::string_view, 6> kStarLabels = {
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
     ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-};
-const std::array<std::string_view, 6> kStarLabelsMini = {
-    "-",
-    ICON_FA_STAR "1",
-    ICON_FA_STAR "2",
-    ICON_FA_STAR "3",
-    ICON_FA_STAR "4",
-    ICON_FA_STAR "5",
 };
 
 void show_patch_tooltip(const patches::PatchEntry &entry) {
@@ -167,6 +160,20 @@ void entry_context_menu(PatchSelectorContext &context,
     }
   }
 
+  // Written once the tree is drawn: the write rebuilds it, and `entry`
+  // with it.
+  const bool can_rate = is_patch && context.repository.can_edit_metadata(entry);
+  if (begin_group(can_rate) && ImGui::BeginMenu("Rating")) {
+    const int rating = entry.metadata ? entry.metadata->star_rating : 0;
+    for (int stars = 0; stars <= 5; ++stars) {
+      const char *label = stars == 0 ? "None" : kStarLabels[stars].data();
+      if (ImGui::MenuItem(label, nullptr, stars == rating)) {
+        context.pending_rating = PendingRating{entry.relative_path, stars};
+      }
+    }
+    ImGui::EndMenu();
+  }
+
   // Whether a file manager exists is the composition root's call -- the
   // callback is simply absent on platforms without one.
   if (begin_group(static_cast<bool>(context.reveal_in_file_manager))) {
@@ -203,7 +210,17 @@ void render_filter_bar(PatchSelectorContext &context) {
                sizeof(search_buffer));
   search_buffer[sizeof(search_buffer) - 1] = '\0';
 
-  ImGui::SetNextItemWidth(ui::scale::px(130.0f));
+  // The search box takes what the star filter and the link leave of the
+  // row, up to where the caller has narrowed it to.
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float stars_width = ui::scale::px(60.0f);
+  const float link_width = ImGui::CalcTextSize("Clear filters").x;
+  const float row_end = ImGui::GetCurrentWindow()->WorkRect.Max.x;
+  const float search_width = std::clamp(
+      row_end - ImGui::GetCursorScreenPos().x - stars_width - link_width -
+          style.ItemSpacing.x * 2.0f,
+      ui::scale::px(60.0f), ui::scale::px(220.0f));
+  ImGui::SetNextItemWidth(search_width);
   if (ImGui::InputTextWithHint("##SharedSearch",
                                ICON_FA_MAGNIFYING_GLASS " Search...",
                                search_buffer, sizeof(search_buffer))) {
@@ -212,7 +229,7 @@ void render_filter_bar(PatchSelectorContext &context) {
   prefs.patch_search_query = prefs.metadata_search_query;
 
   ImGui::SameLine();
-  ImGui::SetNextItemWidth(ui::scale::px(60.0f));
+  ImGui::SetNextItemWidth(stars_width);
   prefs.metadata_star_filter = std::clamp(prefs.metadata_star_filter, 0, 5);
   ImGui::SliderInt("##Stars", &prefs.metadata_star_filter, 0, 5,
                    prefs.metadata_star_filter == 0

@@ -43,10 +43,14 @@ bool collect_level(const std::vector<patches::PatchEntry> &items, int depth,
                    const std::unordered_set<std::string> &open_directories,
                    std::vector<TreeRow> &out) {
   bool keeps_parent = false;
+  // While filtering, what matched is shown wherever it is: a directory is
+  // open exactly when something below it matched.
+  const bool filtering = !query_lower.empty() || min_star_rating > 0;
 
   for (const auto &item : items) {
     if (item.is_directory) {
-      const bool is_open = open_directories.count(item.relative_path) > 0;
+      const bool is_open =
+          filtering || open_directories.count(item.relative_path) > 0;
       const std::size_t mark = out.size();
       out.push_back(TreeRow{&item, depth, true, is_open});
 
@@ -57,6 +61,9 @@ bool collect_level(const std::vector<patches::PatchEntry> &items, int depth,
                                   min_star_rating, open_directories, out)
                   : subtree_keeps_parent(item.children, query_lower,
                                          min_star_rating);
+      if (filtering) {
+        out[mark].is_open = has_children;
+      }
       const bool empty_on_disk =
           listed_while_empty(item, query_lower, min_star_rating);
       const bool matches_self =

@@ -6,6 +6,7 @@
 #include "patch_selector_shared.hpp"
 #include "patch_tree_flatten.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <imgui.h>
@@ -150,8 +151,10 @@ float row_indent(const TreeRow &row, float indent_spacing) {
   return base + ui::scale::px(kDepthIndent) * static_cast<float>(row.depth);
 }
 
+/// While filtering, every directory leading to a match is shown open, and a
+/// toggle is not kept: what was open before comes back with the filter off.
 void render_directory_row(PatchSelectorContext &context, const TreeRow &row,
-                          PatchTreeCache &cache) {
+                          PatchTreeCache &cache, bool filtering) {
   const auto &item = *row.entry;
 
   ImGui::PushID(item.relative_path.c_str());
@@ -171,7 +174,7 @@ void render_directory_row(PatchSelectorContext &context, const TreeRow &row,
                          item.relative_path != kBuiltinPresetRoot);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
-  if (open != row.is_open) {
+  if (open != row.is_open && !filtering) {
     cache.set_open(item.relative_path, open);
   }
   ImGui::PopID();
@@ -215,6 +218,14 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
   show_patch_tooltip(item);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
+
+  if (const int stars = item.metadata ? item.metadata->star_rating : 0;
+      stars > 0) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", kStarLabels[static_cast<std::size_t>(
+                                  std::min(stars, 5))]
+                                  .data());
+  }
 
   // A click previews the patch, a double click keeps it open.
   if ((name_clicked || format_clicked) && context.open_patch) {
@@ -365,7 +376,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
         ImGui::Indent(offset);
       }
       if (row.is_directory) {
-        render_directory_row(context, row, cache);
+        render_directory_row(context, row, cache,
+                             !query_lower.empty() || min_star_rating > 0);
       } else {
         render_patch_row(context, row);
       }

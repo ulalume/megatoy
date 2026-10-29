@@ -11,11 +11,12 @@
 
 namespace ui {
 
-enum class TableSortColumn { Name, Category, StarRating, Format, Path };
-
-enum class SortOrder { Ascending, Descending };
-
 enum class PendingMenuAction { SaveCurrent };
+
+struct PendingRating {
+  std::string relative_path;
+  int stars = 0;
+};
 
 struct PendingMove {
   patches::PatchEntry entry;
@@ -64,24 +65,9 @@ struct PatchSelectorContext {
   std::function<void(const std::filesystem::path &)> create_folder_in;
   std::optional<std::filesystem::path> pending_remove_folder;
   std::optional<PendingMenuAction> pending_menu_action;
+  std::optional<PendingRating> pending_rating;
   /// A drop in the tree, carried out once the tree is no longer being drawn.
   std::optional<PendingMove> pending_move;
-
-  TableSortColumn get_sort_column() const {
-    return static_cast<TableSortColumn>(prefs.patch_sort_column);
-  }
-
-  void set_sort_column(TableSortColumn column) {
-    prefs.patch_sort_column = static_cast<int>(column);
-  }
-
-  SortOrder get_sort_order() const {
-    return static_cast<SortOrder>(prefs.patch_sort_order);
-  }
-
-  void set_sort_order(SortOrder order) {
-    prefs.patch_sort_order = static_cast<int>(order);
-  }
 };
 
 // Function to render patch browser panel

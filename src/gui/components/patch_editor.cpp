@@ -12,6 +12,7 @@
 #include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -48,8 +49,93 @@ ImVec2 menu_anchor_below_last_item() {
 }
 #endif
 
+/// Five stars: one clicked sets the rating to it, the one already set clears
+/// it. Returns the rating chosen this frame, if any.
+std::optional<int> star_rating_buttons(int rating) {
+  std::optional<int> chosen;
+  const ImU32 lit = ImGui::GetColorU32(
+      styles::color(styles::MegatoyCol::TextHighlight));
+  const ImU32 unlit = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+  const float size = ImGui::GetFrameHeight();
+  for (int star = 1; star <= 5; ++star) {
+    ImGui::PushID(star);
+    if (star > 1) {
+      ImGui::SameLine(0.0f, 0.0f);
+    }
+    if (ImGui::InvisibleButton("##star", ImVec2(size * 0.8f, size))) {
+      chosen = star == rating ? 0 : star;
+    }
+    const ImVec2 min = ImGui::GetItemRectMin();
+    const ImVec2 max = ImGui::GetItemRectMax();
+    const ImVec2 text_size = ImGui::CalcTextSize(ICON_FA_STAR);
+    ImGui::GetWindowDrawList()->AddText(
+        ImVec2((min.x + max.x - text_size.x) * 0.5f,
+               (min.y + max.y - text_size.y) * 0.5f),
+        star <= rating || ImGui::IsItemHovered() ? lit : unlit, ICON_FA_STAR);
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip(star == rating ? "Clear rating" : "Rate %d", star);
+    }
+    ImGui::PopID();
+  }
+  return chosen;
+}
+
+/**
+ * The rating and category of the patch's file, at the right of the row,
+ * or below it when the row has no room. Only for a patch the browser lists
+ * in a folder that keeps metadata.
+ */
+void render_patch_metadata(PatchEditorContext &context,
+                           const patches::PatchDocument &document,
+                           UIState::DocumentUi &ui) {
+  auto &session = context.session;
+  const auto &key = document.selection_path().empty()
+                        ? document.path()
+                        : document.selection_path();
+  const auto *entry = session.find_entry(key);
+  if (entry == nullptr || !session.repository().can_edit_metadata(*entry)) {
+    return;
+  }
+  const float spacing = ImGui::GetStyle().ItemSpacing.x;
+  const float category_width = ui::scale::px(110.0f);
+  const float stars_width = ImGui::GetFrameHeight() * 0.8f * 5.0f;
+  const float needed = category_width + spacing + stars_width;
+  ImGui::SameLine();
+  if (ImGui::GetContentRegionAvail().x >= needed) {
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                         ImGui::GetContentRegionAvail().x - needed);
+  } else {
+    ImGui::NewLine();
+  }
+
+  const std::string saved_category =
+      entry->metadata ? entry->metadata->category : std::string();
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), "%s",
+                ui.pending_category.value_or(saved_category).c_str());
+  ImGui::SetNextItemWidth(category_width);
+  if (ImGui::InputTextWithHint("##category", "Category", buffer,
+                               sizeof(buffer))) {
+    ui.pending_category = std::string(buffer);
+  }
+  if (ImGui::IsItemDeactivated() && ui.pending_category) {
+    const std::string category = std::move(*ui.pending_category);
+    ui.pending_category.reset();
+    // The tree is rebuilt by the write, so `entry` is not used after it.
+    session.set_entry_category(*entry, category);
+    return;
+  }
+
+  ImGui::SameLine(0.0f, spacing);
+  const int rating = entry->metadata ? entry->metadata->star_rating : 0;
+  if (const auto chosen = star_rating_buttons(rating)) {
+    session.set_entry_rating(*entry, *chosen);
+  }
+}
+
 void render_save_export_buttons(PatchEditorContext &context,
                                 patches::PatchDocument &document,
+                                UIState::DocumentUi &ui,
                                 PatchEditorState &state, bool is_active) {
   auto &patch_session = context.session;
 
@@ -118,6 +204,7 @@ void render_save_export_buttons(PatchEditorContext &context,
   auto relative_path =
       patch_session.repository().to_relative_path(document.path());
   ImGui::Text("%s", display_preset_path(relative_path).c_str());
+  render_patch_metadata(context, document, ui);
 
   // Render popups in the same window/ID stack as the actions that open them.
   // They act on the active document, so only its window holds them.
@@ -555,7 +642,7 @@ void render_document_window(PatchEditorContext &context,
     if (ui.disk_version) {
       render_disk_change_bar(context, id, ui);
     }
-    render_save_export_buttons(context, document, state, is_active);
+    render_save_export_buttons(context, document, ui, state, is_active);
     ImGui::Spacing();
 
     const auto available_width = ImGui::GetContentRegionAvail().x;

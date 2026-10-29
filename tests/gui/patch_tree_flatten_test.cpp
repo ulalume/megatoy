@@ -94,20 +94,23 @@ void test_closed_tree_lists_visible_top_level_only() {
   CHECK(rows[2].depth == 0);
 }
 
-void test_closed_ancestors_of_a_deep_match_are_listed() {
+void test_a_filter_opens_the_directories_down_to_each_match() {
   const auto tree = make_tree();
 
-  // Nothing is open, so the only trace of the match two levels down is the
-  // top-level row it keeps alive.
+  // Nothing is open, yet the match two levels down is shown, with the
+  // directories above it open.
   const auto by_query = flatten_visible_rows(tree, "zap", 0, {});
-  CHECK(paths_of(by_query) == std::vector<std::string>({"banks"}));
-  CHECK(by_query[0].is_directory);
-  CHECK(!by_query[0].is_open);
-  CHECK(by_query[0].depth == 0);
+  CHECK(paths_of(by_query) == std::vector<std::string>(
+                                  {"banks", "banks/fx", "banks/fx/zap.opm"}));
+  CHECK(by_query[0].is_open);
+  CHECK(by_query[1].is_open);
+  CHECK(by_query[2].depth == 2);
 
-  // The star filter reaches through a closed directory the same way.
+  // The star filter reaches through the same way.
   const auto by_stars = flatten_visible_rows(tree, "", 5, {});
-  CHECK(paths_of(by_stars) == std::vector<std::string>({"banks"}));
+  CHECK(paths_of(by_stars) ==
+        std::vector<std::string>({"banks", "banks/lead.dmp"}));
+  CHECK(by_stars[0].is_open);
 }
 
 void test_open_directory_exposes_direct_children() {
@@ -147,9 +150,11 @@ void test_star_filter_prunes_emptied_directories() {
 
 void test_query_keeps_the_ancestors_of_a_match() {
   const auto tree = make_tree();
+  // What is open makes no difference while searching.
   const std::unordered_set<std::string> open{"banks"};
   const auto rows = flatten_visible_rows(tree, "zap", 0, open);
-  CHECK(paths_of(rows) == std::vector<std::string>({"banks", "banks/fx"}));
+  CHECK(paths_of(rows) ==
+        std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
 
   const std::unordered_set<std::string> open_nested{"banks", "banks/fx"};
   const auto nested = flatten_visible_rows(tree, "zap", 0, open_nested);
@@ -170,11 +175,11 @@ void test_directory_name_match_needs_no_visible_files() {
   CHECK(rows[0].is_directory);
   CHECK(!rows[0].is_open);
 
-  // Opening such a directory reports the open state and still yields no
-  // children.
+  // Having opened it before changes nothing: with nothing below it to show,
+  // it stays closed while the filter is on.
   const auto opened = flatten_visible_rows(tree, "empty", 0, {"empty"});
   CHECK(paths_of(opened) == std::vector<std::string>({"empty"}));
-  CHECK(opened[0].is_open);
+  CHECK(!opened[0].is_open);
 
   // ...but a match on a nested directory does not pull in its parent: the
   // parent is listed only for files below it or a match of its own.
@@ -202,7 +207,8 @@ void test_a_directory_holding_nothing_is_listed_only_without_filters() {
   CHECK(paths_of(flatten_visible_rows(tree, "solo", 0, {})) ==
         std::vector<std::string>({"solo.dmp"}));
   CHECK(paths_of(flatten_visible_rows(tree, "", 1, {})) ==
-        std::vector<std::string>({"banks"}));
+        std::vector<std::string>(
+            {"banks", "banks/lead.dmp", "banks/fx", "banks/fx/zap.opm"}));
 
   // A query it matches lists it by name, like any other directory.
   CHECK(paths_of(flatten_visible_rows(tree, "fresh", 0, {})) ==
@@ -245,7 +251,7 @@ void test_search_key_ignores_surrounding_spaces() {
 
 int main() {
   test_closed_tree_lists_visible_top_level_only();
-  test_closed_ancestors_of_a_deep_match_are_listed();
+  test_a_filter_opens_the_directories_down_to_each_match();
   test_open_directory_exposes_direct_children();
   test_star_filter_prunes_emptied_directories();
   test_query_keeps_the_ancestors_of_a_match();

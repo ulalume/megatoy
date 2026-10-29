@@ -74,6 +74,9 @@ struct UIState {
     /// What the file holds after it was written outside megatoy while the
     /// document had unsaved changes, until the user picks one.
     std::optional<ym2612::Patch> disk_version;
+    /// The category being typed, written to the folder's metadata once the
+    /// field is left.
+    std::optional<std::string> pending_category;
   };
   std::map<patches::DocumentId, DocumentUi> documents;
   /// The document whose editor window is brought to the front next frame.

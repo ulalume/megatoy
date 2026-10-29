@@ -102,7 +102,6 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/patch_selector_shared.cpp
-  src/gui/components/patch_table_view.cpp
   src/gui/components/patch_tree_flatten.cpp
   src/gui/components/patch_tree_view.cpp
   src/gui/components/preferences.cpp

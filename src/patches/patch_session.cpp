@@ -608,6 +608,49 @@ void PatchSession::assign_patch(PatchDocument &document,
   remember_disk_time(document);
 }
 
+template <typename Change>
+bool PatchSession::update_entry_metadata(const PatchEntry &entry,
+                                         Change &&change) {
+  if (entry.is_directory || !repository_->can_edit_metadata(entry)) {
+    return false;
+  }
+  auto metadata = entry.metadata.value_or(PatchMetadata{});
+  metadata.path = entry.relative_path;
+  if (metadata.hash.empty()) {
+    ym2612::Patch patch;
+    if (repository_->load_patch(entry, patch)) {
+      metadata.hash = patch.hash();
+    }
+  }
+  change(metadata);
+  if (!repository_->update_patch_metadata(entry.relative_path, metadata)) {
+    return false;
+  }
+  repository_->refresh();
+  return true;
+}
+
+bool PatchSession::set_entry_rating(const PatchEntry &entry, int stars) {
+  stars = std::clamp(stars, 0, 5);
+  if (entry.metadata && entry.metadata->star_rating == stars) {
+    return true;
+  }
+  return update_entry_metadata(entry, [stars](PatchMetadata &metadata) {
+    metadata.star_rating = stars;
+  });
+}
+
+bool PatchSession::set_entry_category(const PatchEntry &entry,
+                                      const std::string &category) {
+  if (entry.metadata ? entry.metadata->category == category
+                     : category.empty()) {
+    return true;
+  }
+  return update_entry_metadata(entry, [&category](PatchMetadata &metadata) {
+    metadata.category = category;
+  });
+}
+
 void PatchSession::remember_disk_time(const PatchDocument &document) {
   if (document.path().empty()) {
     disk_times_.erase(document.id());

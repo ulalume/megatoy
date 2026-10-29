@@ -54,9 +54,6 @@ struct UIPreferences {
   std::string patch_search_query;
 
   // Patch selector view settings
-  int patch_sort_column =
-      0; // 0=Name, 1=Category, 2=StarRating, 3=Format, 4=Path
-  int patch_sort_order = 0; // 0=Ascending, 1=Descending
   std::string metadata_search_query;
   int metadata_star_filter = 0;
 
@@ -97,8 +94,6 @@ struct UIPreferences {
                rhs.envelope_reference_midi_note &&
            lhs.use_pitch_bend == rhs.use_pitch_bend &&
            lhs.use_mod_wheel == rhs.use_mod_wheel &&
-           lhs.patch_sort_column == rhs.patch_sort_column &&
-           lhs.patch_sort_order == rhs.patch_sort_order &&
            lhs.midi_keyboard_scale == rhs.midi_keyboard_scale &&
            lhs.midi_keyboard_key == rhs.midi_keyboard_key &&
            lhs.midi_keyboard_typing_octave == rhs.midi_keyboard_typing_octave &&

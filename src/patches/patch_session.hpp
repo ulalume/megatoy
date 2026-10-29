@@ -143,6 +143,13 @@ public:
   /// the contents when `replace`.
   void accept_disk_version(DocumentId id, const ym2612::Patch &patch,
                            bool replace);
+  /**
+   * Rate an entry's patch, 0 for none, or file it under a category, in its
+   * folder's metadata. False when the entry cannot carry metadata or the
+   * write failed.
+   */
+  bool set_entry_rating(const PatchEntry &entry, int stars);
+  bool set_entry_category(const PatchEntry &entry, const std::string &category);
   /// Pin every preview document that has been edited.
   void pin_modified_documents();
   /**
@@ -329,6 +336,10 @@ private:
   /// Note when the document's file was last written, as megatoy read or
   /// saved it.
   void remember_disk_time(const PatchDocument &document);
+  /// The entry's metadata with `change` applied, written and the tree
+  /// rebuilt to show it.
+  template <typename Change>
+  bool update_entry_metadata(const PatchEntry &entry, Change &&change);
   /// The preference only follows the active document.
   void set_document_path(PatchDocument &document,
                          const std::filesystem::path &path,
