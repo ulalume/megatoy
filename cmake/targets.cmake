@@ -107,6 +107,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/patch_tree_view.cpp
   src/gui/components/preferences.cpp
   src/gui/components/view_patch_drop.cpp
+  src/gui/areas.cpp
   src/gui/patch_save_dialog.cpp
   src/gui/save_as_dialog.cpp
   src/gui/save_export_actions.cpp

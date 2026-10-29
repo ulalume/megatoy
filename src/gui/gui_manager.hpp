@@ -164,6 +164,8 @@ private:
   float ui_scale_preference_ = ui::scale::kAuto;
   float ui_scale_ = 1.0f;
   bool web_layout_loaded_ = false;
+  /// The arrangement just loaded is still to be checked against the areas.
+  bool check_loaded_layout_ = true;
   ui::layouts::LayoutId current_layout_ = ui::layouts::kDefaultLayout;
   std::optional<ui::layouts::LayoutId> pending_layout_;
   bool pending_window_visibility_ = false;

@@ -1,12 +1,12 @@
 #include "patch_lab_window.hpp"
 
 #include "common.hpp"
+#include "gui/areas.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "imgui_internal.h"
 #include "patch_selector.hpp"
 #include "patches/patch_lab.hpp"
-#include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <cctype>
@@ -481,6 +481,7 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(700, 320)),
                            ImGuiCond_FirstUseEver);
 
+  areas::keep_in_area(areas::Area::FooterRight, title);
   if (!ImGui::Begin(title, &context.prefs.show_patch_lab)) {
     ImGui::End();
     return;
@@ -520,7 +521,6 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   }
   ImGui::EndChild();
 
-  view_patch_drop_target();
   ImGui::End();
 }
 

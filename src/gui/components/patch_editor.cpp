@@ -1,6 +1,7 @@
 #include "patch_editor.hpp"
 #include "common.hpp"
 #include "gui/components/operator_commands.hpp"
+#include "gui/areas.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
@@ -406,6 +407,8 @@ void render_document_window(PatchEditorContext &context,
       document_label(document), ui.window_slot, document.is_modified());
   const ImGuiWindow *existing = ImGui::FindWindowByName(title.c_str());
   ImGuiDockNode *node = existing != nullptr ? existing->DockNode : nullptr;
+  areas::keep_in_area(areas::Area::Main, title.c_str(), 0,
+                      context.editor_dock_id);
 
   // A document dropped on a view goes into that view's dock node, and takes
   // the keys there.

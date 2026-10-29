@@ -1,5 +1,6 @@
 #include "gui_manager.hpp"
 #include "fonts/icon_font.hpp"
+#include "gui/areas.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
@@ -230,7 +231,17 @@ void GuiManager::begin_frame(UIPreferences &window_prefs) {
 
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
 
+  // An arrangement saved before the areas were fixed may have views where
+  // they no longer go; it is laid out afresh.
+  if (check_loaded_layout_ && !(first_frame_ && !web_layout_loaded_)) {
+    check_loaded_layout_ = false;
+    if (!ui::areas::layout_fits_areas()) {
+      first_frame_ = true;
+      web_layout_loaded_ = false;
+    }
+  }
   if (first_frame_ && !web_layout_loaded_) {
+    check_loaded_layout_ = false;
     setup_default_layout(dockspace_id);
   }
 }
@@ -266,6 +277,7 @@ void GuiManager::apply_pending_layout(UIPreferences &window_prefs) {
     sync_imgui_ini();
     const bool loaded = load_layout_ini();
     first_frame_ = !loaded;
+    check_loaded_layout_ = true;
     web_layout_loaded_ = megatoy::platform::is_web() && loaded;
     pending_window_visibility_ = true;
   }
@@ -532,5 +544,6 @@ void GuiManager::sync_web_imgui_ini() {
   web_layout_loaded_ =
       ui::load_web_layout_ini(ui::layouts::definition(current_layout_).name);
   first_frame_ = !web_layout_loaded_;
+  check_loaded_layout_ = true;
   web_ini_loaded_ = true;
 }

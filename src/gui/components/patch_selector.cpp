@@ -1,5 +1,6 @@
 #include "patch_selector.hpp"
 
+#include "gui/areas.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_selector_shared.hpp"
@@ -92,9 +93,8 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
                            ImGuiCond_FirstUseEver);
 
   // Match the waveform panel: no tab bar while this window is docked alone.
-  ImGuiWindowClass window_class;
-  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
-  ImGui::SetNextWindowClass(&window_class);
+  areas::keep_in_area(areas::Area::Sidebar, title,
+                      ImGuiDockNodeFlags_AutoHideTabBar);
   if (!ImGui::Begin(title, &prefs.show_patch_selector)) {
     ImGui::End();
     return;

@@ -1,10 +1,10 @@
 #include "waveform.hpp"
 
 #include "audio/scope_trigger.hpp"
+#include "gui/areas.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
-#include "view_patch_drop.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -218,9 +218,8 @@ void render_waveform(const char *title, WaveformContext &context) {
     return;
   }
 
-  ImGuiWindowClass window_class;
-  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
-  ImGui::SetNextWindowClass(&window_class);
+  areas::keep_in_area(areas::Area::FooterLeft, title,
+                      ImGuiDockNodeFlags_AutoHideTabBar);
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(420.0f, 240.0f)),
                            ImGuiCond_FirstUseEver);
@@ -258,7 +257,6 @@ void render_waveform(const char *title, WaveformContext &context) {
   draw_spectrum(spectrum_panel, context.spectrum, context.sample_rate);
   end_panel(spectrum_panel);
 
-  view_patch_drop_target();
   ImGui::End();
 }
 

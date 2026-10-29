@@ -1,12 +1,12 @@
 #include "midi_keyboard.hpp"
 
 #include "core/types.hpp"
+#include "gui/areas.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/keyboard_typing.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "util.hpp"
-#include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chord_detector.h>
@@ -258,6 +258,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 180)),
                            ImGuiCond_FirstUseEver);
+  areas::keep_in_area(areas::Area::FooterRight, title);
   if (!ImGui::Begin(title, &ui_prefs.show_midi_keyboard)) {
     ImGui::End();
     return;
@@ -447,7 +448,6 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   }
   ImGui::EndChild();
 
-  view_patch_drop_target();
   ImGui::End();
 };
 

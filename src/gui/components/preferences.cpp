@@ -1,5 +1,6 @@
 #include "preferences.hpp"
 #include "audio/load_meter.hpp"
+#include "gui/areas.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
@@ -641,6 +642,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     ImGui::SetNextWindowFocus();
   }
 
+  areas::keep_in_area(areas::Area::Main, title);
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
     if (ImGui::BeginTabBar("##preference_tabs")) {
       // Each tab scrolls in its own child so the tab bar stays put. Input in

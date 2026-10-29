@@ -1,8 +1,8 @@
 #include "mml_console.hpp"
 #include "formats/ym2612_format_adapter.hpp"
+#include "gui/areas.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/clipboard.hpp"
-#include "view_patch_drop.hpp"
 #include <cstring>
 #include <imgui.h>
 
@@ -15,6 +15,7 @@ void render_mml_console(const char *title, MmlConsoleContext &context) {
   if (!context.ui_prefs.show_mml_console) {
     return;
   }
+  areas::keep_in_area(areas::Area::FooterRight, title);
   if (!ImGui::Begin(title, &context.ui_prefs.show_mml_console)) {
     ImGui::End();
     return;
@@ -34,7 +35,6 @@ void render_mml_console(const char *title, MmlConsoleContext &context) {
   ImGui::Text("%s", mml_c);
   ImGui::EndChild();
 
-  view_patch_drop_target();
   ImGui::End();
 };
 

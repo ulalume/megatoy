@@ -1,5 +1,6 @@
 #include "gui/layouts.hpp"
 
+#include "gui/areas.hpp"
 #include "gui/window_title.hpp"
 #include <algorithm>
 #include <array>
@@ -29,13 +30,25 @@ void build_sound_layout(unsigned int dockspace_id) {
   const auto patch_editor_title = std::string(ui::PATCH_EDITOR_TITLE) + "###" +
                                   std::string(ui::PATCH_EDITOR_TITLE);
   ImGui::DockBuilderDockWindow(patch_editor_title.c_str(), dock_main_id);
-  // The other documents' editor windows join the first as tabs.
-  const std::string editor_id = std::string("###") + ui::PATCH_EDITOR_TITLE;
+  // The other documents' editor windows join the first as tabs, those only
+  // remembered from before too, so none comes back where it used to be.
+  const auto is_other_editor = [](std::string_view name) {
+    if (const auto at = name.find("###"); at != std::string_view::npos) {
+      name.remove_prefix(at + 3);
+    }
+    return ui::areas::is_editor_window(name) &&
+           name != ui::PATCH_EDITOR_TITLE;
+  };
   for (const ImGuiWindow *window : GImGui->Windows) {
-    const std::string_view name(window->Name);
-    if (name.find(editor_id) != std::string_view::npos &&
-        name.substr(name.find(editor_id)) != editor_id) {
+    if (is_other_editor(window->Name)) {
       ImGui::DockBuilderDockWindow(window->Name, dock_main_id);
+    }
+  }
+  for (ImGuiWindowSettings *settings = GImGui->SettingsWindows.begin();
+       settings != nullptr;
+       settings = GImGui->SettingsWindows.next_chunk(settings)) {
+    if (is_other_editor(settings->GetName())) {
+      settings->DockId = dock_main_id;
     }
   }
   ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, dock_main_id);
