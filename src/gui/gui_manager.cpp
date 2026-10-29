@@ -244,6 +244,7 @@ void GuiManager::begin_frame(UIPreferences &window_prefs) {
     check_loaded_layout_ = false;
     setup_default_layout(dockspace_id);
   }
+  ui::areas::refuse_outer_docking(dockspace_id);
 }
 
 void GuiManager::setup_default_layout(unsigned int dockspace_id) {

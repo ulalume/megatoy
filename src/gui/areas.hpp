@@ -34,6 +34,13 @@ std::optional<Area> area_of(std::string_view window_name);
 void keep_in_area(Area area, const char *window_name,
                   unsigned int node_flags = 0, unsigned int main_dock_id = 0);
 
+/**
+ * Call after the dockspace is submitted. A view dragged over the window then
+ * offers only the groups of its own area: the window's outer edges, where a
+ * new group would start beside every area, are not offered.
+ */
+void refuse_outer_docking(unsigned int dockspace_id);
+
 /// Whether no tab group mixes areas and each side area's views share one,
 /// judged from the saved arrangement just loaded.
 bool layout_fits_areas();

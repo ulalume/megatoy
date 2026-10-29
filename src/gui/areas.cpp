@@ -149,6 +149,16 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
   ImGui::SetNextWindowDockID(target->ID, ImGuiCond_Always);
 }
 
+void refuse_outer_docking(unsigned int dockspace_id) {
+  // Set on the root alone: the groups below keep their own flags, so the main
+  // area can still be split.
+  ImGuiDockNode *root = ImGui::DockBuilderGetNode(dockspace_id);
+  if (root != nullptr && root->IsSplitNode() &&
+      (root->LocalFlags & ImGuiDockNodeFlags_NoDockingSplit) == 0) {
+    root->SetLocalFlags(root->LocalFlags | ImGuiDockNodeFlags_NoDockingSplit);
+  }
+}
+
 bool layout_fits_areas() {
   const ImGuiID dockspace_id = ImGui::GetMainViewport()->ID;
   std::map<ImGuiID, std::set<Area>> areas_in_node;
