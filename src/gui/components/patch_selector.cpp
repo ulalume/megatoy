@@ -100,10 +100,6 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
     return;
   }
 
-  if (context.repository.has_directory_changed()) {
-    context.repository.refresh();
-  }
-
   if (context.workspace_is_empty && context.add_folder) {
     render_empty_workspace_prompt(context);
     render_add_folder_button(context);
@@ -149,11 +145,8 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   }
 
   if (context.pending_menu_action) {
-    const auto action = *context.pending_menu_action;
     context.pending_menu_action.reset();
-    if (action == PendingMenuAction::Refresh) {
-      context.repository.refresh();
-    } else if (context.save_current_patch) {
+    if (context.save_current_patch) {
       context.save_current_patch();
     }
   }

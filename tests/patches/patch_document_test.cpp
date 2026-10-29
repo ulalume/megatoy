@@ -7,6 +7,7 @@
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -386,6 +387,65 @@ void test_open_beside_preview() {
   CHECK(session.find_document(*warm)->path() == env.relative(fixture.warm));
 }
 
+/// Write `patch` over `path` as another program would, later than before.
+void write_outside(const ym2612::Patch &patch, const fs::path &path) {
+  const auto before = fs::last_write_time(path);
+  CHECK(patches::write_patch(patch, path));
+  fs::last_write_time(path, before + std::chrono::seconds(2));
+}
+
+void test_outside_write_is_reported_once() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  const auto warm = session.open_or_activate(env.entry_at(fixture.warm), true);
+  CHECK(warm.has_value());
+  CHECK(session.take_disk_versions().empty());
+
+  write_outside(make_patch(5), fixture.warm);
+  session.repository().refresh();
+  const auto versions = session.take_disk_versions();
+  CHECK(versions.size() == 1);
+  CHECK(versions.front().document == *warm);
+  CHECK(versions.front().patch.instrument.algorithm == 5);
+  CHECK(session.take_disk_versions().empty());
+
+  session.accept_disk_version(*warm, versions.front().patch, true);
+  CHECK(session.find_document(*warm)->patch().instrument.algorithm == 5);
+  CHECK(!session.find_document(*warm)->is_modified());
+}
+
+void test_own_save_is_not_reported() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  CHECK(session.open_or_activate(env.entry_at(fixture.warm), true));
+  session.current_patch().instrument.algorithm = 4;
+  CHECK(session.save_current_patch().is_success());
+  session.repository().refresh();
+  CHECK(session.take_disk_versions().empty());
+}
+
+void test_keeping_edits_over_an_outside_write() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  const auto warm = session.open_or_activate(env.entry_at(fixture.warm), true);
+  session.current_patch().instrument.algorithm = 6;
+
+  write_outside(make_patch(5), fixture.warm);
+  session.repository().refresh();
+  const auto versions = session.take_disk_versions();
+  CHECK(versions.size() == 1);
+
+  session.accept_disk_version(*warm, versions.front().patch, false);
+  const auto *document = session.find_document(*warm);
+  CHECK(document->patch().instrument.algorithm == 6);
+  CHECK(document->original_patch().instrument.algorithm == 5);
+  CHECK(document->is_modified());
+  CHECK(session.take_disk_versions().empty());
+}
+
 void test_open_entry_activates_open_document() {
   BrowserFixture fixture;
   auto &env = fixture.env;
@@ -624,6 +684,9 @@ int main() {
   test_snapshot_per_document();
   test_preview_is_reused();
   test_open_beside_preview();
+  test_outside_write_is_reported_once();
+  test_own_save_is_not_reported();
+  test_keeping_edits_over_an_outside_write();
   test_open_entry_activates_open_document();
   test_modified_preview_is_kept();
   test_pinning();

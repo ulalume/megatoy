@@ -11,6 +11,7 @@
 #include "ym2612/patch.hpp"
 #include <array>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -126,6 +127,22 @@ public:
   /// An open document that plays like `patch`, the active one first.
   std::optional<DocumentId>
   find_document_with_sound(const ym2612::Patch &patch) const;
+  /// What an open document's file holds after it was written outside
+  /// megatoy.
+  struct DiskVersion {
+    DocumentId document = 0;
+    ym2612::Patch patch;
+  };
+  /**
+   * The open documents whose file has been written since megatoy last read
+   * or saved it, and now holds something other than the document's saved
+   * contents. Each write is reported once.
+   */
+  std::vector<DiskVersion> take_disk_versions();
+  /// Take `patch` as what the document's file holds, and show it in place of
+  /// the contents when `replace`.
+  void accept_disk_version(DocumentId id, const ym2612::Patch &patch,
+                           bool replace);
   /// Pin every preview document that has been edited.
   void pin_modified_documents();
   /**
@@ -309,6 +326,9 @@ private:
                     const std::filesystem::path &source_path,
                     RememberPatchPath remember);
   void assign_default_patch(PatchDocument &document);
+  /// Note when the document's file was last written, as megatoy read or
+  /// saved it.
+  void remember_disk_time(const PatchDocument &document);
   /// The preference only follows the active document.
   void set_document_path(PatchDocument &document,
                          const std::filesystem::path &path,
@@ -356,6 +376,7 @@ private:
   AudioManager &audio_;
   std::unique_ptr<PatchRepository> repository_;
   std::vector<std::unique_ptr<PatchDocument>> documents_;
+  std::map<DocumentId, std::filesystem::file_time_type> disk_times_;
   DocumentId active_id_ = 0;
   DocumentId next_id_ = 1;
   /// What the chip has, whichever document it came from.

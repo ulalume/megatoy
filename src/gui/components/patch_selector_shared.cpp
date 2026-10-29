@@ -193,11 +193,6 @@ void entry_context_menu(PatchSelectorContext &context,
     }
   }
 
-  begin_group(true);
-  if (ImGui::MenuItem("Refresh repository")) {
-    context.pending_menu_action = PendingMenuAction::Refresh;
-  }
-
   ImGui::EndPopup();
 }
 

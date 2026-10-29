@@ -71,6 +71,9 @@ struct UIState {
     bool window_placed = false;
     /// A dock node to move the window into next frame; 0 for none.
     unsigned int dock_target = 0;
+    /// What the file holds after it was written outside megatoy while the
+    /// document had unsaved changes, until the user picks one.
+    std::optional<ym2612::Patch> disk_version;
   };
   std::map<patches::DocumentId, DocumentUi> documents;
   /// The document whose editor window is brought to the front next frame.

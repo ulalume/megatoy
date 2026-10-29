@@ -489,6 +489,7 @@ void PatchSession::assign_default_patch(PatchDocument &document) {
   set_document_path(document, starting_point.source, RememberPatchPath::No);
   document.set_file_identity(starting_point.source);
   document.mark_as_clean();
+  remember_disk_time(document);
 }
 
 void PatchSession::sync_workspace() {
@@ -604,6 +605,78 @@ void PatchSession::assign_patch(PatchDocument &document,
     }
   }
   document.mark_as_clean(); // New patch loaded, not modified yet
+  remember_disk_time(document);
+}
+
+void PatchSession::remember_disk_time(const PatchDocument &document) {
+  if (document.path().empty()) {
+    disk_times_.erase(document.id());
+    return;
+  }
+  std::error_code error;
+  const auto time = std::filesystem::last_write_time(
+      repository_->to_absolute_path(document.path()), error);
+  if (error) {
+    disk_times_.erase(document.id());
+    return;
+  }
+  disk_times_[document.id()] = time;
+}
+
+std::vector<PatchSession::DiskVersion> PatchSession::take_disk_versions() {
+  std::erase_if(disk_times_, [this](const auto &entry) {
+    return find_document(entry.first) == nullptr;
+  });
+  std::vector<DiskVersion> versions;
+  for (const auto &document : documents_) {
+    const auto recorded = disk_times_.find(document->id());
+    if (recorded == disk_times_.end()) {
+      continue;
+    }
+    const auto absolute = repository_->to_absolute_path(document->path());
+    std::error_code error;
+    const auto time = std::filesystem::last_write_time(absolute, error);
+    if (error || time == recorded->second) {
+      continue;
+    }
+    recorded->second = time;
+
+    const auto &selection = document->selection_path().empty()
+                                ? document->path()
+                                : document->selection_path();
+    const auto *entry = find_entry(selection);
+    ym2612::Patch patch;
+    if (entry == nullptr || !repository_->load_patch(*entry, patch)) {
+      continue;
+    }
+    // Named as opening the file names it, so only a change in the file
+    // itself tells it apart.
+    const auto format = formats::adapter::format_for_extension(
+        lowercase_extension(document->path()));
+    if (!format || !formats::adapter::is_multi_patch(*format)) {
+      patch.name = absolute.stem().string();
+    }
+    if (patch != document->original_patch()) {
+      versions.push_back({document->id(), std::move(patch)});
+    }
+  }
+  return versions;
+}
+
+void PatchSession::accept_disk_version(DocumentId id,
+                                       const ym2612::Patch &patch,
+                                       bool replace) {
+  auto *document = find_document(id);
+  if (document == nullptr) {
+    return;
+  }
+  document->set_original_patch(patch);
+  if (replace) {
+    document->patch() = patch;
+    if (is_active(*document)) {
+      apply_patch_to_audio();
+    }
+  }
 }
 
 void PatchSession::apply_patch_to_audio() {
@@ -669,6 +742,7 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
       if (patches::write_patch(patch_to_write, absolute)) {
         current_patch().name = patch_to_write.name;
         mark_as_clean();
+        remember_disk_time(active_document());
         repository_->refresh();
 #if defined(MEGATOY_PLATFORM_WEB)
         platform::web::request_storage_persist();
@@ -745,6 +819,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
         current_patch().name = sanitized_name;
         set_current_patch_path(result.path);
         mark_as_clean();
+        remember_disk_time(active_document());
       }
       return SaveResult::success(result.path);
     }
@@ -795,6 +870,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
     current_patch().name = selected.stem().string();
     set_current_patch_path(selected);
     mark_as_clean();
+    remember_disk_time(active_document());
   }
   repository_->refresh();
   return SaveResult::success(selected);

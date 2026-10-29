@@ -106,6 +106,39 @@ inline bool open_entry_in_dock(AppContext &context,
   return true;
 }
 
+/**
+ * Show what the document's file now holds, as one step undo takes back.
+ * Undone, the contents differ from the file and so count as unsaved.
+ */
+inline void reload_from_disk(AppContext &context, patches::DocumentId document,
+                             const ym2612::Patch &patch) {
+  auto &session = context.services.patch_session;
+  const auto *open = session.find_document(document);
+  if (open == nullptr) {
+    return;
+  }
+  if (document == session.active_document_id()) {
+    context.services.history().cancel_transaction();
+  }
+  auto before = open->capture_snapshot();
+  before.original_patch = patch;
+  auto &history = context.services.histories[document];
+  history.begin_transaction(
+      "Reload from Disk", {},
+      [document, before = std::move(before)](
+          AppContext &ctx) -> std::unique_ptr<history::HistoryEntry> {
+        const auto *reloaded =
+            ctx.services.patch_session.find_document(document);
+        if (reloaded == nullptr) {
+          return nullptr;
+        }
+        return detail::make_entry("Reload from Disk", {}, document, before,
+                                  reloaded->capture_snapshot());
+      });
+  session.accept_disk_version(document, patch, /*replace=*/true);
+  history.commit_transaction(context);
+}
+
 /// Open a patch read from a file outside the browser, as a preview.
 inline void open_dropped_patch(AppContext &context, const ym2612::Patch &patch,
                                const std::filesystem::path &source_path) {

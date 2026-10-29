@@ -138,6 +138,7 @@ set(MEGATOY_CORE_SOURCES
   src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
   src/patches/persistent_parse_cache.cpp
+  src/patches/folder_watcher.cpp
   src/patches/patch_repository.cpp
   src/patches/patch_write.cpp
   src/patches/filesystem_patch_storage.cpp
@@ -243,6 +244,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     nfd
     rtmidi
     SQLiteCpp
+    efsw
   )
   if(WIN32)
     target_link_libraries(megatoy_core PUBLIC shell32)

@@ -1,14 +1,16 @@
 #include "patch_editor.hpp"
 #include "common.hpp"
-#include "gui/components/operator_commands.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
 #include "platform/platform_config.hpp"
 #include "view_patch_drop.hpp"
+#include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <filesystem>
 #include <imgui.h>
@@ -383,6 +385,34 @@ void assign_window_slots(PatchEditorContext &context) {
   }
 }
 
+/**
+ * Across the top of a document whose file was written outside megatoy while
+ * it had unsaved changes: take the file's contents, or keep the edits and
+ * count the file's contents as what they differ from.
+ */
+void render_disk_change_bar(PatchEditorContext &context,
+                            patches::DocumentId id,
+                            UIState::DocumentUi &ui) {
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
+                     ICON_FA_TRIANGLE_EXCLAMATION
+                     " The file was changed outside megatoy.");
+  ImGui::SameLine();
+  if (ImGui::Button("Reload")) {
+    if (context.reload_from_disk) {
+      context.reload_from_disk(id, *ui.disk_version);
+    }
+    ui.disk_version.reset();
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Keep Mine")) {
+    context.session.accept_disk_version(id, *ui.disk_version,
+                                        /*replace=*/false);
+    ui.disk_version.reset();
+  }
+  ImGui::Separator();
+}
+
 struct EditorFrame {
   EnvelopeVoices voices;
   /// Some editor window had the keyboard as the frame began.
@@ -522,6 +552,9 @@ void render_document_window(PatchEditorContext &context,
     // Keyed by document, so a window slot that showed another document
     // keeps nothing of it.
     ImGui::PushID(static_cast<int>(id));
+    if (ui.disk_version) {
+      render_disk_change_bar(context, id, ui);
+    }
     render_save_export_buttons(context, document, state, is_active);
     ImGui::Spacing();
 

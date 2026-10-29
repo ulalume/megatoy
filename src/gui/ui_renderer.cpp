@@ -164,6 +164,34 @@ void save_and_exit(AppContext &ctx, patches::DocumentId id) {
   }
 }
 
+/**
+ * Pick up what changed in the workspace's folders outside megatoy: the
+ * browser's tree, and the open documents whose file was written. One without
+ * unsaved changes shows the file's new contents; one with them keeps its own
+ * and asks.
+ */
+void follow_outside_changes(AppContext &ctx) {
+  auto &session = ctx.services.patch_session;
+  auto &repository = session.repository();
+  const bool outside = repository.take_outside_change();
+  if (!outside && !repository.has_directory_changed()) {
+    return;
+  }
+  repository.refresh();
+  for (auto &version : session.take_disk_versions()) {
+    const auto *document = session.find_document(version.document);
+    if (document == nullptr) {
+      continue;
+    }
+    if (document->is_modified()) {
+      ctx.ui_state().document_ui(version.document).disk_version =
+          std::move(version.patch);
+    } else {
+      patch_actions::reload_from_disk(ctx, version.document, version.patch);
+    }
+  }
+}
+
 /// Cmd/Ctrl+W closes the active document while an editor window or the
 /// browser has the keyboard. The browser keeps the key for its own tab.
 void handle_close_shortcut(AppContext &ctx) {
@@ -986,6 +1014,10 @@ struct FrameContexts {
       patch_actions::activate_document(ctx, patch_editor.document);
       patch_actions::begin_change(ctx, label, merge_key);
     };
+    patch_editor.reload_from_disk = [&ctx](patches::DocumentId document,
+                                           const ym2612::Patch &patch) {
+      patch_actions::reload_from_disk(ctx, document, patch);
+    };
   }
 
   AppContext *owner;
@@ -1019,6 +1051,8 @@ void render_all(AppContext &ctx) {
       ctx.services.patch_session.sync_workspace();
     }
   }
+
+  follow_outside_changes(ctx);
 
   // Per-frame values; everything else in the contexts is stable references.
   contexts.patch_selector.workspace_is_empty =

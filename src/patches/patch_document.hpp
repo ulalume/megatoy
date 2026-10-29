@@ -41,6 +41,10 @@ public:
 
   bool is_modified() const { return original_patch_ != patch_; }
   void mark_as_clean() { original_patch_ = patch_; }
+  /// Take `patch` as what the file holds, leaving the contents as they are.
+  void set_original_patch(const ym2612::Patch &patch) {
+    original_patch_ = patch;
+  }
 
   /// The file Save targets.
   const std::string &path() const { return path_; }

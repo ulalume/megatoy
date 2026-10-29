@@ -32,6 +32,9 @@ struct PatchEditorContext {
   unsigned int &editor_dock_id;
   /// The document whose window is being drawn.
   patches::DocumentId document = 0;
+  /// Show a document's file's new contents, as one undo step.
+  std::function<void(patches::DocumentId, const ym2612::Patch &)>
+      reload_from_disk;
 
   OperatorEditState &operator_edit() const {
     return document_ui(document).operator_edit;

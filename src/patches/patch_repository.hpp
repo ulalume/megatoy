@@ -1,5 +1,6 @@
 #pragma once
 
+#include "folder_watcher.hpp"
 #include "patch_storage.hpp"
 #include "patches/folder_metadata.hpp"
 #include "platform/virtual_file_system.hpp"
@@ -66,6 +67,9 @@ public:
 
   bool load_patch(const PatchEntry &entry, ym2612::Patch &patch) const;
   bool has_directory_changed() const;
+  /// True once something in the workspace's folders has changed outside
+  /// megatoy and settled since this last returned true.
+  bool take_outside_change();
 
   static std::vector<std::string> supported_extensions();
 
@@ -131,6 +135,7 @@ private:
 
   std::vector<PatchEntry> tree_cache_;
   std::vector<std::filesystem::path> watched_directories_;
+  FolderWatcher folder_watcher_;
   std::vector<std::filesystem::file_time_type> watched_times_;
   bool cache_initialized_ = false;
   bool show_builtin_presets_ = true;

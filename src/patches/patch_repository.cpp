@@ -88,6 +88,15 @@ void PatchRepository::rebuild_storages() {
     watched_directories_.push_back(builtin_presets_directory_);
   }
 
+  // The built-in presets ship with the app; only the user's folders change.
+  std::vector<std::filesystem::path> user_folders;
+  for (const auto &folder : workspace_.folders()) {
+    if (folder.available) {
+      user_folders.push_back(folder.path);
+    }
+  }
+  folder_watcher_.watch(user_folders);
+
   synced_revision_ = workspace_.revision();
   storages_built_ = true;
 }
@@ -177,6 +186,10 @@ bool PatchRepository::has_directory_changed() const {
     }
   }
   return false;
+}
+
+bool PatchRepository::take_outside_change() {
+  return folder_watcher_.take_settled_change();
 }
 
 std::vector<std::string> PatchRepository::supported_extensions() {

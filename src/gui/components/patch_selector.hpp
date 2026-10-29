@@ -15,7 +15,7 @@ enum class TableSortColumn { Name, Category, StarRating, Format, Path };
 
 enum class SortOrder { Ascending, Descending };
 
-enum class PendingMenuAction { Refresh, SaveCurrent };
+enum class PendingMenuAction { SaveCurrent };
 
 struct PendingMove {
   patches::PatchEntry entry;
