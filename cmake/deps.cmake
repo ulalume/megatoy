@@ -108,7 +108,7 @@ if(NOT EMSCRIPTEN)
   FetchContent_Declare(
     efsw
     GIT_REPOSITORY https://github.com/SpartanJ/efsw
-    GIT_TAG        1.7.2
+    GIT_TAG        1.7.3
   )
   # Its options are plain variables here, inside a function so they do not
   # reach the projects added after it.
