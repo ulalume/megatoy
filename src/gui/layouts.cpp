@@ -23,7 +23,7 @@ void build_sound_layout(unsigned int dockspace_id) {
       doc_id_down, ImGuiDir_Left, 0.20f, nullptr, &doc_id_down);
 
   ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
-      dock_main_id, ImGuiDir_Left, 0.35f, nullptr, &dock_main_id);
+      dock_main_id, ImGuiDir_Left, 0.26f, nullptr, &dock_main_id);
 
   // This ImGui version clears DockOrder in DockBuilderDockWindow; render_all
   // submits these windows in the same editor-then-Preferences tab order.
