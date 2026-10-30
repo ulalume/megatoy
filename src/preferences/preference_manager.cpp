@@ -105,7 +105,7 @@ bool PreferenceManager::folder_add_is_import() {
 }
 
 void PreferenceManager::request_add_workspace_folder(
-    std::function<void()> on_changed) {
+    std::function<void()> on_changed, ConfirmReplace confirm) {
 #if defined(MEGATOY_PLATFORM_WEB)
   platform::web::import_folder(
       megatoy::system::PathService::web_storage_root(),
@@ -139,33 +139,75 @@ void PreferenceManager::request_add_workspace_folder(
       platform::file_dialog::DialogResult::Ok) {
     return;
   }
+  add_chosen_workspace_folder(chosen, std::move(on_changed),
+                              std::move(confirm));
+#endif
+}
 
+#if !defined(MEGATOY_PLATFORM_WEB)
+void PreferenceManager::add_chosen_workspace_folder(
+    const std::filesystem::path &chosen, std::function<void()> on_changed,
+    ConfirmReplace confirm) {
   // Warm the parse cache on a worker before the folder joins the workspace:
   // the sync that follows re-walks it on the UI thread, and for a folder of
   // thousands of banks that first parse is a freeze measured in seconds.
   // Warm the same path the workspace will store, or the cache keys miss.
   const auto folder = megatoy::workspace::normalize_path(chosen);
   const std::string folder_name = folder.filename().string();
-  const bool started = patches::background_folder_scan::begin(
-      folder, [this, folder, folder_name, on_changed](bool cancelled) {
-        if (cancelled) {
-          megatoy::status::info("Folder scan cancelled.");
-          return;
-        }
-        if (add_workspace_folder(folder)) {
-          if (on_changed) {
-            on_changed();
-          }
-        } else {
-          megatoy::status::warning("\"" + folder_name +
-                                   "\" is already in the workspace.");
-        }
-      });
-  if (!started) {
-    megatoy::status::warning("Another folder scan is in progress.");
+  if (const auto *outer = workspace_.enclosing(folder)) {
+    megatoy::status::warning("\"" + folder_name +
+                             "\" is already in the workspace, inside \"" +
+                             outer->name + "\".");
+    return;
   }
-#endif
+  const auto inside = workspace_.enclosed_by(folder);
+  std::string replaced;
+  for (const auto *inner : inside) {
+    if (workspace_folder_is_protected(inner->path)) {
+      megatoy::status::warning("\"" + folder_name + "\" holds \"" +
+                               inner->name +
+                               "\", which cannot leave the workspace.");
+      return;
+    }
+    replaced += (replaced.empty() ? "\"" : ", \"") + inner->name + "\"";
+  }
+
+  auto add = [this, folder, folder_name, on_changed]() {
+    const bool started = patches::background_folder_scan::begin(
+        folder, [this, folder, folder_name, on_changed](bool cancelled) {
+          if (cancelled) {
+            megatoy::status::info("Folder scan cancelled.");
+            return;
+          }
+          if (add_workspace_folder(folder)) {
+            if (on_changed) {
+              on_changed();
+            }
+          } else {
+            megatoy::status::warning("\"" + folder_name +
+                                     "\" is already in the workspace.");
+          }
+        });
+    if (!started) {
+      megatoy::status::warning("Another folder scan is in progress.");
+    }
+  };
+  if (inside.empty()) {
+    add();
+    return;
+  }
+  if (!confirm) {
+    megatoy::status::warning("\"" + folder_name +
+                             "\" holds folders already in the workspace.");
+    return;
+  }
+  confirm("\"" + folder_name + "\" holds " + replaced +
+              ", already in the workspace. Merge " +
+              (inside.size() == 1 ? "it" : "them") + " into \"" +
+              folder_name + "\"?\n\nRatings and categories are kept.",
+          std::move(add));
 }
+#endif
 
 void PreferenceManager::set_show_builtin_presets(bool show) {
   if (show == show_builtin_presets_) {
@@ -209,6 +251,22 @@ void PreferenceManager::set_last_patch_path(const std::string &path) {
   save_preferences();
 }
 
+const std::vector<OpenPatchRecord> &PreferenceManager::open_patches() const {
+  return open_patches_;
+}
+
+int PreferenceManager::active_open_patch() const { return active_open_patch_; }
+
+void PreferenceManager::set_open_patches(std::vector<OpenPatchRecord> patches,
+                                         int active) {
+  if (patches == open_patches_ && active == active_open_patch_) {
+    return;
+  }
+  open_patches_ = std::move(patches);
+  active_open_patch_ = active;
+  save_preferences();
+}
+
 const std::string &PreferenceManager::last_seen_version() const {
   return last_seen_version_;
 }
@@ -218,6 +276,16 @@ void PreferenceManager::set_last_seen_version(const std::string &version) {
     return;
   }
   last_seen_version_ = version;
+  save_preferences();
+}
+
+const std::string &PreferenceManager::layout() const { return layout_; }
+
+void PreferenceManager::set_layout(const std::string &name) {
+  if (name == layout_) {
+    return;
+  }
+  layout_ = name;
   save_preferences();
 }
 
@@ -340,7 +408,10 @@ PreferenceData PreferenceManager::to_data() const {
   data.workspace_folders = workspace_.paths();
   data.last_save_directory = last_save_directory_;
   data.last_patch_path = last_patch_path_;
+  data.open_patches = open_patches_;
+  data.active_open_patch = active_open_patch_;
   data.last_seen_version = last_seen_version_;
+  data.layout = layout_;
   data.show_builtin_presets = show_builtin_presets_;
   data.legacy_workspace_migration_complete =
       legacy_workspace_migration_complete_;
@@ -354,7 +425,10 @@ void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
   workspace_.set_paths(data.workspace_folders);
   last_save_directory_ = data.last_save_directory;
   last_patch_path_ = data.last_patch_path;
+  open_patches_ = data.open_patches;
+  active_open_patch_ = data.active_open_patch;
   last_seen_version_ = data.last_seen_version;
+  layout_ = data.layout;
   show_builtin_presets_ = data.show_builtin_presets;
   legacy_workspace_migration_complete_ =
       data.legacy_workspace_migration_complete;

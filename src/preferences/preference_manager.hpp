@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/platform_config.hpp"
 #include "preferences_data.hpp"
 #include "system/path_service.hpp"
 #include "workspace/workspace.hpp"
@@ -47,8 +48,22 @@ public:
    * into persistent storage instead, and because the picker and the reads are
    * asynchronous `on_changed` may run several frames later. It is not called
    * if the user cancels.
+   *
+   * A folder already inside one in the workspace is turned away. One holding
+   * folders in the workspace takes their place, once `confirm` has had the
+   * user agree to `message` and called `proceed`; without `confirm` it is
+   * turned away too.
    */
-  void request_add_workspace_folder(std::function<void()> on_changed);
+  using ConfirmReplace = std::function<void(const std::string &message,
+                                            std::function<void()> proceed)>;
+  void request_add_workspace_folder(std::function<void()> on_changed,
+                                    ConfirmReplace confirm = {});
+#if !defined(MEGATOY_PLATFORM_WEB)
+  /// The same for a folder already chosen, by the picker or by a drop.
+  void add_chosen_workspace_folder(const std::filesystem::path &chosen,
+                                   std::function<void()> on_changed,
+                                   ConfirmReplace confirm);
+#endif
 
   /// True when adding a folder copies it rather than referencing it.
   static bool folder_add_is_import();
@@ -61,10 +76,17 @@ public:
   void set_last_save_directory(const std::filesystem::path &path);
   const std::string &last_patch_path() const;
   void set_last_patch_path(const std::string &path);
+  const std::vector<OpenPatchRecord> &open_patches() const;
+  int active_open_patch() const;
+  void set_open_patches(std::vector<OpenPatchRecord> patches, int active);
 
   /// The version whose change log the user has already been offered.
   const std::string &last_seen_version() const;
   void set_last_seen_version(const std::string &version);
+
+  /// Name of the window layout in use; empty means the default one.
+  const std::string &layout() const;
+  void set_layout(const std::string &name);
 
   std::filesystem::path get_imgui_ini_file() const;
 
@@ -100,7 +122,10 @@ private:
   megatoy::workspace::Workspace workspace_;
   std::filesystem::path last_save_directory_;
   std::string last_patch_path_;
+  std::vector<OpenPatchRecord> open_patches_;
+  int active_open_patch_ = -1;
   std::string last_seen_version_;
+  std::string layout_;
   bool show_builtin_presets_ = true;
   bool legacy_workspace_migration_complete_ = false;
   bool legacy_metadata_migration_complete_ = false;

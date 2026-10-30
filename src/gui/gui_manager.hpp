@@ -1,8 +1,10 @@
 #pragma once
 
+#include "gui/layouts.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "preferences/preference_manager.hpp"
+#include <optional>
 #include <string>
 
 #include <SDL3/SDL.h>
@@ -54,9 +56,11 @@ public:
   void set_should_close(bool value);
 
   /**
-   * Begin new frame
+   * Begin new frame. A layout switch or reset requested during the previous
+   * frame takes effect here, before ImGui starts the frame; `window_prefs`
+   * receives the layout's window visibility.
    */
-  void begin_frame();
+  void begin_frame(UIPreferences &window_prefs);
 
   /**
    * End frame and render
@@ -88,9 +92,17 @@ public:
   void apply_theme();
 
   /**
-   * Reset ImGui layout
+   * Layouts
    */
+  ui::layouts::LayoutId current_layout() const { return current_layout_; }
+  /// Remembers the current layout's arrangement and brings up `layout`'s
+  /// saved one, or its default, from the next frame.
+  void switch_layout(ui::layouts::LayoutId layout);
+  /// Rebuilds the current layout's default arrangement from the next frame.
   void reset_layout();
+
+  /// The title of the application's window; unchanged titles cost nothing.
+  void set_window_title(const std::string &title);
 
   /**
    * Fullscreen management
@@ -125,7 +137,6 @@ public:
 
   // Web-specific ini bridge (no-op on native).
   void sync_web_imgui_ini();
-  void save_web_imgui_ini_if_needed();
 
 private:
   // Core GUI system
@@ -148,10 +159,16 @@ private:
   bool first_end_frame_;
   bool pending_imgui_ini_update_;
   std::string imgui_ini_file_path_;
+  std::string window_title_;
   ui::styles::ThemeId theme_;
   float ui_scale_preference_ = ui::scale::kAuto;
   float ui_scale_ = 1.0f;
   bool web_layout_loaded_ = false;
+  /// The arrangement just loaded is still to be checked against the areas.
+  bool check_loaded_layout_ = true;
+  ui::layouts::LayoutId current_layout_ = ui::layouts::kDefaultLayout;
+  std::optional<ui::layouts::LayoutId> pending_layout_;
+  bool pending_window_visibility_ = false;
 
   // Internal methods
   void set_imgui_ini_file(const std::string &path);
@@ -159,6 +176,9 @@ private:
   void dispatch_drop_event(const char *path);
   void process_event(const SDL_Event &event);
   void setup_default_layout(unsigned int dockspace_id);
+  void apply_pending_layout(UIPreferences &window_prefs);
+  void store_layout_ini();
+  bool load_layout_ini();
 
   // Drop callback state
   void *drop_user_pointer_;

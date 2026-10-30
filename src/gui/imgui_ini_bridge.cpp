@@ -6,9 +6,9 @@
 
 namespace ui {
 
-void sync_web_imgui_ini(bool &, bool &, bool &) {}
+bool load_web_layout_ini(std::string_view) { return false; }
 
-void save_web_imgui_ini_if_needed(bool &) {}
+void save_web_layout_ini(std::string_view, bool) {}
 
 } // namespace ui
 

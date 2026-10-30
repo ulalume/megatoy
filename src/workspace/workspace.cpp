@@ -3,7 +3,10 @@
 #include "workspace/path_policy.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
 #include <system_error>
+#include <vector>
 
 namespace megatoy::workspace {
 
@@ -40,7 +43,99 @@ Folder make_folder(const fs::path &resolved) {
   return folder;
 }
 
+/// Whether `path` lies strictly inside `folder`; both resolved already.
+bool is_strictly_inside(const fs::path &path, const fs::path &folder) {
+  auto inner = path.begin();
+  for (auto outer = folder.begin(); outer != folder.end(); ++outer, ++inner) {
+    if (outer->empty()) {
+      continue;
+    }
+    if (inner == path.end() || *inner != *outer) {
+      return false;
+    }
+  }
+  for (; inner != path.end(); ++inner) {
+    if (!inner->empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
+
+namespace {
+
+/// The last `depth` folders above `path`, outermost first, each with a slash.
+std::string folders_above(const fs::path &path, std::size_t depth) {
+  std::vector<std::string> names;
+  for (auto parent = path.parent_path();
+       names.size() < depth && parent.has_relative_path();
+       parent = parent.parent_path()) {
+    names.push_back(parent.filename().generic_string());
+  }
+  std::string joined;
+  for (auto name = names.rbegin(); name != names.rend(); ++name) {
+    joined += *name + "/";
+  }
+  return joined;
+}
+
+} // namespace
+
+std::string Workspace::telling_parents(const Folder &folder) const {
+  std::vector<const Folder *> others;
+  for (const auto &other : folders_) {
+    if (other.path != folder.path && other.name == folder.name) {
+      others.push_back(&other);
+    }
+  }
+  if (others.empty()) {
+    return {};
+  }
+  // Paths are distinct, so enough folders above always tell them apart.
+  const auto taken = [&](std::size_t levels) {
+    const auto parents = folders_above(folder.path, levels);
+    return std::any_of(others.begin(), others.end(), [&](const Folder *other) {
+      return folders_above(other->path, levels) == parents;
+    });
+  };
+  const auto levels = static_cast<std::size_t>(
+      std::distance(folder.path.begin(), folder.path.end()));
+  std::size_t depth = 1;
+  while (taken(depth) && depth < levels) {
+    ++depth;
+  }
+  return folders_above(folder.path, depth);
+}
+
+std::string Workspace::display_name(const Folder &folder) const {
+  return telling_parents(folder) + folder.name;
+}
+
+const Folder *Workspace::enclosing(const fs::path &path) const {
+  const auto resolved = normalize_path(path);
+  const Folder *outermost = nullptr;
+  for (const auto &folder : folders_) {
+    if (is_strictly_inside(resolved, folder.path) &&
+        (outermost == nullptr ||
+         is_strictly_inside(outermost->path, folder.path))) {
+      outermost = &folder;
+    }
+  }
+  return outermost;
+}
+
+std::vector<const Folder *> Workspace::enclosed_by(const fs::path &path) const {
+  const auto resolved = normalize_path(path);
+  std::vector<const Folder *> inside;
+  for (const auto &folder : folders_) {
+    if (is_strictly_inside(folder.path, resolved)) {
+      inside.push_back(&folder);
+    }
+  }
+  return inside;
+}
 
 bool Workspace::add(const fs::path &path) {
   const auto resolved = normalize_path(path);
@@ -49,7 +144,7 @@ bool Workspace::add(const fs::path &path) {
   if (!fs::is_directory(resolved, ec) || ec) {
     return false;
   }
-  if (contains(resolved)) {
+  if (contains(resolved) || enclosing(resolved) != nullptr) {
     return false;
   }
 

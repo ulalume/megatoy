@@ -54,9 +54,6 @@ struct UIPreferences {
   std::string patch_search_query;
 
   // Patch selector view settings
-  int patch_sort_column =
-      0; // 0=Name, 1=Category, 2=StarRating, 3=Format, 4=Path
-  int patch_sort_order = 0; // 0=Ascending, 1=Descending
   std::string metadata_search_query;
   int metadata_star_filter = 0;
 
@@ -97,8 +94,6 @@ struct UIPreferences {
                rhs.envelope_reference_midi_note &&
            lhs.use_pitch_bend == rhs.use_pitch_bend &&
            lhs.use_mod_wheel == rhs.use_mod_wheel &&
-           lhs.patch_sort_column == rhs.patch_sort_column &&
-           lhs.patch_sort_order == rhs.patch_sort_order &&
            lhs.midi_keyboard_scale == rhs.midi_keyboard_scale &&
            lhs.midi_keyboard_key == rhs.midi_keyboard_key &&
            lhs.midi_keyboard_typing_octave == rhs.midi_keyboard_typing_octave &&
@@ -114,6 +109,14 @@ struct UIPreferences {
   }
 };
 
+/// One patch left open in the editor: its browser entry, and whether it was
+/// kept open or only previewed.
+struct OpenPatchRecord {
+  std::string path;
+  bool pinned = true;
+  bool operator==(const OpenPatchRecord &) const = default;
+};
+
 struct PreferenceData {
   /// Patch folders the user has added, in browser order.
   std::vector<std::filesystem::path> workspace_folders;
@@ -122,12 +125,18 @@ struct PreferenceData {
   std::filesystem::path last_save_directory;
   /// Repository-relative source path of the patch selected most recently.
   std::string last_patch_path;
+  /// The patches open in the editor, in tab order, and which one was active
+  /// (-1 for none).
+  std::vector<OpenPatchRecord> open_patches;
+  int active_open_patch = -1;
   /**
    * The version whose change log the user has already been offered. Empty on
    * a fresh install and on builds that predate the change log. Written as
    * soon as the decision is made, so ignoring the notice still counts.
    */
   std::string last_seen_version;
+  /// Name of the window layout in use; empty means the default one.
+  std::string layout;
   bool show_builtin_presets = true;
 
   // Runtime-only flag set while adopting a pre-workspace patch folder.

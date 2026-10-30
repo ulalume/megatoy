@@ -1,9 +1,7 @@
 #pragma once
 
 #include "app_state.hpp"
-#include "patches/patch_repository.hpp"
-#include "ym2612/patch.hpp"
-#include <filesystem>
+#include "patches/patch_document.hpp"
 #include <functional>
 
 namespace ui {
@@ -13,11 +11,16 @@ struct ConfirmationDialogContext {
   UIState::DangerConfirmationState &danger_state;
   UIState::TextPromptState &text_prompt_state;
   UIState::NewPatchPromptState &new_patch_prompt_state;
-  UIState::DropState &drop_state;
-  std::function<void(const patches::PatchEntry &)> load_patch_entry;
-  std::function<void(const ym2612::Patch &, const std::filesystem::path &)>
-      apply_dropped_patch;
+  /// Close a document without saving it.
+  std::function<void(patches::DocumentId)> discard_and_close;
+  /// Save a document, then close it once it has nothing left unsaved.
+  std::function<void(patches::DocumentId)> save_and_close;
+  /// Keep a document open after its close was cancelled, with its tab in
+  /// front again.
+  std::function<void(patches::DocumentId)> keep_open;
   std::function<void()> confirm_exit;
+  /// Save a document, then exit once nothing is left unsaved.
+  std::function<void(patches::DocumentId)> save_and_exit;
 };
 
 void render_confirmation_dialog(ConfirmationDialogContext &context);

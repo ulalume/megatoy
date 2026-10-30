@@ -10,11 +10,13 @@
 #include "gui/components/common.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/components/preferences.hpp"
+#include "gui/image/resource_manager.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <imgui.h>
@@ -191,7 +193,8 @@ void render_load_menu(MainMenuContext &context) {
 /// The load graph, at the right-hand end of the bar.
 void render_audio_load(MainMenuContext &context) {
   const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 size(ui::scale::px(kLoadGraphWidth), ImGui::GetTextLineHeight());
+  const ImVec2 size(ui::scale::px(kLoadGraphWidth),
+                    ImGui::GetTextLineHeight() + ui::scale::px(4.0f));
 
   const auto history = context.audio_load.history();
   const LoadWindow window = load_window(history, size.x);
@@ -207,12 +210,13 @@ void render_audio_load(MainMenuContext &context) {
                            ImGui::GetWindowWidth() - size.x - reading_width -
                                style.ItemSpacing.x -
                                style.FramePadding.x * 2.0f);
-  const float y = (ImGui::GetWindowHeight() - row) * 0.5f;
-  ImGui::SetCursorPos(ImVec2(x, y));
+  // Text in the bar is drawn the frame padding below the cursor.
+  ImGui::SetCursorPos(ImVec2(
+      x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
   ImGui::TextUnformatted(reading);
 
-  ImGui::SetCursorPos(
-      ImVec2(x + reading_width + style.ItemSpacing.x, y));
+  ImGui::SetCursorPos(ImVec2(x + reading_width + style.ItemSpacing.x,
+                             (ImGui::GetWindowHeight() - size.y) * 0.5f));
   const Panel panel = begin_panel(size, "##audio_load");
   const bool clicked = ImGui::IsItemClicked();
   const bool hovered = ImGui::IsItemHovered();
@@ -234,11 +238,72 @@ void render_audio_load(MainMenuContext &context) {
 
 } // namespace
 
+namespace {
+
+/// The app's icon, loaded once; 0 when it could not be.
+ImTextureID app_icon() {
+  static const ImTextureID icon = [] {
+    unsigned int texture = 0;
+    int width = 0;
+    int height = 0;
+    if (!ResourceManager::instance().load_texture_from_resource(
+            "images/app_icon.png", texture, width, height)) {
+      return ImTextureID{};
+    }
+    return static_cast<ImTextureID>(texture);
+  }();
+  return icon;
+}
+
+/**
+ * The menu holding About and Quit, shown as the app's icon. The label is
+ * blank space as wide as the icon, which is drawn over it afterwards so the
+ * menu's hover highlight stays underneath.
+ */
+/// A menu in the bar, highlighted from the bar's top to its bottom.
+bool begin_bar_menu(const char *label) {
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing,
+                       ImGui::GetStyle().FramePadding.y * 2.0f);
+  const bool open = ImGui::BeginMenu(label);
+  ImGui::PopStyleVar();
+  return open;
+}
+
+bool begin_app_menu() {
+  const ImTextureID icon = app_icon();
+  if (icon == ImTextureID{}) {
+    return begin_bar_menu("megatoy");
+  }
+  const float size = ImGui::GetTextLineHeight() + ui::scale::px(6.0f);
+  const float space = ImGui::CalcTextSize(" ").x;
+  const std::string label =
+      std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
+      "##megatoy";
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImVec2 start = ImGui::GetCursorScreenPos();
+  const float label_width = ImGui::CalcTextSize(label.c_str(), nullptr, true).x;
+  const bool open = begin_bar_menu(label.c_str());
+  // A menu bar item's label starts half an item spacing in.
+  const float x = start.x + ImGui::GetStyle().ItemSpacing.x * 0.5f +
+                  (label_width - size) * 0.5f;
+  const float y = start.y + (ImGui::GetFrameHeight() - size) * 0.5f;
+  draw_list->AddImage(icon, ImVec2(x, y),
+                      ImVec2(x + size, y + size));
+  return open;
+}
+
+} // namespace
+
 void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
   const ImGuiIO &io = ImGui::GetIO();
+  // A taller bar than the frame padding alone would give. It stays pushed
+  // until the bar ends so the items centre in it and the menus open below it.
+  const ImVec2 padding = ImGui::GetStyle().FramePadding;
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                      ImVec2(padding.x, padding.y + ui::scale::px(4.0f)));
   if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::BeginMenu("megatoy")) {
+    if (begin_app_menu()) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
 
       if (ImGui::MenuItem("About megatoy")) {
@@ -259,8 +324,17 @@ void render_main_menu(MainMenuContext &context) {
     const bool is_patch_modified = session.is_modified();
     const bool is_user_patch = session.current_patch_is_user_patch();
     const bool save_disabled = is_user_patch && !is_patch_modified;
-    if (ImGui::BeginMenu("File")) {
+    if (begin_bar_menu("File")) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
+      // The browser keeps Ctrl+N for a new window of its own.
+      const char *new_shortcut = megatoy::platform::is_web()
+                                     ? nullptr
+                                     : (mac_behavior ? "Cmd+N" : "Ctrl+N");
+      if (ImGui::MenuItem("New Patch", new_shortcut) && context.new_patch) {
+        context.new_patch();
+      }
+      ImGui::Separator();
+
       const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
 #if defined(MEGATOY_PLATFORM_WEB)
       // The two ways out of the editor, as the patch tree names them. The
@@ -298,6 +372,16 @@ void render_main_menu(MainMenuContext &context) {
         request_save_as(context.save_state);
       }
 #endif
+
+      ImGui::Separator();
+      // The browser keeps Ctrl+W for closing its own tab.
+      const char *close_shortcut = megatoy::platform::is_web()
+                                       ? nullptr
+                                       : (mac_behavior ? "Cmd+W" : "Ctrl+W");
+      if (ImGui::MenuItem("Close Patch", close_shortcut) &&
+          context.close_patch) {
+        context.close_patch();
+      }
 
       {
         ImGui::Separator();
@@ -343,11 +427,13 @@ void render_main_menu(MainMenuContext &context) {
     if (context.open_add_folder_dialog) {
       context.open_add_folder_dialog = false;
       auto sync = context.sync_workspace;
-      context.preferences.request_add_workspace_folder([sync]() {
-        if (sync) {
-          sync();
-        }
-      });
+      context.preferences.request_add_workspace_folder(
+          [sync]() {
+            if (sync) {
+              sync();
+            }
+          },
+          context.confirm_replace_folders);
     }
 
     // Not gated on supports_quit(): saving has nothing to do with whether
@@ -367,8 +453,8 @@ void render_main_menu(MainMenuContext &context) {
       request_save_as(context.save_state);
     }
 
-    if (ImGui::BeginMenu("Edit")) {
-      auto &history = context.history;
+    if (begin_bar_menu("Edit")) {
+      auto &history = context.history();
       const ImGuiIO &io = ImGui::GetIO();
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
       const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
@@ -411,14 +497,15 @@ void render_main_menu(MainMenuContext &context) {
       // The items name their target the way the undo entries above do, which
       // saves the menu a section heading.
       OperatorCommandContext operator_commands{
-          session.current_patch().instrument, context.operator_edit,
-          context.begin_patch_history, context.commit_patch_history};
+          session.current_patch().instrument, context.operator_edit(),
+          context.operator_clipboard, context.begin_patch_history,
+          context.commit_patch_history};
       render_operator_command_items(operator_commands);
 
       ImGui::EndMenu();
     }
 
-    if (ImGui::BeginMenu("View")) {
+    if (begin_bar_menu("View")) {
       auto &ui_prefs = context.ui_prefs;
 
       if (context.gui.supports_fullscreen()) {
@@ -441,13 +528,8 @@ void render_main_menu(MainMenuContext &context) {
 
       ImGui::Separator();
 
-      // Reset buttons
-      if (ImGui::MenuItem("Reset to Default View")) {
-        context.preferences.reset_ui_preferences();
-        context.ui_prefs = context.preferences.ui_preferences();
-        context.open_add_folder_dialog = false;
+      if (ImGui::MenuItem("Reset to Default Layout")) {
         context.gui.reset_layout();
-        context.gui.set_theme(ui::styles::ThemeId::MegatoyDark);
       }
       ImGui::EndMenu();
     }
@@ -456,6 +538,7 @@ void render_main_menu(MainMenuContext &context) {
 
     ImGui::EndMainMenuBar();
   }
+  ImGui::PopStyleVar();
 
   if (open_about) {
     open_about_dialog();

@@ -11,17 +11,28 @@
 
 namespace ui {
 
-enum class TableSortColumn { Name, Category, StarRating, Format, Path };
+enum class PendingMenuAction { SaveCurrent };
 
-enum class SortOrder { Ascending, Descending };
+struct PendingRating {
+  std::string relative_path;
+  int stars = 0;
+};
 
-enum class PendingMenuAction { Refresh, SaveCurrent };
+struct PendingMove {
+  patches::PatchEntry entry;
+  patches::PatchEntry destination;
+};
+
+/// Drag payload of a browser entry: its repository-relative path.
+inline constexpr const char *kPatchEntryPayload = "MEGATOY_PATCH_ENTRY";
 
 struct PatchSelectorContext {
   patches::PatchRepository &repository;
   patches::PatchSession &session;
   PreferenceManager::UIPreferences &prefs;
-  std::function<void(const patches::PatchEntry &)> safe_load_patch;
+  /// Open an entry in the editor; `pinned` keeps it open rather than
+  /// previewing it.
+  std::function<void(const patches::PatchEntry &, bool pinned)> open_patch;
   std::function<void(const std::filesystem::path &)> reveal_in_file_manager;
   std::function<void(const patches::PatchEntry &)> download_entry;
   /// Download one entry's patch in the named format. Absent where there is
@@ -42,6 +53,9 @@ struct PatchSelectorContext {
   std::function<void(const std::filesystem::path &)> remove_folder;
   std::function<void(const patches::PatchEntry &)> rename_patch;
   std::function<void(const patches::PatchEntry &)> delete_patch;
+  /// Move an entry into a folder.
+  std::function<void(const patches::PatchEntry &, const patches::PatchEntry &)>
+      move_patch;
   /// Copy the entry's patch to a new file, leaving the editor alone.
   std::function<void(const patches::PatchEntry &)> duplicate_patch;
   /// Ask for a new patch in this folder. Only offered on a folder the
@@ -51,22 +65,9 @@ struct PatchSelectorContext {
   std::function<void(const std::filesystem::path &)> create_folder_in;
   std::optional<std::filesystem::path> pending_remove_folder;
   std::optional<PendingMenuAction> pending_menu_action;
-
-  TableSortColumn get_sort_column() const {
-    return static_cast<TableSortColumn>(prefs.patch_sort_column);
-  }
-
-  void set_sort_column(TableSortColumn column) {
-    prefs.patch_sort_column = static_cast<int>(column);
-  }
-
-  SortOrder get_sort_order() const {
-    return static_cast<SortOrder>(prefs.patch_sort_order);
-  }
-
-  void set_sort_order(SortOrder order) {
-    prefs.patch_sort_order = static_cast<int>(order);
-  }
+  std::optional<PendingRating> pending_rating;
+  /// A drop in the tree, carried out once the tree is no longer being drawn.
+  std::optional<PendingMove> pending_move;
 };
 
 // Function to render patch browser panel

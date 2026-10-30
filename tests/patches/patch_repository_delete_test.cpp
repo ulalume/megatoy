@@ -101,6 +101,50 @@ void test_read_only_storage_refuses_delete(const fs::path &root) {
   CHECK(fs::exists(path));
 }
 
+void test_builtin_metadata_lives_outside_presets(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto builtin = root / "builtin_rated";
+  fs::create_directories(builtin);
+  const auto stored = root / "config" / "builtin_presets.json";
+
+  ym2612::Patch patch;
+  patch.name = "preset";
+  const auto path = builtin / "preset.gin";
+  CHECK(patches::write_patch(patch, path));
+
+  megatoy::workspace::Workspace workspace;
+  {
+    patches::PatchRepository repository(file_system, workspace, builtin,
+                                        stored);
+    const auto *found = find_entry(repository.tree(), path);
+    CHECK(found != nullptr);
+    const auto entry = *found;
+    CHECK(repository.can_edit_metadata(entry));
+    CHECK(!repository.can_delete_patch(entry));
+
+    patches::PatchMetadata metadata;
+    metadata.star_rating = 4;
+    metadata.category = "bass";
+    CHECK(repository.update_patch_metadata(entry.relative_path, metadata));
+  }
+  CHECK(fs::exists(stored));
+  CHECK(!fs::exists(builtin / ".megatoy"));
+
+  patches::PatchRepository reopened(file_system, workspace, builtin, stored);
+  const auto *found = find_entry(reopened.tree(), path);
+  CHECK(found != nullptr);
+  CHECK(found->metadata.has_value());
+  CHECK(found->metadata->star_rating == 4);
+  CHECK(found->metadata->category == "bass");
+
+  // Gone presets leave nothing behind, but missing ones lose nothing.
+  patches::PatchRepository elsewhere(file_system, workspace,
+                                     root / "no_presets", stored);
+  patches::PatchRepository again(file_system, workspace, builtin, stored);
+  found = find_entry(again.tree(), path);
+  CHECK(found != nullptr && found->metadata.has_value());
+}
+
 void test_duplicate_save_requires_overwrite(const fs::path &root) {
   platform::StdFileSystem file_system;
   const auto writable = root / "duplicate";
@@ -170,7 +214,7 @@ void test_container_parse_cache_invalidates_on_change(const fs::path &root) {
 
   patches::FilesystemPatchStorage storage(file_system, writable, "cache",
                                           /*writable=*/true,
-                                          /*enable_metadata=*/false);
+                                          /*metadata_file=*/{});
   std::vector<patches::PatchEntry> tree;
   storage.append_entries(tree);
   CHECK(storage.container_parse_count_for_testing() == 1);
@@ -262,6 +306,7 @@ int main() {
 
   test_writable_storage_deletes_patch(root);
   test_read_only_storage_refuses_delete(root);
+  test_builtin_metadata_lives_outside_presets(root);
   test_duplicate_save_requires_overwrite(root);
   test_container_parse_cache_invalidates_on_change(root);
   test_repository_revision_tracks_refresh(root);

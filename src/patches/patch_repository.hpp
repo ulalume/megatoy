@@ -1,5 +1,6 @@
 #pragma once
 
+#include "folder_watcher.hpp"
 #include "patch_storage.hpp"
 #include "patches/folder_metadata.hpp"
 #include "platform/virtual_file_system.hpp"
@@ -26,6 +27,9 @@ struct PatchEntry {
   bool is_directory;
   /// A directory with nothing on disk but dotfiles.
   bool holds_nothing = false;
+  /// For a workspace folder sharing its name with another: the folders above
+  /// it that tell them apart, as "songs/".
+  std::string telling_parents;
   std::vector<PatchEntry> children;
 
   // Metadata (only valid for files, not directories)
@@ -54,6 +58,7 @@ public:
   PatchRepository(platform::VirtualFileSystem &vfs,
                   const megatoy::workspace::Workspace &workspace,
                   const std::filesystem::path &builtin_presets_dir = {},
+                  const std::filesystem::path &builtin_presets_metadata = {},
                   PersistentParseCache *persistent_cache = nullptr);
 
   /// Rebuild the storage list if the workspace has changed since last call.
@@ -66,6 +71,9 @@ public:
 
   bool load_patch(const PatchEntry &entry, ym2612::Patch &patch) const;
   bool has_directory_changed() const;
+  /// True once something in the workspace's folders has changed outside
+  /// megatoy and settled since this last returned true.
+  bool take_outside_change();
 
   static std::vector<std::string> supported_extensions();
 
@@ -97,6 +105,14 @@ public:
   bool can_rename_patch(const PatchEntry &entry) const;
   bool delete_patch(const PatchEntry &entry);
   bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
+  /// Moves stay inside one workspace folder: the storage that owns `entry`
+  /// has to own `destination` too.
+  bool can_move_patch(const PatchEntry &entry,
+                      const PatchEntry &destination) const;
+  bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
+  /// A relative path as the user sees it: starting with what its folder is
+  /// listed as.
+  std::string display_path(const std::string &relative) const;
   bool can_edit_metadata(const PatchEntry &entry) const;
 
   // Batch operations
@@ -121,11 +137,13 @@ private:
 
   const megatoy::workspace::Workspace &workspace_;
   std::filesystem::path builtin_presets_directory_;
+  std::filesystem::path builtin_presets_metadata_;
   platform::VirtualFileSystem &vfs_;
   PersistentParseCache *persistent_cache_;
 
   std::vector<PatchEntry> tree_cache_;
   std::vector<std::filesystem::path> watched_directories_;
+  FolderWatcher folder_watcher_;
   std::vector<std::filesystem::file_time_type> watched_times_;
   bool cache_initialized_ = false;
   bool show_builtin_presets_ = true;

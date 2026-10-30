@@ -102,10 +102,12 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/patch_selector_shared.cpp
-  src/gui/components/patch_table_view.cpp
   src/gui/components/patch_tree_flatten.cpp
   src/gui/components/patch_tree_view.cpp
   src/gui/components/preferences.cpp
+  src/gui/components/star_rating.cpp
+  src/gui/components/view_patch_drop.cpp
+  src/gui/areas.cpp
   src/gui/patch_save_dialog.cpp
   src/gui/save_as_dialog.cpp
   src/gui/save_export_actions.cpp
@@ -115,6 +117,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/preview/ssg_preview.cpp
   src/gui/components/waveform.cpp
   src/gui/gui_manager.cpp
+  src/gui/layouts.cpp
   src/gui/ui_scale.cpp
   src/gui/ui_renderer.cpp
   src/gui/image/resource_manager.cpp
@@ -128,12 +131,14 @@ set(MEGATOY_CORE_SOURCES
   src/drop_actions.cpp
   src/midi/midi_input_manager.cpp
 
+  src/patches/patch_document.cpp
   src/patches/patch_session.cpp
   src/patches/filename_utils.cpp
   src/workspace/path_policy.cpp
   src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
   src/patches/persistent_parse_cache.cpp
+  src/patches/folder_watcher.cpp
   src/patches/patch_repository.cpp
   src/patches/patch_write.cpp
   src/patches/filesystem_patch_storage.cpp
@@ -152,6 +157,7 @@ set(MEGATOY_CORE_SOURCES
   src/ym2612/device.cpp
   src/ym2612/operator.cpp
   src/ym2612/operator_edit.cpp
+  src/ym2612/operator_text.cpp
   src/ym2612/nuked_chip.cpp
   src/ym2612/ymfm_chip.cpp
 )
@@ -238,6 +244,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     nfd
     rtmidi
     SQLiteCpp
+    efsw
   )
   if(WIN32)
     target_link_libraries(megatoy_core PUBLIC shell32)

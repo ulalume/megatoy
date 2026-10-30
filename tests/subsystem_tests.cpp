@@ -1129,6 +1129,89 @@ void test_folder_rename_follows_the_current_patch(TestEnvironment &env) {
   CHECK(env.session.current_patch().name == "warm");
 }
 
+// Moving the folder that holds the current patch, or the patch itself, has to
+// carry the editor's path, the browser selection and the remembered path.
+void test_move_follows_the_current_patch(TestEnvironment &env) {
+  auto &repository = env.session.repository();
+  const auto crate = env.patches_folder / "crate";
+  const auto shelf = env.patches_folder / "shelf";
+  std::filesystem::create_directories(crate / "strings");
+  std::filesystem::create_directories(shelf);
+  auto patch = env.session.current_patch();
+  CHECK(patches::write_patch(patch, crate / "strings" / "violin.gin"));
+  CHECK(patches::write_patch(patch, shelf / "filler.gin"));
+  CHECK(formats::PatchRegistry::instance()
+            .save_package(".ginpkg", crate / "strings", "cello", patch)
+            .has_value());
+  repository.refresh();
+
+  const auto *violin =
+      find_patch_entry(repository.tree(), crate / "strings" / "violin.gin");
+  CHECK(violin != nullptr);
+  CHECK(env.session.load_patch_from_entry(*violin));
+
+  const auto *strings = find_patch_entry(repository.tree(), crate / "strings");
+  const auto *shelf_entry = find_patch_entry(repository.tree(), shelf);
+  CHECK(strings != nullptr && shelf_entry != nullptr);
+  CHECK(env.session.can_move_patch(*strings, *shelf_entry));
+  const auto strings_entry = *strings;
+  const auto shelf_copy = *shelf_entry;
+  CHECK(env.session.move_patch(strings_entry, shelf_copy));
+
+  const auto moved_violin = shelf / "strings" / "violin.gin";
+  CHECK(std::filesystem::exists(moved_violin));
+  CHECK(!std::filesystem::exists(crate / "strings"));
+  const auto expected =
+      repository.to_relative_path(moved_violin).generic_string();
+  CHECK(env.session.current_patch_path() == expected);
+  CHECK(env.session.current_patch_selection_path() == expected);
+  CHECK(env.preferences.last_patch_path() == expected);
+  CHECK(env.session.current_patch().name == "violin");
+
+  // The current patch itself, back up to the workspace folder.
+  const auto *moved = find_patch_entry(repository.tree(), moved_violin);
+  const auto *root = find_patch_entry(repository.tree(), env.patches_folder);
+  CHECK(moved != nullptr && root != nullptr);
+  const auto file_entry = *moved;
+  const auto root_entry = *root;
+  CHECK(env.session.move_patch(file_entry, root_entry));
+  const auto at_root =
+      repository.to_relative_path(env.patches_folder / "violin.gin")
+          .generic_string();
+  CHECK(env.session.current_patch_path() == at_root);
+  CHECK(env.preferences.last_patch_path() == at_root);
+
+  // One version out of a package: the selection keeps naming that version.
+  const auto *package =
+      find_patch_entry(repository.tree(), shelf / "strings" / "cello.ginpkg");
+  CHECK(package != nullptr && !package->children.empty());
+  const auto version = package->children.back();
+  CHECK(env.session.load_patch_from_entry(version));
+  const auto suffix =
+      version.relative_path.substr(package->relative_path.size());
+  CHECK(env.session.current_patch_selection_path() ==
+        package->relative_path + suffix);
+
+  const auto *crate_entry = find_patch_entry(repository.tree(), crate);
+  const auto *strings_now =
+      find_patch_entry(repository.tree(), shelf / "strings");
+  CHECK(crate_entry != nullptr && strings_now != nullptr);
+  const auto crate_copy = *crate_entry;
+  const auto strings_copy = *strings_now;
+  CHECK(env.session.move_patch(strings_copy, crate_copy));
+  const auto package_now =
+      repository.to_relative_path(crate / "strings" / "cello.ginpkg")
+          .generic_string();
+  CHECK(env.session.current_patch_path() == package_now);
+  CHECK(env.session.current_patch_selection_path() == package_now + suffix);
+  CHECK(env.preferences.last_patch_path() == package_now);
+
+  // A workspace folder is not something to move.
+  const auto *crate_again = find_patch_entry(repository.tree(), crate);
+  CHECK(crate_again != nullptr);
+  CHECK(!env.session.can_move_patch(root_entry, *crate_again));
+}
+
 // A workspace folder is registered by path, so renaming one has to move the
 // registration with it or the folder comes back missing.
 void test_workspace_root_rename_follows_the_preference(TestEnvironment &env) {
@@ -1349,6 +1432,7 @@ int main() {
   test_current_patch_rename_preserves_clean_identity(env);
   test_current_patch_path_recording(env);
   test_folder_rename_follows_the_current_patch(env);
+  test_move_follows_the_current_patch(env);
   test_workspace_root_rename_follows_the_preference(env);
   test_restore_last_patch(env);
   test_missing_last_patch_falls_back_silently(env);

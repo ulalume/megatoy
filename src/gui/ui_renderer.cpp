@@ -14,6 +14,7 @@
 #include "gui/components/patch_selector.hpp"
 #include "gui/components/preferences.hpp"
 #include "gui/components/status_toasts.hpp"
+#include "gui/components/view_patch_drop.hpp"
 #include "gui/components/waveform.hpp"
 #include "gui/patch_save_dialog.hpp"
 #include "gui/save_as_dialog.hpp"
@@ -38,6 +39,8 @@
 #include <cassert>
 #include <chrono>
 #include <filesystem>
+#include <functional>
+#include <imgui_internal.h>
 #include <optional>
 #include <string>
 #include <utility>
@@ -49,8 +52,8 @@ namespace {
 struct HistoryActions {
   AppContext &ctx;
 
-  void undo() const { ctx.services.history.undo(ctx); }
-  void redo() const { ctx.services.history.redo(ctx); }
+  void undo() const { ctx.services.history().undo(ctx); }
+  void redo() const { ctx.services.history().redo(ctx); }
 };
 
 struct PatchHistoryActions {
@@ -58,43 +61,10 @@ struct PatchHistoryActions {
 
   void begin_snapshot(const std::string &label,
                       const std::string &merge_key) const {
-    auto before_snapshot = ctx.services.patch_session.capture_snapshot();
-    auto label_copy = label;
-    auto key_copy = merge_key;
-    ctx.services.history.begin_transaction(
-        label_copy, key_copy,
-        [label_copy = std::move(label_copy), key_copy = std::move(key_copy),
-         before_snapshot](AppContext &context) mutable {
-          auto &patch_session = context.services.patch_session;
-          auto after_snapshot = patch_session.capture_snapshot();
-          return history::make_snapshot_entry<
-              patches::PatchSession::PatchSnapshot>(
-              label_copy, key_copy, before_snapshot, after_snapshot,
-              [](AppContext &context,
-                 const patches::PatchSession::PatchSnapshot &snapshot) {
-                context.services.patch_session.restore_snapshot(snapshot);
-              });
-        });
+    patch_actions::begin_change(ctx, label, merge_key);
   }
 
-  void commit() const { ctx.services.history.commit_transaction(ctx); }
-};
-
-struct PatchActions {
-  AppContext &ctx;
-
-  bool load(const patches::PatchEntry &entry) const {
-    return patch_actions::load(ctx, entry);
-  }
-
-  void safe_load(const patches::PatchEntry &entry) const {
-    patch_actions::safe_load(ctx, entry);
-  }
-
-  void load_dropped(const ym2612::Patch &patch,
-                    const std::filesystem::path &path) const {
-    patch_actions::load_dropped_patch(ctx, patch, path);
-  }
+  void commit() const { patch_actions::commit_change(ctx); }
 };
 
 struct MidiActions {
@@ -122,8 +92,156 @@ drop_actions::Environment make_drop_environment(AppContext &ctx) {
   return {
       ctx.services, ctx.ui_state(),
       [&ctx](const ym2612::Patch &patch, const std::filesystem::path &path) {
-        patch_actions::load_dropped_patch(ctx, patch, path);
+        patch_actions::open_dropped_patch(ctx, patch, path);
       }};
+}
+
+void close_document_now(AppContext &ctx, patches::DocumentId id) {
+  auto &session = ctx.services.patch_session;
+  if (session.find_document(id) == nullptr) {
+    return;
+  }
+  const bool was_active = id == session.active_document_id();
+  if (was_active) {
+    ctx.services.history().cancel_transaction();
+  }
+  session.close_document(id);
+  if (was_active) {
+    patch_actions::reveal_document(ctx, session.active_document_id());
+  }
+}
+
+/// Close a document, asking first when it has unsaved changes.
+void request_close_document(AppContext &ctx, patches::DocumentId id) {
+  const auto *document = ctx.services.patch_session.find_document(id);
+  if (document == nullptr) {
+    return;
+  }
+  if (!document->is_modified()) {
+    close_document_now(ctx, id);
+    return;
+  }
+  ctx.ui_state().confirmation_state =
+      UIState::ConfirmationState::close(id, document_label(*document));
+}
+
+/**
+ * Save a document and close it. One that has to be saved through Save As is
+ * activated and the dialog started instead; it stays open, to be closed
+ * again once saved.
+ */
+void save_and_close_document(AppContext &ctx, patches::DocumentId id) {
+  auto &session = ctx.services.patch_session;
+  if (session.find_document(id) == nullptr) {
+    return;
+  }
+  patch_actions::activate_document(ctx, id);
+  patch_actions::reveal_document(ctx, id);
+  auto &save_state = ctx.ui_state().save_export_state;
+  if (!session.can_save_in_place()) {
+    request_save_as(save_state);
+    return;
+  }
+  trigger_save(session, save_state);
+  const auto *document = session.find_document(id);
+  if (document != nullptr && !document->is_modified()) {
+    close_document_now(ctx, id);
+  }
+}
+
+/// Save the one changed document in place and exit once it is clean; a save
+/// that does not finish, such as one waiting on an overwrite question,
+/// leaves the app open.
+void save_and_exit(AppContext &ctx, patches::DocumentId id) {
+  auto &session = ctx.services.patch_session;
+  if (session.find_document(id) == nullptr) {
+    return;
+  }
+  patch_actions::activate_document(ctx, id);
+  trigger_save(session, ctx.ui_state().save_export_state);
+  if (session.modified_document_count() == 0) {
+    ctx.services.gui_manager.set_should_close(true);
+  }
+}
+
+/**
+ * Pick up what changed outside megatoy: the browser's tree, and the open
+ * documents whose file was written, in the workspace or, when
+ * `check_outside_files`, beyond it. One without unsaved changes shows the
+ * file's new contents; one with them keeps its own and asks.
+ */
+void follow_outside_changes(AppContext &ctx, bool check_outside_files) {
+  auto &session = ctx.services.patch_session;
+  auto &repository = session.repository();
+  const bool outside = repository.take_outside_change();
+  if (outside || repository.has_directory_changed()) {
+    repository.refresh();
+  } else if (!check_outside_files || !session.outside_file_changed()) {
+    return;
+  }
+  for (auto &version : session.take_disk_versions()) {
+    const auto *document = session.find_document(version.document);
+    if (document == nullptr) {
+      continue;
+    }
+    if (document->is_modified()) {
+      ctx.ui_state().document_ui(version.document).disk_version =
+          std::move(version.patch);
+    } else {
+      patch_actions::reload_from_disk(ctx, version.document, version.patch);
+    }
+  }
+}
+
+/// Cmd/Ctrl+W closes the active document while an editor window or the
+/// browser has the keyboard. The browser keeps the key for its own tab.
+void handle_close_shortcut(AppContext &ctx) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  (void)ctx;
+#else
+  const ImGuiIO &io = ImGui::GetIO();
+  if (io.WantTextInput || !(io.KeyCtrl || io.KeySuper) || io.KeyShift ||
+      io.KeyAlt || !ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+    return;
+  }
+  const ImGuiWindow *focused = GImGui->NavWindow;
+  const bool browser_focused =
+      focused != nullptr &&
+      focused->RootWindow == ImGui::FindWindowByName(PATCH_BROWSER_TITLE);
+  if (!browser_focused && !patch_editor_has_focus()) {
+    return;
+  }
+  request_close_document(ctx, ctx.services.patch_session.active_document_id());
+#endif
+}
+
+/// Cmd/Ctrl+N opens an untitled patch. The browser keeps the key for a new
+/// window.
+void handle_new_shortcut(AppContext &ctx) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  (void)ctx;
+#else
+  const ImGuiIO &io = ImGui::GetIO();
+  if (io.WantTextInput || !(io.KeyCtrl || io.KeySuper) || io.KeyShift ||
+      io.KeyAlt || !ImGui::IsKeyPressed(ImGuiKey_N, false)) {
+    return;
+  }
+  patch_actions::new_patch(ctx);
+#endif
+}
+
+UIState::DocumentUi &active_document_ui(AppContext &ctx) {
+  return ctx.ui_state().document_ui(
+      ctx.services.patch_session.active_document_id());
+}
+
+/// Drop what closed documents kept: their undo history and editor state.
+void prune_closed_documents(AppContext &ctx) {
+  const auto &session = ctx.services.patch_session;
+  ctx.services.prune_histories();
+  ctx.ui_state().prune_documents([&session](patches::DocumentId id) {
+    return session.find_document(id) != nullptr;
+  });
 }
 
 PatchLabState &patch_lab_state() {
@@ -198,15 +316,6 @@ void request_workspace_folder_removal(AppContext &ctx,
 #endif
 }
 
-bool selection_belongs_to_entry(const std::string &selection,
-                                const patches::PatchEntry &entry) {
-  if (selection == entry.relative_path) {
-    return true;
-  }
-  const std::string prefix = entry.relative_path + "/";
-  return selection.rfind(prefix, 0) == 0;
-}
-
 void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
   if (!ctx.services.patch_session.repository().can_delete_patch(entry)) {
     return;
@@ -219,15 +328,9 @@ void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
       "Delete \"" + entry.name + "\"?\n\nThis permanently deletes it " +
           location + ". This cannot be undone.",
       "Delete", [&ctx, entry]() {
-        auto &session = ctx.services.patch_session;
-        const bool clear_selection = selection_belongs_to_entry(
-            session.current_patch_selection_path(), entry);
-        if (!session.repository().delete_patch(entry)) {
+        if (!ctx.services.patch_session.delete_patch(entry)) {
           megatoy::status::error("Could not delete \"" + entry.name + "\".");
           return;
-        }
-        if (clear_selection) {
-          session.set_current_patch_path({});
         }
         megatoy::status::success("Deleted \"" + entry.name + "\".");
       });
@@ -245,52 +348,126 @@ std::size_t count_patches(const patches::PatchEntry &entry) {
   return total;
 }
 
-/// Rename, and on the web wait for browser storage: IndexedDB keys files by
-/// path, so renaming a folder rewrites every patch under it.
-void perform_patch_rename(AppContext &ctx, const patches::PatchEntry &entry,
-                          const std::string &new_stem) {
-  auto &session = ctx.services.patch_session;
+/// Run `action`, on the web only once a folder big enough to keep browser
+/// storage busy for a while has been confirmed.
+void confirm_large_folder_change(AppContext &ctx,
+                                 const patches::PatchEntry &entry,
+                                 const std::string &title,
+                                 const std::string &consequence,
+                                 const std::string &button,
+                                 std::function<void()> action) {
 #if defined(MEGATOY_PLATFORM_WEB)
-  auto &preferences = ctx.services.preference_manager;
+  constexpr std::size_t kWarnThreshold = 200;
+  const std::size_t patches = count_patches(entry);
+  if (entry.is_directory && patches >= kWarnThreshold) {
+    ctx.ui_state().danger_confirmation_state.request(
+        title,
+        "\"" + entry.name + "\" holds " + std::to_string(patches) +
+            " patches.\n\n" + consequence,
+        button, std::move(action));
+    return;
+  }
+#else
+  (void)ctx;
+  (void)entry;
+  (void)title;
+  (void)consequence;
+  (void)button;
+#endif
+  action();
+}
+
+/// After a folder changed path, report once browser storage has it: IndexedDB
+/// keys files by path, so every patch under the folder is rewritten. Elsewhere
+/// the change is already on disk.
+void report_folder_change(AppContext &ctx, const patches::PatchEntry &entry,
+                          const std::filesystem::path &new_path,
+                          const std::string &progress,
+                          const std::string &success,
+                          const std::string &failure,
+                          const std::string &undone) {
+#if defined(MEGATOY_PLATFORM_WEB)
   const auto old_path = entry.full_path;
   const bool was_workspace_folder =
-      entry.is_directory && preferences.workspace().find(old_path) != nullptr;
+      ctx.services.preference_manager.workspace().find(new_path) != nullptr;
+  const bool started = platform::web::begin_awaited_flush(
+      progress, "Saving the change to browser storage.",
+      [&ctx, new_path, old_path, was_workspace_folder, success, failure,
+       undone](bool ok, std::string error) {
+        if (ok) {
+          megatoy::status::success(success);
+          return;
+        }
+        // Storage kept the old path, so the workspace has to point there
+        // again or a reload finds the folder missing.
+        if (was_workspace_folder) {
+          ctx.services.preference_manager.rename_workspace_folder(new_path,
+                                                                  old_path);
+        }
+        megatoy::status::error(failure + ": " + error + " -- " + undone);
+      });
+  if (!started) {
+    megatoy::status::warning("Another storage operation is in progress.");
+  }
+#else
+  (void)ctx;
+  (void)entry;
+  (void)new_path;
+  (void)progress;
+  (void)failure;
+  (void)undone;
+  megatoy::status::success(success);
 #endif
+}
 
-  if (!session.rename_patch(entry, new_stem)) {
+void perform_patch_rename(AppContext &ctx, const patches::PatchEntry &entry,
+                          const std::string &new_stem) {
+  if (!ctx.services.patch_session.rename_patch(entry, new_stem)) {
     megatoy::status::error("Could not rename \"" + entry.name + "\".");
     return;
   }
-
-#if defined(MEGATOY_PLATFORM_WEB)
-  if (entry.is_directory) {
-    const auto new_path = old_path.parent_path() / new_stem;
-    const bool started = platform::web::begin_awaited_flush(
-        "Renaming \"" + entry.name + "\"...",
-        "Saving the change to browser storage.",
-        [&ctx, new_stem, new_path, old_path,
-         was_workspace_folder](bool ok, std::string error) {
-          if (ok) {
-            megatoy::status::success("Renamed to \"" + new_stem + "\".");
-            return;
-          }
-          // Storage kept the old name, so the workspace has to point there
-          // again or a reload finds the folder missing.
-          if (was_workspace_folder) {
-            ctx.services.preference_manager.rename_workspace_folder(new_path,
-                                                                    old_path);
-          }
-          megatoy::status::error("Could not save the rename: " + error +
-                                 " -- the old name comes back after a reload.");
-        });
-    if (!started) {
-      megatoy::status::warning("Another storage operation is in progress.");
-    }
+  const std::string success = "Renamed to \"" + new_stem + "\".";
+  if (!entry.is_directory) {
+    megatoy::status::success(success);
     return;
   }
-#endif
+  report_folder_change(ctx, entry, entry.full_path.parent_path() / new_stem,
+                       "Renaming \"" + entry.name + "\"...", success,
+                       "Could not save the rename",
+                       "the old name comes back after a reload.");
+}
 
-  megatoy::status::success("Renamed to \"" + new_stem + "\".");
+void perform_patch_move(AppContext &ctx, const patches::PatchEntry &entry,
+                        const patches::PatchEntry &destination) {
+  const auto target = destination.full_path / entry.full_path.filename();
+  std::error_code error;
+  if (std::filesystem::exists(target, error)) {
+    megatoy::status::error("\"" + destination.name + "\" already has \"" +
+                           entry.name + "\".");
+    return;
+  }
+  if (error || !ctx.services.patch_session.move_patch(entry, destination)) {
+    megatoy::status::error("Could not move \"" + entry.name + "\".");
+    return;
+  }
+  const std::string success =
+      "Moved \"" + entry.name + "\" to \"" + destination.name + "\".";
+  if (!entry.is_directory) {
+    megatoy::status::success(success);
+    return;
+  }
+  report_folder_change(ctx, entry, target, "Moving \"" + entry.name + "\"...",
+                       success, "Could not save the move",
+                       "it moves back after a reload.");
+}
+
+void request_patch_move(AppContext &ctx, const patches::PatchEntry &entry,
+                        const patches::PatchEntry &destination) {
+  confirm_large_folder_change(ctx, entry, "Move Folder?",
+                              "Moving may take a while.", "Move",
+                              [&ctx, entry, destination]() {
+                                perform_patch_move(ctx, entry, destination);
+                              });
 }
 
 void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
@@ -309,23 +486,11 @@ void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
   ctx.ui_state().text_prompt_state.request(
       title, label, initial, "Rename",
       [&ctx, entry](const std::string &new_stem) {
-#if defined(MEGATOY_PLATFORM_WEB)
-        // Browser storage rewrites every patch under the folder, so a big one
-        // is worth warning about first.
-        constexpr std::size_t kWarnThreshold = 200;
-        const std::size_t patches = count_patches(entry);
-        if (entry.is_directory && patches >= kWarnThreshold) {
-          ctx.ui_state().danger_confirmation_state.request(
-              "Rename Folder?",
-              "\"" + entry.name + "\" holds " + std::to_string(patches) +
-                  " patches.\n\nRenaming may take a while.",
-              "Rename", [&ctx, entry, new_stem]() {
-                perform_patch_rename(ctx, entry, new_stem);
-              });
-          return;
-        }
-#endif
-        perform_patch_rename(ctx, entry, new_stem);
+        confirm_large_folder_change(
+            ctx, entry, "Rename Folder?", "Renaming may take a while.",
+            "Rename", [&ctx, entry, new_stem]() {
+              perform_patch_rename(ctx, entry, new_stem);
+            });
       },
       [entry, is_directory](const std::string &new_stem) {
         if (new_stem.empty()) {
@@ -368,6 +533,8 @@ void request_new_patch(AppContext &ctx, const std::filesystem::path &folder) {
         const auto result =
             patch_session.create_patch_in(folder, name, extension);
         if (result.is_success()) {
+          patch_actions::reveal_document(ctx,
+                                         patch_session.active_document_id());
           megatoy::status::success("Created \"" +
                                    result.path.filename().string() + "\".");
         } else {
@@ -434,8 +601,24 @@ writable_entry_folder(AppContext &ctx, const patches::PatchEntry &entry) {
 void announce_saved_patch(AppContext &ctx, const std::filesystem::path &path) {
   const auto relative =
       ctx.services.patch_session.repository().to_relative_path(path);
-  megatoy::status::success("Saved " +
-                           display_preset_path(relative.generic_string()));
+  megatoy::status::success(
+      "Saved " + display_preset_path(
+                     ctx.services.patch_session.repository().display_path(
+                         relative.generic_string())));
+}
+
+/// Open a copy just written, kept open. `patch` is what was written, for a
+/// copy outside the workspace that the browser does not list.
+void open_duplicate(AppContext &ctx, const std::filesystem::path &path,
+                    const ym2612::Patch &patch) {
+  auto &session = ctx.services.patch_session;
+  ctx.services.history().cancel_transaction();
+  auto document = session.open_path(session.repository().to_relative_path(path),
+                                    /*pinned=*/true);
+  if (!document) {
+    document = session.open_or_activate_patch(patch, path, /*pinned=*/true);
+  }
+  patch_actions::reveal_document(ctx, *document);
 }
 
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -455,7 +638,7 @@ void download_patch_entry(AppContext &ctx, const patches::PatchEntry &entry,
 }
 #endif
 
-/// Copy the entry's patch to a new file. The editor is left as it is.
+/// Copy the entry's patch to a new file and open the copy.
 void request_patch_duplicate(AppContext &ctx,
                              const patches::PatchEntry &entry) {
   auto &session = ctx.services.patch_session;
@@ -510,6 +693,7 @@ void request_patch_duplicate(AppContext &ctx,
       selected.parent_path());
   session.repository().refresh();
   announce_saved_patch(ctx, selected);
+  open_duplicate(ctx, selected, patch);
 #endif
 }
 
@@ -533,6 +717,8 @@ void render_patch_duplicate_dialog(AppContext &ctx) {
         switch (result.status) {
         case patches::SavePatchResult::Status::Success:
           announce_saved_patch(ctx, result.path);
+          open_duplicate(ctx, result.path,
+                         ctx.ui_state().patch_duplicate_state.patch);
           break;
         case patches::SavePatchResult::Status::Duplicate:
           megatoy::status::error("A patch named \"" + stem +
@@ -552,29 +738,42 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
   auto &ui_state = state.ui_state();
   auto history_actions = HistoryActions{ctx};
   auto patch_history = PatchHistoryActions{ctx};
-  return {ctx.services.history,
-          ctx.services.gui_manager,
-          ctx.services.preference_manager,
-          ui_state.prefs,
-          ui_state.open_add_folder_dialog,
-          [&ctx]() { ctx.services.patch_session.sync_workspace(); },
-          [&ctx](const std::filesystem::path &path) {
-            request_workspace_folder_removal(ctx, path);
-          },
-          ctx.services.patch_session,
-          ui_state.save_export_state,
-          [history_actions]() { history_actions.undo(); },
-          [history_actions]() { history_actions.redo(); },
-          ui_state.operator_edit,
-          [patch_history](const std::string &label) {
-            // Empty merge key: two operator commands in a row stay two
-            // separate undo steps.
-            patch_history.begin_snapshot(label, {});
-          },
-          [patch_history]() { patch_history.commit(); },
-          ctx.services.audio_manager.load_meter(),
-          ui_state.open_sound_preferences,
-          ctx.services.audio_manager.default_buffer_frames()};
+  return {
+      [&ctx]() -> history::HistoryManager & { return ctx.services.history(); },
+      ctx.services.gui_manager,
+      ctx.services.preference_manager,
+      ui_state.prefs,
+      ui_state.open_add_folder_dialog,
+      [&ctx]() { ctx.services.patch_session.sync_workspace(); },
+      [&ctx](const std::filesystem::path &path) {
+        request_workspace_folder_removal(ctx, path);
+      },
+      ctx.services.patch_session,
+      ui_state.save_export_state,
+      [history_actions]() { history_actions.undo(); },
+      [history_actions]() { history_actions.redo(); },
+      [&ctx]() -> OperatorEditState & {
+        return active_document_ui(ctx).operator_edit;
+      },
+      ui_state.operator_clipboard,
+      [patch_history](const std::string &label) {
+        // Empty merge key: two operator commands in a row stay two
+        // separate undo steps.
+        patch_history.begin_snapshot(label, {});
+      },
+      [patch_history]() { patch_history.commit(); },
+      ctx.services.audio_manager.load_meter(),
+      ui_state.open_sound_preferences,
+      ctx.services.audio_manager.default_buffer_frames(),
+      [&ctx]() { patch_actions::new_patch(ctx); },
+      [&ctx]() {
+        request_close_document(ctx,
+                               ctx.services.patch_session.active_document_id());
+      },
+      [&ctx](const std::string &message, std::function<void()> proceed) {
+        ctx.ui_state().danger_confirmation_state.request_merge_folders(
+            message, std::move(proceed));
+      }};
 }
 
 void render_save_export_popup_host(AppContext &ctx) {
@@ -606,38 +805,42 @@ PatchDropContext make_patch_drop_context(AppContext &ctx) {
 ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  auto patch_actions_facade = PatchActions{ctx};
   return {ui_state.confirmation_state,
           ui_state.danger_confirmation_state,
           ui_state.text_prompt_state,
           ui_state.new_patch_prompt_state,
-          ui_state.drop_state,
-          [patch_actions_facade](const patches::PatchEntry &entry) {
-            patch_actions_facade.load(entry);
-          },
-          [patch_actions_facade](const ym2612::Patch &patch,
-                                 const std::filesystem::path &path) {
-            patch_actions_facade.load_dropped(patch, path);
+          [&ctx](patches::DocumentId id) { close_document_now(ctx, id); },
+          [&ctx](patches::DocumentId id) { save_and_close_document(ctx, id); },
+          [&ctx](patches::DocumentId id) {
+            patch_actions::reveal_document(ctx, id);
           },
           [&ctx]() {
             ctx.services.gui_manager.set_should_close(true);
-            ctx.services.patch_session.mark_as_clean();
-          }};
+            ctx.services.patch_session.mark_all_clean();
+          },
+          [&ctx](patches::DocumentId id) { save_and_exit(ctx, id); }};
 }
 
+/// The undo step opens on the document whose window is being drawn, which
+/// the context names only once it exists; FrameContexts sets begin_history.
 PatchEditorContext make_patch_editor_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
   auto patch_history = PatchHistoryActions{ctx};
   return {ctx.services.patch_session,
           ui_state.prefs,
-          ui_state.envelope_states,
-          ui_state.operator_edit,
-          [patch_history](const std::string &label,
-                          const std::string &merge_key, const ym2612::Patch &) {
-            patch_history.begin_snapshot(label, merge_key);
+          [&ctx](patches::DocumentId id) -> UIState::DocumentUi & {
+            return ctx.ui_state().document_ui(id);
           },
-          [patch_history]() { patch_history.commit(); }};
+          ui_state.operator_clipboard,
+          {},
+          [patch_history]() { patch_history.commit(); },
+          [&ctx](patches::DocumentId id) {
+            patch_actions::activate_document(ctx, id);
+          },
+          [&ctx](patches::DocumentId id) { request_close_document(ctx, id); },
+          ui_state.reveal_document,
+          ui_state.editor_dock_id};
 }
 
 PatchLabContext make_patch_lab_context(AppContext &ctx) {
@@ -655,12 +858,11 @@ PatchLabContext make_patch_lab_context(AppContext &ctx) {
 PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  auto patch_actions_facade = PatchActions{ctx};
   return {
       ctx.services.patch_session.repository(), ctx.services.patch_session,
       ui_state.prefs,
-      [patch_actions_facade](const patches::PatchEntry &entry) {
-        patch_actions_facade.safe_load(entry);
+      [&ctx](const patches::PatchEntry &entry, bool pinned) {
+        patch_actions::open_entry(ctx, entry, pinned);
       },
       // No file manager exists in a browser; the context menu keys off
       // the callback's absence.
@@ -716,6 +918,10 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_deletion(ctx, entry);
+      },
+      [&ctx](const patches::PatchEntry &entry,
+             const patches::PatchEntry &destination) {
+        request_patch_move(ctx, entry, destination);
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_duplicate(ctx, entry);
@@ -824,7 +1030,18 @@ struct FrameContexts {
         midi_keyboard(make_midi_keyboard_context(ctx)),
         mml_console(make_mml_console_context(ctx)),
         patch_lab(make_patch_lab_context(ctx)),
-        waveform(make_waveform_context(ctx)) {}
+        waveform(make_waveform_context(ctx)) {
+    patch_editor.begin_history = [&ctx, this](const std::string &label,
+                                              const std::string &merge_key,
+                                              const ym2612::Patch &) {
+      patch_actions::activate_document(ctx, patch_editor.document);
+      patch_actions::begin_change(ctx, label, merge_key);
+    };
+    patch_editor.reload_from_disk = [&ctx](patches::DocumentId document,
+                                           const ym2612::Patch &patch) {
+      patch_actions::reload_from_disk(ctx, document, patch);
+    };
+  }
 
   AppContext *owner;
   MainMenuContext main_menu;
@@ -846,14 +1063,20 @@ void render_all(AppContext &ctx) {
   // The cache is only valid for the AppContext it captured.
   assert(contexts.owner == &ctx);
 
+  prune_closed_documents(ctx);
+  ctx.services.patch_session.pin_modified_documents();
+
   static auto next_workspace_refresh = std::chrono::steady_clock::time_point{};
   const auto now = std::chrono::steady_clock::now();
-  if (now >= next_workspace_refresh) {
+  const bool periodic_check = now >= next_workspace_refresh;
+  if (periodic_check) {
     next_workspace_refresh = now + std::chrono::seconds(2);
     if (ctx.services.preference_manager.refresh_workspace_availability()) {
       ctx.services.patch_session.sync_workspace();
     }
   }
+
+  follow_outside_changes(ctx, periodic_check);
 
   // Per-frame values; everything else in the contexts is stable references.
   contexts.patch_selector.workspace_is_empty =
@@ -880,17 +1103,32 @@ void render_all(AppContext &ctx) {
 #else
   render_folder_scan_dialog();
 #endif
-  render_patch_editor(PATCH_EDITOR_TITLE, contexts.patch_editor,
-                      ctx.app_state().ui_state().save_export_state);
+  render_patch_editors(contexts.patch_editor,
+                       ctx.app_state().ui_state().save_export_state);
   render_patch_selector(PATCH_BROWSER_TITLE, contexts.patch_selector);
   render_preferences_window(PREFERENCES_TITLE, contexts.preferences);
   render_midi_keyboard(SOFT_KEYBOARD_TITLE, contexts.midi_keyboard);
   render_mml_console(MML_CONSOLE_TITLE, contexts.mml_console);
   render_patch_lab(PATCH_LAB_TITLE, contexts.patch_lab, patch_lab_state());
   render_waveform(WAVEFORM_TITLE, contexts.waveform);
+  if (const auto drop = take_view_patch_drop()) {
+    if (const auto *entry =
+            ctx.services.patch_session.find_entry(drop->entry_path)) {
+      patch_actions::open_entry_in_dock(ctx, *entry, drop->dock_id);
+    }
+  }
 
   render_save_export_popup_host(ctx);
   render_status_toasts();
+
+  handle_close_shortcut(ctx);
+  handle_new_shortcut(ctx);
+  auto &session = ctx.services.patch_session;
+  session.apply_patch_to_audio_if_changed();
+  session.remember_open_documents();
+  const auto &active = session.active_document();
+  ctx.services.gui_manager.set_window_title(
+      app_window_title(document_label(active), active.is_modified()));
 }
 
 } // namespace ui

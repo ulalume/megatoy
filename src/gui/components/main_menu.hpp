@@ -12,7 +12,8 @@
 namespace ui {
 
 struct MainMenuContext {
-  history::HistoryManager &history;
+  /// The active document's undo history.
+  std::function<history::HistoryManager &()> history;
   GuiManager &gui;
   PreferenceManager &preferences;
   PreferenceManager::UIPreferences &ui_prefs;
@@ -23,7 +24,9 @@ struct MainMenuContext {
   SaveExportState &save_state;
   std::function<void()> undo;
   std::function<void()> redo;
-  OperatorEditState &operator_edit;
+  /// The active document's operator selection.
+  std::function<OperatorEditState &()> operator_edit;
+  ym2612::OperatorClipboard &operator_clipboard;
   /// Opens and closes one undo step around an operator command.
   std::function<void(const std::string &label)> begin_patch_history;
   std::function<void()> commit_patch_history;
@@ -33,6 +36,12 @@ struct MainMenuContext {
   bool &open_sound_preferences;
   /// Frames the audio device uses when the buffer preference is unset.
   int default_audio_buffer_frames = 0;
+  /// Open an untitled patch in an editor.
+  std::function<void()> new_patch;
+  /// Close the active document, asking first when it has unsaved changes.
+  std::function<void()> close_patch;
+  /// Ask before a folder being added merges in the ones inside it.
+  PreferenceManager::ConfirmReplace confirm_replace_folders;
 };
 
 void render_main_menu(MainMenuContext &context);

@@ -1,5 +1,6 @@
 #include "preferences.hpp"
 #include "audio/load_meter.hpp"
+#include "gui/areas.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
@@ -7,6 +8,7 @@
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
+#include "view_patch_drop.hpp"
 #include "ym2612/note.hpp"
 #include <algorithm>
 #include <array>
@@ -640,6 +642,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     ImGui::SetNextWindowFocus();
   }
 
+  areas::keep_in_area(areas::Area::Main, title);
   if (ImGui::Begin(title, &ui_prefs.show_preferences)) {
     if (ImGui::BeginTabBar("##preference_tabs")) {
       // Each tab scrolls in its own child so the tab bar stays put. Input in
@@ -674,6 +677,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     }
   }
 
+  view_patch_drop_target();
   ImGui::End();
 
   // The flag is consumed by the main menu, which owns the single folder

@@ -66,6 +66,16 @@ public:
     return false;
   }
 
+  // Moving an entry into another directory of the same storage. Whether the
+  // destination already holds something of the same name is left to
+  // move_patch(), which refuses it.
+  virtual bool can_move_patch(const PatchEntry &, const PatchEntry &) const {
+    return false;
+  }
+  virtual bool move_patch(const PatchEntry &, const PatchEntry &) {
+    return false;
+  }
+
   virtual bool can_edit_metadata(const PatchEntry &) const { return false; }
 
   // Optional metadata operations. Default is unsupported (for storages without

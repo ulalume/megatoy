@@ -5,6 +5,7 @@
 
 #include "patches/patch_repository.hpp"
 
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -25,7 +26,8 @@ struct TreeRow {
  * -- while searching -- when the directory itself matches the query. With no
  * filter active, a directory holding nothing on disk is listed as well, and
  * keeps the directories above it listed. Its children follow only when its
- * relative_path is in `open_directories`.
+ * relative_path is in `open_directories`; while a filter is active, they
+ * follow whenever any of them is listed, and only then.
  *
  * The returned rows point into `tree`, so they stay valid only as long as the
  * repository does not rebuild it.
@@ -34,5 +36,13 @@ std::vector<TreeRow>
 flatten_visible_rows(const std::vector<patches::PatchEntry> &tree,
                      const std::string &query_lower, int min_star_rating,
                      const std::unordered_set<std::string> &open_directories);
+
+/**
+ * The directories the entry at `relative_path` is listed under, outermost
+ * first. Empty optional when no entry has that path.
+ */
+std::optional<std::vector<std::string>>
+directories_above(const std::vector<patches::PatchEntry> &tree,
+                  const std::string &relative_path);
 
 } // namespace ui::selector_detail

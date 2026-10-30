@@ -8,6 +8,7 @@
 #include "drop_actions.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/ui_renderer.hpp"
+#include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "patch_actions.hpp"
 #include "platform/run_loop.hpp"
@@ -45,7 +46,7 @@ void handle_file_drop(void *user_pointer, int count, const char **paths) {
     drop_actions::Environment env{context->services, context->ui_state(),
                                   [context](const ym2612::Patch &patch,
                                             const std::filesystem::path &path) {
-                                    patch_actions::load_dropped_patch(
+                                    patch_actions::open_dropped_patch(
                                         *context, patch, path);
                                   }};
 
@@ -58,9 +59,21 @@ bool run_frame(RuntimeContext &runtime) {
   auto &app_state = runtime.app_context->state;
 
   if (services.gui_manager.get_should_close()) {
-    if (services.patch_session.is_modified()) {
+    auto &session = services.patch_session;
+    if (const auto modified = session.modified_document_count()) {
+      const patches::PatchDocument *only = nullptr;
+      if (modified == 1) {
+        for (const auto &document : session.documents()) {
+          if (document->is_modified()) {
+            only = document.get();
+          }
+        }
+      }
+      using Confirmation = UIState::ConfirmationState;
       app_state.ui_state().confirmation_state =
-          UIState::ConfirmationState::exit();
+          only != nullptr && session.can_save_in_place(*only)
+              ? Confirmation::exit_saving(only->id(), ui::document_label(*only))
+              : Confirmation::exit(modified);
       services.gui_manager.set_should_close(false);
     } else {
       runtime.running = false;
@@ -90,8 +103,8 @@ bool run_frame(RuntimeContext &runtime) {
   runtime.midi->poll();
   runtime.midi->dispatch(*runtime.app_context);
 
-  services.gui_manager.begin_frame();
-  services.history.handle_shortcuts(*runtime.app_context);
+  services.gui_manager.begin_frame(app_state.ui_state().prefs);
+  services.history().handle_shortcuts(*runtime.app_context);
   // The envelope graphs are drawn at this note. Pushed in before the frame
   // rather than compared against the saved preferences after it, because the
   // frame that changes the setting is the last one an idle app draws: read

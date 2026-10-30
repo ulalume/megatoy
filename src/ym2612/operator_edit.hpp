@@ -3,6 +3,7 @@
 #include "ym2612/types.hpp"
 #include <cstdint>
 #include <optional>
+#include <string>
 
 /**
  * Editing operations on a channel's four operators. No ImGui, no app state.
@@ -110,8 +111,9 @@ void apply_operator_flag_edit(ChannelInstrument &instrument, uint8_t selection,
                               bool OperatorSettings::*flag, bool value);
 
 /**
- * One operator on the editor's own clipboard. Not the system one: the web
- * build can be embedded where clipboard access is denied outright.
+ * One operator on the editor's own clipboard, kept beside the text put on the
+ * system one: the web build can be embedded where clipboard access is denied
+ * outright, and text has no room for feedback.
  */
 struct OperatorClipboard {
   bool has_value = false;
@@ -119,6 +121,8 @@ struct OperatorClipboard {
   /// Set only for a copy from OP1, the slot feedback is drawn in. Pasting
   /// anywhere else drops it.
   std::optional<uint8_t> feedback;
+  /// What the same copy put on the system clipboard.
+  std::string text;
 };
 
 OperatorClipboard copy_operator(const ChannelInstrument &instrument, int slot);

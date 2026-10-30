@@ -108,11 +108,12 @@ void test_refresh_recovers_folder_availability(const fs::path &root) {
 }
 
 void test_owner_lookup(const fs::path &root) {
+  // Saved before nesting was turned away, a list can still hold both.
   megatoy::workspace::Workspace workspace;
-  CHECK(workspace.add(root / "alpha"));
-  CHECK(workspace.add(root / "alpha" / "nested"));
+  workspace.set_paths({root / "alpha", root / "alpha" / "nested"});
+  CHECK(workspace.folders().size() == 2);
 
-  // Nested folders are allowed; the deepest match wins.
+  // The deepest match wins.
   const auto *owner = workspace.owner_of(root / "alpha" / "nested" / "x.dmp");
   CHECK(owner != nullptr);
   CHECK(owner->path == root / "alpha" / "nested");
@@ -122,6 +123,25 @@ void test_owner_lookup(const fs::path &root) {
   CHECK(shallow->path == root / "alpha");
 
   CHECK(workspace.owner_of(root / "beta" / "z.dmp") == nullptr);
+}
+
+void test_nesting_is_seen_both_ways(const fs::path &root) {
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(root / "alpha"));
+
+  // A folder inside one in the list is turned away.
+  CHECK(!workspace.add(root / "alpha" / "nested"));
+  const auto *outer = workspace.enclosing(root / "alpha" / "nested");
+  CHECK(outer != nullptr && outer->path == root / "alpha");
+  CHECK(workspace.enclosing(root / "alpha") == nullptr);
+  CHECK(workspace.enclosing(root / "alphabet") == nullptr);
+
+  // One holding a folder in the list is let in beside it, and reports it.
+  const auto inside = workspace.enclosed_by(root);
+  CHECK(inside.size() == 1 && inside.front()->path == root / "alpha");
+  CHECK(workspace.add(root));
+  CHECK(workspace.enclosing(root / "alpha")->path == root);
+  CHECK(workspace.enclosed_by(root / "alpha").empty());
 }
 
 void test_revision_tracks_changes(const fs::path &root) {
@@ -177,6 +197,32 @@ void test_metadata_sidecar(const fs::path &root) {
 
 } // namespace
 
+void test_same_named_folders_are_told_apart(const fs::path &root) {
+  using megatoy::workspace::Workspace;
+  const auto first = root / "names" / "songs" / "patches";
+  const auto second = root / "names" / "home" / "desk" / "patches";
+  const auto third = root / "names" / "other" / "songs" / "patches";
+  const auto alone = root / "names" / "bank";
+  for (const auto &path : {first, second, third, alone}) {
+    fs::create_directories(path);
+  }
+  Workspace workspace;
+  CHECK(workspace.add(first));
+  CHECK(workspace.add(alone));
+  CHECK(workspace.telling_parents(*workspace.find(first)).empty());
+  CHECK(workspace.display_name(*workspace.find(first)) == "patches");
+  CHECK(workspace.add(second));
+  CHECK(workspace.display_name(*workspace.find(alone)) == "bank");
+  CHECK(workspace.telling_parents(*workspace.find(first)) == "songs/");
+  CHECK(workspace.telling_parents(*workspace.find(second)) == "desk/");
+  CHECK(workspace.display_name(*workspace.find(second)) == "desk/patches");
+  // The folder above is the same for these, so the next one up is shown.
+  CHECK(workspace.add(third));
+  CHECK(workspace.telling_parents(*workspace.find(first)) == "names/songs/");
+  CHECK(workspace.telling_parents(*workspace.find(third)) == "other/songs/");
+  CHECK(workspace.telling_parents(*workspace.find(second)) == "desk/");
+}
+
 int main() {
   const auto root = make_root();
 
@@ -185,6 +231,8 @@ int main() {
   test_missing_folder_is_kept(root);
   test_refresh_recovers_folder_availability(root);
   test_owner_lookup(root);
+  test_nesting_is_seen_both_ways(root);
+  test_same_named_folders_are_told_apart(root);
   test_revision_tracks_changes(root);
   test_path_comparison_policy(root);
   test_metadata_sidecar(root);

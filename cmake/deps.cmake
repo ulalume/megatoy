@@ -102,6 +102,24 @@ if(NOT EMSCRIPTEN)
   set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(SQLiteCpp)
+
+  # efsw reports changes made to the workspace's folders outside megatoy.
+  # The browser's storage has no outside to change it.
+  FetchContent_Declare(
+    efsw
+    GIT_REPOSITORY https://github.com/SpartanJ/efsw
+    GIT_TAG        1.7.3
+  )
+  # Its options are plain variables here, inside a function so they do not
+  # reach the projects added after it.
+  function(megatoy_add_efsw)
+    set(BUILD_SHARED_LIBS OFF)
+    set(BUILD_STATIC_LIBS OFF)
+    set(BUILD_TEST_APP OFF)
+    set(EFSW_INSTALL OFF)
+    FetchContent_MakeAvailable(efsw)
+  endfunction()
+  megatoy_add_efsw()
 endif()
 
 # stb single-header image loader

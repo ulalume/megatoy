@@ -8,64 +8,151 @@
 #include "history/snapshot_entry.hpp"
 #include "patches/patch_session.hpp"
 #include <filesystem>
-#include <iostream>
+#include <memory>
 #include <string>
 
 namespace patch_actions {
 namespace detail {
-inline void record_change(AppContext &context, const std::string &label,
-                          const patches::PatchSession::PatchSnapshot &before,
-                          const patches::PatchSession::PatchSnapshot &after) {
-  context.services.history.begin_transaction(
-      label, {}, [label, before, after](AppContext &ctx) {
-        return history::make_snapshot_entry<
-            patches::PatchSession::PatchSnapshot>(
-            label, std::string{}, before, after,
-            [](AppContext &ctx,
-               const patches::PatchSession::PatchSnapshot &snapshot) {
-              ctx.services.patch_session.restore_snapshot(snapshot);
-              std::cout << "Patch restored" << std::endl;
-            });
+using Snapshot = patches::PatchSession::PatchSnapshot;
+
+/// An undo step that restores into the document it was recorded in.
+inline std::unique_ptr<history::HistoryEntry>
+make_entry(const std::string &label, const std::string &merge_key,
+           patches::DocumentId document, const Snapshot &before,
+           const Snapshot &after) {
+  return history::make_snapshot_entry<Snapshot>(
+      label, merge_key, before, after,
+      [document](AppContext &ctx, const Snapshot &snapshot) {
+        ctx.services.patch_session.restore_snapshot(document, snapshot);
       });
-  context.services.history.commit_transaction(context);
 }
 } // namespace detail
 
-inline bool load(AppContext &context, const patches::PatchEntry &patch_info) {
-  auto &patch_session = context.services.patch_session;
-  const auto before = patch_session.capture_snapshot();
+/**
+ * Open one undo step on the active document: the state now is what undo
+ * returns to, the state at commit_change() what redo restores.
+ */
+inline void begin_change(AppContext &context, const std::string &label,
+                         const std::string &merge_key) {
+  auto &session = context.services.patch_session;
+  const auto document = session.active_document_id();
+  auto before = session.capture_snapshot();
+  context.services.history().begin_transaction(
+      label, merge_key,
+      [label, merge_key, document, before = std::move(before)](
+          AppContext &ctx) -> std::unique_ptr<history::HistoryEntry> {
+        const auto *open = ctx.services.patch_session.find_document(document);
+        if (open == nullptr) {
+          return nullptr;
+        }
+        return detail::make_entry(label, merge_key, document, before,
+                                  open->capture_snapshot());
+      });
+}
 
-  if (!patch_session.load_patch_from_entry(patch_info)) {
-    megatoy::status::error("Failed to load \"" + patch_info.name + "\"");
+inline void commit_change(AppContext &context) {
+  context.services.history().commit_transaction(context);
+  context.services.patch_session.pin_modified_documents();
+}
+
+/**
+ * Make `document` the active one. An edit still open on the previous one is
+ * dropped rather than recorded against the wrong document.
+ */
+inline void activate_document(AppContext &context,
+                              patches::DocumentId document) {
+  auto &session = context.services.patch_session;
+  if (document == session.active_document_id() ||
+      session.find_document(document) == nullptr) {
+    return;
+  }
+  context.services.history().cancel_transaction();
+  session.activate(document);
+}
+
+/// Bring the document's editor window to the front.
+inline void reveal_document(AppContext &context, patches::DocumentId document) {
+  context.state.ui_state().reveal_document = document;
+}
+
+/// Open an untitled patch and show its editor.
+inline void new_patch(AppContext &context) {
+  context.services.history().cancel_transaction();
+  reveal_document(context,
+                  context.services.patch_session.open_new_document());
+}
+
+/// Open a browser entry by the preview rules; `pinned` keeps it open.
+inline bool open_entry(AppContext &context, const patches::PatchEntry &entry,
+                       bool pinned) {
+  context.services.history().cancel_transaction();
+  const auto document =
+      context.services.patch_session.open_or_activate(entry, pinned);
+  if (!document) {
+    megatoy::status::error("Failed to load \"" + entry.name + "\"");
     return false;
   }
-
-  const auto after = patch_session.capture_snapshot();
-  detail::record_change(context, "Load: " + patch_info.name, before, after);
-  patch_session.mark_as_clean();
-  std::cout << "Loaded preset patch: " << patch_info.name << std::endl;
+  reveal_document(context, *document);
   return true;
 }
 
-inline void safe_load(AppContext &context,
-                      const patches::PatchEntry &preset_info) {
-  auto &patch_session = context.services.patch_session;
-  if (patch_session.is_modified()) {
-    context.state.ui_state().confirmation_state =
-        UIState::ConfirmationState::load(preset_info);
-  } else {
-    load(context, preset_info);
+/// Open a browser entry, kept open, in the dock node `dock_id`; 0 places it
+/// as open_entry() does. The preview, wherever it is, stays.
+inline bool open_entry_in_dock(AppContext &context,
+                               const patches::PatchEntry &entry,
+                               unsigned int dock_id) {
+  context.services.history().cancel_transaction();
+  const auto document = context.services.patch_session.open_or_activate(
+      entry, /*pinned=*/true, /*reuse_preview=*/false);
+  if (!document) {
+    megatoy::status::error("Failed to load \"" + entry.name + "\"");
+    return false;
   }
+  reveal_document(context, *document);
+  context.state.ui_state().document_ui(*document).dock_target = dock_id;
+  return true;
 }
 
-inline void load_dropped_patch(AppContext &context, const ym2612::Patch &patch,
+/**
+ * Show what the document's file now holds, as one step undo takes back.
+ * Undone, the contents differ from the file and so count as unsaved.
+ */
+inline void reload_from_disk(AppContext &context, patches::DocumentId document,
+                             const ym2612::Patch &patch) {
+  auto &session = context.services.patch_session;
+  const auto *open = session.find_document(document);
+  if (open == nullptr) {
+    return;
+  }
+  if (document == session.active_document_id()) {
+    context.services.history().cancel_transaction();
+  }
+  auto before = open->capture_snapshot();
+  before.original_patch = patch;
+  auto &history = context.services.histories[document];
+  history.begin_transaction(
+      "Reload from Disk", {},
+      [document, before = std::move(before)](
+          AppContext &ctx) -> std::unique_ptr<history::HistoryEntry> {
+        const auto *reloaded =
+            ctx.services.patch_session.find_document(document);
+        if (reloaded == nullptr) {
+          return nullptr;
+        }
+        return detail::make_entry("Reload from Disk", {}, document, before,
+                                  reloaded->capture_snapshot());
+      });
+  session.accept_disk_version(document, patch, /*replace=*/true);
+  history.commit_transaction(context);
+}
+
+/// Open a patch read from a file outside the browser, as a preview.
+inline void open_dropped_patch(AppContext &context, const ym2612::Patch &patch,
                                const std::filesystem::path &source_path) {
-  auto &patch_session = context.services.patch_session;
-  const auto before = patch_session.capture_snapshot();
-  patch_session.set_current_patch(patch, source_path);
-  const auto after = patch_session.capture_snapshot();
-  detail::record_change(context, "Load: " + source_path.filename().string(),
-                        before, after);
+  context.services.history().cancel_transaction();
+  reveal_document(context,
+                  context.services.patch_session.open_or_activate_patch(
+                      patch, source_path, /*pinned=*/false));
 }
 
 } // namespace patch_actions

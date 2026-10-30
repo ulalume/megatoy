@@ -6,6 +6,7 @@
 #include "ym2612/patch.hpp"
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,17 @@ struct PatchLabContext {
                      const ym2612::Patch &before)>
       begin_history;
   std::function<void()> commit_history;
+};
+
+/// A patch picked for Mix or Morph: a browser entry, read when the operation
+/// runs, or an open document's patch as it was when picked. The document may
+/// be the one the result goes into, so it is not read again.
+struct PatchLabSource {
+  std::string entry_path;
+  std::optional<ym2612::Patch> patch;
+  std::string label;
+
+  bool empty() const { return entry_path.empty() && !patch; }
 };
 
 struct PatchLabState {
@@ -38,8 +50,8 @@ struct PatchLabState {
   int random_template_iterations = 4;
 
   // Shared sources for blend/morph
-  const patches::PatchEntry *source_a = nullptr;
-  const patches::PatchEntry *source_b = nullptr;
+  PatchLabSource source_a;
+  PatchLabSource source_b;
   int merge_seed = -1;
   std::uint32_t merge_last_seed = 0;
   bool merge_has_result = false;
@@ -54,13 +66,8 @@ struct PatchLabState {
   float mutate_probability = 0.35f;
   bool mutate_allow_algorithm_change = true;
 
-  // Combo filter states
-  std::string combo_filter_patch_a;
-  std::string combo_filter_patch_b;
-  // Widest the open list has been, so filtering cannot pull it narrower
-  // mid-search. Reset when the list closes.
-  float combo_width_patch_a = 0.0f;
-  float combo_width_patch_b = 0.0f;
+  // Search text of the open source list; one list is open at a time.
+  std::string picker_filter;
 };
 
 void render_patch_lab(const char *title, PatchLabContext &context,

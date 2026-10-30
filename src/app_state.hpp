@@ -5,11 +5,15 @@
 #include "gui/patch_save_dialog.hpp"
 #include "gui/save_export_state.hpp"
 #include "input_state.hpp"
+#include "patches/patch_document.hpp"
 #include "patches/patch_repository.hpp"
 #include "preferences/preference_manager.hpp"
 #include "ym2612/patch.hpp"
+#include <cstddef>
 #include <filesystem>
 #include <functional>
+#include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -25,9 +29,6 @@ struct UIState {
     std::filesystem::path pending_instruments_path;
     std::vector<ym2612::Patch> instruments;
     int selected_instrument = 0;
-    bool show_drop_confirmation = false;
-    ym2612::Patch pending_dropped_patch;
-    std::filesystem::path pending_dropped_path;
   } drop_state;
 
   struct EnvelopeState {
@@ -56,45 +57,87 @@ struct UIState {
     /// A handle on the graph is being dragged, which holds the time axis
     /// still.
     bool handle_active = false;
-  } envelope_states[4];
+  };
 
-  ui::OperatorEditState operator_edit;
+  /// What the patch editor keeps for each open document.
+  struct DocumentUi {
+    EnvelopeState envelope_states[4];
+    ui::OperatorEditState operator_edit;
+    /// The editor window showing the document; 0 until it has one.
+    int window_slot = 0;
+    /// Whether that window had the focus last frame.
+    bool window_focused = false;
+    /// The window has been placed for this document.
+    bool window_placed = false;
+    /// A dock node to move the window into next frame; 0 for none.
+    unsigned int dock_target = 0;
+    /// What the file holds after it was written outside megatoy while the
+    /// document had unsaved changes, until the user picks one.
+    std::optional<ym2612::Patch> disk_version;
+    /// The category being typed, written to the folder's metadata once the
+    /// field is left.
+    std::optional<std::string> pending_category;
+    /// The rating being dragged, written once the slider is let go.
+    std::optional<int> pending_rating;
+  };
+  std::map<patches::DocumentId, DocumentUi> documents;
+  /// The document whose editor window is brought to the front next frame.
+  std::optional<patches::DocumentId> reveal_document;
+  /// The dock node the active document's window was last drawn in; new
+  /// documents' windows open there.
+  unsigned int editor_dock_id = 0;
+  /// Shared by every document, so an operator can be carried across.
+  ym2612::OperatorClipboard operator_clipboard;
+
+  DocumentUi &document_ui(patches::DocumentId id) { return documents[id]; }
+  /// Drop the entries of documents `is_open` no longer accepts.
+  template <typename IsOpen> void prune_documents(IsOpen &&is_open) {
+    std::erase_if(documents, [&is_open](const auto &entry) {
+      return !is_open(entry.first);
+    });
+  }
 
   struct ConfirmationState {
     bool show_unsaved_changes_dialog = false;
-    patches::PatchEntry pending_patch_entry;
     std::string dialog_message;
     enum class Operation {
-      Load,
-      Drop,
+      Close,
       Exit,
-    } operation;
+    } operation = Operation::Exit;
+    /// The document a Close asks about, or the one an Exit can save.
+    patches::DocumentId pending_document = 0;
+    /// An Exit with one changed document that saves to its own file.
+    bool exit_can_save = false;
 
-    static ConfirmationState load(patches::PatchEntry patch_entry) {
+    static ConfirmationState close(patches::DocumentId document,
+                                   const std::string &name) {
       ConfirmationState state;
       state.show_unsaved_changes_dialog = true;
-      state.pending_patch_entry = patch_entry;
-      state.dialog_message =
-          "You have unsaved changes. Loading a new patch will discard "
-          "them.\n\nContinue?";
-      state.operation = UIState::ConfirmationState::Operation::Load;
+      state.pending_document = document;
+      state.dialog_message = "Save changes to \"" + name + "\" before closing?";
+      state.operation = UIState::ConfirmationState::Operation::Close;
       return state;
     }
-    static ConfirmationState drop() {
+    static ConfirmationState exit(std::size_t modified_documents = 1) {
       ConfirmationState state;
       state.show_unsaved_changes_dialog = true;
       state.dialog_message =
-          "You have unsaved changes. Dropping a new patch will discard "
-          "them.\n\nContinue?";
-      state.operation = UIState::ConfirmationState::Operation::Drop;
-      return state;
-    }
-    static ConfirmationState exit() {
-      ConfirmationState state;
-      state.show_unsaved_changes_dialog = true;
-      state.dialog_message =
-          "You have unsaved changes. Do you want to discard them and exit?";
+          modified_documents > 1
+              ? std::to_string(modified_documents) +
+                    " patches have unsaved changes. Do you want to discard "
+                    "them and exit?"
+              : "You have unsaved changes. Do you want to discard them and "
+                "exit?";
       state.operation = UIState::ConfirmationState::Operation::Exit;
+      return state;
+    }
+    /// An Exit whose only changed document can be saved where it is.
+    static ConfirmationState exit_saving(patches::DocumentId document,
+                                         const std::string &name) {
+      ConfirmationState state = exit();
+      state.pending_document = document;
+      state.exit_can_save = true;
+      state.dialog_message = "Save changes to \"" + name + "\" before exiting?";
       return state;
     }
 
@@ -115,6 +158,13 @@ struct UIState {
       message = std::move(dialog_message);
       confirm_label = std::move(button_label);
       on_confirm = std::move(confirm_action);
+    }
+
+    /// Whether a folder being added may take in the ones inside it.
+    void request_merge_folders(std::string dialog_message,
+                               std::function<void()> confirm_action) {
+      request("Merge Folders?", std::move(dialog_message), "OK",
+              std::move(confirm_action));
     }
 
     void clear() {

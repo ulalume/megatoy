@@ -1,5 +1,6 @@
 #include "operator_editor.hpp"
 #include "envelope_image.hpp"
+#include "core/status.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/envelope/envelope_handles.hpp"
@@ -201,7 +202,7 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
                      UIState::EnvelopeState::SliderState *slider_state,
                      UIState::EnvelopeState::SliderState handle_lit =
                          UIState::EnvelopeState::SliderState::None) {
-  auto &state = widget.editor.operator_edit;
+  auto &state = widget.editor.operator_edit();
   auto &op = ym2612::operator_at(widget.instrument, widget.slot);
   const auto range = ym2612::operator_field_range(field);
   const auto labels = field_labels(field);
@@ -339,7 +340,7 @@ slider_state_for(UIState::EnvelopeState::HandleLit &states,
 void write_handle_value(OperatorWidget &widget, ym2612::OperatorField field,
                         const ym2612::OperatorEditBaseline &baseline,
                         int value) {
-  auto &state = widget.editor.operator_edit;
+  auto &state = widget.editor.operator_edit();
   const auto &op = ym2612::operator_at(widget.instrument, widget.slot);
   if (value == ym2612::read_operator_field(op, field)) {
     return;
@@ -383,7 +384,7 @@ HandleTouch operator_handle(OperatorWidget &widget,
     return idle;
   }
 
-  auto &state = widget.editor.operator_edit;
+  auto &state = widget.editor.operator_edit();
   HandleDrag &drag = handle_drag();
   const HandleAxes axes = axes_of(spec.handle);
   const ui::envelope::PlotArea &plot = handles.plot;
@@ -504,7 +505,7 @@ bool render_envelope_handles(OperatorWidget &widget,
  */
 void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
                        bool ym2612::OperatorSettings::*flag, bool spread) {
-  auto &state = widget.editor.operator_edit;
+  auto &state = widget.editor.operator_edit();
   auto &op = ym2612::operator_at(widget.instrument, widget.slot);
 
   bool value = op.*flag;
@@ -525,10 +526,78 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
   }
 }
 
+constexpr const char *kOperatorPayload = "MEGATOY_OPERATOR";
+
+/// An operator being dragged, and the document it belongs to: it is only
+/// dropped onto the operators of that same document.
+struct OperatorPayload {
+  patches::DocumentId document;
+  int slot;
+};
+
+struct OperatorHeader {
+  /// Where the frame's top border can pick up again.
+  float end_x;
+  /// The name takes clicks for dragging, so it reports them to select with.
+  bool name_clicked;
+};
+
+/// Inside an open drag source: what is carried and the tooltip that follows
+/// the pointer.
+void carry_operator(patches::DocumentId document, int slot) {
+  const OperatorPayload payload{document, slot};
+  ImGui::SetDragDropPayload(kOperatorPayload, &payload, sizeof(payload));
+  ImGui::TextUnformatted(operator_slot_label(slot).c_str());
+  ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors
+                          ? "Drop to swap, Option to copy"
+                          : "Drop to swap, Alt to copy");
+  ImGui::TextDisabled("Onto another patch: copy");
+}
+
+/// The operator's name drags it onto another operator. So does the frame's
+/// background (see drag_from_background); the sliders and the envelope graph
+/// keep drags of their own.
+bool operator_name_drag_source(patches::DocumentId document, int slot) {
+  if (!ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    const bool hovered = ImGui::IsItemHovered();
+    if (hovered) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+    return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  }
+  carry_operator(document, slot);
+  ImGui::EndDragDropSource();
+  return false;
+}
+
+/// A press on the frame's own background, once the pointer moves, drags the
+/// operator. The envelope graph is a child window, so a press there is not
+/// on the frame itself.
+void drag_from_background(OperatorEditState &state,
+                          patches::DocumentId document, int slot,
+                          bool pressed_on_background) {
+  if (pressed_on_background &&
+      GImGui->HoveredWindow == ImGui::GetCurrentWindow()) {
+    state.background_press_slot = slot;
+  }
+  if (state.background_press_slot != slot) {
+    return;
+  }
+  if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+    state.background_press_slot = -1;
+    return;
+  }
+  if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
+      ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceExtern)) {
+    carry_operator(document, slot);
+    ImGui::EndDragDropSource();
+  }
+}
+
 /// The operator's enable checkbox and name, sitting in the frame's top
-/// border. Returns the x where the border can pick up again.
-float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
-                             const ImVec2 &header_min) {
+/// border.
+OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
+                                      const ImVec2 &header_min) {
   const int slot = widget.slot;
   // Carriers reach the output; modulators only feed other operators. Which
   // is which moves with the algorithm, so it is worth saying on every one.
@@ -546,8 +615,73 @@ float render_operator_header(OperatorWidget &widget, uint8_t algorithm,
     ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive),
                        "%s (Carrier)", operator_slot_label(slot).c_str());
   }
+  const bool name_clicked =
+      operator_name_drag_source(widget.editor.document, slot);
   ImGui::EndGroup();
-  return ImGui::GetItemRectMax().x;
+  return {ImGui::GetItemRectMax().x, name_clicked};
+}
+
+/// The whole frame takes an operator dropped from another one: swapped, or
+/// copied over this one while Option/Alt is held. One from another patch is
+/// always copied, leaving that patch as it was. True while one is held over
+/// it, for the frame's own border to show instead of ImGui's rectangle.
+bool operator_drop_target(PatchEditorContext &context,
+                          ym2612::ChannelInstrument &instrument, int slot,
+                          const ImVec2 &min, const ImVec2 &max) {
+  const ImGuiPayload *pending = ImGui::GetDragDropPayload();
+  if (pending == nullptr || !pending->IsDataType(kOperatorPayload)) {
+    return false;
+  }
+  const auto dragged = *static_cast<const OperatorPayload *>(pending->Data);
+  const bool from_other_patch = dragged.document != context.document;
+  const auto *source_document =
+      from_other_patch ? context.session.find_document(dragged.document)
+                       : nullptr;
+  if (from_other_patch ? source_document == nullptr : dragged.slot == slot) {
+    return false;
+  }
+  if (!ImGui::BeginDragDropTargetCustom(ImRect(min, max),
+                                        ImGui::GetID("##operator_drop"))) {
+    return false;
+  }
+  const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
+      kOperatorPayload, ImGuiDragDropFlags_AcceptBeforeDelivery |
+                            ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+  const bool receiving = payload != nullptr && payload->IsPreview();
+  if (payload != nullptr && payload->IsDelivery()) {
+    const int source =
+        static_cast<const OperatorPayload *>(payload->Data)->slot;
+    const bool copy = from_other_patch || ImGui::GetIO().KeyAlt;
+    const std::string from =
+        operator_slot_label(source) +
+        (from_other_patch ? " of " + source_document->patch().name : "");
+    const std::string to = operator_slot_label(slot);
+    const std::string label =
+        copy ? "Copy " + from + " to " + to
+             : "Swap " + operator_slot_label(std::min(source, slot)) +
+                   " and " + operator_slot_label(std::max(source, slot));
+    // Taken before the step opens: opening it makes this patch the active one.
+    const auto copied = ym2612::copy_operator(
+        from_other_patch ? source_document->patch().instrument : instrument,
+        source);
+    if (context.begin_history) {
+      context.begin_history(label, {}, context.session.current_patch());
+    }
+    if (copy) {
+      ym2612::paste_operator(instrument, slot, copied);
+    } else {
+      ym2612::swap_operators(instrument, source, slot);
+    }
+    if (context.commit_history) {
+      context.commit_history();
+    }
+    // The change happened here, so the keys (Undo among them) follow it.
+    ImGui::SetWindowFocus();
+    megatoy::status::success(copy ? "Copied " + from + " to " + to + "."
+                                  : label + ".");
+  }
+  ImGui::EndDragDropTarget();
+  return receiving;
 }
 
 /**
@@ -630,7 +764,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                               int slot, UIState::EnvelopeState &envelope_state,
                               bool space_for_feedback,
                               const EnvelopeVoices &voices) {
-  auto &state = context.operator_edit;
+  auto &state = context.operator_edit();
   auto &instrument = patch.instrument;
   auto &op = ym2612::operator_at(instrument, slot);
   OperatorWidget widget{context, instrument, slot};
@@ -775,7 +909,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
                             bool space_for_feedback,
                             const EnvelopeVoices &voices) {
-  auto &state = context.operator_edit;
+  auto &state = context.operator_edit();
   OperatorWidget widget{context, patch.instrument, slot};
 
   ImGui::PushID(slot);
@@ -789,10 +923,10 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // sections above rather than indented into the frame.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
-  const float header_end =
+  const OperatorHeader header =
       render_operator_header(widget, patch.instrument.algorithm, block_min);
   const float top_resume_x =
-      std::min(header_end + header_gap(), frame_min.x + frame_width);
+      std::min(header.end_x + header_gap(), frame_min.x + frame_width);
   const float left_resume_y = block_min.y + header_height + header_gap();
 
   ImGui::SetCursorScreenPos(
@@ -829,10 +963,17 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // does not light up the operator it passes over.
   const bool background_hovered = on_background && !ImGui::IsAnyItemActive();
 
-  if (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+  if (header.name_clicked ||
+      (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left))) {
     note_operator_click(state.selection, slot);
     state.click_claimed = true;
   }
+  drag_from_background(
+      state, context.document, slot,
+      on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left));
+
+  const bool receiving = operator_drop_target(context, patch.instrument, slot,
+                                              block_min, frame_max);
 
   // Anywhere in the frame, including on a slider, which ignores right-click.
   if (frame_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
@@ -844,7 +985,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
   if (ImGui::BeginPopup("##operator_menu")) {
     OperatorCommandContext commands{
-        patch.instrument, state,
+        patch.instrument, state, context.operator_clipboard,
         [&context](const std::string &label) {
           if (context.begin_history) {
             context.begin_history(label, {}, context.session.current_patch());
@@ -860,9 +1001,12 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   draw_operator_frame(frame_min, frame_max, top_resume_x, left_resume_y,
-                      operator_frame_color(state.selection.contains(slot),
-                                           state.selection.primary == slot,
-                                           background_hovered));
+                      receiving
+                          ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
+                          : operator_frame_color(
+                                state.selection.contains(slot),
+                                state.selection.primary == slot,
+                                background_hovered));
 
   ImGui::PopID();
 }

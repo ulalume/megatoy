@@ -175,6 +175,11 @@ add_executable(patch_repository_rename_test
 target_include_directories(patch_repository_rename_test PRIVATE src)
 target_link_libraries(patch_repository_rename_test PRIVATE megatoy_core)
 add_test(NAME patch_repository_rename_test COMMAND patch_repository_rename_test)
+add_executable(patch_repository_move_test
+  tests/patches/patch_repository_move_test.cpp)
+target_include_directories(patch_repository_move_test PRIVATE src)
+target_link_libraries(patch_repository_move_test PRIVATE megatoy_core)
+add_test(NAME patch_repository_move_test COMMAND patch_repository_move_test)
 add_executable(folder_metadata_test tests/patches/folder_metadata_test.cpp)
 target_include_directories(folder_metadata_test PRIVATE src)
 target_link_libraries(folder_metadata_test PRIVATE megatoy_core)
@@ -195,6 +200,10 @@ add_executable(operator_edit_test tests/ym2612/operator_edit_test.cpp)
 target_include_directories(operator_edit_test PRIVATE src)
 target_link_libraries(operator_edit_test PRIVATE megatoy_core)
 add_test(NAME operator_edit_test COMMAND operator_edit_test)
+add_executable(operator_text_test tests/ym2612/operator_text_test.cpp)
+target_include_directories(operator_text_test PRIVATE src)
+target_link_libraries(operator_text_test PRIVATE megatoy_core)
+add_test(NAME operator_text_test COMMAND operator_text_test)
 add_executable(operator_selection_test tests/gui/operator_selection_test.cpp
   src/gui/components/operator_selection.cpp)
 target_include_directories(operator_selection_test PRIVATE src)
@@ -215,9 +224,17 @@ add_executable(ui_scale_test tests/gui/ui_scale_test.cpp src/gui/ui_scale.cpp)
 target_include_directories(ui_scale_test PRIVATE src)
 target_link_libraries(ui_scale_test PRIVATE imgui_lib)
 add_test(NAME ui_scale_test COMMAND ui_scale_test)
+add_executable(layouts_test tests/gui/layouts_test.cpp)
+target_include_directories(layouts_test PRIVATE src)
+target_link_libraries(layouts_test PRIVATE megatoy_core)
+add_test(NAME layouts_test COMMAND layouts_test)
 add_executable(snapshot_entry_test tests/history/snapshot_entry_test.cpp)
 target_include_directories(snapshot_entry_test PRIVATE src)
 add_test(NAME snapshot_entry_test COMMAND snapshot_entry_test)
+add_executable(document_history_test tests/history/document_history_test.cpp)
+target_include_directories(document_history_test PRIVATE src)
+target_link_libraries(document_history_test PRIVATE megatoy_core)
+add_test(NAME document_history_test COMMAND document_history_test)
 add_executable(changelog_gate_test tests/core/changelog_gate_test.cpp
   src/changelog_gate.cpp src/update/version.cpp)
 target_include_directories(changelog_gate_test PRIVATE src)
@@ -245,6 +262,14 @@ add_test(NAME background_folder_scan_test COMMAND background_folder_scan_test)
 add_executable(version_test tests/update/version_test.cpp src/update/version.cpp)
 target_include_directories(version_test PRIVATE src)
 add_test(NAME version_test COMMAND version_test)
+add_executable(folder_watcher_test tests/patches/folder_watcher_test.cpp)
+target_include_directories(folder_watcher_test PRIVATE src)
+target_link_libraries(folder_watcher_test PRIVATE megatoy_core)
+add_test(NAME folder_watcher_test COMMAND folder_watcher_test)
+add_executable(patch_document_test tests/patches/patch_document_test.cpp)
+target_include_directories(patch_document_test PRIVATE src)
+target_link_libraries(patch_document_test PRIVATE megatoy_core)
+add_test(NAME patch_document_test COMMAND patch_document_test)
 add_executable(workspace_test tests/workspace/workspace_test.cpp)
 target_include_directories(workspace_test PRIVATE src)
 target_link_libraries(workspace_test PRIVATE megatoy_core)
@@ -261,15 +286,17 @@ add_custom_target(check
           ginpkg_history_test patch_write_test patch_lab_test status_test
           filename_utils_test utf8_utils_test
           patch_repository_delete_test patch_repository_rename_test
+          patch_repository_move_test patch_document_test folder_watcher_test
           folder_metadata_test patch_tree_flatten_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           version_test import_pipeline_test persistent_parse_cache_test
           background_folder_scan_test
-          operator_layout_test operator_edit_test operator_selection_test
+          operator_layout_test operator_edit_test operator_text_test
+          operator_selection_test
           note_test
           envelope_curve_test
-          ui_scale_test save_as_dialog_test
-          snapshot_entry_test changelog_gate_test
+          ui_scale_test layouts_test save_as_dialog_test
+          snapshot_entry_test document_history_test changelog_gate_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

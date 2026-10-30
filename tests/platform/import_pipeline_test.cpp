@@ -288,7 +288,7 @@ int main() {
                                    warm_validation.warmed_container);
   platform::StdFileSystem file_system;
   patches::FilesystemPatchStorage storage(file_system, warm_root, "warm", true,
-                                          false);
+                                          /*metadata_file=*/{});
   std::vector<patches::PatchEntry> tree;
   storage.append_entries(tree);
   CHECK(storage.container_parse_count_for_testing() == 0);

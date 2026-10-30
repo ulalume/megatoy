@@ -22,8 +22,10 @@ PatchRepository::PatchRepository(
     platform::VirtualFileSystem &vfs,
     const megatoy::workspace::Workspace &workspace,
     const std::filesystem::path &builtin_presets_dir,
+    const std::filesystem::path &builtin_presets_metadata,
     PersistentParseCache *persistent_cache)
     : workspace_(workspace), builtin_presets_directory_(builtin_presets_dir),
+      builtin_presets_metadata_(builtin_presets_metadata),
       vfs_(vfs), persistent_cache_(persistent_cache) {
   rebuild_storages();
   refresh();
@@ -73,20 +75,37 @@ void PatchRepository::rebuild_storages() {
   used_labels.emplace_back(kBuiltinRootName);
 
   for (const auto &folder : workspace_.folders()) {
-    storages_.push_back(std::make_unique<FilesystemPatchStorage>(
+    auto storage = std::make_unique<FilesystemPatchStorage>(
         vfs_, folder.path, unique_label(folder.name), folder.writable,
-        /*enable_metadata=*/folder.writable, persistent_cache_));
+        folder.writable ? folder.metadata_path() : std::filesystem::path{},
+        persistent_cache_);
+    storage->set_listed_as(folder.name, workspace_.telling_parents(folder));
+    storages_.push_back(std::move(storage));
     if (folder.available) {
       watched_directories_.push_back(folder.path);
     }
   }
 
   if (show_builtin_presets_ && !builtin_presets_directory_.empty()) {
+    // Without the presets there would be nothing to keep, and the cleanup
+    // after a scan would drop every rating.
+    const bool keep_metadata = vfs_.is_directory(builtin_presets_directory_);
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, builtin_presets_directory_, kBuiltinRootName,
-        /*writable=*/false, /*enable_metadata=*/false, persistent_cache_));
+        /*writable=*/false,
+        keep_metadata ? builtin_presets_metadata_ : std::filesystem::path{},
+        persistent_cache_));
     watched_directories_.push_back(builtin_presets_directory_);
   }
+
+  // The built-in presets ship with the app; only the user's folders change.
+  std::vector<std::filesystem::path> user_folders;
+  for (const auto &folder : workspace_.folders()) {
+    if (folder.available) {
+      user_folders.push_back(folder.path);
+    }
+  }
+  folder_watcher_.watch(user_folders);
 
   synced_revision_ = workspace_.revision();
   storages_built_ = true;
@@ -177,6 +196,10 @@ bool PatchRepository::has_directory_changed() const {
     }
   }
   return false;
+}
+
+bool PatchRepository::take_outside_change() {
+  return folder_watcher_.take_settled_change();
 }
 
 std::vector<std::string> PatchRepository::supported_extensions() {
@@ -276,6 +299,32 @@ bool PatchRepository::rename_patch(const PatchEntry &entry,
   return false;
 }
 
+bool PatchRepository::can_move_patch(const PatchEntry &entry,
+                                     const PatchEntry &destination) const {
+  return std::any_of(storages_.begin(), storages_.end(),
+                     [&](const auto &storage) {
+                       return storage->can_move_patch(entry, destination);
+                     });
+}
+
+bool PatchRepository::move_patch(const PatchEntry &entry,
+                                 const PatchEntry &destination) {
+  for (const auto &storage : storages_) {
+    if (!storage->can_move_patch(entry, destination)) {
+      continue;
+    }
+    if (!storage->move_patch(entry, destination)) {
+      return false;
+    }
+    refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+    platform::web::request_storage_persist();
+#endif
+    return true;
+  }
+  return false;
+}
+
 bool PatchRepository::can_edit_metadata(const PatchEntry &entry) const {
   return std::any_of(
       storages_.begin(), storages_.end(),
@@ -290,6 +339,19 @@ PatchRepository::to_relative_path(const std::filesystem::path &path) const {
     }
   }
   return path;
+}
+
+std::string PatchRepository::display_path(const std::string &relative) const {
+  for (const auto &root : tree_cache_) {
+    if (relative == root.relative_path) {
+      return root.telling_parents + root.name;
+    }
+    if (relative.starts_with(root.relative_path + "/")) {
+      return root.telling_parents + root.name +
+             relative.substr(root.relative_path.size());
+    }
+  }
+  return relative;
 }
 
 std::filesystem::path

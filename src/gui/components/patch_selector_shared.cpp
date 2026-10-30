@@ -6,39 +6,26 @@
 #include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
+#include "star_rating.hpp"
 
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <cstring>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <optional>
 
 namespace ui::selector_detail {
 
-const std::array<std::string_view, 6> kStarLabels = {
-    "-",
-    ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-};
-const std::array<std::string_view, 6> kStarLabelsMini = {
-    "-",
-    ICON_FA_STAR "1",
-    ICON_FA_STAR "2",
-    ICON_FA_STAR "3",
-    ICON_FA_STAR "4",
-    ICON_FA_STAR "5",
-};
-
-void show_patch_tooltip(const patches::PatchEntry &entry) {
+void show_patch_tooltip(const patches::PatchRepository &repository,
+                        const patches::PatchEntry &entry) {
   if (!ImGui::IsItemHovered()) {
     return;
   }
 
-  std::string tooltip = "Format: " + entry.format +
-                        "\nPath: " + display_preset_path(entry.relative_path);
+  std::string tooltip =
+      "Format: " + entry.format + "\nPath: " +
+      display_preset_path(repository.display_path(entry.relative_path));
 
   if (entry.metadata) {
     tooltip += "\nStars: " + std::to_string(entry.metadata->star_rating) + "/5";
@@ -51,6 +38,19 @@ void show_patch_tooltip(const patches::PatchEntry &entry) {
   }
 
   ImGui::SetTooltip("%s", tooltip.c_str());
+}
+
+bool entry_can_rename(const PatchSelectorContext &context,
+                      const patches::PatchEntry &entry) {
+  const bool protected_folder = context.folder_is_protected &&
+                                context.folder_is_protected(entry.full_path);
+  return context.rename_patch && !protected_folder &&
+         context.repository.can_rename_patch(entry);
+}
+
+bool entry_can_delete(const PatchSelectorContext &context,
+                      const patches::PatchEntry &entry) {
+  return context.delete_patch && context.repository.can_delete_patch(entry);
 }
 
 void entry_context_menu(PatchSelectorContext &context,
@@ -89,10 +89,8 @@ void entry_context_menu(PatchSelectorContext &context,
 
   const bool protected_folder = context.folder_is_protected &&
                                 context.folder_is_protected(entry.full_path);
-  const bool can_rename = context.rename_patch && !protected_folder &&
-                          context.repository.can_rename_patch(entry);
-  const bool can_delete =
-      context.delete_patch && context.repository.can_delete_patch(entry);
+  const bool can_rename = entry_can_rename(context, entry);
+  const bool can_delete = entry_can_delete(context, entry);
   const bool can_remove_folder =
       allow_remove_folder && context.remove_folder && !protected_folder;
 
@@ -156,6 +154,20 @@ void entry_context_menu(PatchSelectorContext &context,
     }
   }
 
+  // Written once the tree is drawn: the write rebuilds it, and `entry`
+  // with it.
+  const bool can_rate = is_patch && context.repository.can_edit_metadata(entry);
+  if (begin_group(can_rate) && ImGui::BeginMenu("Rating")) {
+    const int rating = entry.metadata ? entry.metadata->star_rating : 0;
+    for (int stars = 0; stars <= 5; ++stars) {
+      const char *label = stars == 0 ? "None" : kStarLabels[stars].data();
+      if (ImGui::MenuItem(label, nullptr, stars == rating)) {
+        context.pending_rating = PendingRating{entry.relative_path, stars};
+      }
+    }
+    ImGui::EndMenu();
+  }
+
   // Whether a file manager exists is the composition root's call -- the
   // callback is simply absent on platforms without one.
   if (begin_group(static_cast<bool>(context.reveal_in_file_manager))) {
@@ -182,11 +194,6 @@ void entry_context_menu(PatchSelectorContext &context,
     }
   }
 
-  begin_group(true);
-  if (ImGui::MenuItem("Refresh repository")) {
-    context.pending_menu_action = PendingMenuAction::Refresh;
-  }
-
   ImGui::EndPopup();
 }
 
@@ -197,37 +204,39 @@ void render_filter_bar(PatchSelectorContext &context) {
                sizeof(search_buffer));
   search_buffer[sizeof(search_buffer) - 1] = '\0';
 
-  ImGui::SetNextItemWidth(ui::scale::px(130.0f));
+  // The search box takes what the star filter leaves of the row, up to where
+  // the caller has narrowed it to.
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float row_end = ImGui::GetCurrentWindow()->WorkRect.Max.x;
+  const float search_width = std::max(
+      row_end - ImGui::GetCursorScreenPos().x - star_rating_width() -
+          style.ItemSpacing.x,
+      ui::scale::px(60.0f));
+  ImGui::SetNextItemWidth(search_width);
+  // The clear button sits over the box's right end and has to win the hover.
+  ImGui::SetNextItemAllowOverlap();
   if (ImGui::InputTextWithHint("##SharedSearch",
                                ICON_FA_MAGNIFYING_GLASS " Search...",
                                search_buffer, sizeof(search_buffer))) {
     prefs.metadata_search_query = std::string(search_buffer);
   }
+  if (!prefs.metadata_search_query.empty()) {
+    const ImVec2 box_min = ImGui::GetItemRectMin();
+    const ImVec2 box_max = ImGui::GetItemRectMax();
+    const float size = box_max.y - box_min.y;
+    ImGui::SetCursorScreenPos(ImVec2(box_max.x - size, box_min.y));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    if (ImGui::Button(ICON_FA_XMARK "##clear_search", ImVec2(size, size))) {
+      prefs.metadata_search_query.clear();
+    }
+    ImGui::PopStyleColor(2);
+  }
   prefs.patch_search_query = prefs.metadata_search_query;
 
   ImGui::SameLine();
-  ImGui::SetNextItemWidth(ui::scale::px(60.0f));
-  prefs.metadata_star_filter = std::clamp(prefs.metadata_star_filter, 0, 5);
-  ImGui::SliderInt("##Stars", &prefs.metadata_star_filter, 0, 5,
-                   prefs.metadata_star_filter == 0
-                       ? "Stars"
-                       : kStarLabels[prefs.metadata_star_filter].data(),
-                   ImGuiSliderFlags_AlwaysClamp);
-
-  ImGui::SameLine();
-  const bool is_filtered =
-      !(prefs.metadata_search_query.empty() && prefs.metadata_star_filter == 0);
-  ImGui::BeginDisabled(!is_filtered);
-  if (is_filtered) {
-    if (ImGui::TextLink("Clear filters")) {
-      prefs.metadata_search_query.clear();
-      prefs.metadata_star_filter = 0;
-      prefs.patch_search_query.clear();
-    }
-  } else {
-    ImGui::Text("Clear filters");
-  }
-  ImGui::EndDisabled();
+  star_rating_slider("##Stars", prefs.metadata_star_filter, "Stars");
 }
 
 } // namespace ui::selector_detail

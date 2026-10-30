@@ -76,7 +76,7 @@ inline void apply() {
   colors[ImGuiCol_TextSelectedBg] = ImVec4(0.45f, 0.65f, 0.95f, 0.43f);
 
   colors[ImGuiCol_TreeLines] = ImVec4(0.40f, 0.40f, 0.40f, 0.50f);
-  colors[ImGuiCol_DragDropTarget] = ImVec4(0.00f, 0.00f, 0.00f, 0.90f);
+  colors[ImGuiCol_DragDropTarget] = ImVec4(0.45f, 0.65f, 0.95f, 1.00f);
   colors[ImGuiCol_NavCursor] = ImVec4(0.45f, 0.65f, 0.95f, 1.00f);
   colors[ImGuiCol_NavWindowingHighlight] = ImVec4(0.00f, 0.00f, 0.00f, 0.70f);
   colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.20f);

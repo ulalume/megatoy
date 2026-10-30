@@ -26,15 +26,15 @@ class PersistentParseCache;
  *
  * Metadata lives in a sidecar inside the folder itself and is therefore keyed
  * by a path relative to `root`, not to the repository -- that is what lets a
- * folder be moved or shared without losing its ratings. Read-only folders
- * (the presets directory, a mounted archive) get no store at all.
+ * folder be moved or shared without losing its ratings. A read-only folder
+ * keeps its metadata elsewhere, or has none.
  */
 class FilesystemPatchStorage final : public PatchStorage {
 public:
   FilesystemPatchStorage(platform::VirtualFileSystem &vfs,
                          std::filesystem::path root,
                          std::string relative_root_label, bool writable,
-                         bool enable_metadata,
+                         std::filesystem::path metadata_file,
                          PersistentParseCache *persistent_cache = nullptr);
 
   void append_entries(std::vector<PatchEntry> &tree) const override;
@@ -48,9 +48,19 @@ public:
   bool delete_patch(const PatchEntry &entry) override;
   bool rename_patch(const PatchEntry &entry,
                     const std::string &new_stem) override;
+  bool can_move_patch(const PatchEntry &entry,
+                      const PatchEntry &destination) const override;
+  bool move_patch(const PatchEntry &entry,
+                  const PatchEntry &destination) override;
   bool can_edit_metadata(const PatchEntry &entry) const override;
   bool is_writable() const override { return writable_; }
   std::string_view label() const override { return label_; }
+  /// What the folder itself is listed as, in place of its label, and the
+  /// folders above it to show beside that.
+  void set_listed_as(std::string name, std::string parents) {
+    listed_name_ = std::move(name);
+    listed_parents_ = std::move(parents);
+  }
   bool save_patch_metadata(const std::string &relative_path,
                            const ym2612::Patch &patch,
                            const PatchMetadata &metadata) override;
@@ -94,6 +104,8 @@ private:
   std::string root_label_;
   bool writable_;
   std::string label_;
+  std::string listed_name_;
+  std::string listed_parents_;
   std::unique_ptr<FolderMetadataStore> metadata_;
   PersistentParseCache *persistent_cache_;
   mutable std::unordered_map<std::filesystem::path, ParseCacheEntry>
@@ -116,6 +128,8 @@ private:
   /// Strip the root label so metadata keys stay relative to the folder.
   std::string metadata_key(const std::string &relative_path) const;
   bool owns_relative_path(const std::string &relative_path) const;
+  /// The entry's path on disk is the one its relative path maps to.
+  bool maps_to_own_path(const PatchEntry &entry) const;
 };
 
 } // namespace patches
