@@ -325,21 +325,16 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::TextWrapped("Generates a new patch each time.");
   ImGui::Spacing();
 
-  ImGui::SetNextItemWidth(ui::scale::px(120.0f));
-  ImGui::InputInt("Seed (auto = -1)", &state.random_seed);
-
   if (ImGui::Button("Apply to current patch")) {
     state.random_template_iterations =
         std::clamp(state.random_template_iterations, 0, 8);
     patch_lab::RandomOptions options;
-    options.seed = state.random_seed;
     options.mode = patch_lab::RandomOptions::Mode::Wild;
     options.mutate_iterations = state.random_template_iterations;
 
     auto result = patch_lab::random_patch(options);
     const auto key = "patch_lab.random: " + std::to_string(result.seed);
-    remember_result(state, "Random (Seed: " + std::to_string(result.seed) + ")",
-                    result.patch);
+    remember_result(state, "Random", result.patch);
     apply_patch_result(context, "Patch Lab Randomize", key, result.patch);
   }
 }
@@ -352,9 +347,6 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
 
   render_source_slots(context, state, entries);
 
-  ImGui::SetNextItemWidth(ui::scale::px(120.0f));
-  ImGui::InputInt("Seed (auto = -1)##merge", &state.merge_seed);
-
   ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
   if (ImGui::Button("Merge into current patch")) {
     ym2612::Patch patch_a;
@@ -362,22 +354,15 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
     if (auto error = load_sources(context, state, patch_a, patch_b)) {
       state.merge_error = std::move(*error);
     } else {
-      patch_lab::MergeOptions options;
-      options.seed = state.merge_seed;
-      auto result = patch_lab::merge(patch_a, patch_b, options);
+      auto result = patch_lab::merge(patch_a, patch_b);
       remember_result(state, "Mix", result.patch);
       apply_patch_result(context, "Patch Lab Merge", result.patch.hash(),
                          result.patch);
-      state.merge_last_seed = result.seed;
-      state.merge_has_result = true;
       state.merge_error.clear();
     }
   }
   ImGui::EndDisabled();
 
-  if (state.merge_has_result) {
-    ImGui::Text("Last seed: %u", state.merge_last_seed);
-  }
   if (!state.merge_error.empty()) {
     ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%s",
                        state.merge_error.c_str());
