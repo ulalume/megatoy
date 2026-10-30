@@ -32,12 +32,8 @@ void PatchSession::sync_workspace() {
       set_document_path(*document, {});
       continue;
     }
-    const auto relative = repository_->to_relative_path(*absolute);
-    if (relative.is_absolute()) {
-      set_document_path(*document, {});
-      continue;
-    }
-    set_document_path(*document, relative);
+    // A file outside the workspace stays known by its absolute path.
+    set_document_path(*document, repository_->to_relative_path(*absolute));
   }
 
   absorb_nested_folders();
@@ -150,9 +146,7 @@ void PatchSession::absorb_nested_folders() {
         if (!absolute) {
           return std::string{};
         }
-        const auto relative = repository_->to_relative_path(*absolute);
-        return relative.is_absolute() ? std::string{}
-                                      : relative.generic_string();
+        return repository_->to_relative_path(*absolute).generic_string();
       };
   for (const auto &[document, path, selection] : document_paths) {
     if (path) {
