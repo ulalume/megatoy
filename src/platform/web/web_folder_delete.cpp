@@ -159,11 +159,12 @@ void on_persist_succeeded() {
   // The flush that just committed covered every MEMFS change made before it
   // started, so any recorded directory that is no longer there is now no
   // longer in IndexedDB either. One that still exists was not fully removed
-  // (a replay is mid-flight, or removal failed); its tombstone stays.
+  // (a replay is mid-flight, or removal failed), and one that cannot be checked
+  // may be there too; their tombstones stay.
   std::vector<std::string> remaining;
   for (auto &value : paths) {
     std::error_code ec;
-    if (std::filesystem::exists(std::filesystem::path(value), ec) && !ec) {
+    if (std::filesystem::exists(std::filesystem::path(value), ec) || ec) {
       remaining.push_back(std::move(value));
     }
   }
