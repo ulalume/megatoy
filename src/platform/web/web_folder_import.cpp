@@ -11,7 +11,6 @@
 #include <cctype>
 #include <chrono>
 #include <cstdint>
-#include <deque>
 #include <emscripten.h>
 #include <filesystem>
 #include <memory>
@@ -90,7 +89,6 @@ std::function<void(FolderImportResult)> g_drop_handler;
 std::unique_ptr<ImportRequest> g_active_import;
 std::unique_ptr<PendingSelection> g_pending_selection;
 std::uintptr_t g_next_selection_token = 1;
-std::deque<FolderImportResult> g_result_reports;
 bool g_import_finished = false;
 bool g_selection_finished = false;
 
@@ -171,11 +169,6 @@ EM_JS(void, megatoy_import_settled_js, (void *request), {
 namespace {
 
 void dispatch_result(FolderImportResult result) {
-  if (result.ok &&
-      (result.filtered_count > 0 || !result.validation_failures.empty())) {
-    g_result_reports.push_back(result);
-  }
-
   if (g_active_import && g_active_import->is_drop) {
     if (g_drop_handler) {
       g_drop_handler(std::move(result));
@@ -1059,18 +1052,6 @@ void decide_folder_import(bool proceed) {
 void cancel_folder_import() {
   if (g_active_import) {
     g_active_import->cancel_requested.store(true, std::memory_order_relaxed);
-  }
-}
-
-const FolderImportResult *folder_import_report() {
-  return g_result_reports.empty() ? nullptr : &g_result_reports.front();
-}
-
-bool folder_import_report_ready() { return !g_import_finished; }
-
-void dismiss_folder_import_report() {
-  if (!g_result_reports.empty()) {
-    g_result_reports.pop_front();
   }
 }
 

@@ -40,6 +40,10 @@ struct ValidationFailure {
 const std::vector<std::string> &supported_extensions();
 bool supports_extension(std::string_view extension);
 bool needs_confirmation(std::size_t file_count, std::uint64_t byte_count);
+/// What an import tells the user once it is done. `skipped` counts the files
+/// it could not use, for whatever reason.
+std::string import_summary(const std::string &folder_name, std::size_t imported,
+                           std::size_t skipped);
 
 /// Perform a real, format-specific validation of a staged file.
 ValidationResult validate_file(const std::filesystem::path &path);
