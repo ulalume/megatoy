@@ -194,9 +194,9 @@ void PreferenceManager::request_add_workspace_folder(
     return;
   }
   confirm("\"" + folder_name + "\" holds " + replaced +
-              ", already in the workspace. It will take " +
-              (inside.size() == 1 ? "its" : "their") +
-              " place; ratings and categories are kept.",
+              ", already in the workspace. Merge " +
+              (inside.size() == 1 ? "it" : "them") + " into \"" +
+              folder_name + "\"?\n\nRatings and categories are kept.",
           std::move(add));
 #endif
 }

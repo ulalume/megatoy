@@ -753,7 +753,7 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
       },
       [&ctx](const std::string &message, std::function<void()> proceed) {
         ctx.ui_state().danger_confirmation_state.request(
-            "Replace Folders?", message, "Replace", std::move(proceed));
+            "Merge Folders?", message, "OK", std::move(proceed));
       }};
 }
 

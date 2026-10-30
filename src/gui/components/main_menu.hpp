@@ -38,7 +38,7 @@ struct MainMenuContext {
   int default_audio_buffer_frames = 0;
   /// Close the active document, asking first when it has unsaved changes.
   std::function<void()> close_patch;
-  /// Ask before a folder being added takes the place of ones inside it.
+  /// Ask before a folder being added merges in the ones inside it.
   PreferenceManager::ConfirmReplace confirm_replace_folders;
 };
 
