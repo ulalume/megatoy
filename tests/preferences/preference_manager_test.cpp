@@ -21,8 +21,7 @@ struct TestEnvironment {
       : root(path), directories(file_system, root / "config") {
     fs::create_directories(root / "config");
     std::ofstream stream(directories.paths().preferences_file);
-    stream
-        << R"({"legacy_workspace_migration":1,"legacy_metadata_migration":1})";
+    stream << "{}";
     CHECK(stream.good());
   }
 };

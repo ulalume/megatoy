@@ -1,7 +1,6 @@
 #include "patches/folder_metadata.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <fstream>
@@ -118,39 +117,11 @@ bool FolderMetadataStore::load() {
   try {
     nlohmann::json j;
     file >> j;
-    // The normalization below may rewrite the sidecar; Windows refuses to
-    // replace a file that still has an open handle.
-    file.close();
     if (!j.contains("patches") || !j["patches"].is_object()) {
       return true;
     }
     for (const auto &[path, value] : j["patches"].items()) {
       entries_.emplace(path, metadata_from_json(path, value));
-    }
-
-    std::vector<PatchMetadata> normalized;
-    for (const auto &[path, metadata] : entries_) {
-      std::string lower_path = path;
-      std::transform(
-          lower_path.begin(), lower_path.end(), lower_path.begin(),
-          [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-      if (!lower_path.ends_with(".ginpkg")) {
-        continue;
-      }
-
-      const std::string latest_path = path + "/latest";
-      if (!entries_.contains(latest_path)) {
-        auto latest = metadata;
-        latest.path = latest_path;
-        normalized.push_back(std::move(latest));
-      }
-    }
-    for (auto &metadata : normalized) {
-      const std::string path = metadata.path;
-      entries_.emplace(path, std::move(metadata));
-    }
-    if (!normalized.empty() && !save()) {
-      return false;
     }
   } catch (const std::exception &e) {
     std::cerr << "Failed to read patch metadata at " << sidecar_path_ << ": "
@@ -262,31 +233,6 @@ bool FolderMetadataStore::merge_newer(
     return true;
   }
   load();
-  return false;
-}
-
-bool FolderMetadataStore::merge_missing(
-    const std::vector<PatchMetadata> &metadata, std::size_t &inserted) {
-  inserted = 0;
-  for (const auto &entry : metadata) {
-    if (entry.path.empty()) {
-      continue;
-    }
-    if (entries_.emplace(entry.path, entry).second) {
-      ++inserted;
-    }
-  }
-  if (inserted == 0) {
-    return true;
-  }
-  if (save()) {
-    return true;
-  }
-
-  // Leave this object consistent with the on-disk sidecar after a failed
-  // write. The migration will retry on the next launch.
-  load();
-  inserted = 0;
   return false;
 }
 

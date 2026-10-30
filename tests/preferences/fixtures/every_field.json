@@ -4,8 +4,6 @@
   "last_save_directory": "exports",
   "last_seen_version": "v1.2.3",
   "layout": "Sound",
-  "legacy_metadata_migration": 1,
-  "legacy_workspace_migration": 1,
   "open_patches": [
     {
       "path": "songs/lead.gin",

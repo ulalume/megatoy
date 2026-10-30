@@ -88,21 +88,6 @@ if(NOT EMSCRIPTEN)
   set(RTMIDI_TARGETNAME_UNINSTALL rtmidi_uninstall CACHE STRING "" FORCE)
   FetchContent_MakeAvailable(rtmidi)
 
-  # SQLiteCpp is kept native-only for the one-time import of metadata written
-  # by pre-workspace releases. The browser never created that database.
-  FetchContent_Declare(
-    SQLiteCpp
-    GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp.git
-    GIT_TAG        3.3.1
-  )
-  set(SQLITECPP_INTERNAL_SQLITE ON CACHE BOOL "" FORCE)
-  set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
-  set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
-  set(SQLITECPP_RUN_DOXYGEN OFF CACHE BOOL "" FORCE)
-  set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-  set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-  FetchContent_MakeAvailable(SQLiteCpp)
-
   # efsw reports changes made to the workspace's folders outside megatoy.
   # The browser's storage has no outside to change it.
   FetchContent_Declare(

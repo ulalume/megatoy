@@ -45,12 +45,6 @@ public:
   /// Insert or replace, stamping created_at/updated_at, then persist.
   bool put(PatchMetadata metadata);
 
-  /** Add entries that are not already present and persist them in one write.
-   * Existing sidecar data always wins over legacy imported data.
-   */
-  bool merge_missing(const std::vector<PatchMetadata> &metadata,
-                     std::size_t &inserted);
-
   /// Every entry, in key order.
   std::vector<PatchMetadata> entries() const;
 

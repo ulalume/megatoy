@@ -1,17 +1,12 @@
 #include "platform/web/web_patch_url.hpp"
 
 #include "core/utf8_utils.hpp"
-#include "formats/ym2612_format_adapter.hpp"
 #include "platform/platform_config.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
-#include <array>
-#include <cctype>
-#include <charconv>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -22,14 +17,9 @@
 namespace platform::web::patch_url {
 namespace {
 
-constexpr size_t kOperatorValueCount = 13;
 constexpr uint8_t kBinaryVersion = 1;
 constexpr int kBinaryVersionBits = 4;
 constexpr int kNameLengthBits = 6;
-
-bool is_unreserved(unsigned char c) {
-  return std::isalnum(c) != 0 || c == '-' || c == '_' || c == '.' || c == '~';
-}
 
 int hex_value(char c) {
   if (c >= '0' && c <= '9') {
@@ -63,22 +53,6 @@ std::string decode_component(std::string_view text, bool plus_as_space) {
       }
     }
     result.push_back(c);
-  }
-  return result;
-}
-
-[[maybe_unused]] std::string encode_component(std::string_view text) {
-  std::string result;
-  result.reserve(text.size());
-  constexpr char kHex[] = "0123456789ABCDEF";
-  for (unsigned char c : text) {
-    if (is_unreserved(c)) {
-      result.push_back(static_cast<char>(c));
-    } else {
-      result.push_back('%');
-      result.push_back(kHex[c >> 4]);
-      result.push_back(kHex[c & 0x0F]);
-    }
   }
   return result;
 }
@@ -251,18 +225,6 @@ private:
   int bit_pos_ = 0;
 };
 
-std::optional<int> parse_int(std::string_view text) {
-  if (text.empty()) {
-    return std::nullopt;
-  }
-  int value = 0;
-  auto result = std::from_chars(text.data(), text.data() + text.size(), value);
-  if (result.ec != std::errc() || result.ptr != text.data() + text.size()) {
-    return std::nullopt;
-  }
-  return value;
-}
-
 std::vector<std::string_view> split(std::string_view text, char delimiter) {
   std::vector<std::string_view> parts;
   size_t start = 0;
@@ -280,99 +242,8 @@ std::vector<std::string_view> split(std::string_view text, char delimiter) {
   return parts;
 }
 
-bool parse_int_list(std::string_view text, size_t expected,
-                    std::vector<int> &out) {
-  out.clear();
-  auto parts = split(text, ',');
-  if (parts.size() < expected) {
-    return false;
-  }
-  out.reserve(parts.size());
-  for (auto part : parts) {
-    auto value = parse_int(part);
-    if (!value.has_value()) {
-      return false;
-    }
-    out.push_back(*value);
-  }
-  return true;
-}
-
 int clamp_int(int value, int min, int max) {
   return std::clamp(value, min, max);
-}
-
-bool parse_global(std::string_view value, ym2612::GlobalSettings &global) {
-  std::vector<int> values;
-  if (!parse_int_list(value, 3, values)) {
-    return false;
-  }
-  global.dac_enable = values[0] != 0;
-  global.lfo_enable = values[1] != 0;
-  global.lfo_frequency = static_cast<uint8_t>(clamp_int(values[2], 0, 7));
-  return true;
-}
-
-bool parse_channel(std::string_view value, ym2612::ChannelSettings &channel) {
-  std::vector<int> values;
-  if (!parse_int_list(value, 4, values)) {
-    return false;
-  }
-  channel.left_speaker = values[0] != 0;
-  channel.right_speaker = values[1] != 0;
-  channel.amplitude_modulation_sensitivity =
-      static_cast<uint8_t>(clamp_int(values[2], 0, 3));
-  channel.frequency_modulation_sensitivity =
-      static_cast<uint8_t>(clamp_int(values[3], 0, 7));
-  return true;
-}
-
-bool parse_instrument(std::string_view value, ym2612::ChannelInstrument &inst) {
-  std::vector<int> values;
-  if (!parse_int_list(value, 2, values)) {
-    return false;
-  }
-  inst.feedback = static_cast<uint8_t>(clamp_int(values[0], 0, 7));
-  inst.algorithm = static_cast<uint8_t>(clamp_int(values[1], 0, 7));
-  return true;
-}
-
-bool parse_operator(std::string_view value, ym2612::OperatorSettings &op) {
-  std::vector<int> values;
-  if (!parse_int_list(value, kOperatorValueCount, values)) {
-    return false;
-  }
-  op.attack_rate = static_cast<uint8_t>(clamp_int(values[0], 0, 31));
-  op.decay_rate = static_cast<uint8_t>(clamp_int(values[1], 0, 31));
-  op.sustain_rate = static_cast<uint8_t>(clamp_int(values[2], 0, 31));
-  op.release_rate = static_cast<uint8_t>(clamp_int(values[3], 0, 15));
-  op.sustain_level = static_cast<uint8_t>(clamp_int(values[4], 0, 15));
-  op.total_level = static_cast<uint8_t>(clamp_int(values[5], 0, 127));
-  op.key_scale = static_cast<uint8_t>(clamp_int(values[6], 0, 3));
-  op.multiple = static_cast<uint8_t>(clamp_int(values[7], 0, 15));
-  op.detune = formats::adapter::detune_from_linear(clamp_int(values[8], 0, 7));
-  op.ssg_type_envelope_control =
-      static_cast<uint8_t>(clamp_int(values[9], 0, 7));
-  op.ssg_enable = values[10] != 0;
-  op.amplitude_modulation_enable = values[11] != 0;
-  op.enable = values[12] != 0;
-  return true;
-}
-
-[[maybe_unused]] void append_int(std::string &out, int value) {
-  out += std::to_string(value);
-}
-
-[[maybe_unused]] void append_list(std::string &out,
-                                  std::initializer_list<int> values) {
-  bool first = true;
-  for (int value : values) {
-    if (!first) {
-      out.push_back(',');
-    }
-    first = false;
-    append_int(out, value);
-  }
 }
 
 const ym2612::OperatorSettings &
@@ -619,15 +490,6 @@ std::optional<ym2612::Patch> parse_query(std::string_view query,
   }
 
   std::optional<std::string> binary_payload;
-  bool has_version = false;
-  int version = 0;
-  bool has_global = false;
-  bool has_channel = false;
-  bool has_instrument = false;
-  std::array<bool, 4> has_operator = {false, false, false, false};
-
-  ym2612::Patch patch = defaults;
-
   auto pairs = split(normalized, '&');
   for (auto pair : pairs) {
     if (pair.empty()) {
@@ -646,53 +508,6 @@ std::optional<ym2612::Patch> parse_query(std::string_view query,
       binary_payload = std::move(value);
       continue;
     }
-
-    if (key == "v") {
-      auto parsed = parse_int(value);
-      if (!parsed.has_value()) {
-        continue;
-      }
-      has_version = true;
-      version = *parsed;
-      continue;
-    }
-
-    if (key == "n") {
-      patch.name = value;
-      continue;
-    }
-
-    if (key == "g") {
-      if (parse_global(value, patch.global)) {
-        has_global = true;
-      }
-      continue;
-    }
-
-    if (key == "c") {
-      if (parse_channel(value, patch.channel)) {
-        has_channel = true;
-      }
-      continue;
-    }
-
-    if (key == "i") {
-      if (parse_instrument(value, patch.instrument)) {
-        has_instrument = true;
-      }
-      continue;
-    }
-
-    if (key.size() == 2 && key[0] == 'o') {
-      int index = key[1] - '1';
-      if (index >= 0 && index < 4) {
-        auto &op = operator_for_ui_index(patch, static_cast<size_t>(index));
-        if (parse_operator(value, op)) {
-          has_operator[static_cast<size_t>(index)] = true;
-        }
-      }
-      continue;
-    }
   }
 
   if (binary_payload.has_value()) {
@@ -706,23 +521,7 @@ std::optional<ym2612::Patch> parse_query(std::string_view query,
     return unpack_patch_binary(*decoded, defaults, error);
   }
 
-  if (!has_version || version != kQueryVersion) {
-    if (error) {
-      *error = "Unsupported or missing patch URL version.";
-    }
-    return std::nullopt;
-  }
-
-  if (!has_global || !has_channel || !has_instrument ||
-      std::any_of(has_operator.begin(), has_operator.end(),
-                  [](bool value) { return !value; })) {
-    if (error) {
-      *error = "Incomplete patch URL data.";
-    }
-    return std::nullopt;
-  }
-
-  return patch;
+  return std::nullopt;
 }
 
 std::optional<ym2612::Patch>
