@@ -136,20 +136,20 @@ void handle_row_keys(PatchSelectorContext &context,
 }
 
 /**
- * Reproduces the layout of the recursion this list replaced: each level used
- * to sit inside one more TreePush (one IndentSpacing each) and file rows added
- * kDepthIndent per level on top. ImGui::Indent(0) means "one IndentSpacing",
- * so the old depth-0 file rows were indented as well.
+ * How far a row is indented. Files step in one IndentSpacing per level plus
+ * kDepthIndent. A folder's name lines up with the files of its level, its
+ * arrow standing out to the left of them.
  */
 float row_indent(const TreeRow &row, float indent_spacing) {
-  const float base = static_cast<float>(row.depth) * indent_spacing;
-  if (row.is_directory) {
-    return base;
+  const float depth = static_cast<float>(row.depth);
+  const float file_indent =
+      row.depth == 0
+          ? indent_spacing
+          : depth * indent_spacing + ui::scale::px(kDepthIndent) * depth;
+  if (!row.is_directory) {
+    return file_indent;
   }
-  if (row.depth == 0) {
-    return indent_spacing;
-  }
-  return base + ui::scale::px(kDepthIndent) * static_cast<float>(row.depth);
+  return std::max(0.0f, file_indent - ImGui::GetTreeNodeToLabelSpacing());
 }
 
 /// While filtering, every directory leading to a match is shown open, and a
