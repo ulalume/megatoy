@@ -24,3 +24,6 @@ This will:
 ctest --test-dir build-release -N              # list
 ctest --test-dir build-release -R patch_write  # run one
 ```
+
+For Clang line coverage, configure with `-DMEGATOY_COVERAGE=ON`, build,
+then run `python3 tools/coverage.py build-cov`. The script runs CTest.

@@ -23,6 +23,15 @@ configure_file(
 
 enable_testing()
 
+option(MEGATOY_SANITIZE "Enable address and undefined behavior sanitizers" OFF)
+option(MEGATOY_COVERAGE "Enable Clang source-based coverage" OFF)
+if(MEGATOY_SANITIZE AND NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  message(FATAL_ERROR "MEGATOY_SANITIZE requires GCC or Clang")
+endif()
+if(MEGATOY_COVERAGE AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  message(FATAL_ERROR "MEGATOY_COVERAGE requires Clang")
+endif()
+
 # Set Release as the default build type
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -277,6 +286,21 @@ add_test(NAME workspace_test COMMAND workspace_test)
 add_test(NAME platform_macro_include_test
          COMMAND ${CMAKE_COMMAND} -DMEGATOY_SOURCE_DIR=${CMAKE_SOURCE_DIR}
                  -P ${CMAKE_SOURCE_DIR}/tests/platform/platform_macro_include_test.cmake)
+
+get_property(MEGATOY_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(target IN LISTS MEGATOY_TARGETS)
+  get_target_property(target_type ${target} TYPE)
+  if(target_type STREQUAL "EXECUTABLE" OR target STREQUAL "megatoy_core")
+    if(MEGATOY_SANITIZE)
+      target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+      target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    endif()
+    if(MEGATOY_COVERAGE)
+      target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+      target_link_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+    endif()
+  endif()
+endforeach()
 
 # Convenience target to build and run tests
 add_custom_target(check
