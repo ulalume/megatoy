@@ -6,8 +6,8 @@
 #include "gui/components/operator_commands.hpp"
 #include "history/snapshot_entry.hpp"
 #include "patch_actions.hpp"
-#include "platform/native/native_file_system.hpp"
 #include "platform/platform_services.hpp"
+#include "platform/std_file_system.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -66,7 +66,7 @@ public:
 
 class TestPlatform final : public platform::PlatformServicesProvider {
 public:
-  platform::VirtualFileSystem &file_system() override { return file_system_; }
+  platform::StdFileSystem &file_system() override { return file_system_; }
   std::unique_ptr<AudioTransport> create_audio_transport() override {
     return std::make_unique<SilentTransport>();
   }
@@ -79,7 +79,7 @@ public:
   }
 
 private:
-  NativeFileSystem file_system_;
+  platform::StdFileSystem file_system_;
 };
 
 void edit(AppContext &context, const std::string &label,

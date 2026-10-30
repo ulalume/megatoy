@@ -223,7 +223,6 @@ void render_filter_bar(PatchSelectorContext &context) {
     }
     ImGui::PopStyleColor(2);
   }
-  prefs.patch_search_query = prefs.metadata_search_query;
 
   ImGui::SameLine();
   star_rating_slider("##Stars", prefs.metadata_star_filter, "Stars");

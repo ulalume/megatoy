@@ -61,6 +61,8 @@ struct GlobalSettings {
   bool dac_enable = false;
   bool lfo_enable = false;
   uint8_t lfo_frequency = 0; // 0 ~ 7
+
+  bool operator==(const GlobalSettings &) const = default;
 };
 
 struct OperatorSettings {
@@ -78,6 +80,8 @@ struct OperatorSettings {
   bool amplitude_modulation_enable = false;
 
   bool enable = true; // global register
+
+  bool operator==(const OperatorSettings &) const = default;
 };
 
 struct ChannelSettings {
@@ -85,6 +89,8 @@ struct ChannelSettings {
   bool right_speaker = true;
   uint8_t amplitude_modulation_sensitivity = 0; // 0 ~ 3 ams for lfo
   uint8_t frequency_modulation_sensitivity = 0; // 0 ~ 7 pms for lfo
+
+  bool operator==(const ChannelSettings &) const = default;
 };
 
 struct ChannelInstrument {
@@ -106,6 +112,8 @@ struct ChannelInstrument {
     }
     return modified;
   }
+
+  bool operator==(const ChannelInstrument &) const = default;
 };
 
 } // namespace ym2612

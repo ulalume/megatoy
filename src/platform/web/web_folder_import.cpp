@@ -852,6 +852,7 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
   Module.__megatoyFolderImportCommon = {
     run: run,
     enumerateEntry: enumerateEntry,
+    readAll: readAll,
     selectionStarted: selectionStarted,
     selectionProgress: selectionProgress,
     selectionAbandoned: selectionAbandoned,
@@ -948,16 +949,7 @@ EM_JS(void, megatoy_install_drop_import_js, (const char *destination), {
         var counter = {selection: selection, scanned: 0, abandoned: false};
         var files = [];
         try {
-          var children = await (new Promise(function(resolve, reject) {
-            var reader = directory.createReader();
-            var all = [];
-            (function next() {
-              reader.readEntries(function(batch) {
-                if (!batch.length) { resolve(all); return; }
-                all = all.concat(Array.prototype.slice.call(batch)); next();
-              }, reject);
-            })();
-          }));
+          var children = await common.readAll(directory.createReader());
           for (var child = 0; child < children.length; child++) {
             if (counter.abandoned) break;
             await common.enumerateEntry(children[child], "", files, counter);

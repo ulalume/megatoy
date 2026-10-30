@@ -202,6 +202,16 @@ class BitReader {
 public:
   explicit BitReader(const std::vector<uint8_t> &data) : data_(data) {}
 
+  template <typename T> bool read(int count, T &out) {
+    uint32_t value = 0;
+    if (!read_bits(count, value)) {
+      return false;
+    }
+    out = static_cast<T>(value);
+    return true;
+  }
+
+private:
   bool read_bits(int count, uint32_t &out) {
     out = 0;
     for (int i = 0; i < count; ++i) {
@@ -219,7 +229,6 @@ public:
     return true;
   }
 
-private:
   const std::vector<uint8_t> &data_;
   size_t byte_index_ = 0;
   int bit_pos_ = 0;
@@ -326,7 +335,7 @@ unpack_patch_binary(const std::vector<uint8_t> &data,
   };
 
   uint32_t version = 0;
-  if (!reader.read_bits(kBinaryVersionBits, version)) {
+  if (!reader.read(kBinaryVersionBits, version)) {
     return fail("Patch binary data is too short.");
   }
   if (version != kBinaryVersion) {
@@ -334,7 +343,7 @@ unpack_patch_binary(const std::vector<uint8_t> &data,
   }
 
   uint32_t name_len = 0;
-  if (!reader.read_bits(kNameLengthBits, name_len)) {
+  if (!reader.read(kNameLengthBits, name_len)) {
     return fail("Patch binary data is incomplete.");
   }
 
@@ -343,107 +352,38 @@ unpack_patch_binary(const std::vector<uint8_t> &data,
   patch.name.reserve(name_len);
   for (uint32_t i = 0; i < name_len; ++i) {
     uint32_t ch = 0;
-    if (!reader.read_bits(8, ch)) {
+    if (!reader.read(8, ch)) {
       return fail("Patch binary data is incomplete.");
     }
     patch.name.push_back(static_cast<char>(ch));
   }
   patch.name = megatoy::utf8::trim_incomplete_suffix(patch.name);
 
-  uint32_t value = 0;
-  if (!reader.read_bits(1, value)) {
+  if (!reader.read(1, patch.global.dac_enable) ||
+      !reader.read(1, patch.global.lfo_enable) ||
+      !reader.read(3, patch.global.lfo_frequency) ||
+      !reader.read(1, patch.channel.left_speaker) ||
+      !reader.read(1, patch.channel.right_speaker) ||
+      !reader.read(2, patch.channel.amplitude_modulation_sensitivity) ||
+      !reader.read(3, patch.channel.frequency_modulation_sensitivity) ||
+      !reader.read(3, patch.instrument.feedback) ||
+      !reader.read(3, patch.instrument.algorithm)) {
     return fail("Patch binary data is incomplete.");
   }
-  patch.global.dac_enable = value != 0;
-  if (!reader.read_bits(1, value)) {
-    return fail("Patch binary data is incomplete.");
-  }
-  patch.global.lfo_enable = value != 0;
-  if (!reader.read_bits(3, value)) {
-    return fail("Patch binary data is incomplete.");
-  }
-  patch.global.lfo_frequency = static_cast<uint8_t>(value);
-
-  if (!reader.read_bits(1, value)) {
-    return fail("Patch binary data is incomplete.");
-  }
-  patch.channel.left_speaker = value != 0;
-  if (!reader.read_bits(1, value)) {
-    return fail("Patch binary data is incomplete.");
-  }
-  patch.channel.right_speaker = value != 0;
-  if (!reader.read_bits(2, value)) {
-    return fail("Patch binary data is incomplete.");
-  }
-  patch.channel.amplitude_modulation_sensitivity = static_cast<uint8_t>(value);
-  if (!reader.read_bits(3, value)) {
-    return fail("Patch binary data is incomplete.");
-  }
-  patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(value);
-
-  if (!reader.read_bits(3, value)) {
-    return fail("Patch binary data is incomplete.");
-  }
-  patch.instrument.feedback = static_cast<uint8_t>(value);
-  if (!reader.read_bits(3, value)) {
-    return fail("Patch binary data is incomplete.");
-  }
-  patch.instrument.algorithm = static_cast<uint8_t>(value);
 
   for (size_t ui_index = 0; ui_index < 4; ++ui_index) {
     auto &op = operator_for_ui_index(patch, ui_index);
-    if (!reader.read_bits(5, value)) {
+    if (!reader.read(5, op.attack_rate) || !reader.read(5, op.decay_rate) ||
+        !reader.read(5, op.sustain_rate) || !reader.read(4, op.release_rate) ||
+        !reader.read(4, op.sustain_level) || !reader.read(7, op.total_level) ||
+        !reader.read(2, op.key_scale) || !reader.read(4, op.multiple) ||
+        !reader.read(3, op.detune) ||
+        !reader.read(3, op.ssg_type_envelope_control) ||
+        !reader.read(1, op.ssg_enable) ||
+        !reader.read(1, op.amplitude_modulation_enable) ||
+        !reader.read(1, op.enable)) {
       return fail("Patch binary data is incomplete.");
     }
-    op.attack_rate = static_cast<uint8_t>(value);
-    if (!reader.read_bits(5, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.decay_rate = static_cast<uint8_t>(value);
-    if (!reader.read_bits(5, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.sustain_rate = static_cast<uint8_t>(value);
-    if (!reader.read_bits(4, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.release_rate = static_cast<uint8_t>(value);
-    if (!reader.read_bits(4, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.sustain_level = static_cast<uint8_t>(value);
-    if (!reader.read_bits(7, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.total_level = static_cast<uint8_t>(value);
-    if (!reader.read_bits(2, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.key_scale = static_cast<uint8_t>(value);
-    if (!reader.read_bits(4, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.multiple = static_cast<uint8_t>(value);
-    if (!reader.read_bits(3, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.detune = static_cast<uint8_t>(value);
-    if (!reader.read_bits(3, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.ssg_type_envelope_control = static_cast<uint8_t>(value);
-    if (!reader.read_bits(1, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.ssg_enable = value != 0;
-    if (!reader.read_bits(1, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.amplitude_modulation_enable = value != 0;
-    if (!reader.read_bits(1, value)) {
-      return fail("Patch binary data is incomplete.");
-    }
-    op.enable = value != 0;
   }
 
   return patch;

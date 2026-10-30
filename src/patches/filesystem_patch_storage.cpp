@@ -17,7 +17,7 @@
 namespace patches {
 
 FilesystemPatchStorage::FilesystemPatchStorage(
-    platform::VirtualFileSystem &vfs, std::filesystem::path root,
+    platform::StdFileSystem &vfs, std::filesystem::path root,
     std::string relative_root_label, bool writable,
     std::filesystem::path metadata_file, PersistentParseCache *persistent_cache)
     : vfs_(vfs), root_(std::move(root)),
@@ -363,19 +363,6 @@ bool FilesystemPatchStorage::can_edit_metadata(const PatchEntry &entry) const {
   return metadata_ && owns_relative_path(entry.relative_path);
 }
 
-bool FilesystemPatchStorage::save_patch_metadata(
-    const std::string &relative_path, const ym2612::Patch &patch,
-    const PatchMetadata &metadata) {
-  if (!metadata_ || !owns_relative_path(relative_path)) {
-    return false;
-  }
-
-  PatchMetadata stored = metadata;
-  stored.path = metadata_key(relative_path);
-  stored.hash = patch.hash();
-  return metadata_->put(std::move(stored));
-}
-
 bool FilesystemPatchStorage::update_patch_metadata(
     const std::string &relative_path, const PatchMetadata &metadata) {
   if (!metadata_ || !owns_relative_path(relative_path)) {
@@ -393,14 +380,6 @@ bool FilesystemPatchStorage::update_patch_metadata(
   return metadata_->put(std::move(stored));
 }
 
-std::optional<PatchMetadata> FilesystemPatchStorage::get_patch_metadata(
-    const std::string &relative_path) const {
-  if (!metadata_ || !owns_relative_path(relative_path)) {
-    return std::nullopt;
-  }
-  return metadata_->get(metadata_key(relative_path));
-}
-
 void FilesystemPatchStorage::cleanup_metadata(
     const std::vector<std::string> &paths) const {
   if (!metadata_) {
@@ -414,19 +393,6 @@ void FilesystemPatchStorage::cleanup_metadata(
     }
   }
   metadata_->retain_only(mine);
-}
-
-std::optional<bool>
-FilesystemPatchStorage::has_patch_named(const std::string &name) const {
-  if (!writable_) {
-    return std::nullopt;
-  }
-  auto sanitized = sanitize_filename(name.empty() ? "patch" : name);
-  const auto patches_dir = root_;
-  auto ginpkg_target =
-      formats::ginpkg::build_package_path(patches_dir, sanitized);
-  auto gin_target = patches_dir / (sanitized + ".gin");
-  return vfs_.exists(ginpkg_target) || vfs_.exists(gin_target);
 }
 
 std::optional<std::filesystem::path> FilesystemPatchStorage::to_relative_path(

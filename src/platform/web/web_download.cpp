@@ -31,27 +31,6 @@ EM_JS(void, megatoy_download_bytes,
 
 // clang-format on
 
-// clang-format off
-EM_JS(void, megatoy_download_text,
-      (const char *filename, const char *text, const char *mime), {
-        const name = UTF8ToString(filename);
-        const data = UTF8ToString(text);
-        const type = UTF8ToString(mime);
-        const blob = new Blob([data], { type });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = name;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(
-            function() {
-              URL.revokeObjectURL(link.href);
-              document.body.removeChild(link);
-            },
-            0);
-      });
-// clang-format on
 #endif
 
 } // namespace
@@ -68,19 +47,6 @@ void download_binary(const std::string &filename,
 #else
   (void)filename;
   (void)data;
-  (void)mime_type;
-#endif
-}
-
-void download_text(const std::string &filename, std::string_view text,
-                   std::string_view mime_type) {
-#if defined(__EMSCRIPTEN__)
-  std::string payload(text);
-  megatoy_download_text(filename.c_str(), payload.c_str(),
-                        std::string(mime_type).c_str());
-#else
-  (void)filename;
-  (void)text;
   (void)mime_type;
 #endif
 }

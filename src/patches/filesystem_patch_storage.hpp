@@ -2,7 +2,7 @@
 
 #include "patch_repository.hpp"
 #include "patches/folder_metadata.hpp"
-#include "platform/virtual_file_system.hpp"
+#include "platform/std_file_system.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -29,51 +29,40 @@ class PersistentParseCache;
  * folder be moved or shared without losing its ratings. A read-only folder
  * keeps its metadata elsewhere, or has none.
  */
-class FilesystemPatchStorage final : public PatchStorage {
+class FilesystemPatchStorage {
 public:
-  FilesystemPatchStorage(platform::VirtualFileSystem &vfs,
+  FilesystemPatchStorage(platform::StdFileSystem &vfs,
                          std::filesystem::path root,
                          std::string relative_root_label, bool writable,
                          std::filesystem::path metadata_file,
                          PersistentParseCache *persistent_cache = nullptr);
 
-  void append_entries(std::vector<PatchEntry> &tree) const override;
-  bool load_patch(const PatchEntry &entry,
-                  ym2612::Patch &out_patch) const override;
+  void append_entries(std::vector<PatchEntry> &tree) const;
+  bool load_patch(const PatchEntry &entry, ym2612::Patch &out_patch) const;
   SavePatchResult save_patch(const ym2612::Patch &patch,
                              const std::string &name, bool overwrite,
-                             std::string_view preferred_extension) override;
-  bool can_delete_patch(const PatchEntry &entry) const override;
-  bool can_rename_patch(const PatchEntry &entry) const override;
-  bool delete_patch(const PatchEntry &entry) override;
-  bool rename_patch(const PatchEntry &entry,
-                    const std::string &new_stem) override;
+                             std::string_view preferred_extension);
+  bool can_delete_patch(const PatchEntry &entry) const;
+  bool can_rename_patch(const PatchEntry &entry) const;
+  bool delete_patch(const PatchEntry &entry);
+  bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
   bool can_move_patch(const PatchEntry &entry,
-                      const PatchEntry &destination) const override;
-  bool move_patch(const PatchEntry &entry,
-                  const PatchEntry &destination) override;
-  bool can_edit_metadata(const PatchEntry &entry) const override;
-  bool is_writable() const override { return writable_; }
-  std::string_view label() const override { return label_; }
+                      const PatchEntry &destination) const;
+  bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
+  bool can_edit_metadata(const PatchEntry &entry) const;
   /// What the folder itself is listed as, in place of its label, and the
   /// folders above it to show beside that.
   void set_listed_as(std::string name, std::string parents) {
     listed_name_ = std::move(name);
     listed_parents_ = std::move(parents);
   }
-  bool save_patch_metadata(const std::string &relative_path,
-                           const ym2612::Patch &patch,
-                           const PatchMetadata &metadata) override;
   bool update_patch_metadata(const std::string &relative_path,
-                             const PatchMetadata &metadata) override;
-  std::optional<PatchMetadata>
-  get_patch_metadata(const std::string &relative_path) const override;
-  void cleanup_metadata(const std::vector<std::string> &paths) const override;
-  std::optional<bool> has_patch_named(const std::string &name) const override;
+                             const PatchMetadata &metadata);
+  void cleanup_metadata(const std::vector<std::string> &paths) const;
   std::optional<std::filesystem::path>
-  to_relative_path(const std::filesystem::path &path) const override;
+  to_relative_path(const std::filesystem::path &path) const;
   std::optional<std::filesystem::path>
-  to_absolute_path(const std::filesystem::path &path) const override;
+  to_absolute_path(const std::filesystem::path &path) const;
 
   const std::filesystem::path &root() const { return root_; }
   std::size_t container_parse_count_for_testing() const {
@@ -99,7 +88,7 @@ private:
     PatchEntry subtree;
   };
 
-  platform::VirtualFileSystem &vfs_;
+  platform::StdFileSystem &vfs_;
   std::filesystem::path root_;
   std::string root_label_;
   bool writable_;

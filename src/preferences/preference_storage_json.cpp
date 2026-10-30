@@ -15,22 +15,13 @@ namespace {
 class JsonPreferenceStorage : public PreferenceStorage {
 public:
   JsonPreferenceStorage(std::filesystem::path path,
-                        platform::VirtualFileSystem &vfs)
-      : path_(std::move(path)), vfs_(vfs)
-#if defined(MEGATOY_PLATFORM_WEB)
-        ,
-        use_local_storage_(true)
-#else
-        ,
-        use_local_storage_(false)
-#endif
-  {
-  }
+                        platform::StdFileSystem &vfs)
+      : path_(std::move(path)), vfs_(vfs) {}
 
   bool load(PreferenceData &data) override {
     try {
       nlohmann::json j;
-      if (use_local_storage_) {
+      if (megatoy::platform::is_web()) {
 #if defined(MEGATOY_PLATFORM_WEB)
         auto stored = platform::web::read_local_storage("megatoy_preferences");
         if (!stored.has_value()) {
@@ -92,10 +83,6 @@ public:
       if (j.contains("last_seen_version")) {
         data.last_seen_version = j["last_seen_version"].get<std::string>();
       }
-      if (j.contains("layout") && j["layout"].is_string()) {
-        data.layout = j["layout"].get<std::string>();
-      }
-
       if (j.contains("show_builtin_presets")) {
         data.show_builtin_presets = j["show_builtin_presets"].get<bool>();
       }
@@ -110,10 +97,6 @@ public:
         if (ui.contains("show_patch_editor")) {
           data.ui_preferences.show_patch_editor =
               ui["show_patch_editor"].get<bool>();
-        }
-        if (ui.contains("show_audio_controls")) {
-          data.ui_preferences.show_audio_controls =
-              ui["show_audio_controls"].get<bool>();
         }
         if (ui.contains("show_midi_keyboard")) {
           data.ui_preferences.show_midi_keyboard =
@@ -250,13 +233,11 @@ public:
       j["open_patches"] = std::move(open_patches);
       j["active_open_patch"] = data.active_open_patch;
       j["last_seen_version"] = data.last_seen_version;
-      j["layout"] = data.layout;
       j["show_builtin_presets"] = data.show_builtin_presets;
       j["theme"] = ui::styles::storage_key(data.theme);
 
       nlohmann::json ui;
       ui["show_patch_editor"] = data.ui_preferences.show_patch_editor;
-      ui["show_audio_controls"] = data.ui_preferences.show_audio_controls;
       ui["show_midi_keyboard"] = data.ui_preferences.show_midi_keyboard;
       ui["show_patch_selector"] = data.ui_preferences.show_patch_selector;
       ui["show_mml_console"] = data.ui_preferences.show_mml_console;
@@ -292,7 +273,7 @@ public:
           data.ui_preferences.custom_typing_octave_up_key;
       j["ui"] = ui;
 
-      if (use_local_storage_) {
+      if (megatoy::platform::is_web()) {
 #if defined(MEGATOY_PLATFORM_WEB)
         platform::web::write_local_storage("megatoy_preferences", j.dump(2));
 #endif
@@ -315,14 +296,13 @@ public:
 
 private:
   std::filesystem::path path_;
-  platform::VirtualFileSystem &vfs_;
-  bool use_local_storage_;
+  platform::StdFileSystem &vfs_;
 };
 
 } // namespace
 
 std::unique_ptr<PreferenceStorage>
 make_json_preference_storage(const std::filesystem::path &path,
-                             platform::VirtualFileSystem &vfs) {
+                             platform::StdFileSystem &vfs) {
   return std::make_unique<JsonPreferenceStorage>(path, vfs);
 }

@@ -1,5 +1,5 @@
 // The version history inside a .ginpkg: saving over a package archives the
-// previous current patch, versions can be read back and deleted. This is the
+// previous current patch, and versions can be read back. This is the
 // mechanism behind Save Version and the package entries in the patch tree.
 
 #include "formats/ginpkg.hpp"
@@ -67,15 +67,6 @@ int main() {
   {
     auto package = formats::ginpkg::load_package(*path);
     CHECK(package->history().size() == 2);
-  }
-
-  // Deleting a version removes it and keeps the rest intact.
-  CHECK(formats::ginpkg::delete_version(*path, first_uuid));
-  {
-    auto package = formats::ginpkg::load_package(*path);
-    CHECK(package->history().size() == 1);
-    CHECK(package->history()[0].uuid != first_uuid);
-    CHECK(!formats::ginpkg::read_version(*path, first_uuid).has_value());
   }
 
   std::filesystem::remove_all(dir);

@@ -6,9 +6,9 @@
 
 namespace ui {
 
-bool load_web_layout_ini(std::string_view) { return false; }
+bool load_web_layout_ini() { return false; }
 
-void save_web_layout_ini(std::string_view, bool) {}
+void save_web_layout_ini() {}
 
 } // namespace ui
 

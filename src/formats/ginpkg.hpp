@@ -27,14 +27,12 @@ public:
 
   void SetCurrentData(std::string data);
   const std::string &current_data() const;
-  const std::string &current_timestamp() const { return current_timestamp_; }
 
   void AddVersion(const std::string &json_snapshot,
                   const std::string &comment = "");
 
   const std::vector<HistoryEntry> &history() const;
   std::optional<std::string> snapshot(const std::string &uuid) const;
-  bool DeleteVersion(const std::string &uuid);
 
 private:
   std::string current_data_;
@@ -59,6 +57,5 @@ std::optional<ym2612::Patch> read_version(const GinPackage &package,
                                           const std::string &uuid);
 std::optional<ym2612::Patch> read_version(const std::filesystem::path &path,
                                           const std::string &uuid);
-bool delete_version(const std::filesystem::path &path, const std::string &uuid);
 
 } // namespace formats::ginpkg

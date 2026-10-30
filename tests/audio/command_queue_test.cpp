@@ -78,7 +78,7 @@ void test_commands_apply_on_render() {
   render_block(engine, 64);
   CHECK(engine.notes().published_contains(note));
   CHECK(engine.notes().published_notes().size() == 1);
-  CHECK(engine.notes().published_channels()[0]);
+  CHECK(engine.notes().published_voices()[0].held);
 
   engine.submit(audio::AudioCommand::note_off(note));
   render_block(engine, 64);

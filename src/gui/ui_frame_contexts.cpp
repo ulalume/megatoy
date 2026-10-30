@@ -23,46 +23,6 @@
 namespace ui::renderer_detail {
 namespace {
 
-struct HistoryActions {
-  AppContext &ctx;
-
-  void undo() const { ctx.services.history().undo(ctx); }
-  void redo() const { ctx.services.history().redo(ctx); }
-};
-
-struct PatchHistoryActions {
-  AppContext &ctx;
-
-  void begin_snapshot(const std::string &label,
-                      const std::string &merge_key) const {
-    patch_actions::begin_change(ctx, label, merge_key);
-  }
-
-  void commit() const { patch_actions::commit_change(ctx); }
-};
-
-struct MidiActions {
-  AppContext &ctx;
-
-  bool note_on(ym2612::Note note, uint8_t velocity) const {
-    return ctx.services.patch_session.note_on(note, velocity,
-                                              ctx.ui_state().prefs);
-  }
-
-  bool note_off(ym2612::Note note) const {
-    return ctx.services.audio_manager.submit(
-        audio::AudioCommand::note_off(note));
-  }
-
-  bool note_is_active(const ym2612::Note &note) const {
-    return ctx.services.audio_manager.notes().published_contains(note);
-  }
-
-  std::vector<ym2612::Note> active_notes() const {
-    return ctx.services.audio_manager.notes().published_notes();
-  }
-};
-
 drop_actions::Environment make_drop_environment(AppContext &ctx) {
   return {
       ctx.services, ctx.ui_state(),
@@ -84,8 +44,6 @@ MidiKeyboardState &midi_keyboard_state() {
 MainMenuContext make_main_menu_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  auto history_actions = HistoryActions{ctx};
-  auto patch_history = PatchHistoryActions{ctx};
   return {
       [&ctx]() -> history::HistoryManager & { return ctx.services.history(); },
       ctx.services.gui_manager,
@@ -98,18 +56,18 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
       },
       ctx.services.patch_session,
       ui_state.save_export_state,
-      [history_actions]() { history_actions.undo(); },
-      [history_actions]() { history_actions.redo(); },
+      [&ctx]() { ctx.services.history().undo(ctx); },
+      [&ctx]() { ctx.services.history().redo(ctx); },
       [&ctx]() -> OperatorEditState & {
         return active_document_ui(ctx).operator_edit;
       },
       ui_state.operator_clipboard,
-      [patch_history](const std::string &label) {
+      [&ctx](const std::string &label) {
         // Empty merge key: two operator commands in a row stay two
         // separate undo steps.
-        patch_history.begin_snapshot(label, {});
+        patch_actions::begin_change(ctx, label, {});
       },
-      [patch_history]() { patch_history.commit(); },
+      [&ctx]() { patch_actions::commit_change(ctx); },
       ctx.services.audio_manager.load_meter(),
       ui_state.open_sound_preferences,
       ctx.services.audio_manager.default_buffer_frames(),
@@ -160,7 +118,6 @@ ConfirmationDialogContext make_confirmation_context(AppContext &ctx) {
 PatchEditorContext make_patch_editor_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  auto patch_history = PatchHistoryActions{ctx};
   return {ctx.services.patch_session,
           ctx.services.audio_manager,
           ui_state.prefs,
@@ -169,7 +126,7 @@ PatchEditorContext make_patch_editor_context(AppContext &ctx) {
           },
           ui_state.operator_clipboard,
           {},
-          [patch_history]() { patch_history.commit(); },
+          [&ctx]() { patch_actions::commit_change(ctx); },
           [&ctx](patches::DocumentId id) {
             patch_actions::activate_document(ctx, id);
           },
@@ -181,13 +138,11 @@ PatchEditorContext make_patch_editor_context(AppContext &ctx) {
 PatchLabContext make_patch_lab_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  auto patch_history = PatchHistoryActions{ctx};
   return {ctx.services.patch_session, ui_state.prefs,
-          [patch_history](const std::string &label,
-                          const std::string &merge_key, const ym2612::Patch &) {
-            patch_history.begin_snapshot(label, merge_key);
+          [&ctx](const std::string &label, const std::string &merge_key) {
+            patch_actions::begin_change(ctx, label, merge_key);
           },
-          [patch_history]() { patch_history.commit(); }};
+          [&ctx]() { patch_actions::commit_change(ctx); }};
 }
 
 PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
@@ -272,19 +227,22 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
 MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
   auto &state = ctx.app_state();
   auto &ui_state = state.ui_state();
-  auto midi_actions = MidiActions{ctx};
   return {
       ui_state.prefs,
       state.input_state(),
       midi_keyboard_state(),
-      [midi_actions](ym2612::Note note, uint8_t velocity) {
-        return midi_actions.note_on(note, velocity);
+      [&ctx](ym2612::Note note, uint8_t velocity) {
+        return ctx.services.patch_session.note_on(note, velocity,
+                                                  ctx.ui_state().prefs);
       },
-      [midi_actions](ym2612::Note note) { return midi_actions.note_off(note); },
-      [midi_actions](const ym2612::Note &note) {
-        return midi_actions.note_is_active(note);
+      [&ctx](ym2612::Note note) {
+        return ctx.services.audio_manager.submit(
+            audio::AudioCommand::note_off(note));
       },
-      [midi_actions]() { return midi_actions.active_notes(); },
+      [&ctx](const ym2612::Note &note) {
+        return ctx.services.audio_manager.notes().published_contains(note);
+      },
+      [&ctx]() { return ctx.services.audio_manager.notes().published_notes(); },
   };
 }
 
@@ -300,7 +258,6 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
       ui_state.prefs,
       ui_state.open_add_folder_dialog,
       ui_state.open_sound_preferences,
-      ctx.services.path_service.paths(),
       state.connected_midi_inputs(),
       midi_status.message,
       midi_status.show_enable_button,
@@ -320,7 +277,6 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
       [&ctx](float preference) {
         ctx.services.gui_manager.apply_ui_scale(preference);
       },
-      true,
       ctx.services.audio_manager.default_buffer_frames(),
       ctx.services.gui_manager.display_scale(),
   };
@@ -359,8 +315,7 @@ FrameContexts::FrameContexts(AppContext &ctx)
       patch_lab(make_patch_lab_context(ctx)),
       waveform(make_waveform_context(ctx)) {
   patch_editor.begin_history = [&ctx, this](const std::string &label,
-                                            const std::string &merge_key,
-                                            const ym2612::Patch &) {
+                                            const std::string &merge_key) {
     patch_actions::activate_document(ctx, patch_editor.document);
     patch_actions::begin_change(ctx, label, merge_key);
   };

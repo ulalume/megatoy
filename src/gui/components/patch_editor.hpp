@@ -21,8 +21,7 @@ struct PatchEditorContext {
   ym2612::OperatorClipboard &operator_clipboard;
   /// Opens an undo step on the document being drawn, making it the active
   /// one first.
-  std::function<void(const std::string &label, const std::string &merge_key,
-                     const ym2612::Patch &before)>
+  std::function<void(const std::string &label, const std::string &merge_key)>
       begin_history;
   std::function<void()> commit_history;
   /// Make a document the active one.
@@ -66,13 +65,9 @@ inline void track_patch_history(PatchEditorContext &context, const char *label,
 template <typename Apply>
 void track_instant_patch_history(PatchEditorContext &context,
                                  const std::string &label, Apply &&apply) {
-  if (context.begin_history) {
-    context.begin_history(label, {}, context.session.current_patch());
-  }
+  context.begin_history(label, {});
   apply();
-  if (context.commit_history) {
-    context.commit_history();
-  }
+  context.commit_history();
 }
 
 /// One editor window per open document, docked together as tabs.

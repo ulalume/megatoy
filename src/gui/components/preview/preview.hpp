@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -48,7 +47,5 @@ private:
   std::vector<std::string> filenames_;
   std::vector<Entry> entries_;
 };
-
-std::filesystem::path build_asset_path(const std::string &filename);
 
 } // namespace ui

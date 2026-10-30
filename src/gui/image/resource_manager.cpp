@@ -69,15 +69,6 @@ bool ResourceManager::has_resource(const std::filesystem::path &path) const {
   return has_resource(path.generic_string());
 }
 
-std::vector<std::string> ResourceManager::get_resource_names() const {
-  std::vector<std::string> names;
-  names.reserve(resources_.size());
-  for (const auto &pair : resources_) {
-    names.push_back(pair.first);
-  }
-  return names;
-}
-
 void ResourceManager::register_embedded_resources() {
   // Register all embedded resources from the generated registry
   for (const auto &entry : embedded_assets::resource_registry) {

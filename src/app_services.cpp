@@ -33,8 +33,7 @@ std::unique_ptr<patches::PersistentParseCache> load_persistent_parse_cache() {
 } // namespace
 
 AppServices::AppServices(platform::PlatformServicesProvider &platform_services)
-    : platform_services_(platform_services),
-      path_service(platform_services.file_system()),
+    : path_service(platform_services.file_system()),
       preference_manager(path_service),
       audio_manager(platform_services.create_audio_transport()),
       gui_manager(preference_manager),

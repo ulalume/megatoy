@@ -4,7 +4,7 @@
 
 #include "patches/filename_utils.hpp"
 #include "patches/patch_write.hpp"
-#include "platform/virtual_file_system.hpp"
+#include "platform/std_file_system.hpp"
 #include "platform/web/web_download.hpp"
 #include <algorithm>
 #include <fstream>
@@ -18,7 +18,7 @@ namespace platform::web {
 namespace {
 
 std::optional<std::vector<uint8_t>>
-read_bytes(const VirtualFileSystem &vfs, const std::filesystem::path &path) {
+read_bytes(const StdFileSystem &vfs, const std::filesystem::path &path) {
   auto stream = vfs.open_read(path);
   if (!stream) {
     return std::nullopt;
@@ -27,7 +27,7 @@ read_bytes(const VirtualFileSystem &vfs, const std::filesystem::path &path) {
                               std::istreambuf_iterator<char>()};
 }
 
-bool add_directory(mz_zip_archive &archive, const VirtualFileSystem &vfs,
+bool add_directory(mz_zip_archive &archive, const StdFileSystem &vfs,
                    const std::filesystem::path &directory,
                    const std::string &archive_prefix) {
   const std::string directory_entry = archive_prefix + "/";
@@ -68,7 +68,7 @@ bool add_directory(mz_zip_archive &archive, const VirtualFileSystem &vfs,
 
 } // namespace
 
-bool download_workspace_path(const VirtualFileSystem &vfs,
+bool download_workspace_path(const StdFileSystem &vfs,
                              const std::filesystem::path &path) {
   if (!vfs.exists(path)) {
     return false;

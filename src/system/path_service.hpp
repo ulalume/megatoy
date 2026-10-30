@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform/virtual_file_system.hpp"
+#include "platform/std_file_system.hpp"
 #include <filesystem>
 
 namespace megatoy::system {
@@ -30,12 +30,12 @@ public:
    *                    Tests pass a temporary directory so they cannot
    *                    overwrite the real user configuration.
    */
-  explicit PathService(::platform::VirtualFileSystem &vfs,
+  explicit PathService(::platform::StdFileSystem &vfs,
                        std::filesystem::path config_root = {});
 
   const DirectoryPaths &paths() const { return paths_; }
-  ::platform::VirtualFileSystem &file_system() { return vfs_; }
-  const ::platform::VirtualFileSystem &file_system() const { return vfs_; }
+  ::platform::StdFileSystem &file_system() { return vfs_; }
+  const ::platform::StdFileSystem &file_system() const { return vfs_; }
 
   /// Create the configuration directory. Patch folders belong to the user.
   bool ensure_directories() const;
@@ -59,11 +59,9 @@ public:
 private:
   DirectoryPaths paths_;
 
-  static std::filesystem::path
-  canonical_or_normal(const std::filesystem::path &path);
   static std::filesystem::path executable_directory_impl();
 
-  ::platform::VirtualFileSystem &vfs_;
+  ::platform::StdFileSystem &vfs_;
 };
 
 } // namespace megatoy::system

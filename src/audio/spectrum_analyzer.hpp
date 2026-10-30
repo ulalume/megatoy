@@ -26,8 +26,6 @@ public:
   static constexpr float kFloorDb = -100.0f;
 
   std::size_t fft_size() const { return fft_size_; }
-  /// Number of magnitude bins, i.e. fft_size / 2 + 1.
-  std::size_t bin_count() const { return magnitudes_db_.size(); }
 
   float bin_frequency(std::size_t bin, uint32_t sample_rate) const;
 

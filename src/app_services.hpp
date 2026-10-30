@@ -28,7 +28,6 @@ struct AppServices {
   void initialize_app(AppState &state);
   void shutdown_app();
 
-  platform::PlatformServicesProvider &platform_services_;
   megatoy::system::PathService path_service;
   PreferenceManager preference_manager;
   AudioManager audio_manager;

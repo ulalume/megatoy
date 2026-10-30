@@ -1,14 +1,13 @@
 #pragma once
 
 #include "folder_watcher.hpp"
-#include "patch_storage.hpp"
 #include "patches/folder_metadata.hpp"
-#include "platform/virtual_file_system.hpp"
+#include "platform/std_file_system.hpp"
+#include "save_patch_result.hpp"
 #include "workspace/workspace.hpp"
 #include "ym2612/patch.hpp"
 #include <cstdint>
 #include <filesystem>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -17,6 +16,7 @@
 
 namespace patches {
 
+class FilesystemPatchStorage;
 class PersistentParseCache;
 
 struct PatchEntry {
@@ -55,11 +55,12 @@ struct PatchEntry {
  */
 class PatchRepository {
 public:
-  PatchRepository(platform::VirtualFileSystem &vfs,
+  PatchRepository(platform::StdFileSystem &vfs,
                   const megatoy::workspace::Workspace &workspace,
                   const std::filesystem::path &builtin_presets_dir = {},
                   const std::filesystem::path &builtin_presets_metadata = {},
                   PersistentParseCache *persistent_cache = nullptr);
+  ~PatchRepository();
 
   /// Rebuild the storage list if the workspace has changed since last call.
   /// Returns true when something changed.
@@ -86,13 +87,8 @@ public:
   to_absolute_path(const std::filesystem::path &path) const;
 
   // Metadata operations
-  bool save_patch_metadata(const std::string &relative_path,
-                           const ym2612::Patch &patch,
-                           const PatchMetadata &metadata);
   bool update_patch_metadata(const std::string &relative_path,
                              const PatchMetadata &metadata);
-  std::optional<PatchMetadata>
-  get_patch_metadata(const std::string &relative_path) const;
 
   SavePatchResult save_patch(const ym2612::Patch &patch,
                              const std::string &name, bool overwrite,
@@ -119,13 +115,7 @@ public:
   bool can_edit_metadata(const PatchEntry &entry) const;
 
   // Batch operations
-  std::vector<PatchEntry> get_patches_by_metadata_filter(
-      const std::function<bool(const PatchMetadata &)> &filter) const;
   void cleanup_orphaned_metadata();
-
-  // Capabilities
-  std::string primary_writable_label() const;
-  bool patch_name_conflicts(const std::string &name) const;
 
   /// The folders the tree mirrors, in the order it lists them.
   const megatoy::workspace::Workspace &workspace() const { return workspace_; }
@@ -141,7 +131,7 @@ private:
   const megatoy::workspace::Workspace &workspace_;
   std::filesystem::path builtin_presets_directory_;
   std::filesystem::path builtin_presets_metadata_;
-  platform::VirtualFileSystem &vfs_;
+  platform::StdFileSystem &vfs_;
   PersistentParseCache *persistent_cache_;
 
   std::vector<PatchEntry> tree_cache_;
@@ -154,7 +144,7 @@ private:
   bool storages_built_ = false;
   std::uint64_t revision_ = 0;
 
-  std::vector<std::unique_ptr<PatchStorage>> storages_;
+  std::vector<std::unique_ptr<FilesystemPatchStorage>> storages_;
 };
 
 } // namespace patches

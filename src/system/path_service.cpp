@@ -1,8 +1,9 @@
 #include "path_service.hpp"
 
-#include "platform/native/native_file_system.hpp"
+#include "platform/std_file_system.hpp"
 
 #include "platform/platform_config.hpp"
+#include "workspace/path_policy.hpp"
 
 #include <array>
 #include <cstdlib>
@@ -25,8 +26,8 @@
 
 namespace {
 
-platform::VirtualFileSystem &default_vfs() {
-  static NativeFileSystem fs;
+platform::StdFileSystem &default_vfs() {
+  static platform::StdFileSystem fs;
   return fs;
 }
 
@@ -93,14 +94,6 @@ fs::path PathService::executable_directory_impl() {
 #endif
 }
 
-fs::path PathService::canonical_or_normal(const fs::path &p) {
-  try {
-    return fs::weakly_canonical(p);
-  } catch (...) {
-    return p.lexically_normal();
-  }
-}
-
 fs::path PathService::executable_directory() {
   static const fs::path dir = executable_directory_impl();
   return dir;
@@ -110,8 +103,8 @@ fs::path PathService::builtin_presets_directory() {
 #if defined(MEGATOY_PLATFORM_WEB)
   return fs::path("/app/assets/presets");
 #else
-  return canonical_or_normal(executable_directory() /
-                             MEGATOY_PRESETS_RELATIVE_PATH);
+  return workspace::normalize_path(executable_directory() /
+                                   MEGATOY_PRESETS_RELATIVE_PATH);
 #endif
 }
 
@@ -145,8 +138,7 @@ fs::path PathService::imgui_ini_file_path() { return config_path("imgui.ini"); }
 
 PathService::PathService() : PathService(default_vfs()) {}
 
-PathService::PathService(::platform::VirtualFileSystem &vfs,
-                         fs::path config_root)
+PathService::PathService(::platform::StdFileSystem &vfs, fs::path config_root)
     : vfs_(vfs) {
   paths_.builtin_presets_root = builtin_presets_directory();
   if (config_root.empty()) {

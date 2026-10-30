@@ -16,8 +16,7 @@ namespace ui {
 struct PatchLabContext {
   patches::PatchSession &session;
   PreferenceManager::UIPreferences &prefs;
-  std::function<void(const std::string &label, const std::string &merge_key,
-                     const ym2612::Patch &before)>
+  std::function<void(const std::string &label, const std::string &merge_key)>
       begin_history;
   std::function<void()> commit_history;
 };

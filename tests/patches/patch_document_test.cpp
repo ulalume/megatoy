@@ -3,7 +3,7 @@
 #include "audio/audio_transport.hpp"
 #include "patches/patch_session.hpp"
 #include "patches/patch_write.hpp"
-#include "platform/native/native_file_system.hpp"
+#include "platform/std_file_system.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 
@@ -41,7 +41,7 @@ private:
 struct TestEnvironment {
   fs::path root;
   fs::path patches_folder;
-  NativeFileSystem file_system;
+  platform::StdFileSystem file_system;
   megatoy::system::PathService directories;
   PreferenceManager preferences;
   AudioManager audio;
@@ -191,13 +191,12 @@ void test_modified_per_document() {
   auto &session = env.session;
   const auto first = session.active_document_id();
   const auto second = session.open_document(make_patch(2), {});
-  CHECK(!session.any_document_modified());
+  CHECK(session.modified_document_count() == 0);
 
   session.find_document(second)->patch().instrument.feedback = 3;
   CHECK(session.find_document(second)->is_modified());
   CHECK(!session.find_document(first)->is_modified());
   CHECK(!session.is_modified());
-  CHECK(session.any_document_modified());
   CHECK(session.modified_document_count() == 1);
 
   session.current_patch().instrument.feedback = 5;
@@ -207,7 +206,7 @@ void test_modified_per_document() {
   session.mark_as_clean();
   CHECK(session.modified_document_count() == 1);
   session.mark_all_clean();
-  CHECK(!session.any_document_modified());
+  CHECK(session.modified_document_count() == 0);
 }
 
 void test_rename_and_move_follow_inactive_documents() {
@@ -917,7 +916,7 @@ void test_open_documents_round_trip() {
   CHECK(documents[1]->pinned());
   CHECK(!documents[2]->pinned());
   CHECK(restored.active_document_id() == documents[1]->id());
-  CHECK(!restored.any_document_modified());
+  CHECK(restored.modified_document_count() == 0);
   CHECK(restored.current_patch().instrument.feedback ==
         make_patch(2).instrument.feedback);
   CHECK(preferences.last_patch_path() == env.relative(fixture.cold));

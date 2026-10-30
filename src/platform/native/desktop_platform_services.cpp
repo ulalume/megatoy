@@ -9,7 +9,7 @@ DesktopPlatformServices::DesktopPlatformServices()
     : file_system_(),
       release_provider_(std::make_shared<update::CurlReleaseInfoProvider>()) {}
 
-platform::VirtualFileSystem &DesktopPlatformServices::file_system() {
+platform::StdFileSystem &DesktopPlatformServices::file_system() {
   return file_system_;
 }
 
