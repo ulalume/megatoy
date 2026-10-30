@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <initializer_list>
+#include <limits>
 #include <random>
 #include <string_view>
 
@@ -281,7 +282,9 @@ void mutate_operator(ym2612::OperatorSettings &op, std::mt19937 &rng,
   }
 
   const float ssg_probability =
-      std::clamp(options.probability * 0.4f, 0.02f, 0.25f);
+      options.probability <= 0.0f
+          ? 0.0f
+          : std::clamp(options.probability * 0.4f, 0.02f, 0.25f);
 
   if (random_bool(rng, ssg_probability)) {
     if (op.ssg_enable && random_bool(rng, 0.6)) {
@@ -522,7 +525,10 @@ OperationResult random_patch(const RandomOptions &options) {
     mutate_options.probability = 0.6f;
     mutate_options.allow_algorithm_variation = false;
     int iterations = std::max(0, options.mutate_iterations);
+    std::uniform_int_distribution<int> seed_dist(
+        0, std::numeric_limits<int>::max());
     for (int i = 0; i < iterations; ++i) {
+      mutate_options.seed = seed_dist(rng);
       mutate_in_place(patch, mutate_options);
     }
   }

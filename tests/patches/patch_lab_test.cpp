@@ -376,25 +376,43 @@ void test_category_ids_and_labels_generate_the_same_seeded_sound() {
 void test_seeded_random_patches_repeat_and_stay_in_register_ranges() {
   for (const auto mode : {patch_lab::RandomOptions::Mode::Wild,
                           patch_lab::RandomOptions::Mode::Category}) {
-    for (const int seed : {0, 1, 2, 3, 42, 1234}) {
-      patch_lab::RandomOptions options;
-      options.mode = mode;
-      options.category = "unknown category";
-      options.seed = seed;
-      const auto first = patch_lab::random_patch(options);
-      const auto again = patch_lab::random_patch(options);
-      CHECK(first.seed == static_cast<uint32_t>(seed));
-      CHECK(first.patch == again.patch);
-      CHECK(first.patch.name.empty());
-      check_register_ranges(first.patch);
-      const auto &instrument = first.patch.instrument;
-      for (int i = 0; i < 4; ++i) {
-        CHECK(instrument.operators[i].enable);
-        if (i >= ym2612::algorithm_modulator_count[instrument.algorithm]) {
-          CHECK(instrument.operators[i].total_level <= 40);
+    // An unknown category falls back to a wild patch; a known one mutates
+    // the template it starts from.
+    for (const auto *category : {"unknown category", "bell"}) {
+      for (const int seed : {0, 1, 2, 3, 42, 1234}) {
+        patch_lab::RandomOptions options;
+        options.mode = mode;
+        options.category = category;
+        options.mutate_iterations = 4;
+        options.seed = seed;
+        const auto first = patch_lab::random_patch(options);
+        const auto again = patch_lab::random_patch(options);
+        CHECK(first.seed == static_cast<uint32_t>(seed));
+        CHECK(first.patch == again.patch);
+        CHECK(first.patch.name.empty());
+        check_register_ranges(first.patch);
+        const auto &instrument = first.patch.instrument;
+        for (int i = 0; i < 4; ++i) {
+          CHECK(instrument.operators[i].enable);
+          if (i >= ym2612::algorithm_modulator_count[instrument.algorithm]) {
+            CHECK(instrument.operators[i].total_level <= 40);
+          }
         }
       }
     }
+  }
+}
+
+void test_zero_probability_preserves_patch() {
+  for (int seed = 0; seed < 256; ++seed) {
+    const int levels[4] = {90, 91, 92, 127};
+    const auto original = patch_with_levels(7, levels, 1);
+    auto patch = original;
+    patch_lab::MutateOptions options;
+    options.seed = seed;
+    options.probability = 0.0f;
+    patch_lab::mutate_in_place(patch, options);
+    CHECK(patch == original);
   }
 }
 
@@ -508,6 +526,7 @@ int main() {
   test_mutate_does_not_pull_a_silenced_carrier_down_to_the_cap();
   test_mutate_caps_an_operator_that_becomes_a_carrier();
   test_category_ids_and_labels_generate_the_same_seeded_sound();
+  test_zero_probability_preserves_patch();
   test_seeded_random_patches_repeat_and_stay_in_register_ranges();
   test_seeded_mutation_preserves_name_pan_mutes_and_fixed_algorithm();
   test_morph_clamps_mix_and_switches_flags_at_operator_thresholds();
