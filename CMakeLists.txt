@@ -23,6 +23,15 @@ configure_file(
 
 enable_testing()
 
+option(MEGATOY_SANITIZE "Enable address and undefined behavior sanitizers" OFF)
+option(MEGATOY_COVERAGE "Enable Clang source-based coverage" OFF)
+if(MEGATOY_SANITIZE AND NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  message(FATAL_ERROR "MEGATOY_SANITIZE requires GCC or Clang")
+endif()
+if(MEGATOY_COVERAGE AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  message(FATAL_ERROR "MEGATOY_COVERAGE requires Clang")
+endif()
+
 # Set Release as the default build type
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -208,6 +217,14 @@ add_executable(operator_selection_test tests/gui/operator_selection_test.cpp
   src/gui/components/operator_selection.cpp)
 target_include_directories(operator_selection_test PRIVATE src)
 add_test(NAME operator_selection_test COMMAND operator_selection_test)
+add_executable(operator_commands_test tests/gui/operator_commands_test.cpp)
+target_include_directories(operator_commands_test PRIVATE src)
+target_link_libraries(operator_commands_test PRIVATE megatoy_core)
+add_test(NAME operator_commands_test COMMAND operator_commands_test)
+add_executable(keyboard_typing_test tests/gui/keyboard_typing_test.cpp)
+target_include_directories(keyboard_typing_test PRIVATE src)
+target_link_libraries(keyboard_typing_test PRIVATE megatoy_core)
+add_test(NAME keyboard_typing_test COMMAND keyboard_typing_test)
 add_executable(envelope_curve_test tests/gui/envelope_curve_test.cpp
   src/gui/envelope/envelope_curve.cpp)
 target_include_directories(envelope_curve_test PRIVATE src)
@@ -228,6 +245,10 @@ add_executable(layouts_test tests/gui/layouts_test.cpp)
 target_include_directories(layouts_test PRIVATE src)
 target_link_libraries(layouts_test PRIVATE megatoy_core)
 add_test(NAME layouts_test COMMAND layouts_test)
+add_executable(areas_test tests/gui/areas_test.cpp)
+target_include_directories(areas_test PRIVATE src)
+target_link_libraries(areas_test PRIVATE megatoy_core)
+add_test(NAME areas_test COMMAND areas_test)
 add_executable(snapshot_entry_test tests/history/snapshot_entry_test.cpp)
 target_include_directories(snapshot_entry_test PRIVATE src)
 add_test(NAME snapshot_entry_test COMMAND snapshot_entry_test)
@@ -235,6 +256,10 @@ add_executable(document_history_test tests/history/document_history_test.cpp)
 target_include_directories(document_history_test PRIVATE src)
 target_link_libraries(document_history_test PRIVATE megatoy_core)
 add_test(NAME document_history_test COMMAND document_history_test)
+add_executable(preference_manager_test tests/preferences/preference_manager_test.cpp)
+target_include_directories(preference_manager_test PRIVATE src)
+target_link_libraries(preference_manager_test PRIVATE megatoy_core)
+add_test(NAME preference_manager_test COMMAND preference_manager_test)
 add_executable(changelog_gate_test tests/core/changelog_gate_test.cpp
   src/changelog_gate.cpp src/update/version.cpp)
 target_include_directories(changelog_gate_test PRIVATE src)
@@ -278,6 +303,21 @@ add_test(NAME platform_macro_include_test
          COMMAND ${CMAKE_COMMAND} -DMEGATOY_SOURCE_DIR=${CMAKE_SOURCE_DIR}
                  -P ${CMAKE_SOURCE_DIR}/tests/platform/platform_macro_include_test.cmake)
 
+get_property(MEGATOY_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(target IN LISTS MEGATOY_TARGETS)
+  get_target_property(target_type ${target} TYPE)
+  if(target_type STREQUAL "EXECUTABLE" OR target STREQUAL "megatoy_core")
+    if(MEGATOY_SANITIZE)
+      target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+      target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    endif()
+    if(MEGATOY_COVERAGE)
+      target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+      target_link_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+    endif()
+  endif()
+endforeach()
+
 # Convenience target to build and run tests
 add_custom_target(check
   DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test scale_test
@@ -293,10 +333,13 @@ add_custom_target(check
           background_folder_scan_test
           operator_layout_test operator_edit_test operator_text_test
           operator_selection_test
+          operator_commands_test keyboard_typing_test
           note_test
           envelope_curve_test
           ui_scale_test layouts_test save_as_dialog_test
+          areas_test
           snapshot_entry_test document_history_test changelog_gate_test
+          preference_manager_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

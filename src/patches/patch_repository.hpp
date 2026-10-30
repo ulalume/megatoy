@@ -24,7 +24,7 @@ struct PatchEntry {
   std::string relative_path;
   std::filesystem::path full_path;
   std::string format;
-  bool is_directory;
+  bool is_directory = false;
   /// A directory with nothing on disk but dotfiles.
   bool holds_nothing = false;
   /// For a workspace folder sharing its name with another: the folders above

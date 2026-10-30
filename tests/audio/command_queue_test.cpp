@@ -255,7 +255,8 @@ void test_a_steal_starts_a_new_voice() {
   }
   render_block(engine, 64);
 
-  const VoiceActivity *stolen = find_voice(engine.voice_activity(), 60);
+  const VoiceActivityFrame before_steal = engine.voice_activity();
+  const VoiceActivity *stolen = find_voice(before_steal, 60);
   CHECK(stolen != nullptr);
   const uint64_t stolen_sequence = stolen->sequence;
 
@@ -286,7 +287,8 @@ void test_every_channel_gets_its_own_record() {
     engine.submit(audio::AudioCommand::note_on(
         ym2612::Note::from_midi_note(static_cast<uint8_t>(60 + i)), 100));
     render_block(engine, 64);
-    const VoiceActivity *voice = find_voice(engine.voice_activity(), 60 + i);
+    const VoiceActivityFrame frame = engine.voice_activity();
+    const VoiceActivity *voice = find_voice(frame, 60 + i);
     CHECK(voice != nullptr);
     CHECK(voice->sequence > previous);
     previous = voice->sequence;
