@@ -193,7 +193,7 @@ add_executable(folder_metadata_test tests/patches/folder_metadata_test.cpp)
 target_include_directories(folder_metadata_test PRIVATE src)
 target_link_libraries(folder_metadata_test PRIVATE megatoy_core)
 add_test(NAME folder_metadata_test COMMAND folder_metadata_test)
-add_executable(patch_tree_flatten_test tests/gui/patch_tree_flatten_test.cpp)
+add_executable(patch_tree_flatten_test tests/patches/patch_tree_flatten_test.cpp)
 target_include_directories(patch_tree_flatten_test PRIVATE src)
 target_link_libraries(patch_tree_flatten_test PRIVATE megatoy_core)
 add_test(NAME patch_tree_flatten_test COMMAND patch_tree_flatten_test)
@@ -228,10 +228,7 @@ add_test(NAME keyboard_typing_test COMMAND keyboard_typing_test)
 add_executable(envelope_curve_test tests/gui/envelope_curve_test.cpp
   src/gui/envelope/envelope_curve.cpp)
 target_include_directories(envelope_curve_test PRIVATE src)
-# imgui_lib is only here for the header path: ym2612/types.hpp pulls in
-# core/types.hpp, which includes imgui.h. The envelope logic itself calls no
-# ImGui at all, which is the point of keeping it out of the component.
-target_link_libraries(envelope_curve_test PRIVATE imgui_lib ym2612_eg::ym2612_eg)
+target_link_libraries(envelope_curve_test PRIVATE ym2612_eg::ym2612_eg)
 add_test(NAME envelope_curve_test COMMAND envelope_curve_test)
 add_executable(save_as_dialog_test tests/gui/save_as_dialog_test.cpp)
 target_include_directories(save_as_dialog_test PRIVATE src)
@@ -260,6 +257,19 @@ add_executable(preference_manager_test tests/preferences/preference_manager_test
 target_include_directories(preference_manager_test PRIVATE src)
 target_link_libraries(preference_manager_test PRIVATE megatoy_core)
 add_test(NAME preference_manager_test COMMAND preference_manager_test)
+# In the browser the logic layer calls into src/platform/web, built with the GUI.
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  set(MEGATOY_LOGIC_TEST_LIBRARY megatoy_core)
+else()
+  set(MEGATOY_LOGIC_TEST_LIBRARY megatoy_logic)
+endif()
+add_executable(preference_storage_compatibility_test
+  tests/preferences/preference_storage_compatibility_test.cpp)
+target_link_libraries(preference_storage_compatibility_test
+  PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME preference_storage_compatibility_test
+         COMMAND preference_storage_compatibility_test
+                 ${CMAKE_SOURCE_DIR}/tests/preferences/fixtures)
 add_executable(changelog_gate_test tests/core/changelog_gate_test.cpp
   src/changelog_gate.cpp src/update/version.cpp)
 target_include_directories(changelog_gate_test PRIVATE src)
@@ -302,11 +312,31 @@ add_test(NAME workspace_test COMMAND workspace_test)
 add_test(NAME platform_macro_include_test
          COMMAND ${CMAKE_COMMAND} -DMEGATOY_SOURCE_DIR=${CMAKE_SOURCE_DIR}
                  -P ${CMAKE_SOURCE_DIR}/tests/platform/platform_macro_include_test.cmake)
+add_test(NAME logic_include_test
+         COMMAND ${CMAKE_COMMAND} -DMEGATOY_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+                 -P ${CMAKE_SOURCE_DIR}/tests/core/logic_include_test.cmake)
+
+add_executable(document_decisions_test
+  tests/patches/document_decisions_test.cpp)
+target_link_libraries(document_decisions_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME document_decisions_test COMMAND document_decisions_test)
+add_executable(patch_entry_actions_test
+  tests/patches/patch_entry_actions_test.cpp)
+target_link_libraries(patch_entry_actions_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME patch_entry_actions_test COMMAND patch_entry_actions_test)
+add_executable(patch_tree_navigation_test
+  tests/patches/patch_tree_navigation_test.cpp)
+target_link_libraries(patch_tree_navigation_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME patch_tree_navigation_test COMMAND patch_tree_navigation_test)
+add_executable(patch_lab_sources_test tests/patches/patch_lab_sources_test.cpp)
+target_link_libraries(patch_lab_sources_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME patch_lab_sources_test COMMAND patch_lab_sources_test)
 
 get_property(MEGATOY_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
 foreach(target IN LISTS MEGATOY_TARGETS)
   get_target_property(target_type ${target} TYPE)
-  if(target_type STREQUAL "EXECUTABLE" OR target STREQUAL "megatoy_core")
+  if(target_type STREQUAL "EXECUTABLE" OR
+     target STREQUAL "megatoy_core" OR target STREQUAL "megatoy_logic")
     if(MEGATOY_SANITIZE)
       target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
       target_link_options(${target} PRIVATE -fsanitize=address,undefined)
@@ -328,7 +358,10 @@ add_custom_target(check
           patch_repository_delete_test patch_repository_rename_test
           patch_repository_move_test patch_document_test folder_watcher_test
           folder_metadata_test patch_tree_flatten_test
+          document_decisions_test patch_entry_actions_test
+          patch_tree_navigation_test patch_lab_sources_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
+          preference_storage_compatibility_test
           version_test import_pipeline_test persistent_parse_cache_test
           background_folder_scan_test
           operator_layout_test operator_edit_test operator_text_test

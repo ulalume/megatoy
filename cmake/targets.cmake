@@ -64,18 +64,16 @@ target_include_directories(megatoy_resampler PUBLIC ${CMAKE_SOURCE_DIR}/src)
 # upstream. Every packaging path below flows through this variable.
 set(MEGATOY_PRESETS_SOURCE_DIR "${ym2612_patches_SOURCE_DIR}")
 
-set(MEGATOY_CORE_SOURCES
-  src/app_services.cpp
-  src/app_state.cpp
+# Everything here compiles without ImGui. In the browser it still calls into
+# src/platform/web, which is built with the GUI below.
+set(MEGATOY_LOGIC_SOURCES
+  src/channel_allocator.cpp
   src/audio/audio_engine.cpp
   src/audio/scope_buffer.cpp
   src/audio/scope_trigger.cpp
   src/audio/spectrum_analyzer.cpp
   src/audio/audio_manager.cpp
   src/audio/sdl_audio_transport.cpp
-  src/changelog.cpp
-  src/changelog_gate.cpp
-  src/channel_allocator.cpp
   src/core/random_utils.cpp
   src/core/status.cpp
   src/core/utf8_utils.cpp
@@ -83,11 +81,57 @@ set(MEGATOY_CORE_SOURCES
   src/formats/patch_loader.cpp
   src/formats/ym2612_format_adapter.cpp
   src/formats/patch_registry.cpp
+  src/history/history_manager.cpp
+  src/midi/midi_input_manager.cpp
+  src/patches/document_confirmation.cpp
+  src/patches/save_controls.cpp
+  src/patches/patch_entry_actions.cpp
+  src/patches/patch_lab_sources.cpp
+  src/patches/patch_tree_navigation.cpp
+  src/patches/patch_tree_flatten.cpp
+  src/patches/patch_filter.cpp
+  src/patches/patch_document.cpp
+  src/patches/patch_session.cpp
+  src/patches/filename_utils.cpp
+  src/workspace/path_policy.cpp
+  src/workspace/workspace.cpp
+  src/patches/patch_lab.cpp
+  src/patches/persistent_parse_cache.cpp
+  src/patches/folder_watcher.cpp
+  src/patches/patch_repository.cpp
+  src/patches/patch_write.cpp
+  src/patches/filesystem_patch_storage.cpp
+  src/patches/folder_metadata.cpp
+  src/platform/file_dialog.cpp
+  src/preferences/preference_manager.cpp
+  src/preferences/preference_storage_json.cpp
+  src/preferences/theme.cpp
+  src/platform/std_file_system.cpp
+  src/platform/import_pipeline.cpp
+  src/system/path_service.cpp
+  src/update/update_checker.cpp
+  src/update/release_provider.cpp
+  src/update/version.cpp
+  src/ym2612/channel.cpp
+  src/ym2612/device.cpp
+  src/ym2612/operator.cpp
+  src/ym2612/operator_edit.cpp
+  src/ym2612/operator_text.cpp
+  src/ym2612/nuked_chip.cpp
+  src/ym2612/ymfm_chip.cpp
+)
+
+set(MEGATOY_CORE_SOURCES
+  src/app_services.cpp
+  src/app_state.cpp
+  src/changelog.cpp
+  src/changelog_gate.cpp
   src/gui/components/about_dialog.cpp
   src/gui/components/changelog_dialog.cpp
   src/gui/components/confirmation_dialog.cpp
   src/gui/components/envelope_image.cpp
   src/gui/envelope/envelope_curve.cpp
+  src/gui/input/history_shortcuts.cpp
   src/gui/input/keyboard_typing.cpp
   src/gui/components/main_menu.cpp
   src/gui/components/modal.cpp
@@ -98,11 +142,9 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/operator_selection.cpp
   src/gui/components/patch_drop.cpp
   src/gui/components/patch_editor.cpp
-  src/gui/components/patch_filter.cpp
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/patch_selector_shared.cpp
-  src/gui/components/patch_tree_flatten.cpp
   src/gui/components/patch_tree_view.cpp
   src/gui/components/preferences.cpp
   src/gui/components/star_rating.cpp
@@ -124,47 +166,17 @@ set(MEGATOY_CORE_SOURCES
   src/gui/image/stb_image_impl.cpp
   src/gui/image/texture_utils.cpp
   src/gui/imgui_ini_bridge.cpp
-  src/platform/clipboard.cpp
+  src/gui/clipboard.cpp
   src/gui/styles/megatoy_style.cpp
   src/gui/styles/theme.cpp
-  src/history/history_manager.cpp
   src/drop_actions.cpp
-  src/midi/midi_input_manager.cpp
-
-  src/patches/patch_document.cpp
-  src/patches/patch_session.cpp
-  src/patches/filename_utils.cpp
-  src/workspace/path_policy.cpp
-  src/workspace/workspace.cpp
-  src/patches/patch_lab.cpp
-  src/patches/persistent_parse_cache.cpp
-  src/patches/folder_watcher.cpp
-  src/patches/patch_repository.cpp
-  src/patches/patch_write.cpp
-  src/patches/filesystem_patch_storage.cpp
-  src/patches/folder_metadata.cpp
-  src/platform/file_dialog.cpp
-  src/preferences/preference_manager.cpp
-  src/preferences/preference_storage_json.cpp
-
-  src/platform/std_file_system.cpp
-  src/platform/import_pipeline.cpp
-  src/system/path_service.cpp
-  src/update/update_checker.cpp
-  src/update/release_provider.cpp
-  src/update/version.cpp
-  src/ym2612/channel.cpp
-  src/ym2612/device.cpp
-  src/ym2612/operator.cpp
-  src/ym2612/operator_edit.cpp
-  src/ym2612/operator_text.cpp
-  src/ym2612/nuked_chip.cpp
-  src/ym2612/ymfm_chip.cpp
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
-  list(APPEND MEGATOY_CORE_SOURCES
+  list(APPEND MEGATOY_LOGIC_SOURCES
     src/audio/webaudio_transport.cpp
+  )
+  list(APPEND MEGATOY_CORE_SOURCES
     src/gui/imgui_ini_bridge_web.cpp
     src/platform/web/web_platform_services.cpp
     src/platform/web/web_file_system.cpp
@@ -182,6 +194,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 else()
   list(APPEND MEGATOY_CORE_SOURCES
     src/gui/components/folder_scan_dialog.cpp
+  )
+  list(APPEND MEGATOY_LOGIC_SOURCES
     src/midi/rtmidi_backend.cpp
     src/patches/background_folder_scan.cpp
     src/patches/legacy_metadata_migration.cpp
@@ -191,14 +205,20 @@ else()
 endif()
 # Add platform-specific source files
 if(APPLE)
-  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.mm)
+  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm)
 elseif(WIN32)
-  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.cpp)
+  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
 else()
-  list(APPEND MEGATOY_CORE_SOURCES src/system/open_default_browser.cpp)
+  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
 endif()
 
+add_library(megatoy_logic STATIC ${MEGATOY_LOGIC_SOURCES})
 add_library(megatoy_core ${MEGATOY_CORE_SOURCES})
+
+target_include_directories(megatoy_logic PUBLIC
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_BINARY_DIR}
+)
 
 target_include_directories(megatoy_core PUBLIC
   ${imgui_SOURCE_DIR}
@@ -217,17 +237,23 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   if(MEGATOY_RELEASE_CPU_FLAGS)
     list(APPEND MEGATOY_CORE_RELEASE_FLAGS ${MEGATOY_RELEASE_CPU_FLAGS})
   endif()
-  target_compile_options(megatoy_core PRIVATE
-      $<$<CXX_COMPILER_ID:GNU,Clang>:${MEGATOY_CORE_RELEASE_FLAGS}>
-      $<$<CXX_COMPILER_ID:MSVC>:/O2>
-  )
+  foreach(target megatoy_logic megatoy_core)
+    target_compile_options(${target} PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang>:${MEGATOY_CORE_RELEASE_FLAGS}>
+        $<$<CXX_COMPILER_ID:MSVC>:/O2>
+    )
+  endforeach()
 endif()
 
 target_link_libraries(megatoy_core PUBLIC
+  megatoy_logic
+  imgui_lib
+)
+
+target_link_libraries(megatoy_logic PUBLIC
   ymfm_core
   nuked_opn2_core
   megatoy_resampler
-  imgui_lib
   SDL3::SDL3
   nlohmann_json::nlohmann_json
   chord_detector::chord_detector
@@ -238,8 +264,8 @@ target_link_libraries(megatoy_core PUBLIC
 )
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
-  target_link_libraries(megatoy_core PUBLIC
-    OpenGL::GL
+  target_link_libraries(megatoy_core PUBLIC OpenGL::GL)
+  target_link_libraries(megatoy_logic PUBLIC
     CURL::libcurl
     nfd
     rtmidi
@@ -247,12 +273,12 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     efsw
   )
   if(WIN32)
-    target_link_libraries(megatoy_core PUBLIC shell32)
+    target_link_libraries(megatoy_logic PUBLIC shell32)
   endif()
 endif()
 
 if(APPLE)
-  target_link_libraries(megatoy_core PUBLIC
+  target_link_libraries(megatoy_logic PUBLIC
     "-framework AppKit"
     "-framework ApplicationServices"
     "-framework CoreFoundation"
@@ -265,10 +291,13 @@ if(APPLE)
   set(MEGATOY_PRESETS_RELATIVE_PATH_VALUE "../Resources/presets")
 endif()
 
-target_compile_definitions(megatoy_core PUBLIC
+target_compile_definitions(megatoy_logic PUBLIC
   VGM_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
   USE_EMBEDDED_RESOURCES
   MEGATOY_PRESETS_RELATIVE_PATH="${MEGATOY_PRESETS_RELATIVE_PATH_VALUE}"
+)
+
+target_compile_definitions(megatoy_core PUBLIC
   $<$<PLATFORM_ID:Darwin>:GL_SILENCE_DEPRECATION>
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")

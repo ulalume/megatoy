@@ -1,8 +1,8 @@
 #include "mml_console.hpp"
 #include "formats/ym2612_format_adapter.hpp"
 #include "gui/areas.hpp"
+#include "gui/clipboard.hpp"
 #include "gui/ui_scale.hpp"
-#include "platform/clipboard.hpp"
 #include <cstring>
 #include <imgui.h>
 

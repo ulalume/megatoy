@@ -3,10 +3,9 @@
 
 #include "midi/midi_backend.hpp"
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
-
-struct AppContext;
 
 class MidiInputManager {
 public:
@@ -25,7 +24,9 @@ public:
   void shutdown();
 
   void poll();
-  void dispatch(AppContext &context);
+  /// The port list, when it has changed since the last call. The backend
+  /// sends notes directly to the audio thread.
+  std::optional<std::vector<std::string>> take_changed_ports();
 
   StatusInfo status() const;
   void request_web_midi_access();

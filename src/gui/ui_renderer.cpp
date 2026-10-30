@@ -113,16 +113,18 @@ void close_document_now(AppContext &ctx, patches::DocumentId id) {
 
 /// Close a document, asking first when it has unsaved changes.
 void request_close_document(AppContext &ctx, patches::DocumentId id) {
-  const auto *document = ctx.services.patch_session.find_document(id);
-  if (document == nullptr) {
+  const auto decision = patches::close_document_decision(
+      ctx.services.patch_session.find_document(id));
+  switch (decision.action) {
+  case patches::CloseDocumentAction::Ignore:
     return;
-  }
-  if (!document->is_modified()) {
+  case patches::CloseDocumentAction::Close:
     close_document_now(ctx, id);
     return;
+  case patches::CloseDocumentAction::Ask:
+    ctx.ui_state().confirmation_state = decision.confirmation;
+    return;
   }
-  ctx.ui_state().confirmation_state =
-      UIState::ConfirmationState::close(id, document_label(*document));
 }
 
 /**

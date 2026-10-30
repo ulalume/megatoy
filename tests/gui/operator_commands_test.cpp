@@ -4,6 +4,7 @@
 #include "ym2612/operator_text.hpp"
 #include "ym2612/patch.hpp"
 
+#include <imgui.h>
 #include <iostream>
 #include <string>
 #include <vector>

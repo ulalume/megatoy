@@ -7,12 +7,24 @@
 #include "history/history_manager.hpp"
 #include "history/snapshot_entry.hpp"
 #include "patches/patch_session.hpp"
+#include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/web/web_patch_url.hpp"
+#endif
 #include <filesystem>
 #include <memory>
 #include <string>
 
 namespace patch_actions {
 namespace detail {
+/// The page's address follows the active patch in the browser.
+inline void sync_patch_url([[maybe_unused]] AppContext &context) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::patch_url::sync_patch_to_url_if_needed(
+      context.services.patch_session.current_patch());
+#endif
+}
+
 using Snapshot = patches::PatchSession::PatchSnapshot;
 
 /// An undo step that restores into the document it was recorded in.
@@ -24,6 +36,7 @@ make_entry(const std::string &label, const std::string &merge_key,
       label, merge_key, before, after,
       [document](AppContext &ctx, const Snapshot &snapshot) {
         ctx.services.patch_session.restore_snapshot(document, snapshot);
+        sync_patch_url(ctx);
       });
 }
 } // namespace detail
@@ -51,7 +64,9 @@ inline void begin_change(AppContext &context, const std::string &label,
 }
 
 inline void commit_change(AppContext &context) {
-  context.services.history().commit_transaction(context);
+  if (context.services.history().commit_transaction(context)) {
+    detail::sync_patch_url(context);
+  }
   context.services.patch_session.pin_modified_documents();
 }
 
@@ -143,7 +158,9 @@ inline void reload_from_disk(AppContext &context, patches::DocumentId document,
                                   reloaded->capture_snapshot());
       });
   session.accept_disk_version(document, patch, /*replace=*/true);
-  history.commit_transaction(context);
+  if (history.commit_transaction(context)) {
+    detail::sync_patch_url(context);
+  }
 }
 
 /// Open a patch read from a file outside the browser, as a preview.

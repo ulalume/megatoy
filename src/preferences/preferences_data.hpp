@@ -2,8 +2,8 @@
 
 #include "audio/load_meter.hpp"
 #include "core/types.hpp"
-#include "gui/input/typing_keyboard_layout.hpp"
-#include "gui/styles/theme.hpp"
+#include "preferences/theme.hpp"
+#include "preferences/typing_keyboard_layout.hpp"
 #include "ym2612/chip.hpp"
 #include <filesystem>
 #include <string>
@@ -61,13 +61,11 @@ struct UIPreferences {
   int midi_keyboard_key = static_cast<int>(Key::C);
   int midi_keyboard_typing_octave = 4;
   int midi_keyboard_layout = static_cast<int>(ui::TypingKeyboardLayout::Qwerty);
-  ui::TypingLayoutPreference custom_typing_layout_keys = []() {
-    ui::TypingLayoutPreference pref;
-    ui::copy_builtin_to_preferences(pref, ui::qwerty_typing_layout_keys);
-    return pref;
-  }();
-  int custom_typing_octave_down_key = static_cast<int>(ImGuiKey_Comma);
-  int custom_typing_octave_up_key = static_cast<int>(ImGuiKey_Period);
+  ui::TypingLayoutPreference custom_typing_layout_keys =
+      ui::TypingLayoutPreference(ui::default_typing_layout_keys.begin(),
+                                 ui::default_typing_layout_keys.end());
+  int custom_typing_octave_down_key = ui::default_typing_octave_down_key;
+  int custom_typing_octave_up_key = ui::default_typing_octave_up_key;
 
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
     // Search and star filters are session-scoped. Excluding them prevents

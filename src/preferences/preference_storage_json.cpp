@@ -2,7 +2,6 @@
 #include "platform/platform_config.hpp"
 #include "preference_storage.hpp"
 #include <algorithm>
-#include <imgui.h>
 
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/local_storage.hpp"
@@ -245,7 +244,7 @@ public:
           }
           if (!data.ui_preferences.custom_typing_layout_keys.empty() &&
               data.ui_preferences.custom_typing_layout_keys.back() ==
-                  static_cast<int>(ImGuiKey_None) &&
+                  ui::typing_key_none &&
               data.ui_preferences.custom_typing_layout_keys.size() ==
                   ui::typing_layout_builtin_entry_count) {
             data.ui_preferences.custom_typing_layout_keys.pop_back();

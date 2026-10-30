@@ -1,8 +1,5 @@
 #include "midi/midi_input_manager.hpp"
 
-#include "app_context.hpp"
-#include "app_services.hpp"
-#include "patches/patch_session.hpp"
 #include <iostream>
 
 MidiInputManager::MidiInputManager(std::unique_ptr<MidiBackend> backend)
@@ -45,15 +42,13 @@ void MidiInputManager::poll() {
   ports_dirty_ = ports_dirty_ || ports_changed;
 }
 
-void MidiInputManager::dispatch(AppContext &context) {
-  if (ports_dirty_) {
-    context.app_state().set_connected_midi_inputs(available_ports_);
-    ports_dirty_ = false;
-  }
-
-  // Notes no longer come through here -- the backend hands them to the audio
-  // thread the moment they arrive. This only keeps the port list current.
+std::optional<std::vector<std::string>> MidiInputManager::take_changed_ports() {
   pending_events_.clear();
+  if (!ports_dirty_) {
+    return std::nullopt;
+  }
+  ports_dirty_ = false;
+  return available_ports_;
 }
 
 MidiInputManager::StatusInfo MidiInputManager::status() const {

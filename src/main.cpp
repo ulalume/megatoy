@@ -7,6 +7,7 @@
 #include "core/status.hpp"
 #include "drop_actions.hpp"
 #include "gui/envelope/envelope_curve.hpp"
+#include "gui/input/history_shortcuts.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
@@ -25,6 +26,7 @@
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
+#include <utility>
 
 namespace {
 
@@ -60,20 +62,9 @@ bool run_frame(RuntimeContext &runtime) {
 
   if (services.gui_manager.get_should_close()) {
     auto &session = services.patch_session;
-    if (const auto modified = session.modified_document_count()) {
-      const patches::PatchDocument *only = nullptr;
-      if (modified == 1) {
-        for (const auto &document : session.documents()) {
-          if (document->is_modified()) {
-            only = document.get();
-          }
-        }
-      }
-      using Confirmation = UIState::ConfirmationState;
-      app_state.ui_state().confirmation_state =
-          only != nullptr && session.can_save_in_place(*only)
-              ? Confirmation::exit_saving(only->id(), ui::document_label(*only))
-              : Confirmation::exit(modified);
+    const auto confirmation = patches::exit_confirmation(session);
+    if (confirmation.show_unsaved_changes_dialog) {
+      app_state.ui_state().confirmation_state = confirmation;
       services.gui_manager.set_should_close(false);
     } else {
       runtime.running = false;
@@ -101,10 +92,12 @@ bool run_frame(RuntimeContext &runtime) {
 #endif
 
   runtime.midi->poll();
-  runtime.midi->dispatch(*runtime.app_context);
+  if (auto ports = runtime.midi->take_changed_ports()) {
+    app_state.set_connected_midi_inputs(std::move(*ports));
+  }
 
   services.gui_manager.begin_frame(app_state.ui_state().prefs);
-  services.history().handle_shortcuts(*runtime.app_context);
+  ui::handle_history_shortcuts(*runtime.app_context);
   // The envelope graphs are drawn at this note. Pushed in before the frame
   // rather than compared against the saved preferences after it, because the
   // frame that changes the setting is the last one an idle app draws: read

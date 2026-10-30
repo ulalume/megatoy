@@ -1,11 +1,4 @@
 #include "history_manager.hpp"
-#include "app_context.hpp"
-#include "app_services.hpp"
-#include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_url.hpp"
-#endif
-#include <imgui.h>
 #include <utility>
 
 namespace history {
@@ -45,10 +38,6 @@ void HistoryManager::undo(AppContext &app_context) {
   undo_stack_.pop_back();
   entry->undo(app_context);
   redo_stack_.push_back(std::move(entry));
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(
-      app_context.services.patch_session.current_patch());
-#endif
 }
 
 void HistoryManager::redo(AppContext &app_context) {
@@ -62,38 +51,6 @@ void HistoryManager::redo(AppContext &app_context) {
   redo_stack_.pop_back();
   entry->redo(app_context);
   undo_stack_.push_back(std::move(entry));
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(
-      app_context.services.patch_session.current_patch());
-#endif
-}
-
-void HistoryManager::handle_shortcuts(AppContext &app_context) {
-  auto &io = ImGui::GetIO();
-  if (io.WantTextInput) {
-    return;
-  }
-
-  const bool primary_modifier = io.KeyCtrl || io.KeySuper;
-  if (!primary_modifier) {
-    return;
-  }
-
-  const bool shift = io.KeyShift;
-
-  if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
-    if (shift) {
-      if (can_redo()) {
-        redo(app_context);
-      }
-    } else if (can_undo()) {
-      undo(app_context);
-    }
-  } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
-    if (can_redo()) {
-      redo(app_context);
-    }
-  }
 }
 
 void HistoryManager::begin_transaction(std::string label, std::string merge_key,
@@ -106,27 +63,24 @@ void HistoryManager::begin_transaction(std::string label, std::string merge_key,
   });
 }
 
-void HistoryManager::commit_transaction(AppContext &app_context) {
+bool HistoryManager::commit_transaction(AppContext &app_context) {
   if (!active_transaction_) {
-    return;
+    return false;
   }
 
   auto factory = std::move(active_transaction_->factory);
   active_transaction_.reset();
   if (!factory) {
-    return;
+    return false;
   }
 
   auto entry = factory(app_context);
   if (!entry) {
-    return;
+    return false;
   }
 
   push_entry(std::move(entry));
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(
-      app_context.services.patch_session.current_patch());
-#endif
+  return true;
 }
 
 void HistoryManager::cancel_transaction() { active_transaction_.reset(); }

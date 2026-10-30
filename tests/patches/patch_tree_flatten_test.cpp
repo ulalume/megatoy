@@ -1,6 +1,6 @@
 #include "../test_check.hpp"
-#include "gui/components/patch_filter.hpp"
-#include "gui/components/patch_tree_flatten.hpp"
+#include "patches/patch_filter.hpp"
+#include "patches/patch_tree_flatten.hpp"
 
 #include <iostream>
 #include <string>
@@ -100,8 +100,8 @@ void test_a_filter_opens_the_directories_down_to_each_match() {
   // Nothing is open, yet the match two levels down is shown, with the
   // directories above it open.
   const auto by_query = flatten_visible_rows(tree, "zap", 0, {});
-  CHECK(paths_of(by_query) == std::vector<std::string>(
-                                  {"banks", "banks/fx", "banks/fx/zap.opm"}));
+  CHECK(paths_of(by_query) ==
+        std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
   CHECK(by_query[0].is_open);
   CHECK(by_query[1].is_open);
   CHECK(by_query[2].depth == 2);
