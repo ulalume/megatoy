@@ -14,6 +14,7 @@ using PatchEditorState = SaveExportState;
 
 struct PatchEditorContext {
   patches::PatchSession &session;
+  AudioManager &audio;
   PreferenceManager::UIPreferences &prefs;
   /// One document's editor state.
   std::function<UIState::DocumentUi &(patches::DocumentId)> document_ui;

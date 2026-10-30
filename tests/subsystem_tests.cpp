@@ -819,7 +819,7 @@ void test_buffer_size_change_reopens_the_device(TestEnvironment &env) {
   CHECK(session.note_on(c4, 127, prefs));
   const float sounding = test_transport->render_ac_peak(4410);
   CHECK(sounding > 0.0f);
-  CHECK(session.note_is_active(c4));
+  CHECK(audio.notes().published_contains(c4));
   CHECK(audio.load_meter().history().count > 0);
 
   // Nothing reopens while the frames the preference resolves to stay put.
@@ -833,8 +833,8 @@ void test_buffer_size_change_reopens_the_device(TestEnvironment &env) {
   CHECK(audio.is_running());
 
   // The note the reopen interrupted is released, not left sounding.
-  CHECK(!session.note_is_active(c4));
-  for (bool active : session.active_channels()) {
+  CHECK(!audio.notes().published_contains(c4));
+  for (bool active : audio.notes().published_channels()) {
     CHECK(!active);
   }
   CHECK(audio.load_meter().history().count == 0);
@@ -843,7 +843,7 @@ void test_buffer_size_change_reopens_the_device(TestEnvironment &env) {
   CHECK(session.note_on(c4, 127, prefs));
   const float after = test_transport->render_ac_peak(4410);
   CHECK(after > sounding * 0.5f);
-  session.release_all_notes();
+  audio.submit(audio::AudioCommand::all_notes_off());
 
   // A device that will not open at the new size keeps the one that works.
   test_transport->refuse_next_starts(1);
@@ -853,7 +853,7 @@ void test_buffer_size_change_reopens_the_device(TestEnvironment &env) {
   CHECK(test_transport->buffer_frames() == 1024);
   CHECK(session.note_on(c4, 127, prefs));
   CHECK(test_transport->render_ac_peak(4410) > sounding * 0.5f);
-  session.release_all_notes();
+  audio.submit(audio::AudioCommand::all_notes_off());
 }
 
 void test_workspace_folder_is_visible(TestEnvironment &env) {
@@ -1374,14 +1374,14 @@ void test_note_allocation(TestEnvironment &env) {
   ym2612::Note e4 = ym2612::Note::from_midi_note(64);
 
   CHECK(env.session.note_on(c4, 90, prefs));
-  CHECK(env.session.note_is_active(c4));
+  CHECK(env.audio.notes().published_contains(c4));
   CHECK(env.session.note_on(e4, 70, prefs));
-  CHECK(env.session.note_is_active(e4));
+  CHECK(env.audio.notes().published_contains(e4));
 
-  CHECK(env.session.note_off(c4));
-  CHECK(!env.session.note_is_active(c4));
-  env.session.release_all_notes();
-  for (bool active : env.session.active_channels()) {
+  CHECK(env.audio.submit(audio::AudioCommand::note_off(c4)));
+  CHECK(!env.audio.notes().published_contains(c4));
+  env.audio.submit(audio::AudioCommand::all_notes_off());
+  for (bool active : env.audio.notes().published_channels()) {
     CHECK(!active);
   }
 }

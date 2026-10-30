@@ -34,8 +34,8 @@ bool begin_folder_delete(
     const std::filesystem::path &path,
     std::function<void(bool ok, std::string error)> on_complete);
 
-/// Draw the modal shown while a deletion waits for browser storage.
-void render_folder_delete_ui();
+const std::string *folder_delete_name();
+bool take_folder_delete_finished();
 
 /**
  * Deletion tombstones.

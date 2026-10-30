@@ -104,8 +104,6 @@ public:
 
   bool ensure_directories_exist();
 
-  void reset_ui_preferences();
-
   bool is_initialized() const;
 
 private:

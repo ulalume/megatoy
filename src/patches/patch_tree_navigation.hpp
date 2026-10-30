@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace ui::selector_detail {
+namespace patches {
 
 struct TreeRevealState {
   /// The current patch, and whether the tree has yet to be brought to it. A
@@ -31,4 +31,4 @@ std::size_t drop_folder_index(const std::vector<TreeRow> &rows,
                               std::size_t index);
 std::size_t last_row_under(const std::vector<TreeRow> &rows, std::size_t index);
 
-} // namespace ui::selector_detail
+} // namespace patches

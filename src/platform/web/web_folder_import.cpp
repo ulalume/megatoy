@@ -3,8 +3,6 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 
 #include "core/status.hpp"
-#include "gui/clipboard.hpp"
-#include "gui/components/common.hpp"
 #include "platform/import_pipeline.hpp"
 #include "platform/web/web_storage_persistence.hpp"
 
@@ -16,9 +14,7 @@
 #include <deque>
 #include <emscripten.h>
 #include <filesystem>
-#include <imgui.h>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,13 +24,6 @@ namespace platform::web {
 EM_JS_DEPS(megatoy_folder_import, "$stringToNewUTF8");
 
 namespace {
-
-enum class ImportPhase : int {
-  AwaitingConfirmation = 0,
-  Copying = 1,
-  Validating = 2,
-  Syncing = 3,
-};
 
 struct PendingImport {
   std::function<void(FolderImportResult)> on_complete;
@@ -67,15 +56,6 @@ struct ImportRequest {
   std::unique_ptr<import_pipeline::ImportStager> stager;
 };
 
-struct ResultReport {
-  std::string folder_name;
-  std::filesystem::path path;
-  std::size_t imported_count = 0;
-  std::size_t filtered_count = 0;
-  std::vector<import_pipeline::ValidationFailure> failures;
-  bool open = true;
-};
-
 /**
  * The stretch between "Import Folder..." was clicked and the browser handing
  * us a file list, which for a large tree is minutes of total silence: Chrome
@@ -84,11 +64,6 @@ struct ResultReport {
  * frozen and the user reloads -- which leaves the chooser flow pending and
  * makes the next click do nothing at all.
  */
-enum class SelectionPhase : int {
-  WaitingForPicker = 0,
-  Scanning = 1,
-};
-
 struct PendingSelection {
   /// Identity handed to JavaScript. Deliberately NOT the slot address: a
   /// cancelled selection frees the slot, and the next selection can land on
@@ -115,11 +90,9 @@ std::function<void(FolderImportResult)> g_drop_handler;
 std::unique_ptr<ImportRequest> g_active_import;
 std::unique_ptr<PendingSelection> g_pending_selection;
 std::uintptr_t g_next_selection_token = 1;
-std::deque<ResultReport> g_result_reports;
-bool g_close_import_popup = false;
-bool g_close_selection_popup = false;
-
-constexpr const char *kSelectionPopupId = "Import Folder###ImportSelection";
+std::deque<FolderImportResult> g_result_reports;
+bool g_import_finished = false;
+bool g_selection_finished = false;
 
 /// Null when a selection or an import is already running; the caller reports
 /// that to the user rather than opening a second picker behind the first.
@@ -140,7 +113,7 @@ void end_pending_selection() {
     return;
   }
   g_pending_selection.reset();
-  g_close_selection_popup = true;
+  g_selection_finished = true;
 }
 
 bool selection_matches(void *token) {
@@ -156,14 +129,6 @@ void notify_import_busy() {
     return;
   }
   megatoy::status::warning("A folder import is already in progress.");
-}
-
-std::string format_megabytes(std::uint64_t bytes) {
-  std::ostringstream stream;
-  stream.setf(std::ios::fixed);
-  stream.precision(bytes >= 10 * 1024 * 1024 ? 1 : 2);
-  stream << static_cast<double>(bytes) / (1024.0 * 1024.0);
-  return stream.str();
 }
 
 FolderImportResult make_result(const ImportRequest &request, bool ok,
@@ -208,13 +173,7 @@ namespace {
 void dispatch_result(FolderImportResult result) {
   if (result.ok &&
       (result.filtered_count > 0 || !result.validation_failures.empty())) {
-    g_result_reports.push_back(ResultReport{
-        .folder_name = result.folder_name,
-        .path = result.path,
-        .imported_count = result.file_count,
-        .filtered_count = result.filtered_count,
-        .failures = result.validation_failures,
-    });
+    g_result_reports.push_back(result);
   }
 
   if (g_active_import && g_active_import->is_drop) {
@@ -238,7 +197,7 @@ void finish_active(bool ok, bool cancelled, std::string error) {
     return;
   }
   auto result = make_result(*g_active_import, ok, cancelled, std::move(error));
-  g_close_import_popup = true;
+  g_import_finished = true;
   megatoy_import_settled_js(g_active_import.get());
   dispatch_result(std::move(result));
   if (ok) {
@@ -1029,262 +988,89 @@ EM_JS(void, megatoy_install_drop_import_js, (const char *destination), {
 });
 // clang-format on
 
-void render_folder_import_ui() {
-  run_validation_slice();
+void advance_folder_import() { run_validation_slice(); }
 
-  if (!g_active_import && g_close_import_popup) {
-    const char *title = ImGui::IsPopupOpen("Importing Folder")
-                            ? "Importing Folder"
-                            : "Import Folder";
-    if (ImGui::IsPopupOpen(title) &&
-        ImGui::BeginPopupModal(title, nullptr,
-                               ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_AlwaysAutoResize)) {
-      ImGui::CloseCurrentPopup();
-      ImGui::EndPopup();
-    }
-    g_close_import_popup = false;
+bool take_folder_import_finished() {
+  return !g_active_import && std::exchange(g_import_finished, false);
+}
+
+bool take_folder_selection_finished() {
+  return !g_pending_selection && std::exchange(g_selection_finished, false);
+}
+
+std::optional<FolderSelectionProgress> folder_selection_progress() {
+  if (!g_pending_selection || g_active_import ||
+      g_pending_selection->hidden.load(std::memory_order_relaxed)) {
+    return std::nullopt;
   }
+  const auto &selection = *g_pending_selection;
+  return FolderSelectionProgress{
+      selection.phase.load(std::memory_order_relaxed), selection.is_drop,
+      selection.scanned.load(std::memory_order_relaxed),
+      selection.total.load(std::memory_order_relaxed)};
+}
 
-  if (!g_pending_selection && g_close_selection_popup) {
-    if (ImGui::IsPopupOpen(kSelectionPopupId) &&
-        ImGui::BeginPopupModal(kSelectionPopupId, nullptr,
-                               ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_AlwaysAutoResize)) {
-      ImGui::CloseCurrentPopup();
-      ImGui::EndPopup();
-    }
-    g_close_selection_popup = false;
+void dismiss_folder_selection() {
+  if (g_pending_selection) {
+    g_pending_selection->hidden.store(true, std::memory_order_relaxed);
   }
+}
 
-  // The active-import modals take over the moment the selection resolves; by
-  // construction the two never coexist, but the guard keeps it that way. A
-  // hidden slot (cancelled while the browser owned the flow) renders nothing.
-  if (g_pending_selection && !g_active_import &&
-      !g_pending_selection->hidden.load(std::memory_order_relaxed)) {
-    auto &selection = *g_pending_selection;
-    // Open on the edge only, as with the import modals below.
-    if (!ImGui::IsPopupOpen(kSelectionPopupId)) {
-      ImGui::OpenPopup(kSelectionPopupId);
-    }
-    ui::center_next_window();
-    if (ImGui::BeginPopupModal(kSelectionPopupId, nullptr,
-                               ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_AlwaysAutoResize)) {
-      ui::force_center_window();
-      const auto phase = selection.phase.load(std::memory_order_relaxed);
-      if (phase == SelectionPhase::WaitingForPicker) {
-        ImGui::TextUnformatted("Choose a folder to import.");
-        ImGui::TextDisabled("Large folders can take the browser a while to "
-                            "read after you choose.");
-        ImGui::TextDisabled(
-            "You can close this dialog; the import will continue.");
-        ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
-                           ImVec2(360, 0));
-      } else {
-        const auto scanned = static_cast<unsigned long long>(
-            selection.scanned.load(std::memory_order_relaxed));
-        const auto total = static_cast<unsigned long long>(
-            selection.total.load(std::memory_order_relaxed));
-        if (total == 0) {
-          if (selection.is_drop) {
-            ImGui::Text("Scanning dropped folder: %llu files...", scanned);
-          } else {
-            ImGui::Text("Scanning selection: %llu files...", scanned);
-          }
-          ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
-                             ImVec2(360, 0));
-        } else {
-          ImGui::Text("Scanning selection: %llu / %llu files...", scanned,
-                      total);
-          ImGui::ProgressBar(std::clamp(static_cast<float>(scanned) /
-                                            static_cast<float>(total),
-                                        0.0f, 1.0f),
-                             ImVec2(360, 0));
-        }
-      }
-      ImGui::Spacing();
-      if (phase == SelectionPhase::WaitingForPicker) {
-        // The browser owns the chooser flow and cannot be stopped from here,
-        // so this button only dismisses the dialog. The slot stays held --
-        // hidden -- which keeps a second picker from being queued behind the
-        // pending one, and the dialog returns when the files arrive. To
-        // abort, the user cancels the browser's own dialog, whose cancel
-        // event frees the slot.
-        if (ImGui::Button("Close", ImVec2(120, 0))) {
-          ImGui::CloseCurrentPopup();
-          selection.hidden.store(true, std::memory_order_relaxed);
-        }
-      } else if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-        // The files are already ours; destroying the slot is enough. Any
-        // JavaScript still holding the token sees an unknown token, reads
-        // it as abandoned and unwinds silently.
-        selection.abandoned.store(true, std::memory_order_relaxed);
-        ImGui::CloseCurrentPopup();
-        end_pending_selection();
-      }
-      ImGui::EndPopup();
-    }
+void cancel_folder_selection() {
+  if (g_pending_selection) {
+    g_pending_selection->abandoned.store(true, std::memory_order_relaxed);
+    end_pending_selection();
   }
+}
 
+std::optional<FolderImportProgress> folder_import_progress() {
+  if (!g_active_import) {
+    return std::nullopt;
+  }
+  const auto &request = *g_active_import;
+  return FolderImportProgress{
+      request.phase.load(std::memory_order_relaxed),
+      request.folder_name,
+      request.kept_count,
+      request.kept_bytes,
+      request.filtered_count,
+      request.quota_remaining,
+      request.current_files.load(std::memory_order_relaxed),
+      request.total_files.load(std::memory_order_relaxed),
+      request.current_bytes.load(std::memory_order_relaxed),
+      request.total_bytes.load(std::memory_order_relaxed),
+      request.cancel_requested.load(std::memory_order_relaxed)};
+}
+
+void decide_folder_import(bool proceed) {
+  if (!g_active_import) {
+    return;
+  }
+  if (proceed) {
+    g_active_import->phase.store(ImportPhase::Copying,
+                                 std::memory_order_relaxed);
+  }
+  megatoy_import_decide_js(g_active_import.get(), proceed ? 1 : 0);
+  if (!proceed) {
+    abort_active(true, {});
+  }
+}
+
+void cancel_folder_import() {
   if (g_active_import) {
-    auto &request = *g_active_import;
-    const auto phase = request.phase.load(std::memory_order_relaxed);
-    if (phase == ImportPhase::AwaitingConfirmation) {
-      // Open on the edge only: re-opening an already-open popup every frame
-      // resets popup state and can swallow clicks (see confirmation_dialog).
-      if (!ImGui::IsPopupOpen("Import Folder")) {
-        ImGui::OpenPopup("Import Folder");
-      }
-      ui::center_next_window();
-      if (ImGui::BeginPopupModal("Import Folder", nullptr,
-                                 ImGuiWindowFlags_NoMove |
-                                     ImGuiWindowFlags_NoResize |
-                                     ImGuiWindowFlags_AlwaysAutoResize)) {
-        ui::force_center_window();
-        ImGui::TextWrapped("Import %zu files (%s MB) from \"%s\"?",
-                           request.kept_count,
-                           format_megabytes(request.kept_bytes).c_str(),
-                           request.folder_name.c_str());
-        if (request.filtered_count > 0) {
-          ImGui::TextDisabled("%zu unrelated files skipped",
-                              request.filtered_count);
-        }
-        if (request.quota_remaining >= 0) {
-          ImGui::TextDisabled("Browser storage remaining: %s MB",
-                              format_megabytes(static_cast<std::uint64_t>(
-                                                   request.quota_remaining))
-                                  .c_str());
-        }
-        ImGui::Spacing();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-          megatoy_import_decide_js(&request, 0);
-          ImGui::CloseCurrentPopup();
-          abort_active(true, {});
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Import", ImVec2(120, 0))) {
-          request.phase.store(ImportPhase::Copying, std::memory_order_relaxed);
-          megatoy_import_decide_js(&request, 1);
-          ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-      }
-    } else {
-      if (!ImGui::IsPopupOpen("Importing Folder")) {
-        ImGui::OpenPopup("Importing Folder");
-      }
-      ui::center_next_window();
-      if (ImGui::BeginPopupModal("Importing Folder", nullptr,
-                                 ImGuiWindowFlags_NoMove |
-                                     ImGuiWindowFlags_NoResize |
-                                     ImGuiWindowFlags_AlwaysAutoResize)) {
-        ui::force_center_window();
-        const auto current =
-            request.current_files.load(std::memory_order_relaxed);
-        const auto total = request.total_files.load(std::memory_order_relaxed);
-        const char *label = phase == ImportPhase::Copying      ? "Copying"
-                            : phase == ImportPhase::Validating ? "Validating"
-                                                               : "Saving";
-        if (request.cancel_requested.load(std::memory_order_relaxed)) {
-          ImGui::TextUnformatted("Cancelling...");
-        } else {
-          ImGui::Text("%s %zu/%zu...", label, current, total);
-        }
-        float fraction = total == 0 ? 0.0f
-                                    : static_cast<float>(current) /
-                                          static_cast<float>(total);
-        if (phase == ImportPhase::Copying) {
-          const auto current_bytes =
-              request.current_bytes.load(std::memory_order_relaxed);
-          const auto total_bytes =
-              request.total_bytes.load(std::memory_order_relaxed);
-          if (total_bytes > 0) {
-            fraction = static_cast<float>(current_bytes) /
-                       static_cast<float>(total_bytes);
-          }
-        }
-        ImGui::ProgressBar(std::clamp(fraction, 0.0f, 1.0f), ImVec2(360, 0));
-        ImGui::Spacing();
-        ImGui::BeginDisabled(
-            request.cancel_requested.load(std::memory_order_relaxed));
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-          request.cancel_requested.store(true, std::memory_order_relaxed);
-        }
-        ImGui::EndDisabled();
-        ImGui::EndPopup();
-      }
-    }
+    g_active_import->cancel_requested.store(true, std::memory_order_relaxed);
   }
+}
 
-  if (!g_result_reports.empty() && g_result_reports.front().open &&
-      !g_close_import_popup) {
-    ImGui::OpenPopup("Folder Import Complete");
-    g_result_reports.front().open = false;
-  }
+const FolderImportResult *folder_import_report() {
+  return g_result_reports.empty() ? nullptr : &g_result_reports.front();
+}
+
+bool folder_import_report_ready() { return !g_import_finished; }
+
+void dismiss_folder_import_report() {
   if (!g_result_reports.empty()) {
-    auto &report = g_result_reports.front();
-    ui::center_next_window();
-    // AlwaysAutoResize keeps the dialog hugging its content; without it the
-    // window inherits whatever size the ini remembered.
-    if (ImGui::BeginPopupModal("Folder Import Complete", nullptr,
-                               ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_AlwaysAutoResize)) {
-      ui::force_center_window();
-      ImGui::TextWrapped("Imported %zu files into %s.", report.imported_count,
-                         report.folder_name.c_str());
-      if (report.filtered_count > 0) {
-        ImGui::Text("%zu files skipped (unsupported type)",
-                    report.filtered_count);
-      }
-      if (!report.failures.empty()) {
-        ImGui::Text("%zu files failed validation:", report.failures.size());
-        // The list hugs its rows up to a cap, then scrolls.
-        const float row_height = ImGui::GetTextLineHeightWithSpacing();
-        const float list_height = std::min(
-            200.0f,
-            row_height * (static_cast<float>(report.failures.size()) + 0.5f) +
-                ImGui::GetStyle().WindowPadding.y * 2.0f);
-        ImGui::BeginChild("validation_failures", ImVec2(640, list_height),
-                          true);
-        for (const auto &failure : report.failures) {
-          // ASCII separator: the bundled font has no em-dash glyph.
-          ImGui::BulletText("%s - %s",
-                            failure.relative_path.generic_string().c_str(),
-                            failure.reason.c_str());
-        }
-        ImGui::EndChild();
-      }
-      ImGui::Spacing();
-      if (ImGui::Button("OK", ImVec2(120, 0))) {
-        ImGui::CloseCurrentPopup();
-        g_result_reports.pop_front();
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("Copy List", ImVec2(120, 0))) {
-        std::string text = "Imported " + std::to_string(report.imported_count) +
-                           " files into " + report.folder_name + ".\n";
-        if (report.filtered_count > 0) {
-          text += std::to_string(report.filtered_count) +
-                  " files skipped (unsupported type)\n";
-        }
-        if (!report.failures.empty()) {
-          text += std::to_string(report.failures.size()) +
-                  " files failed validation:\n";
-          for (const auto &failure : report.failures) {
-            text += failure.relative_path.generic_string() + " - " +
-                    failure.reason + "\n";
-          }
-        }
-        platform::clipboard::copy_text(text);
-        megatoy::status::success("Copied the import report.");
-      }
-      ImGui::EndPopup();
-    }
+    g_result_reports.pop_front();
   }
 }
 

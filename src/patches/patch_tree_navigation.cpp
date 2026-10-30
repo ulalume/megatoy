@@ -1,6 +1,6 @@
 #include "patch_tree_navigation.hpp"
 
-namespace ui::selector_detail {
+namespace patches {
 
 std::optional<std::vector<std::string>> reveal_tree_selection(
     TreeRevealState &state, const std::vector<patches::PatchEntry> &tree,
@@ -61,4 +61,4 @@ std::size_t last_row_under(const std::vector<TreeRow> &rows,
   return last;
 }
 
-} // namespace ui::selector_detail
+} // namespace patches

@@ -40,11 +40,11 @@ struct PatchTreeCache {
   /// Bumped on every expand/collapse, so the rows rebuild on the next frame.
   std::uint64_t open_revision = 1;
   std::unordered_set<std::string> open_directories;
-  std::vector<TreeRow> rows;
+  std::vector<patches::TreeRow> rows;
 
-  TreeRevealState reveal_state;
+  patches::TreeRevealState reveal_state;
 
-  const std::vector<TreeRow> &
+  const std::vector<patches::TreeRow> &
   get(const std::vector<patches::PatchEntry> &source, std::uint64_t revision,
       const std::string &query_lower, int min_star_rating) {
     if (tree != &source || repository_revision != revision ||
@@ -55,8 +55,8 @@ struct PatchTreeCache {
       search_query = query_lower;
       star_filter = min_star_rating;
       built_open_revision = open_revision;
-      rows = flatten_visible_rows(source, query_lower, min_star_rating,
-                                  open_directories);
+      rows = patches::flatten_visible_rows(source, query_lower, min_star_rating,
+                                           open_directories);
     }
     return rows;
   }
@@ -90,8 +90,8 @@ struct PatchTreeCache {
   bool reveal(const std::vector<patches::PatchEntry> &source,
               const std::string &selection, std::uint64_t revision,
               bool filtering) {
-    const auto above = reveal_tree_selection(reveal_state, source, selection,
-                                             revision, filtering);
+    const auto above = patches::reveal_tree_selection(
+        reveal_state, source, selection, revision, filtering);
     if (!above) {
       return false;
     }
@@ -192,7 +192,7 @@ bool row_selectable(const char *label) {
  * the level above, a folder's and a file's alike; a folder's arrow stands
  * out to the left of its name.
  */
-float row_indent(const TreeRow &row) {
+float row_indent(const patches::TreeRow &row) {
   const float label_spacing = ImGui::GetTreeNodeToLabelSpacing();
   const float name_x = label_spacing + ui::scale::px(kDepthIndent) *
                                            static_cast<float>(row.depth);
@@ -201,8 +201,9 @@ float row_indent(const TreeRow &row) {
 
 /// While filtering, every directory leading to a match is shown open, and a
 /// toggle is not kept: what was open before comes back with the filter off.
-void render_directory_row(PatchSelectorContext &context, const TreeRow &row,
-                          PatchTreeCache &cache, bool filtering) {
+void render_directory_row(PatchSelectorContext &context,
+                          const patches::TreeRow &row, PatchTreeCache &cache,
+                          bool filtering) {
   const auto &item = *row.entry;
 
   ImGui::PushID(item.relative_path.c_str());
@@ -238,7 +239,8 @@ void render_directory_row(PatchSelectorContext &context, const TreeRow &row,
   ImGui::PopID();
 }
 
-void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
+void render_patch_row(PatchSelectorContext &context,
+                      const patches::TreeRow &row) {
   const auto &item = *row.entry;
 
   ImGui::PushID(item.relative_path.c_str());
@@ -314,9 +316,9 @@ struct DropHover {
  * True with `hover` filled while one that folder can take is held over it.
  */
 bool row_drop_target(PatchSelectorContext &context,
-                     const std::vector<TreeRow> &rows, std::size_t index,
-                     const ImRect &rect, DropHover &hover) {
-  const std::size_t folder_index = drop_folder_index(rows, index);
+                     const std::vector<patches::TreeRow> &rows,
+                     std::size_t index, const ImRect &rect, DropHover &hover) {
+  const std::size_t folder_index = patches::drop_folder_index(rows, index);
   if (folder_index == std::string::npos) {
     return false;
   }
@@ -371,9 +373,9 @@ void draw_drop_frame(const ImVec2 &min, const ImVec2 &max) {
 /// Scrolls row `index`, in a list starting at `list_top`, into view: only as
 /// far as it takes for a row partly in view, otherwise to the middle.
 void scroll_to_row(std::size_t index, float list_top) {
-  if (const auto scroll =
-          scroll_for_row(index, list_top, row_height(),
-                         ImGui::GetWindowHeight(), ImGui::GetScrollY())) {
+  if (const auto scroll = patches::scroll_for_row(index, list_top, row_height(),
+                                                  ImGui::GetWindowHeight(),
+                                                  ImGui::GetScrollY())) {
     ImGui::SetScrollY(*scroll);
   }
 }
@@ -455,8 +457,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
         static_cast<float>(hover->row - hover->folder) * row_height;
     const float bottom =
         hover->row_top +
-        static_cast<float>(last_row_under(rows, hover->folder) - hover->row +
-                           1) *
+        static_cast<float>(patches::last_row_under(rows, hover->folder) -
+                           hover->row + 1) *
             row_height;
     draw_drop_frame(
         ImVec2(left + row_indent(rows[hover->folder]),

@@ -120,41 +120,6 @@ void test_last_save_directory_falls_back_when_the_remembered_folder_is_gone(
         megatoy::system::PathService::default_documents_directory());
 }
 
-void test_ui_reset_preserves_velocity_and_typing_configuration(
-    const fs::path &root) {
-  TestEnvironment env(root);
-  PreferenceManager preferences(env.directories);
-  auto ui = preferences.ui_preferences();
-  ui.show_patch_editor = false;
-  ui.show_waveform = false;
-  ui.ui_scale = 2.0f;
-  ui.use_mod_wheel = true;
-  ui.use_velocity = false;
-  ui.velocity_sensitivity_depth = 45;
-  ui.steal_oldest_note_when_full = false;
-  ui.midi_keyboard_layout = static_cast<int>(ui::TypingKeyboardLayout::Custom);
-  ui.custom_typing_layout_keys = {ImGuiKey_Z, ImGuiKey_X, ImGuiKey_C};
-  ui.custom_typing_octave_down_key = ImGuiKey_LeftBracket;
-  ui.custom_typing_octave_up_key = ImGuiKey_RightBracket;
-  preferences.set_ui_preferences(ui);
-  preferences.set_layout("Sound");
-  preferences.set_theme(ui::styles::ThemeId::MegatoyLight);
-  preferences.reset_ui_preferences();
-  UIPreferences expected;
-  expected.use_velocity = ui.use_velocity;
-  expected.velocity_sensitivity_depth = ui.velocity_sensitivity_depth;
-  expected.steal_oldest_note_when_full = ui.steal_oldest_note_when_full;
-  expected.midi_keyboard_layout = ui.midi_keyboard_layout;
-  expected.custom_typing_layout_keys = ui.custom_typing_layout_keys;
-  expected.custom_typing_octave_down_key = ui.custom_typing_octave_down_key;
-  expected.custom_typing_octave_up_key = ui.custom_typing_octave_up_key;
-  CHECK(preferences.ui_preferences() == expected);
-  CHECK(preferences.layout() == "Sound");
-  CHECK(preferences.theme() == ui::styles::ThemeId::MegatoyLight);
-  PreferenceManager loaded(env.directories);
-  CHECK(loaded.ui_preferences() == expected);
-}
-
 void test_malformed_reload_and_failed_save_preserve_current_settings(
     const fs::path &root) {
   TestEnvironment env(root);
@@ -196,7 +161,6 @@ int main() {
                                                                  "workspace");
   test_last_save_directory_falls_back_when_the_remembered_folder_is_gone(
       root / "save");
-  test_ui_reset_preserves_velocity_and_typing_configuration(root / "reset");
   test_malformed_reload_and_failed_save_preserve_current_settings(root /
                                                                   "failures");
   fs::remove_all(root);

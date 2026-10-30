@@ -469,4 +469,30 @@ bool PatchRepository::patch_name_conflicts(const std::string &name) const {
   return false;
 }
 
+const PatchEntry *
+PatchRepository::find_entry(const std::string &relative_path) const {
+  if (relative_path.empty()) {
+    return nullptr;
+  }
+  const auto search = [&](const auto &self,
+                          const std::vector<PatchEntry> &entries,
+                          bool by_source) -> const PatchEntry * {
+    for (const auto &entry : entries) {
+      if (!entry.is_directory &&
+          (by_source ? entry.source_relative_path == relative_path
+                     : entry.relative_path == relative_path)) {
+        return &entry;
+      }
+      if (const auto *found = self(self, entry.children, by_source)) {
+        return found;
+      }
+    }
+    return nullptr;
+  };
+  if (const auto *exact = search(search, tree(), false)) {
+    return exact;
+  }
+  return search(search, tree(), true);
+}
+
 } // namespace patches

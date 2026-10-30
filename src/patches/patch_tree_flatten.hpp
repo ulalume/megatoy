@@ -10,10 +10,10 @@
 #include <unordered_set>
 #include <vector>
 
-namespace ui::selector_detail {
+namespace patches {
 
 struct TreeRow {
-  const patches::PatchEntry *entry;
+  const PatchEntry *entry;
   int depth; ///< 0 = workspace root level.
   bool is_directory;
   bool is_open; ///< Directories only.
@@ -45,4 +45,4 @@ std::optional<std::vector<std::string>>
 directories_above(const std::vector<patches::PatchEntry> &tree,
                   const std::string &relative_path);
 
-} // namespace ui::selector_detail
+} // namespace patches

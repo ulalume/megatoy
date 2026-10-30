@@ -1,4 +1,3 @@
-# src/platform/web is built with the GUI, and logic may still include it there.
 set(logic_directories core formats ym2612 audio patches workspace history
                       preferences midi system update platform)
 set(ui_includes
@@ -14,10 +13,6 @@ foreach(directory IN LISTS logic_directories)
        "${MEGATOY_SOURCE_DIR}/src/${directory}/*.mm")
   foreach(source IN LISTS sources)
     file(RELATIVE_PATH relative "${MEGATOY_SOURCE_DIR}" "${source}")
-    if(relative MATCHES "^src/platform/web/")
-      continue()
-    endif()
-
     file(READ "${source}" text)
     if(text MATCHES
        "#[ \t]*include[ \t]*[<\"][^>\"\n]*(${ui_includes})")

@@ -6,7 +6,7 @@
 
 namespace {
 
-using namespace ui::selector_detail;
+using namespace patches;
 
 std::vector<patches::PatchEntry> make_tree() {
   patches::PatchEntry patch{.relative_path = "root/sub/lead.gin"};

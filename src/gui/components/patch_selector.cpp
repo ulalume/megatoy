@@ -76,7 +76,7 @@ void render_tree(PatchSelectorContext &context) {
   ImGui::PopStyleVar();
   if (visible) {
     const std::string query_lower =
-        search_key(context.prefs.metadata_search_query);
+        patches::search_key(context.prefs.metadata_search_query);
     const bool rendered =
         render_patch_tree(context.repository.tree(), context, query_lower,
                           context.prefs.metadata_star_filter);
