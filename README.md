@@ -14,8 +14,6 @@ A comprehensive **YM2612/OPN2 patch editor** for the Sega Genesis/Mega Drive sou
 
 ## Patch Lab (Experimental)
 
-![Patch Lab Screenshot](https://raw.githubusercontent.com/ulalume/megatoy/main/docs/patch_lab.png)
-
 Access via **View ▸ Patch Lab**.
 Changes apply directly to your active patch with full undo support.
 
