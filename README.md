@@ -20,9 +20,9 @@ Access via **View ▸ Patch Lab**.
 Changes apply directly to your active patch with full undo support.
 
 - **Random** – Generates a new patch each time.
-- **Mix** – Mixes two patches from your patches by randomly choosing parameters from Patch A and Patch B. You can pick both sources via combo boxes and reuse seeds.
+- **Mix** – Mixes two patches, taking each parameter from one of them at random. Pick them from a list or drag them from the browser.
 - **Morph** – Interpolates between two patches using a 0–1 blend slider with smooth parameter transitions.
-- **Mutate** – Applies subtle or extreme perturbations to the current patch. Adjust variation depth, probability, and algorithm-lock toggles to taste, or repeat with a fixed seed for reproducible tweaks.
+- **Mutate** – Applies subtle or extreme perturbations to the current patch. Adjust variation depth, probability, and algorithm-lock toggles to taste.
 
 ## Key Features
 

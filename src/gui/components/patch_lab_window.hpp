@@ -46,15 +46,11 @@ struct PatchLabState {
   std::uint64_t next_result_id = 1;
 
   // Randomize
-  int random_seed = -1;
   int random_template_iterations = 4;
 
   // Shared sources for blend/morph
   PatchLabSource source_a;
   PatchLabSource source_b;
-  int merge_seed = -1;
-  std::uint32_t merge_last_seed = 0;
-  bool merge_has_result = false;
   std::string merge_error;
 
   float morph_mix = 0.5f;
