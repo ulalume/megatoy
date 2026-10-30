@@ -159,8 +159,13 @@ ImU32 color_from_slider_state(
              : ImGui::GetColorU32(ImGuiCol_FrameBgActive);
 }
 
-void format_ms(char (&out)[16], double ms) {
-  std::snprintf(out, sizeof(out), "%dms", static_cast<int>(ms + 0.5));
+/// With a grid `step` below one, fractions of a ms.
+void format_ms(char (&out)[16], double ms, double step) {
+  if (step < 1.0) {
+    std::snprintf(out, sizeof(out), "%.1fms", ms);
+  } else {
+    std::snprintf(out, sizeof(out), "%dms", static_cast<int>(ms + 0.5));
+  }
 }
 
 /// The one subdued colour for every caption along the top strip.
@@ -185,7 +190,7 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
   const int lines = static_cast<int>(drawn_ms / step + 1e-6);
 
   char widest[16];
-  format_ms(widest, step * static_cast<int>(drawn_ms / step + 1e-6));
+  format_ms(widest, step * static_cast<int>(drawn_ms / step + 1e-6), step);
   const float needed = ImGui::CalcTextSize(widest).x + ui::scale::px(6.0f);
   const float pitch = plot.width() * static_cast<float>(step / drawn_ms);
   const int label_every =
@@ -200,7 +205,7 @@ void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
       continue;
     }
     char label[16];
-    format_ms(label, ms);
+    format_ms(label, ms, step);
     if (x + ImGui::CalcTextSize(label).x > label_limit_x) {
       continue; // would hang off the right edge, or run into the note
     }
@@ -444,7 +449,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   // Before BeginChild, so the ID comes from the operator's stack rather than
   // from the child window.
   EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
-  const EnvelopeCurve &curve = slot.curve.get(op);
+  const EnvelopeCurve &curve = slot.curve.get(op, slot.drawn_span_ms);
 
   // A parameter is lit by its slider or by the handle that sets it, whichever
   // is the stronger: the two are pointed at in the same place on the graph.
@@ -624,7 +629,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
   };
-  return ui::envelope::handle_layout(curve, plot, op.ssg_enable, metrics);
+  return ui::envelope::handle_layout(curve, plot, metrics);
 }
 
 void draw_envelope_handle(const ui::envelope::EnvelopeHandles &handles,
