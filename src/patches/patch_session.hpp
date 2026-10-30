@@ -94,6 +94,11 @@ public:
                            bool pinned = true);
   /// A new document holding default_patch(), as a fresh launch opens it.
   DocumentId open_default_document(bool pinned = true);
+  /**
+   * An untitled document holding default_patch(), activated and kept open.
+   * Like create_patch_in(), it takes over an unedited preview.
+   */
+  DocumentId open_new_document();
   /// A new document loaded from `entry`; empty when it cannot be read.
   std::optional<DocumentId> open_entry(const PatchEntry &entry,
                                        bool pinned = true);

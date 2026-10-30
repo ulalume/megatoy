@@ -326,6 +326,15 @@ void render_main_menu(MainMenuContext &context) {
     const bool save_disabled = is_user_patch && !is_patch_modified;
     if (begin_bar_menu("File")) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
+      // The browser keeps Ctrl+N for a new window of its own.
+      const char *new_shortcut = megatoy::platform::is_web()
+                                     ? nullptr
+                                     : (mac_behavior ? "Cmd+N" : "Ctrl+N");
+      if (ImGui::MenuItem("New Patch", new_shortcut) && context.new_patch) {
+        context.new_patch();
+      }
+      ImGui::Separator();
+
       const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
 #if defined(MEGATOY_PLATFORM_WEB)
       // The two ways out of the editor, as the patch tree names them. The

@@ -126,6 +126,12 @@ DocumentId PatchSession::open_default_document(bool pinned) {
   return document.id();
 }
 
+DocumentId PatchSession::open_new_document() {
+  auto patch = default_patch();
+  patch.name.clear();
+  return place_document(patch, {}, {}, /*pinned=*/true);
+}
+
 std::optional<DocumentId> PatchSession::open_entry(const PatchEntry &entry,
                                                    bool pinned) {
   ym2612::Patch patch;

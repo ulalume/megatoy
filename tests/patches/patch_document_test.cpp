@@ -649,6 +649,27 @@ void test_new_patch_opens_pinned() {
   CHECK(session.documents().size() == before);
 }
 
+void test_new_document_is_untitled() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  const auto before = session.documents().size();
+  const auto id = session.open_new_document();
+  CHECK(session.active_document_id() == id);
+  CHECK(session.active_document().pinned());
+  CHECK(session.current_patch_path().empty());
+  CHECK(session.current_patch().name.empty());
+  CHECK(session.current_patch().instrument ==
+        session.default_patch().instrument);
+  CHECK(!session.is_modified());
+  // The unedited preview the session started with was taken over.
+  CHECK(session.documents().size() == before);
+
+  // A second one is another document.
+  CHECK(session.open_new_document() != id);
+  CHECK(session.documents().size() == before + 1);
+}
+
 void test_open_documents_round_trip() {
   BrowserFixture fixture;
   auto &env = fixture.env;
@@ -751,6 +772,7 @@ int main() {
   test_closing_the_last_leaves_a_default_preview();
   test_dropped_patch_follows_the_preview_rules();
   test_new_patch_opens_pinned();
+  test_new_document_is_untitled();
   test_open_documents_round_trip();
   test_nothing_to_restore();
   test_find_document_with_sound();

@@ -75,6 +75,13 @@ inline void reveal_document(AppContext &context, patches::DocumentId document) {
   context.state.ui_state().reveal_document = document;
 }
 
+/// Open an untitled patch and show its editor.
+inline void new_patch(AppContext &context) {
+  context.services.history().cancel_transaction();
+  reveal_document(context,
+                  context.services.patch_session.open_new_document());
+}
+
 /// Open a browser entry by the preview rules; `pinned` keeps it open.
 inline bool open_entry(AppContext &context, const patches::PatchEntry &entry,
                        bool pinned) {

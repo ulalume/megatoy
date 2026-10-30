@@ -36,6 +36,8 @@ struct MainMenuContext {
   bool &open_sound_preferences;
   /// Frames the audio device uses when the buffer preference is unset.
   int default_audio_buffer_frames = 0;
+  /// Open an untitled patch in an editor.
+  std::function<void()> new_patch;
   /// Close the active document, asking first when it has unsaved changes.
   std::function<void()> close_patch;
   /// Ask before a folder being added merges in the ones inside it.

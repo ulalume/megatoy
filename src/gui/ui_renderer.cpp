@@ -214,6 +214,21 @@ void handle_close_shortcut(AppContext &ctx) {
 #endif
 }
 
+/// Cmd/Ctrl+N opens an untitled patch. The browser keeps the key for a new
+/// window.
+void handle_new_shortcut(AppContext &ctx) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  (void)ctx;
+#else
+  const ImGuiIO &io = ImGui::GetIO();
+  if (io.WantTextInput || !(io.KeyCtrl || io.KeySuper) || io.KeyShift ||
+      io.KeyAlt || !ImGui::IsKeyPressed(ImGuiKey_N, false)) {
+    return;
+  }
+  patch_actions::new_patch(ctx);
+#endif
+}
+
 UIState::DocumentUi &active_document_ui(AppContext &ctx) {
   return ctx.ui_state().document_ui(
       ctx.services.patch_session.active_document_id());
@@ -747,6 +762,7 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
       ctx.services.audio_manager.load_meter(),
       ui_state.open_sound_preferences,
       ctx.services.audio_manager.default_buffer_frames(),
+      [&ctx]() { patch_actions::new_patch(ctx); },
       [&ctx]() {
         request_close_document(ctx,
                                ctx.services.patch_session.active_document_id());
@@ -1102,6 +1118,7 @@ void render_all(AppContext &ctx) {
   render_status_toasts();
 
   handle_close_shortcut(ctx);
+  handle_new_shortcut(ctx);
   auto &session = ctx.services.patch_session;
   session.apply_patch_to_audio_if_changed();
   session.remember_open_documents();
