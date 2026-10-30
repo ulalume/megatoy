@@ -13,10 +13,7 @@ SaveControls save_controls(const PatchSession &session,
   controls.save_label =
       session.save_label_for(document, controls.saves_in_place);
   if (!controls.saves_in_place) {
-    const auto &path = document.path();
-    controls.save_tooltip = path.ends_with(".ginpkg")
-                                ? "Save version to " + path
-                                : "Choose a filename and format";
+    controls.save_tooltip = "Choose a filename and format";
   } else if (!document.is_modified()) {
     controls.save_tooltip = "Patch is not modified";
   }

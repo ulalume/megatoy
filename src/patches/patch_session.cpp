@@ -432,7 +432,7 @@ void PatchSession::set_document_path(PatchDocument &document,
         (path.is_absolute() ? repository_->to_relative_path(path) : path)
             .generic_string();
     auto selection = stored;
-    if (path.extension() == ".ginpkg") {
+    if (lowercase_extension(path) == ".ginpkg") {
       selection += "/latest";
     }
     document.set_path(stored);
@@ -1480,7 +1480,8 @@ const char *PatchSession::save_label_for(const PatchDocument &document,
     return "Save As...";
   }
   // Saving a .ginpkg adds a version rather than replacing the file.
-  return document.path().ends_with(".ginpkg") ? "Save Version" : "Overwrite";
+  return lowercase_extension(document.path()) == ".ginpkg" ? "Save Version"
+                                                           : "Overwrite";
 }
 
 } // namespace patches

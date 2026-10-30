@@ -1,5 +1,6 @@
 #pragma once
 
+#include "patches/patch_lab_sources.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
 #include "preferences/preference_manager.hpp"
@@ -51,6 +52,10 @@ struct PatchLabState {
   // Shared sources for blend/morph
   PatchLabSource source_a;
   PatchLabSource source_b;
+  /// The patches a source can be picked from, as of `entries_revision` of the
+  /// repository. They point into its tree, which only changes with it.
+  std::vector<EntryDisplay> entries;
+  std::uint64_t entries_revision = 0;
   std::string merge_error;
 
   float morph_mix = 0.5f;
