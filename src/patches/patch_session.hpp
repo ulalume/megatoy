@@ -316,8 +316,9 @@ public:
   const char *save_label_for(const PatchDocument &document,
                              bool is_user_patch) const;
 
-  /// The workspace folder holding the current patch, when it may be written
-  /// to. Empty for a new patch, the built-in presets, or a read-only folder.
+  /// The folder holding the current patch's file, when it may be written to:
+  /// in the workspace or outside it. Empty for a new patch, the built-in
+  /// presets, or a read-only workspace folder.
   std::optional<std::filesystem::path> writable_source_folder() const;
   std::optional<std::filesystem::path>
   writable_source_folder(const PatchDocument &document) const;

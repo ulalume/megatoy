@@ -634,6 +634,50 @@ void test_dropped_patch_follows_the_preview_rules() {
   CHECK(session.documents().size() == 2);
 }
 
+void test_a_file_outside_the_workspace_saves_in_place() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  const auto outside = env.root / "desktop" / "dropped.dmp";
+  fs::create_directories(outside.parent_path());
+  CHECK(patches::write_patch(make_patch(5), outside));
+
+  const auto id = session.open_or_activate_patch(make_patch(5), outside, true);
+  CHECK(session.can_save_in_place());
+  CHECK(session.current_patch_is_user_patch());
+  CHECK(session.writable_source_folder() == outside.parent_path());
+
+  session.current_patch().instrument.algorithm = 2;
+  CHECK(session.is_modified());
+  CHECK(session.save_current_patch().is_success());
+  CHECK(!session.is_modified());
+  const auto saved = formats::load_patch_from_file(outside);
+  CHECK(saved.status == formats::PatchLoadStatus::Success);
+  CHECK(saved.patches[0].instrument.algorithm == 2);
+  CHECK(session.active_document_id() == id);
+
+  // It comes back with the open set, though the tree does not hold it.
+  session.remember_open_documents();
+  CHECK(session.close_document(id));
+  CHECK(session.restore_open_documents());
+  CHECK(session.current_patch_path() == outside.generic_string());
+  CHECK(session.current_patch().instrument.algorithm == 2);
+  CHECK(session.can_save_in_place());
+}
+
+void test_presets_and_untitled_do_not_save_in_place() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  const auto preset =
+      env.directories.paths().builtin_presets_root / "init.dmp";
+  session.open_or_activate_patch(make_patch(5), preset, true);
+  CHECK(!session.can_save_in_place());
+
+  session.open_new_document();
+  CHECK(!session.can_save_in_place());
+}
+
 void test_new_patch_opens_pinned() {
   BrowserFixture fixture;
   auto &env = fixture.env;
@@ -771,6 +815,8 @@ int main() {
   test_pinning();
   test_closing_the_last_leaves_a_default_preview();
   test_dropped_patch_follows_the_preview_rules();
+  test_a_file_outside_the_workspace_saves_in_place();
+  test_presets_and_untitled_do_not_save_in_place();
   test_new_patch_opens_pinned();
   test_new_document_is_untitled();
   test_open_documents_round_trip();

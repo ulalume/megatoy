@@ -298,14 +298,31 @@ bool PatchSession::restore_open_documents() {
   bool have_preview = false;
   for (std::size_t i = 0; i < records.size(); ++i) {
     const auto *entry = find_entry(records[i].path);
+    const std::filesystem::path recorded = records[i].path;
     ym2612::Patch patch;
-    if (entry == nullptr || !repository_->load_patch(*entry, patch)) {
-      continue;
+    if (entry != nullptr) {
+      if (!repository_->load_patch(*entry, patch)) {
+        continue;
+      }
+    } else {
+      // A file opened from outside the workspace is not in the tree.
+      if (!recorded.is_absolute()) {
+        continue;
+      }
+      auto loaded = formats::load_patch_from_file(recorded);
+      if (loaded.status != formats::PatchLoadStatus::Success ||
+          loaded.patches.empty()) {
+        continue;
+      }
+      patch = std::move(loaded.patches[0]);
     }
     const bool pinned = records[i].pinned || have_preview;
     have_preview = have_preview || !pinned;
     const auto id =
-        open_document(patch, source_of(*entry), entry->relative_path, pinned);
+        entry != nullptr
+            ? open_document(patch, source_of(*entry), entry->relative_path,
+                            pinned)
+            : open_document(patch, recorded, {}, pinned);
     if (!first) {
       first = id;
     }
@@ -923,11 +940,21 @@ PatchSession::writable_source_folder(const PatchDocument &document) const {
     return std::nullopt;
   }
   const auto folder = absolute.parent_path();
-  const auto *owner = preferences_.workspace().owner_of(folder);
-  if (owner == nullptr || !owner->writable) {
+  if (const auto *owner = preferences_.workspace().owner_of(folder)) {
+    return owner->writable ? std::optional(folder) : std::nullopt;
+  }
+#if defined(MEGATOY_PLATFORM_WEB)
+  // A file dropped on the page is a copy that goes away with it.
+  return std::nullopt;
+#else
+  // A file opened from elsewhere is the user's own; the presets are the app's.
+  const auto inside_presets =
+      folder.lexically_relative(directories_.paths().builtin_presets_root);
+  if (!inside_presets.empty() && *inside_presets.begin() != "..") {
     return std::nullopt;
   }
   return folder;
+#endif
 }
 
 SaveResult
