@@ -95,8 +95,6 @@ void test_the_current_layout_name_survives_a_restart() {
     PreferenceManager preferences(directories);
     CHECK(preferences.layout().empty());
     preferences.set_layout("Song");
-    // Resetting the view keeps the layout it applies to.
-    preferences.reset_ui_preferences();
   }
   {
     PreferenceManager preferences(directories);

@@ -9,8 +9,8 @@
 
 namespace {
 
-using ui::selector_detail::flatten_visible_rows;
-using ui::selector_detail::TreeRow;
+using patches::flatten_visible_rows;
+using patches::TreeRow;
 
 patches::PatchEntry make_file(const std::string &name,
                               const std::string &relative_path, int stars,
@@ -256,7 +256,7 @@ void test_directories_above_an_entry() {
   root.children.push_back(make_file("inner2.dmp", "root/inner2.dmp", 0));
   const std::vector<patches::PatchEntry> tree = {root};
 
-  using ui::selector_detail::directories_above;
+  using patches::directories_above;
   const auto lead = directories_above(tree, "root/inner/lead.dmp");
   CHECK(lead.has_value());
   CHECK((*lead == std::vector<std::string>{"root", "root/inner"}));
@@ -268,7 +268,7 @@ void test_directories_above_an_entry() {
 }
 
 void test_search_key_ignores_surrounding_spaces() {
-  using ui::selector_detail::search_key;
+  using patches::search_key;
   CHECK(search_key("  Acoustic Bass ") == "acoustic bass");
   CHECK(search_key("bass\t") == "bass");
   CHECK(search_key("   ").empty());

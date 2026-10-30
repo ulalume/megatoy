@@ -4,13 +4,13 @@
 
 #include <cstddef>
 
-namespace ui::selector_detail {
+namespace patches {
 
 namespace {
 
 /// A directory holding nothing on disk stands on its own while no filter is
 /// active.
-bool listed_while_empty(const patches::PatchEntry &directory,
+bool listed_while_empty(const PatchEntry &directory,
                         const std::string &query_lower, int min_star_rating) {
   return directory.holds_nothing && query_lower.empty() && min_star_rating == 0;
 }
@@ -119,4 +119,4 @@ directories_above(const std::vector<patches::PatchEntry> &tree,
   return std::nullopt;
 }
 
-} // namespace ui::selector_detail
+} // namespace patches

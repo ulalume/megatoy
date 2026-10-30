@@ -22,8 +22,13 @@ bool begin_awaited_flush(std::string title, std::string detail,
                          std::function<void(bool ok, std::string error)>
                              on_complete);
 
-/// Draw the modal shown while a flush is awaited. Once per frame.
-void render_awaited_flush_ui();
+struct AwaitedFlushProgress {
+  std::string title;
+  std::string detail;
+};
+
+const AwaitedFlushProgress *awaited_flush_progress();
+bool take_awaited_flush_finished();
 
 } // namespace platform::web
 

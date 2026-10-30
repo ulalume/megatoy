@@ -1,4 +1,5 @@
 #include "patch_editor.hpp"
+#include "audio/audio_manager.hpp"
 
 #include "common.hpp"
 #include "gui/areas.hpp"
@@ -669,7 +670,7 @@ void render_patch_editors(PatchEditorContext &context,
   EditorFrame frame;
   // Read once, so all four graphs draw the same instant -- and so the audio
   // thread's publication is sampled once a frame rather than four times.
-  frame.voices = collect_envelope_voices(session.voice_activity());
+  frame.voices = collect_envelope_voices(context.audio.voice_activity());
   frame.editor_focused = patch_editor_has_focus();
   if (const ImGuiWindow *focused = GImGui->NavWindow) {
     frame.focused_node = focused->RootWindow->DockNode;

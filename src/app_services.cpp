@@ -159,7 +159,7 @@ void AppServices::prune_histories() {
 }
 
 void AppServices::shutdown_app() {
-  patch_session.release_all_notes();
+  audio_manager.submit(audio::AudioCommand::all_notes_off());
 #if defined(MEGATOY_PLATFORM_DESKTOP)
   // Join first: a scan still running writes into the same cache.
   patches::background_folder_scan::shutdown();

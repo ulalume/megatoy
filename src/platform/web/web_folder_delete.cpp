@@ -2,15 +2,11 @@
 
 #if defined(MEGATOY_PLATFORM_WEB)
 
-#include "gui/components/common.hpp"
-#include "gui/components/modal.hpp"
 #include "platform/web/local_storage.hpp"
 
 #include <algorithm>
-#include <cfloat>
 #include <cstdint>
 #include <emscripten.h>
-#include <imgui.h>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <system_error>
@@ -23,7 +19,6 @@ EM_JS_DEPS(megatoy_folder_delete, "$stringToNewUTF8");
 namespace {
 
 constexpr const char *kPendingDeletionsKey = "megatoy.pendingFolderDeletions";
-constexpr const char *kPopupId = "Deleting Folder###FolderDelete";
 
 struct ActiveDelete {
   /// Identity handed to JavaScript. Deliberately NOT the slot address: a
@@ -40,7 +35,7 @@ struct ActiveDelete {
 
 std::unique_ptr<ActiveDelete> g_active_delete;
 std::uintptr_t g_next_delete_token = 1;
-bool g_close_delete_popup = false;
+bool g_delete_finished = false;
 
 std::vector<std::string> read_pending_list() {
   const auto stored = read_local_storage(kPendingDeletionsKey);
@@ -82,7 +77,7 @@ void finish_active(bool ok, std::string error) {
     return;
   }
   auto active = std::move(g_active_delete);
-  g_close_delete_popup = true;
+  g_delete_finished = true;
   if (ok) {
     clear_pending_deletion(active->path);
   }
@@ -218,36 +213,12 @@ bool begin_folder_delete(
   return true;
 }
 
-void render_folder_delete_ui() {
-  if (!g_active_delete && g_close_delete_popup) {
-    if (ImGui::IsPopupOpen(kPopupId) &&
-        ui::begin_modal(kPopupId, ui::ModalDismiss::None).visible) {
-      ImGui::CloseCurrentPopup();
-      ui::end_modal();
-    }
-    g_close_delete_popup = false;
-  }
+const std::string *folder_delete_name() {
+  return g_active_delete ? &g_active_delete->name : nullptr;
+}
 
-  if (!g_active_delete) {
-    return;
-  }
-
-  const auto &active = *g_active_delete;
-  // Open on the edge only: re-opening an already-open popup every frame
-  // resets popup state and can swallow clicks (see confirmation_dialog).
-  if (!ImGui::IsPopupOpen(kPopupId)) {
-    ImGui::OpenPopup(kPopupId);
-  }
-  if (ui::begin_modal(kPopupId, ui::ModalDismiss::None).visible) {
-    ImGui::Text("Deleting \"%s\"...", active.name.c_str());
-    ImGui::TextDisabled("Saving the change to browser storage.");
-    // Indeterminate: IndexedDB reports no progress, only completion. No
-    // Cancel either -- the files are already gone from MEMFS, and stopping
-    // the flush would leave storage in exactly the state this fixes.
-    ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
-                       ImVec2(-FLT_MIN, 0));
-    ui::end_modal();
-  }
+bool take_folder_delete_finished() {
+  return !g_active_delete && std::exchange(g_delete_finished, false);
 }
 
 } // namespace platform::web

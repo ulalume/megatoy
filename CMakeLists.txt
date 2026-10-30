@@ -257,16 +257,10 @@ add_executable(preference_manager_test tests/preferences/preference_manager_test
 target_include_directories(preference_manager_test PRIVATE src)
 target_link_libraries(preference_manager_test PRIVATE megatoy_core)
 add_test(NAME preference_manager_test COMMAND preference_manager_test)
-# In the browser the logic layer calls into src/platform/web, built with the GUI.
-if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
-  set(MEGATOY_LOGIC_TEST_LIBRARY megatoy_core)
-else()
-  set(MEGATOY_LOGIC_TEST_LIBRARY megatoy_logic)
-endif()
 add_executable(preference_storage_compatibility_test
   tests/preferences/preference_storage_compatibility_test.cpp)
 target_link_libraries(preference_storage_compatibility_test
-  PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+  PRIVATE megatoy_logic)
 add_test(NAME preference_storage_compatibility_test
          COMMAND preference_storage_compatibility_test
                  ${CMAKE_SOURCE_DIR}/tests/preferences/fixtures)
@@ -318,19 +312,24 @@ add_test(NAME logic_include_test
 
 add_executable(document_decisions_test
   tests/patches/document_decisions_test.cpp)
-target_link_libraries(document_decisions_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+target_link_libraries(document_decisions_test PRIVATE megatoy_logic)
 add_test(NAME document_decisions_test COMMAND document_decisions_test)
 add_executable(patch_entry_actions_test
   tests/patches/patch_entry_actions_test.cpp)
-target_link_libraries(patch_entry_actions_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+target_link_libraries(patch_entry_actions_test PRIVATE megatoy_logic)
 add_test(NAME patch_entry_actions_test COMMAND patch_entry_actions_test)
 add_executable(patch_tree_navigation_test
   tests/patches/patch_tree_navigation_test.cpp)
-target_link_libraries(patch_tree_navigation_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+target_link_libraries(patch_tree_navigation_test PRIVATE megatoy_logic)
 add_test(NAME patch_tree_navigation_test COMMAND patch_tree_navigation_test)
 add_executable(patch_lab_sources_test tests/patches/patch_lab_sources_test.cpp)
-target_link_libraries(patch_lab_sources_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+target_link_libraries(patch_lab_sources_test PRIVATE megatoy_logic)
 add_test(NAME patch_lab_sources_test COMMAND patch_lab_sources_test)
+
+add_executable(document_disk_versions_test
+  tests/patches/document_disk_versions_test.cpp)
+target_link_libraries(document_disk_versions_test PRIVATE megatoy_logic)
+add_test(NAME document_disk_versions_test COMMAND document_disk_versions_test)
 
 get_property(MEGATOY_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
 foreach(target IN LISTS MEGATOY_TARGETS)

@@ -64,8 +64,6 @@ target_include_directories(megatoy_resampler PUBLIC ${CMAKE_SOURCE_DIR}/src)
 # upstream. Every packaging path below flows through this variable.
 set(MEGATOY_PRESETS_SOURCE_DIR "${ym2612_patches_SOURCE_DIR}")
 
-# Everything here compiles without ImGui. In the browser it still calls into
-# src/platform/web, which is built with the GUI below.
 set(MEGATOY_LOGIC_SOURCES
   src/channel_allocator.cpp
   src/audio/audio_engine.cpp
@@ -92,6 +90,11 @@ set(MEGATOY_LOGIC_SOURCES
   src/patches/patch_filter.cpp
   src/patches/patch_document.cpp
   src/patches/patch_session.cpp
+  src/patches/patch_session_documents.cpp
+  src/patches/patch_session_entries.cpp
+  src/patches/patch_session_files.cpp
+  src/patches/patch_session_workspace.cpp
+  src/patches/document_disk_versions.cpp
   src/patches/filename_utils.cpp
   src/workspace/path_policy.cpp
   src/workspace/workspace.cpp
@@ -162,6 +165,9 @@ set(MEGATOY_CORE_SOURCES
   src/gui/layouts.cpp
   src/gui/ui_scale.cpp
   src/gui/ui_renderer.cpp
+  src/gui/ui_document_flows.cpp
+  src/gui/ui_file_requests.cpp
+  src/gui/ui_frame_contexts.cpp
   src/gui/image/resource_manager.cpp
   src/gui/image/stb_image_impl.cpp
   src/gui/image/texture_utils.cpp
@@ -175,9 +181,6 @@ set(MEGATOY_CORE_SOURCES
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   list(APPEND MEGATOY_LOGIC_SOURCES
     src/audio/webaudio_transport.cpp
-  )
-  list(APPEND MEGATOY_CORE_SOURCES
-    src/gui/imgui_ini_bridge_web.cpp
     src/platform/web/web_platform_services.cpp
     src/platform/web/web_file_system.cpp
     src/platform/web/web_download.cpp
@@ -190,6 +193,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/web_workspace_download.cpp
     src/platform/web/web_patch_url.cpp
     src/platform/web/web_midi_backend.cpp
+  )
+  list(APPEND MEGATOY_CORE_SOURCES
+    src/gui/imgui_ini_bridge_web.cpp
+    src/gui/web_folder_import_dialog.cpp
+    src/gui/web_folder_delete_dialog.cpp
+    src/gui/web_storage_flush_dialog.cpp
   )
 else()
   list(APPEND MEGATOY_CORE_SOURCES

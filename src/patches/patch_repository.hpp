@@ -69,6 +69,9 @@ public:
   const std::vector<PatchEntry> &tree() const;
   std::uint64_t revision() const { return revision_; }
 
+  /// Exact selection path first, then the first entry from that source.
+  const PatchEntry *find_entry(const std::string &relative_path) const;
+
   bool load_patch(const PatchEntry &entry, ym2612::Patch &patch) const;
   bool has_directory_changed() const;
   /// True once something in the workspace's folders has changed outside

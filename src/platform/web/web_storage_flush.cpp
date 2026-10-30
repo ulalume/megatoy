@@ -2,12 +2,8 @@
 
 #if defined(MEGATOY_PLATFORM_WEB)
 
-#include "gui/components/modal.hpp"
-
-#include <cfloat>
 #include <cstdint>
 #include <emscripten.h>
-#include <imgui.h>
 #include <memory>
 #include <utility>
 
@@ -17,20 +13,17 @@ EM_JS_DEPS(megatoy_storage_flush, "$stringToNewUTF8");
 
 namespace {
 
-constexpr const char *kPopupId = "Saving###AwaitedStorageFlush";
-
 struct ActiveFlush {
   /// Identity handed to JavaScript. Monotonic rather than the slot address,
   /// which a later flush could reuse and a stale callback then claim.
   void *token = nullptr;
-  std::string title;
-  std::string detail;
+  AwaitedFlushProgress progress;
   std::function<void(bool, std::string)> on_complete;
 };
 
 std::unique_ptr<ActiveFlush> g_active;
 std::uintptr_t g_next_token = 1;
-bool g_close_popup = false;
+bool g_flush_finished = false;
 
 void finish_active(bool ok, std::string error) {
   if (!g_active) {
@@ -40,7 +33,7 @@ void finish_active(bool ok, std::string error) {
   // start the next operation.
   auto active = std::move(g_active);
   g_active.reset();
-  g_close_popup = true;
+  g_flush_finished = true;
   if (active->on_complete) {
     active->on_complete(ok, std::move(error));
   }
@@ -79,8 +72,8 @@ bool begin_awaited_flush(
 
   auto active = std::make_unique<ActiveFlush>();
   active->token = reinterpret_cast<void *>(g_next_token++);
-  active->title = std::move(title);
-  active->detail = std::move(detail);
+  active->progress.title = std::move(title);
+  active->progress.detail = std::move(detail);
   active->on_complete = std::move(on_complete);
 
   auto *token = active->token;
@@ -89,35 +82,12 @@ bool begin_awaited_flush(
   return true;
 }
 
-void render_awaited_flush_ui() {
-  if (!g_active && g_close_popup) {
-    if (ImGui::IsPopupOpen(kPopupId) &&
-        ui::begin_modal(kPopupId, ui::ModalDismiss::None).visible) {
-      ImGui::CloseCurrentPopup();
-      ui::end_modal();
-    }
-    g_close_popup = false;
-  }
+const AwaitedFlushProgress *awaited_flush_progress() {
+  return g_active ? &g_active->progress : nullptr;
+}
 
-  if (!g_active) {
-    return;
-  }
-
-  const auto &active = *g_active;
-  // Open on the edge only: re-opening an already-open popup every frame
-  // resets popup state and can swallow clicks.
-  if (!ImGui::IsPopupOpen(kPopupId)) {
-    ImGui::OpenPopup(kPopupId);
-  }
-  if (ui::begin_modal(kPopupId, ui::ModalDismiss::None).visible) {
-    ImGui::TextUnformatted(active.title.c_str());
-    ImGui::TextDisabled("%s", active.detail.c_str());
-    // Indeterminate, and no Cancel: IndexedDB reports only completion, and
-    // the first half of a flush never gives the frame back.
-    ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
-                       ImVec2(-FLT_MIN, 0));
-    ui::end_modal();
-  }
+bool take_awaited_flush_finished() {
+  return !g_active && std::exchange(g_flush_finished, false);
 }
 
 } // namespace platform::web

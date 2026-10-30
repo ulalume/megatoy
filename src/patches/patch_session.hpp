@@ -1,6 +1,6 @@
 #pragma once
 
-#include "channel_allocator.hpp"
+#include "document_disk_versions.hpp"
 #include "formats/patch_registry.hpp"
 #include "patch_document.hpp"
 #include "patch_repository.hpp"
@@ -9,9 +9,7 @@
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
-#include <array>
 #include <filesystem>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -134,10 +132,7 @@ public:
   find_document_with_sound(const ym2612::Patch &patch) const;
   /// What an open document's file holds after it was written outside
   /// megatoy.
-  struct DiskVersion {
-    DocumentId document = 0;
-    ym2612::Patch patch;
-  };
+  using DiskVersion = DocumentDiskVersions::DiskVersion;
   /**
    * The open documents whose file has been written since megatoy last read
    * or saved it, and now holds something other than the document's saved
@@ -293,14 +288,6 @@ public:
   // Note management
   bool note_on(ym2612::Note note, uint8_t velocity,
                const PreferenceManager::UIPreferences &prefs);
-  bool note_off(ym2612::Note note);
-  bool note_is_active(const ym2612::Note &note) const;
-  void release_all_notes();
-  std::array<bool, 6> active_channels() const;
-  const std::vector<ym2612::Note> active_notes() const;
-  /// What each channel is playing -- or was, until its key came up -- with
-  /// the chip's clock, so the envelope graph can place a cursor on it.
-  VoiceActivityFrame voice_activity() const;
 
   // Snapshot functionality for undo/redo
   PatchSnapshot capture_snapshot() const;
@@ -413,7 +400,7 @@ private:
   AudioManager &audio_;
   std::unique_ptr<PatchRepository> repository_;
   std::vector<std::unique_ptr<PatchDocument>> documents_;
-  std::map<DocumentId, std::filesystem::file_time_type> disk_times_;
+  DocumentDiskVersions disk_versions_;
   DocumentId active_id_ = 0;
   DocumentId next_id_ = 1;
   /// What the chip has, whichever document it came from.
