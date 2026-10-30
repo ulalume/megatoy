@@ -3,7 +3,7 @@
 > ⚠️ **Early Development**: This project is in active development and features may be incomplete.
 
 <p align="center">
-  <img width="240" height="240" src="https://raw.githubusercontent.com/ulalume/megatoy/main/dist/icon.png" alt="app icon">
+  <img width="240" height="240" src="https://raw.githubusercontent.com/ulalume/megatoy/main/dist/icon.svg" alt="app icon">
 </p>
 
 ![Screenshot](https://raw.githubusercontent.com/ulalume/megatoy/main/docs/screenshot.png)
