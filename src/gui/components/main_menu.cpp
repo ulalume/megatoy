@@ -10,11 +10,13 @@
 #include "gui/components/common.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/components/preferences.hpp"
+#include "gui/image/resource_manager.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <imgui.h>
@@ -234,11 +236,58 @@ void render_audio_load(MainMenuContext &context) {
 
 } // namespace
 
+namespace {
+
+/// The app's icon, loaded once; 0 when it could not be.
+ImTextureID app_icon() {
+  static const ImTextureID icon = [] {
+    unsigned int texture = 0;
+    int width = 0;
+    int height = 0;
+    if (!ResourceManager::instance().load_texture_from_resource(
+            "images/app_icon.png", texture, width, height)) {
+      return ImTextureID{};
+    }
+    return static_cast<ImTextureID>(texture);
+  }();
+  return icon;
+}
+
+/**
+ * The menu holding About and Quit, shown as the app's icon. The label is
+ * blank space as wide as the icon, which is drawn over it afterwards so the
+ * menu's hover highlight stays underneath.
+ */
+bool begin_app_menu() {
+  const ImTextureID icon = app_icon();
+  if (icon == ImTextureID{}) {
+    return ImGui::BeginMenu("megatoy");
+  }
+  const float size = ImGui::GetTextLineHeight();
+  const float space = ImGui::CalcTextSize(" ").x;
+  const std::string label =
+      std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
+      "##megatoy";
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImVec2 start = ImGui::GetCursorScreenPos();
+  const float label_width = ImGui::CalcTextSize(label.c_str(), nullptr, true).x;
+  const bool open = ImGui::BeginMenu(label.c_str());
+  // A menu bar item's label starts half an item spacing in.
+  const float x = start.x + ImGui::GetStyle().ItemSpacing.x * 0.5f +
+                  (label_width - size) * 0.5f;
+  const float y = start.y + (ImGui::GetFrameHeight() - size) * 0.5f;
+  draw_list->AddImage(icon, ImVec2(x, y),
+                      ImVec2(x + size, y + size));
+  return open;
+}
+
+} // namespace
+
 void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
   const ImGuiIO &io = ImGui::GetIO();
   if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::BeginMenu("megatoy")) {
+    if (begin_app_menu()) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
 
       if (ImGui::MenuItem("About megatoy")) {
@@ -452,13 +501,8 @@ void render_main_menu(MainMenuContext &context) {
 
       ImGui::Separator();
 
-      // Reset buttons
-      if (ImGui::MenuItem("Reset to Default View")) {
-        context.preferences.reset_ui_preferences();
-        context.ui_prefs = context.preferences.ui_preferences();
-        context.open_add_folder_dialog = false;
+      if (ImGui::MenuItem("Reset to Default Layout")) {
         context.gui.reset_layout();
-        context.gui.set_theme(ui::styles::ThemeId::MegatoyDark);
       }
       ImGui::EndMenu();
     }

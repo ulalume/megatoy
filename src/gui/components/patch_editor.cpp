@@ -9,6 +9,7 @@
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
 #include "platform/platform_config.hpp"
+#include "star_rating.hpp"
 #include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
@@ -49,37 +50,6 @@ ImVec2 menu_anchor_below_last_item() {
 }
 #endif
 
-/// Five stars: one clicked sets the rating to it, the one already set clears
-/// it. Returns the rating chosen this frame, if any.
-std::optional<int> star_rating_buttons(int rating) {
-  std::optional<int> chosen;
-  const ImU32 lit = ImGui::GetColorU32(
-      styles::color(styles::MegatoyCol::TextHighlight));
-  const ImU32 unlit = ImGui::GetColorU32(ImGuiCol_TextDisabled);
-  const float size = ImGui::GetFrameHeight();
-  for (int star = 1; star <= 5; ++star) {
-    ImGui::PushID(star);
-    if (star > 1) {
-      ImGui::SameLine(0.0f, 0.0f);
-    }
-    if (ImGui::InvisibleButton("##star", ImVec2(size * 0.8f, size))) {
-      chosen = star == rating ? 0 : star;
-    }
-    const ImVec2 min = ImGui::GetItemRectMin();
-    const ImVec2 max = ImGui::GetItemRectMax();
-    const ImVec2 text_size = ImGui::CalcTextSize(ICON_FA_STAR);
-    ImGui::GetWindowDrawList()->AddText(
-        ImVec2((min.x + max.x - text_size.x) * 0.5f,
-               (min.y + max.y - text_size.y) * 0.5f),
-        star <= rating || ImGui::IsItemHovered() ? lit : unlit, ICON_FA_STAR);
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip(star == rating ? "Clear rating" : "Rate %d", star);
-    }
-    ImGui::PopID();
-  }
-  return chosen;
-}
-
 /**
  * The rating and category of the patch's file, at the right of the row,
  * or below it when the row has no room. Only for a patch the browser lists
@@ -98,8 +68,7 @@ void render_patch_metadata(PatchEditorContext &context,
   }
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   const float category_width = ui::scale::px(110.0f);
-  const float stars_width = ImGui::GetFrameHeight() * 0.8f * 5.0f;
-  const float needed = category_width + spacing + stars_width;
+  const float needed = category_width + spacing + star_rating_width();
   ImGui::SameLine();
   if (ImGui::GetContentRegionAvail().x >= needed) {
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
@@ -126,10 +95,17 @@ void render_patch_metadata(PatchEditorContext &context,
     return;
   }
 
+  // Written once let go, as the browser's star filter is dragged the same.
   ImGui::SameLine(0.0f, spacing);
-  const int rating = entry->metadata ? entry->metadata->star_rating : 0;
-  if (const auto chosen = star_rating_buttons(rating)) {
-    session.set_entry_rating(*entry, *chosen);
+  int rating = ui.pending_rating.value_or(
+      entry->metadata ? entry->metadata->star_rating : 0);
+  if (star_rating_slider("##rating", rating, "Rating")) {
+    ui.pending_rating = rating;
+  }
+  if (ImGui::IsItemDeactivated() && ui.pending_rating) {
+    const int chosen = *ui.pending_rating;
+    ui.pending_rating.reset();
+    session.set_entry_rating(*entry, chosen);
   }
 }
 

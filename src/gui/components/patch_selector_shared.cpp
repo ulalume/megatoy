@@ -6,6 +6,7 @@
 #include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
+#include "star_rating.hpp"
 
 #include <IconsFontAwesome7.h>
 #include <algorithm>
@@ -15,15 +16,6 @@
 #include <optional>
 
 namespace ui::selector_detail {
-
-const std::array<std::string_view, 6> kStarLabels = {
-    "-",
-    ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-};
 
 void show_patch_tooltip(const patches::PatchEntry &entry) {
   if (!ImGui::IsItemHovered()) {
@@ -210,47 +202,39 @@ void render_filter_bar(PatchSelectorContext &context) {
                sizeof(search_buffer));
   search_buffer[sizeof(search_buffer) - 1] = '\0';
 
-  // The search box takes what the star filter and the link leave of the
-  // row, up to where the caller has narrowed it to.
+  // The search box takes what the star filter leaves of the row, up to where
+  // the caller has narrowed it to.
   const ImGuiStyle &style = ImGui::GetStyle();
-  const float stars_width = ui::scale::px(60.0f);
-  const float link_width = ImGui::CalcTextSize("Clear filters").x;
   const float row_end = ImGui::GetCurrentWindow()->WorkRect.Max.x;
-  const float search_width = std::clamp(
-      row_end - ImGui::GetCursorScreenPos().x - stars_width - link_width -
-          style.ItemSpacing.x * 2.0f,
-      ui::scale::px(60.0f), ui::scale::px(220.0f));
+  const float search_width = std::max(
+      row_end - ImGui::GetCursorScreenPos().x - star_rating_width() -
+          style.ItemSpacing.x,
+      ui::scale::px(60.0f));
   ImGui::SetNextItemWidth(search_width);
+  // The clear button sits over the box's right end and has to win the hover.
+  ImGui::SetNextItemAllowOverlap();
   if (ImGui::InputTextWithHint("##SharedSearch",
                                ICON_FA_MAGNIFYING_GLASS " Search...",
                                search_buffer, sizeof(search_buffer))) {
     prefs.metadata_search_query = std::string(search_buffer);
   }
+  if (!prefs.metadata_search_query.empty()) {
+    const ImVec2 box_min = ImGui::GetItemRectMin();
+    const ImVec2 box_max = ImGui::GetItemRectMax();
+    const float size = box_max.y - box_min.y;
+    ImGui::SetCursorScreenPos(ImVec2(box_max.x - size, box_min.y));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    if (ImGui::Button(ICON_FA_XMARK "##clear_search", ImVec2(size, size))) {
+      prefs.metadata_search_query.clear();
+    }
+    ImGui::PopStyleColor(2);
+  }
   prefs.patch_search_query = prefs.metadata_search_query;
 
   ImGui::SameLine();
-  ImGui::SetNextItemWidth(stars_width);
-  prefs.metadata_star_filter = std::clamp(prefs.metadata_star_filter, 0, 5);
-  ImGui::SliderInt("##Stars", &prefs.metadata_star_filter, 0, 5,
-                   prefs.metadata_star_filter == 0
-                       ? "Stars"
-                       : kStarLabels[prefs.metadata_star_filter].data(),
-                   ImGuiSliderFlags_AlwaysClamp);
-
-  ImGui::SameLine();
-  const bool is_filtered =
-      !(prefs.metadata_search_query.empty() && prefs.metadata_star_filter == 0);
-  ImGui::BeginDisabled(!is_filtered);
-  if (is_filtered) {
-    if (ImGui::TextLink("Clear filters")) {
-      prefs.metadata_search_query.clear();
-      prefs.metadata_star_filter = 0;
-      prefs.patch_search_query.clear();
-    }
-  } else {
-    ImGui::Text("Clear filters");
-  }
-  ImGui::EndDisabled();
+  star_rating_slider("##Stars", prefs.metadata_star_filter, "Stars");
 }
 
 } // namespace ui::selector_detail

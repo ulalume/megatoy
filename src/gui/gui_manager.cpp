@@ -422,7 +422,6 @@ void GuiManager::apply_theme() {
 void GuiManager::reset_layout() {
   first_frame_ = true;
   web_layout_loaded_ = false;
-  pending_window_visibility_ = true;
 }
 
 void GuiManager::set_window_title(const std::string &title) {

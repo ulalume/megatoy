@@ -77,6 +77,8 @@ struct UIState {
     /// The category being typed, written to the folder's metadata once the
     /// field is left.
     std::optional<std::string> pending_category;
+    /// The rating being dragged, written once the slider is let go.
+    std::optional<int> pending_rating;
   };
   std::map<patches::DocumentId, DocumentUi> documents;
   /// The document whose editor window is brought to the front next frame.

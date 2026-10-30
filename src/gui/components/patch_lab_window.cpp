@@ -163,7 +163,7 @@ bool render_source_list(const patches::PatchSession &session,
 
 /// A slot for one source: a click lists what it can take, and a patch
 /// dragged from the browser drops into it.
-void render_source_slot(const char *id, const char *caption,
+void render_source_slot(const char *id,
                         const patches::PatchSession &session,
                         const std::vector<EntryDisplay> &entries,
                         PatchLabSource &source, std::string &filter_text,
@@ -219,20 +219,21 @@ void render_source_slot(const char *id, const char *caption,
                          max.y - style.FramePadding.y);
   const ImU32 dim = ImGui::GetColorU32(ImGuiCol_TextDisabled);
   if (source.empty()) {
-    const std::string text = std::string(ICON_FA_PLUS "  ") + caption;
     ImGui::PushStyleColor(ImGuiCol_Text, dim);
-    ImGui::RenderTextClipped(inner_min, inner_max, text.c_str(), nullptr,
+    ImGui::RenderTextClipped(inner_min, inner_max, ICON_FA_PLUS, nullptr,
                              nullptr, ImVec2(0.5f, 0.5f));
     ImGui::PopStyleColor();
   } else {
-    draw_list->AddText(inner_min, dim, caption);
-    const float line = ImGui::GetTextLineHeight() + style.ItemInnerSpacing.y;
-    ImGui::RenderTextEllipsis(
-        draw_list, ImVec2(inner_min.x, inner_min.y + line), inner_max,
-        inner_max.x, name.c_str(), nullptr, nullptr);
+    const float top = (min.y + max.y - ImGui::GetTextLineHeight()) * 0.5f;
+    ImGui::RenderTextEllipsis(draw_list, ImVec2(inner_min.x, top), inner_max,
+                              inner_max.x, name.c_str(), nullptr, nullptr);
   }
-  if (hovered && !source.empty()) {
-    ImGui::SetTooltip("%s", name.c_str());
+  if (hovered) {
+    if (source.empty()) {
+      ImGui::SetTooltip("Choose a patch, or drop one here");
+    } else {
+      ImGui::SetTooltip("%s", name.c_str());
+    }
   }
 
   // Laid out as a combo's list, which opens above when there is no room
@@ -253,15 +254,15 @@ void render_source_slot(const char *id, const char *caption,
   ImGui::PopID();
 }
 
-/// Patch A and Patch B side by side.
+/// The two patches, side by side.
 void render_source_slots(PatchLabContext &context, PatchLabState &state,
                          const std::vector<EntryDisplay> &entries) {
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   const float width = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
-  render_source_slot("a", "Patch A", context.session, entries, state.source_a,
+  render_source_slot("a", context.session, entries, state.source_a,
                      state.picker_filter, width);
   ImGui::SameLine();
-  render_source_slot("b", "Patch B", context.session, entries, state.source_b,
+  render_source_slot("b", context.session, entries, state.source_b,
                      state.picker_filter, width);
 }
 
@@ -342,8 +343,7 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
 void render_merge_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
   ImGui::TextWrapped(
-      "Mixes two patches by randomly choosing parameters from Patch A and "
-      "Patch B.");
+      "Mixes two patches, taking each parameter from one of them at random.");
   ImGui::Spacing();
 
   render_source_slots(context, state, entries);
@@ -383,8 +383,7 @@ void render_merge_section(PatchLabContext &context, PatchLabState &state,
 void render_morph_section(PatchLabContext &context, PatchLabState &state,
                           const std::vector<EntryDisplay> &entries) {
   ImGui::TextWrapped(
-      "Interpolates between Patch A and Patch B with the blend slider for "
-      "smooth transitions.");
+      "Blends between two patches.");
   ImGui::Spacing();
 
   render_source_slots(context, state, entries);

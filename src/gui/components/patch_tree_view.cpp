@@ -5,6 +5,7 @@
 #include "gui/ui_scale.hpp"
 #include "patch_selector_shared.hpp"
 #include "patch_tree_flatten.hpp"
+#include "star_rating.hpp"
 
 #include <algorithm>
 #include <cstddef>
