@@ -4,7 +4,8 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_selector_shared.hpp"
-#include "patch_tree_flatten.hpp"
+#include "patches/patch_tree_flatten.hpp"
+#include "patches/patch_tree_navigation.hpp"
 #include "star_rating.hpp"
 
 #include <algorithm>
@@ -41,11 +42,7 @@ struct PatchTreeCache {
   std::unordered_set<std::string> open_directories;
   std::vector<TreeRow> rows;
 
-  /// The current patch, and whether the tree has yet to be brought to it. A
-  /// patch the tree does not hold is tried again when the tree changes.
-  std::string revealed_selection;
-  bool reveal_pending = false;
-  std::uint64_t reveal_tried_revision = 0;
+  TreeRevealState reveal_state;
 
   const std::vector<TreeRow> &
   get(const std::vector<patches::PatchEntry> &source, std::uint64_t revision,
@@ -93,25 +90,13 @@ struct PatchTreeCache {
   bool reveal(const std::vector<patches::PatchEntry> &source,
               const std::string &selection, std::uint64_t revision,
               bool filtering) {
-    if (selection != revealed_selection) {
-      revealed_selection = selection;
-      reveal_pending = !selection.empty();
-    } else if (!reveal_pending || reveal_tried_revision == revision) {
-      return false;
-    }
-    if (!reveal_pending) {
-      return false;
-    }
-    reveal_tried_revision = revision;
-    const auto above = directories_above(source, selection);
+    const auto above = reveal_tree_selection(reveal_state, source, selection,
+                                             revision, filtering);
     if (!above) {
       return false;
     }
-    reveal_pending = false;
-    if (!filtering) {
-      for (const auto &directory : *above) {
-        set_open(directory, true);
-      }
+    for (const auto &directory : *above) {
+      set_open(directory, true);
     }
     return true;
   }
@@ -317,31 +302,6 @@ PatchTreeCache &tree_cache() {
   return cache;
 }
 
-/// The folder a drop on row `index` goes into: the row itself when it is a
-/// folder, otherwise the folder it is listed under. npos at the top level.
-std::size_t drop_folder_index(const std::vector<TreeRow> &rows,
-                              std::size_t index) {
-  if (rows[index].is_directory) {
-    return index;
-  }
-  for (std::size_t i = index; i-- > 0;) {
-    if (rows[i].depth < rows[index].depth) {
-      return i;
-    }
-  }
-  return std::string::npos;
-}
-
-/// The last row listed under the folder on row `index`, or the row itself.
-std::size_t last_row_under(const std::vector<TreeRow> &rows,
-                           std::size_t index) {
-  std::size_t last = index;
-  while (last + 1 < rows.size() && rows[last + 1].depth > rows[index].depth) {
-    ++last;
-  }
-  return last;
-}
-
 /// A folder an entry is held over, and where the row under the mouse is.
 struct DropHover {
   std::size_t folder = 0;
@@ -411,18 +371,10 @@ void draw_drop_frame(const ImVec2 &min, const ImVec2 &max) {
 /// Scrolls row `index`, in a list starting at `list_top`, into view: only as
 /// far as it takes for a row partly in view, otherwise to the middle.
 void scroll_to_row(std::size_t index, float list_top) {
-  const float height = row_height();
-  const float view = ImGui::GetWindowHeight();
-  const float scroll = ImGui::GetScrollY();
-  const float top = list_top + static_cast<float>(index) * height;
-  const float bottom = top + height;
-  if (top >= scroll && bottom <= scroll + view) {
-    return;
-  }
-  if (bottom <= scroll || top >= scroll + view) {
-    ImGui::SetScrollY(top - (view - height) * 0.5f);
-  } else {
-    ImGui::SetScrollY(top < scroll ? top : bottom - view);
+  if (const auto scroll =
+          scroll_for_row(index, list_top, row_height(),
+                         ImGui::GetWindowHeight(), ImGui::GetScrollY())) {
+    ImGui::SetScrollY(*scroll);
   }
 }
 

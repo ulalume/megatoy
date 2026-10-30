@@ -62,20 +62,9 @@ bool run_frame(RuntimeContext &runtime) {
 
   if (services.gui_manager.get_should_close()) {
     auto &session = services.patch_session;
-    if (const auto modified = session.modified_document_count()) {
-      const patches::PatchDocument *only = nullptr;
-      if (modified == 1) {
-        for (const auto &document : session.documents()) {
-          if (document->is_modified()) {
-            only = document.get();
-          }
-        }
-      }
-      using Confirmation = UIState::ConfirmationState;
-      app_state.ui_state().confirmation_state =
-          only != nullptr && session.can_save_in_place(*only)
-              ? Confirmation::exit_saving(only->id(), ui::document_label(*only))
-              : Confirmation::exit(modified);
+    const auto confirmation = patches::exit_confirmation(session);
+    if (confirmation.show_unsaved_changes_dialog) {
+      app_state.ui_state().confirmation_state = confirmation;
       services.gui_manager.set_should_close(false);
     } else {
       runtime.running = false;

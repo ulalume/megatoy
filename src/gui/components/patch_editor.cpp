@@ -1,4 +1,5 @@
 #include "patch_editor.hpp"
+
 #include "common.hpp"
 #include "gui/areas.hpp"
 #include "gui/components/operator_commands.hpp"
@@ -8,6 +9,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
+#include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
 #include "view_patch_drop.hpp"
@@ -115,21 +117,18 @@ void render_save_export_buttons(PatchEditorContext &context,
                                 PatchEditorState &state, bool is_active) {
   auto &patch_session = context.session;
 
-  const bool is_user_patch = patch_session.is_user_patch(document);
-  const bool is_patch_modified = document.is_modified();
-
-  auto save_button_is_disabled = is_user_patch && !is_patch_modified;
+  const auto controls = patches::save_controls(patch_session, document);
+  const bool save_button_is_disabled = !controls.save_enabled;
 
   if (save_button_is_disabled) {
     ImGui::BeginDisabled(true);
   }
 
-  const char *save_label =
-      patch_session.save_label_for(document, is_user_patch);
+  const char *save_label = controls.save_label;
   ImVec2 pos = ImGui::GetCursorPos();
   if (ImGui::Button(save_label)) {
     context.activate(document.id());
-    if (is_user_patch) {
+    if (controls.saves_in_place) {
       trigger_save(patch_session, state);
     } else {
       request_save_as(state);
@@ -149,23 +148,14 @@ void render_save_export_buttons(PatchEditorContext &context,
     ImGui::PopStyleVar();
     ImGui::BeginDisabled(true);
   }
-  if (ImGui::IsItemHovered()) {
-    if (!is_user_patch) {
-      const auto &path = document.path();
-      if (path.ends_with(".ginpkg")) {
-        ImGui::SetTooltip("Save version to %s", path.c_str());
-      } else {
-        ImGui::SetTooltip("Choose a filename and format");
-      }
-    } else if (!is_patch_modified) {
-      ImGui::SetTooltip("Patch is not modified");
-    }
+  if (ImGui::IsItemHovered() && !controls.save_tooltip.empty()) {
+    ImGui::SetTooltip("%s", controls.save_tooltip.c_str());
   }
   if (save_button_is_disabled) {
     ImGui::EndDisabled();
   }
 
-  if (is_user_patch) {
+  if (controls.show_save_as) {
     ImGui::SameLine();
     if (ImGui::Button("Save As...")) {
       context.activate(document.id());

@@ -7,9 +7,9 @@
 #include "imgui_internal.h"
 #include "patch_selector.hpp"
 #include "patches/patch_lab.hpp"
+#include "patches/patch_lab_sources.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
-#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -22,58 +22,6 @@
 
 namespace ui {
 namespace {
-
-using EntryPtr = const patches::PatchEntry *;
-
-struct EntryDisplay {
-  EntryPtr entry = nullptr;
-  std::string label;
-};
-
-void collect_entries(const patches::PatchRepository &repository,
-                     const std::vector<patches::PatchEntry> &tree,
-                     std::vector<EntryDisplay> &out) {
-  for (const auto &entry : tree) {
-    if (entry.is_directory) {
-      collect_entries(repository, entry.children, out);
-    } else {
-      EntryDisplay display;
-      display.entry = &entry;
-      if (!entry.relative_path.empty()) {
-        display.label =
-            display_preset_path(repository.display_path(entry.relative_path));
-      } else if (!entry.name.empty()) {
-        display.label = entry.name;
-      } else {
-        display.label = "(unnamed patch)";
-      }
-      out.push_back(std::move(display));
-    }
-  }
-}
-
-std::vector<EntryDisplay>
-build_entry_list(const patches::PatchRepository &repository) {
-  std::vector<EntryDisplay> entries;
-  collect_entries(repository, repository.tree(), entries);
-  std::sort(entries.begin(), entries.end(),
-            [](const EntryDisplay &lhs, const EntryDisplay &rhs) {
-              return lhs.label < rhs.label;
-            });
-  return entries;
-}
-
-bool matches_filter(const std::string &label, const std::string &filter) {
-  if (filter.empty()) {
-    return true;
-  }
-  const auto same = [](unsigned char a, unsigned char b) {
-    return std::tolower(a) == std::tolower(b);
-  };
-  const auto it = std::search(label.begin(), label.end(), filter.begin(),
-                              filter.end(), same);
-  return it != label.end();
-}
 
 /// What a source is called and what it holds; false when its entry has gone.
 bool resolve_source(const patches::PatchSession &session,
@@ -127,33 +75,25 @@ bool render_source_list(const patches::PatchSession &session,
                                       ImVec2(FLT_MAX, max_height));
   if (ImGui::BeginChild("##sources", ImVec2(0.0f, 0.0f),
                         ImGuiChildFlags_AutoResizeY)) {
-    bool any_open = false;
-    for (const auto &document : session.documents()) {
-      const auto label = document_label(*document);
-      if (!matches_filter(label, filter_text)) {
+    const auto sources = patch_lab_sources(session, entries, filter_text);
+    for (const auto &item : sources) {
+      if (item.kind == SourceRowKind::Heading) {
+        ImGui::SeparatorText(item.text().c_str());
         continue;
       }
-      if (!any_open) {
-        ImGui::SeparatorText("Open");
-        any_open = true;
-      }
-      ImGui::PushID(static_cast<int>(document->id()));
-      if (ImGui::Selectable(label.c_str())) {
-        source = {.patch = document->patch(), .label = label};
-        changed = true;
-      }
-      ImGui::PopID();
-    }
-    if (any_open) {
-      ImGui::SeparatorText("Patches");
-    }
-    for (const auto &item : entries) {
-      if (!matches_filter(item.label, filter_text)) {
+      if (item.kind == SourceRowKind::Document) {
+        ImGui::PushID(static_cast<int>(item.document->id()));
+        if (ImGui::Selectable(item.label.c_str())) {
+          source = {.patch = item.document->patch(), .label = item.label};
+          changed = true;
+        }
+        ImGui::PopID();
         continue;
       }
-      const bool selected = source.entry_path == item.entry->relative_path;
-      if (ImGui::Selectable(item.label.c_str(), selected)) {
-        source = {.entry_path = item.entry->relative_path};
+      const auto &entry = *item.entry->entry;
+      const bool selected = source.entry_path == entry.relative_path;
+      if (ImGui::Selectable(item.text().c_str(), selected)) {
+        source = {.entry_path = entry.relative_path};
         changed = true;
       }
       if (selected && ImGui::IsWindowAppearing()) {

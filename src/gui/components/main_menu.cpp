@@ -1,4 +1,6 @@
 #include "main_menu.hpp"
+
+#include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
 #include <algorithm>
 #include <array>
@@ -321,9 +323,10 @@ void render_main_menu(MainMenuContext &context) {
       ImGui::EndMenu();
     }
     auto &session = context.patch_session;
-    const bool is_patch_modified = session.is_modified();
-    const bool is_user_patch = session.current_patch_is_user_patch();
-    const bool save_disabled = is_user_patch && !is_patch_modified;
+    const auto controls =
+        patches::save_controls(session, session.active_document());
+    const bool is_user_patch = controls.saves_in_place;
+    const bool save_disabled = !controls.save_enabled;
     if (begin_bar_menu("File")) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
       // The browser keeps Ctrl+N for a new window of its own.
@@ -341,7 +344,7 @@ void render_main_menu(MainMenuContext &context) {
       // shortcuts offer the same two at the pointer, so neither row shows one.
       if (is_user_patch) {
         ImGui::BeginDisabled(save_disabled);
-        if (ImGui::MenuItem(save_label_for(session, true), save_shortcut)) {
+        if (ImGui::MenuItem(controls.save_label, save_shortcut)) {
           trigger_save(session, context.save_state);
         }
         ImGui::EndDisabled();
@@ -353,7 +356,7 @@ void render_main_menu(MainMenuContext &context) {
         request_save_to_storage(context.save_state);
       }
 #else
-      const char *save_label = save_label_for(session, is_user_patch);
+      const char *save_label = controls.save_label;
       if (save_disabled)
         ImGui::BeginDisabled(true);
       if (ImGui::MenuItem(save_label, save_shortcut)) {
@@ -368,7 +371,8 @@ void render_main_menu(MainMenuContext &context) {
 
       const char *save_as_shortcut =
           mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
-      if (is_user_patch && ImGui::MenuItem("Save As...", save_as_shortcut)) {
+      if (controls.show_save_as &&
+          ImGui::MenuItem("Save As...", save_as_shortcut)) {
         request_save_as(context.save_state);
       }
 #endif

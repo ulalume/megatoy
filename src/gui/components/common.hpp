@@ -1,5 +1,7 @@
 #pragma once
 
+#include "patches/patch_display.hpp"
+
 #include <filesystem>
 #include <imgui.h>
 #include <stdlib.h>
@@ -8,8 +10,9 @@
 
 namespace ui {
 
-inline constexpr std::string_view kBuiltinPresetRoot{"presets"};
-inline constexpr std::string_view kBuiltinPresetDisplayName{"Built-in Presets"};
+using patches::display_preset_path;
+using patches::kBuiltinPresetDisplayName;
+using patches::kBuiltinPresetRoot;
 
 inline void center_next_window() {
   ImVec2 center = ImGui::GetMainViewport()->GetCenter();
@@ -34,28 +37,6 @@ inline ImU32 color_with_alpha(ImU32 color, float alpha) {
 }
 inline ImVec4 color_with_alpha_vec4(ImVec4 color, float alpha) {
   return ImVec4(color.x, color.y, color.z, color.w * alpha);
-}
-
-inline std::string display_preset_path(std::string relative_path) {
-  if (!relative_path.starts_with(kBuiltinPresetRoot)) {
-    return relative_path;
-  }
-
-  if (relative_path.size() == kBuiltinPresetRoot.size()) {
-    return std::string(kBuiltinPresetDisplayName);
-  }
-
-  if (relative_path.size() > kBuiltinPresetRoot.size() &&
-      relative_path[kBuiltinPresetRoot.size()] == '/') {
-    return std::string(kBuiltinPresetDisplayName) +
-           relative_path.substr(kBuiltinPresetRoot.size());
-  }
-
-  return relative_path;
-}
-
-inline std::string display_preset_path(const std::filesystem::path &path) {
-  return display_preset_path(path.generic_string());
 }
 
 } // namespace ui

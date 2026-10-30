@@ -193,7 +193,7 @@ add_executable(folder_metadata_test tests/patches/folder_metadata_test.cpp)
 target_include_directories(folder_metadata_test PRIVATE src)
 target_link_libraries(folder_metadata_test PRIVATE megatoy_core)
 add_test(NAME folder_metadata_test COMMAND folder_metadata_test)
-add_executable(patch_tree_flatten_test tests/gui/patch_tree_flatten_test.cpp)
+add_executable(patch_tree_flatten_test tests/patches/patch_tree_flatten_test.cpp)
 target_include_directories(patch_tree_flatten_test PRIVATE src)
 target_link_libraries(patch_tree_flatten_test PRIVATE megatoy_core)
 add_test(NAME patch_tree_flatten_test COMMAND patch_tree_flatten_test)
@@ -257,10 +257,16 @@ add_executable(preference_manager_test tests/preferences/preference_manager_test
 target_include_directories(preference_manager_test PRIVATE src)
 target_link_libraries(preference_manager_test PRIVATE megatoy_core)
 add_test(NAME preference_manager_test COMMAND preference_manager_test)
+# In the browser the logic layer calls into src/platform/web, built with the GUI.
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  set(MEGATOY_LOGIC_TEST_LIBRARY megatoy_core)
+else()
+  set(MEGATOY_LOGIC_TEST_LIBRARY megatoy_logic)
+endif()
 add_executable(preference_storage_compatibility_test
   tests/preferences/preference_storage_compatibility_test.cpp)
 target_link_libraries(preference_storage_compatibility_test
-  PRIVATE megatoy_logic)
+  PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
 add_test(NAME preference_storage_compatibility_test
          COMMAND preference_storage_compatibility_test
                  ${CMAKE_SOURCE_DIR}/tests/preferences/fixtures)
@@ -310,6 +316,22 @@ add_test(NAME logic_include_test
          COMMAND ${CMAKE_COMMAND} -DMEGATOY_SOURCE_DIR=${CMAKE_SOURCE_DIR}
                  -P ${CMAKE_SOURCE_DIR}/tests/core/logic_include_test.cmake)
 
+add_executable(document_decisions_test
+  tests/patches/document_decisions_test.cpp)
+target_link_libraries(document_decisions_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME document_decisions_test COMMAND document_decisions_test)
+add_executable(patch_entry_actions_test
+  tests/patches/patch_entry_actions_test.cpp)
+target_link_libraries(patch_entry_actions_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME patch_entry_actions_test COMMAND patch_entry_actions_test)
+add_executable(patch_tree_navigation_test
+  tests/patches/patch_tree_navigation_test.cpp)
+target_link_libraries(patch_tree_navigation_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME patch_tree_navigation_test COMMAND patch_tree_navigation_test)
+add_executable(patch_lab_sources_test tests/patches/patch_lab_sources_test.cpp)
+target_link_libraries(patch_lab_sources_test PRIVATE ${MEGATOY_LOGIC_TEST_LIBRARY})
+add_test(NAME patch_lab_sources_test COMMAND patch_lab_sources_test)
+
 get_property(MEGATOY_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
 foreach(target IN LISTS MEGATOY_TARGETS)
   get_target_property(target_type ${target} TYPE)
@@ -336,6 +358,8 @@ add_custom_target(check
           patch_repository_delete_test patch_repository_rename_test
           patch_repository_move_test patch_document_test folder_watcher_test
           folder_metadata_test patch_tree_flatten_test
+          document_decisions_test patch_entry_actions_test
+          patch_tree_navigation_test patch_lab_sources_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           preference_storage_compatibility_test
           version_test import_pipeline_test persistent_parse_cache_test

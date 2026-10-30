@@ -4,8 +4,8 @@
 // public UI surface -- include only from the patch_selector / patch_*_view
 // sources.
 
-#include "patch_filter.hpp"
 #include "patch_selector.hpp"
+#include "patches/patch_filter.hpp"
 
 #include <array>
 #include <string>

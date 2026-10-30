@@ -145,7 +145,8 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     // rather than assumed. Discarding stands apart at the left, away from
     // the answers that keep the changes.
     const auto document = confirmation_state.pending_document;
-    const bool offers_save = closing || confirmation_state.exit_can_save;
+    const bool offers_save =
+        patches::confirmation_offers_save(confirmation_state);
     const float discard_width = button_width("Discard Changes");
     const float cancel_width = button_width("Cancel");
     const float save_width =

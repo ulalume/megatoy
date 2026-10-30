@@ -83,6 +83,13 @@ set(MEGATOY_LOGIC_SOURCES
   src/formats/patch_registry.cpp
   src/history/history_manager.cpp
   src/midi/midi_input_manager.cpp
+  src/patches/document_confirmation.cpp
+  src/patches/save_controls.cpp
+  src/patches/patch_entry_actions.cpp
+  src/patches/patch_lab_sources.cpp
+  src/patches/patch_tree_navigation.cpp
+  src/patches/patch_tree_flatten.cpp
+  src/patches/patch_filter.cpp
   src/patches/patch_document.cpp
   src/patches/patch_session.cpp
   src/patches/filename_utils.cpp
@@ -135,11 +142,9 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/operator_selection.cpp
   src/gui/components/patch_drop.cpp
   src/gui/components/patch_editor.cpp
-  src/gui/components/patch_filter.cpp
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/patch_selector_shared.cpp
-  src/gui/components/patch_tree_flatten.cpp
   src/gui/components/patch_tree_view.cpp
   src/gui/components/preferences.cpp
   src/gui/components/star_rating.cpp
