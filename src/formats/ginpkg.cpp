@@ -143,17 +143,6 @@ std::optional<std::string> GinPackage::snapshot(const std::string &uuid) const {
   return std::nullopt;
 }
 
-bool GinPackage::DeleteVersion(const std::string &uuid) {
-  const auto before_size = history_.size();
-  history_.erase(std::remove_if(history_.begin(), history_.end(),
-                                [&](const HistoryEntry &entry) {
-                                  return entry.uuid == uuid;
-                                }),
-                 history_.end());
-  snapshots_.erase(uuid);
-  return history_.size() != before_size;
-}
-
 void GinPackage::AddVersion(const std::string &json_snapshot,
                             const std::string &comment) {
   if (json_snapshot.empty()) {
@@ -428,24 +417,6 @@ std::optional<ym2612::Patch> read_version(const std::filesystem::path &path,
     std::cerr << "Failed to load ginpkg version '" << uuid << "' from " << path
               << ": " << e.what() << std::endl;
     return std::nullopt;
-  }
-}
-
-bool delete_version(const std::filesystem::path &path,
-                    const std::string &uuid) {
-  try {
-    auto package = load_package(path);
-    if (!package) {
-      return false;
-    }
-    if (!package->DeleteVersion(uuid)) {
-      return false;
-    }
-    return package->Save(path);
-  } catch (const std::exception &e) {
-    std::cerr << "Failed to delete ginpkg version '" << uuid << "' from "
-              << path << ": " << e.what() << std::endl;
-    return false;
   }
 }
 

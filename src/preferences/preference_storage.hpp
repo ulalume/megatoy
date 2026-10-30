@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform/virtual_file_system.hpp"
+#include "platform/std_file_system.hpp"
 #include "preferences_data.hpp"
 
 #include <filesystem>
@@ -16,4 +16,4 @@ public:
 
 std::unique_ptr<PreferenceStorage>
 make_json_preference_storage(const std::filesystem::path &path,
-                             platform::VirtualFileSystem &vfs);
+                             platform::StdFileSystem &vfs);

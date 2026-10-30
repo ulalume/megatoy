@@ -79,10 +79,6 @@ bool PatchSession::activate(DocumentId id) {
   return true;
 }
 
-bool PatchSession::any_document_modified() const {
-  return modified_document_count() > 0;
-}
-
 std::size_t PatchSession::modified_document_count() const {
   return static_cast<std::size_t>(std::count_if(
       documents_.begin(), documents_.end(),

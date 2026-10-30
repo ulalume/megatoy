@@ -32,15 +32,10 @@ void track_patch_history(PatchEditorContext &context, const std::string &label,
                          const std::string &merge_key) {
   const std::string key = merge_key.empty() ? label : merge_key;
   if (ImGui::IsItemActivated()) {
-    auto before = context.session.current_patch();
-    if (context.begin_history) {
-      context.begin_history(label, key, before);
-    }
+    context.begin_history(label, key);
   }
   if (ImGui::IsItemDeactivatedAfterEdit()) {
-    if (context.commit_history) {
-      context.commit_history();
-    }
+    context.commit_history();
   }
 }
 
@@ -306,16 +301,10 @@ OperatorCommandContext make_operator_commands(PatchEditorContext &context,
                                               ym2612::Patch &patch) {
   return {patch.instrument, context.operator_edit(), context.operator_clipboard,
           [&context](const std::string &label) {
-            if (context.begin_history) {
-              // Empty merge key: two pastes in a row stay two undo steps.
-              context.begin_history(label, {}, context.session.current_patch());
-            }
+            // Empty merge key: two pastes in a row stay two undo steps.
+            context.begin_history(label, {});
           },
-          [&context]() {
-            if (context.commit_history) {
-              context.commit_history();
-            }
-          }};
+          [&context]() { context.commit_history(); }};
 }
 
 /**

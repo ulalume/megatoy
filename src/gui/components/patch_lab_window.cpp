@@ -237,19 +237,14 @@ void apply_patch_result(PatchLabContext &context,
                         const std::string &history_key,
                         const ym2612::Patch &new_patch) {
   auto &session = context.session;
-  auto before = session.current_patch();
-  if (context.begin_history) {
-    context.begin_history(history_label, history_key, before);
-  }
+  context.begin_history(history_label, history_key);
 
   session.current_patch() = new_patch;
   session.current_patch().name.clear();
   session.set_current_patch_path({});
   session.apply_patch_to_audio();
 
-  if (context.commit_history) {
-    context.commit_history();
-  }
+  context.commit_history();
 }
 
 void remember_result(PatchLabState &state, std::string label,

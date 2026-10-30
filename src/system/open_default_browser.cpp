@@ -8,8 +8,6 @@
 #include <windows.h>
 
 #include <shellapi.h>
-#elif defined(__APPLE__)
-#include <cstdlib>
 #elif defined(__linux__)
 #include <cstdlib>
 #include <sys/wait.h>
@@ -66,33 +64,6 @@ OpenBrowserResult open_browser_windows(std::string_view url) {
     DWORD error = GetLastError();
     result.error_message =
         "Failed to open URL. Windows error code: " + std::to_string(error);
-  }
-
-  return result;
-}
-
-#elif defined(__APPLE__)
-OpenBrowserResult open_browser_macos(std::string_view url) {
-  OpenBrowserResult result;
-
-  // Properly escape URL for shell command
-  std::string escaped_url;
-  escaped_url.reserve(url.size() + 10); // Reserve some extra space
-  for (char c : url) {
-    if (c == '"' || c == '\\' || c == '$' || c == '`') {
-      escaped_url += '\\';
-    }
-    escaped_url += c;
-  }
-
-  std::string command = "open \"" + escaped_url + "\"";
-  int exit_code = std::system(command.c_str());
-  if (exit_code == 0) {
-    result.success = true;
-  } else {
-    result.success = false;
-    result.error_message =
-        "Command failed with exit code: " + std::to_string(exit_code);
   }
 
   return result;
@@ -174,8 +145,6 @@ OpenBrowserResult open_default_browser(std::string_view url) {
 
 #ifdef _WIN32
   return open_browser_windows(url);
-#elif defined(__APPLE__)
-  return open_browser_macos(url);
 #elif defined(__linux__)
   return open_browser_linux(url);
 #else

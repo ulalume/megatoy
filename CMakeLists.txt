@@ -278,6 +278,10 @@ add_executable(import_pipeline_test tests/platform/import_pipeline_test.cpp)
 target_include_directories(import_pipeline_test PRIVATE src)
 target_link_libraries(import_pipeline_test PRIVATE megatoy_core)
 add_test(NAME import_pipeline_test COMMAND import_pipeline_test)
+add_executable(web_patch_url_test tests/platform/web_patch_url_test.cpp
+  src/platform/web/web_patch_url.cpp)
+target_link_libraries(web_patch_url_test PRIVATE megatoy_logic)
+add_test(NAME web_patch_url_test COMMAND web_patch_url_test)
 add_executable(persistent_parse_cache_test
   tests/patches/persistent_parse_cache_test.cpp)
 target_include_directories(persistent_parse_cache_test PRIVATE src)
@@ -361,7 +365,8 @@ add_custom_target(check
           patch_tree_navigation_test patch_lab_sources_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           preference_storage_compatibility_test
-          version_test import_pipeline_test persistent_parse_cache_test
+          version_test import_pipeline_test web_patch_url_test
+          persistent_parse_cache_test
           background_folder_scan_test
           operator_layout_test operator_edit_test operator_text_test
           operator_selection_test

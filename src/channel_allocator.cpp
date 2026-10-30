@@ -112,14 +112,6 @@ bool ChannelAllocator::published_contains(const ym2612::Note &note) const {
   return false;
 }
 
-std::array<bool, 6> ChannelAllocator::published_channels() const {
-  std::array<bool, 6> busy{};
-  for (std::size_t index = 0; index < published_.size(); ++index) {
-    busy[index] = published_[index].load(std::memory_order_acquire) != 0;
-  }
-  return busy;
-}
-
 bool ChannelAllocator::is_note_active(const ym2612::Note &note) const {
   return note_to_channel_.find(note) != note_to_channel_.end();
 }

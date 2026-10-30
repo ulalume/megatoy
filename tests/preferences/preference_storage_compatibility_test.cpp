@@ -16,6 +16,12 @@ nlohmann::json read_json(const fs::path &path) {
   return nlohmann::json::parse(stream);
 }
 
+nlohmann::json current_keys(nlohmann::json value) {
+  value.erase("layout");
+  value["ui"].erase("show_audio_controls");
+  return value;
+}
+
 void check_fixture(const fs::path &fixtures, const fs::path &output,
                    const char *name, const char *normalized,
                    const PreferenceData &expected) {
@@ -25,7 +31,7 @@ void check_fixture(const fs::path &fixtures, const fs::path &output,
   CHECK(loaded.theme == expected.theme);
   CHECK(loaded.ui_preferences == expected.ui_preferences);
   CHECK(make_json_preference_storage(output, vfs)->save(loaded));
-  CHECK(read_json(output) == read_json(fixtures / normalized));
+  CHECK(read_json(output) == current_keys(read_json(fixtures / normalized)));
 }
 
 /// Every saved value differs from its default, so a field that stops loading
@@ -50,7 +56,7 @@ void check_every_field_survives(const fs::path &fixtures,
   CHECK(make_json_preference_storage(fixtures / "every_field.json", vfs)
             ->load(loaded));
   CHECK(make_json_preference_storage(output, vfs)->save(loaded));
-  CHECK(read_json(output) == all);
+  CHECK(read_json(output) == current_keys(all));
 }
 
 void check_unknown_keys_are_ignored(const fs::path &fixtures,
@@ -70,7 +76,7 @@ void check_unknown_keys_are_ignored(const fs::path &fixtures,
   PreferenceData loaded;
   CHECK(make_json_preference_storage(output, vfs)->load(loaded));
   CHECK(make_json_preference_storage(output, vfs)->save(loaded));
-  CHECK(read_json(output) == defaults);
+  CHECK(read_json(output) == current_keys(defaults));
 }
 
 } // namespace

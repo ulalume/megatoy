@@ -273,16 +273,6 @@ void PreferenceManager::set_last_seen_version(const std::string &version) {
   save_preferences();
 }
 
-const std::string &PreferenceManager::layout() const { return layout_; }
-
-void PreferenceManager::set_layout(const std::string &name) {
-  if (name == layout_) {
-    return;
-  }
-  layout_ = name;
-  save_preferences();
-}
-
 bool PreferenceManager::ensure_directories_exist() {
   directories_initialized = paths_.ensure_directories();
   return directories_initialized;
@@ -358,7 +348,6 @@ PreferenceData PreferenceManager::to_data() const {
   data.open_patches = open_patches_;
   data.active_open_patch = active_open_patch_;
   data.last_seen_version = last_seen_version_;
-  data.layout = layout_;
   data.show_builtin_presets = show_builtin_presets_;
   data.theme = theme_;
   data.ui_preferences = ui_preferences_;
@@ -372,7 +361,6 @@ void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
   open_patches_ = data.open_patches;
   active_open_patch_ = data.active_open_patch;
   last_seen_version_ = data.last_seen_version;
-  layout_ = data.layout;
   show_builtin_presets_ = data.show_builtin_presets;
   theme_ = data.theme;
   ui_preferences_ = data.ui_preferences;

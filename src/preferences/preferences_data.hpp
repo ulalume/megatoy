@@ -11,7 +11,6 @@
 
 struct UIPreferences {
   bool show_patch_editor = true;
-  bool show_audio_controls = true;
   bool show_midi_keyboard = true;
   bool show_patch_selector = true;
   bool show_mml_console = true;
@@ -51,7 +50,6 @@ struct UIPreferences {
    * ui::envelope clamps it to C0..B7.
    */
   int envelope_reference_midi_note = 60;
-  std::string patch_search_query;
 
   // Patch selector view settings
   std::string metadata_search_query;
@@ -71,7 +69,6 @@ struct UIPreferences {
     // Search and star filters are session-scoped. Excluding them prevents
     // typing in the patch browser from dirtying the persistent store.
     return lhs.show_patch_editor == rhs.show_patch_editor &&
-           lhs.show_audio_controls == rhs.show_audio_controls &&
            lhs.show_midi_keyboard == rhs.show_midi_keyboard &&
            lhs.show_patch_selector == rhs.show_patch_selector &&
            lhs.show_mml_console == rhs.show_mml_console &&
@@ -133,8 +130,6 @@ struct PreferenceData {
    * soon as the decision is made, so ignoring the notice still counts.
    */
   std::string last_seen_version;
-  /// Name of the window layout in use; empty means the default one.
-  std::string layout;
   bool show_builtin_presets = true;
 
   ui::styles::ThemeId theme = ui::styles::ThemeId::MegatoyDark;

@@ -2,7 +2,6 @@
 
 #include "gui/styles/theme.hpp"
 #include "preferences/preference_manager.hpp"
-#include "system/path_service.hpp"
 #include <imgui.h>
 
 #include <filesystem>
@@ -21,7 +20,6 @@ struct PreferencesContext {
   bool &open_add_folder_dialog;
   /// Show the window with the Sound tab selected. Consumed when it is drawn.
   bool &open_sound_tab;
-  const megatoy::system::DirectoryPaths &paths;
   const std::vector<std::string> &connected_midi_devices;
   std::string midi_status_message;
   bool show_web_midi_button = false;
@@ -33,7 +31,6 @@ struct PreferencesContext {
   std::function<void(ui::styles::ThemeId theme_id)> apply_theme;
   /// Called with the new interface scale preference.
   std::function<void(float preference)> apply_ui_scale;
-  bool allow_workspace_ui = true;
   /// Frames the audio device uses when the buffer preference is unset.
   int default_audio_buffer_frames = 0;
   /// Enlargement the display asks content for, for the automatic label.

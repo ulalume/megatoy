@@ -28,7 +28,7 @@ WebPlatformServices::WebPlatformServices()
     : file_system_(),
       release_provider_(std::make_shared<WebReleaseInfoProvider>()) {}
 
-platform::VirtualFileSystem &WebPlatformServices::file_system() {
+platform::StdFileSystem &WebPlatformServices::file_system() {
   return file_system_;
 }
 

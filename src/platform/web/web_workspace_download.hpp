@@ -8,7 +8,7 @@
 #include <string_view>
 
 namespace platform {
-class VirtualFileSystem;
+class StdFileSystem;
 }
 
 namespace ym2612 {
@@ -18,7 +18,7 @@ struct Patch;
 namespace platform::web {
 
 /// Download a workspace file directly, or a directory and its contents as ZIP.
-bool download_workspace_path(const VirtualFileSystem &vfs,
+bool download_workspace_path(const StdFileSystem &vfs,
                              const std::filesystem::path &path);
 
 /**

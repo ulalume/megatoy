@@ -1,4 +1,5 @@
 #include "folder_watcher.hpp"
+#include "workspace/path_policy.hpp"
 
 #if !defined(__EMSCRIPTEN__)
 #include <efsw/efsw.hpp>
@@ -79,9 +80,7 @@ void FolderWatcher::watch(const std::vector<std::filesystem::path> &folders) {
   // to /private/var.
   std::vector<std::filesystem::path> wanted;
   for (const auto &folder : folders) {
-    std::error_code error;
-    auto resolved = std::filesystem::weakly_canonical(folder, error);
-    wanted.push_back(error ? folder.lexically_normal() : resolved);
+    wanted.push_back(megatoy::workspace::normalize_path(folder));
   }
   {
     std::lock_guard lock(impl_->mutex);

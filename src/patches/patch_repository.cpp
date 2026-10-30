@@ -1,7 +1,6 @@
 #include "patch_repository.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/ym2612_format_adapter.hpp"
-#include "patch_storage.hpp"
 #include "patches/filesystem_patch_storage.hpp"
 #include "patches/persistent_parse_cache.hpp"
 #include "platform/import_pipeline.hpp"
@@ -19,17 +18,19 @@
 namespace patches {
 
 PatchRepository::PatchRepository(
-    platform::VirtualFileSystem &vfs,
+    platform::StdFileSystem &vfs,
     const megatoy::workspace::Workspace &workspace,
     const std::filesystem::path &builtin_presets_dir,
     const std::filesystem::path &builtin_presets_metadata,
     PersistentParseCache *persistent_cache)
     : workspace_(workspace), builtin_presets_directory_(builtin_presets_dir),
-      builtin_presets_metadata_(builtin_presets_metadata),
-      vfs_(vfs), persistent_cache_(persistent_cache) {
+      builtin_presets_metadata_(builtin_presets_metadata), vfs_(vfs),
+      persistent_cache_(persistent_cache) {
   rebuild_storages();
   refresh();
 }
+
+PatchRepository::~PatchRepository() = default;
 
 void PatchRepository::set_show_builtin_presets(bool show) {
   if (show == show_builtin_presets_) {
@@ -233,13 +234,11 @@ PatchRepository::save_patch_in(const std::filesystem::path &folder,
                                const std::string &name, bool overwrite,
                                std::string_view preferred_extension) {
   for (const auto &storage : storages_) {
-    auto *filesystem_storage =
-        dynamic_cast<FilesystemPatchStorage *>(storage.get());
-    if (filesystem_storage == nullptr || filesystem_storage->root() != folder) {
+    if (storage->root() != folder) {
       continue;
     }
-    auto result = filesystem_storage->save_patch(patch, name, overwrite,
-                                                 preferred_extension);
+    auto result =
+        storage->save_patch(patch, name, overwrite, preferred_extension);
     if (result.status == SavePatchResult::Status::Success) {
       refresh();
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -365,20 +364,6 @@ PatchRepository::to_absolute_path(const std::filesystem::path &path) const {
   return path;
 }
 
-bool PatchRepository::save_patch_metadata(const std::string &relative_path,
-                                          const ym2612::Patch &patch,
-                                          const PatchMetadata &metadata) {
-  for (const auto &storage : storages_) {
-    if (storage->save_patch_metadata(relative_path, patch, metadata)) {
-#if defined(MEGATOY_PLATFORM_WEB)
-      platform::web::request_storage_persist();
-#endif
-      return true;
-    }
-  }
-  return false;
-}
-
 bool PatchRepository::update_patch_metadata(const std::string &relative_path,
                                             const PatchMetadata &metadata) {
   for (const auto &storage : storages_) {
@@ -392,35 +377,6 @@ bool PatchRepository::update_patch_metadata(const std::string &relative_path,
     }
   }
   return false;
-}
-
-std::optional<PatchMetadata>
-PatchRepository::get_patch_metadata(const std::string &relative_path) const {
-  for (const auto &storage : storages_) {
-    if (auto md = storage->get_patch_metadata(relative_path)) {
-      return md;
-    }
-  }
-  return std::nullopt;
-}
-
-std::vector<PatchEntry> PatchRepository::get_patches_by_metadata_filter(
-    const std::function<bool(const PatchMetadata &)> &filter) const {
-  std::vector<PatchEntry> result;
-
-  std::function<void(const std::vector<PatchEntry> &)> search_tree;
-  search_tree = [&](const std::vector<PatchEntry> &entries) {
-    for (const auto &entry : entries) {
-      if (entry.is_directory) {
-        search_tree(entry.children);
-      } else if (entry.metadata && filter(*entry.metadata)) {
-        result.push_back(entry);
-      }
-    }
-  };
-
-  search_tree(tree_cache_);
-  return result;
 }
 
 void PatchRepository::cleanup_orphaned_metadata() {
@@ -444,29 +400,6 @@ void PatchRepository::cleanup_orphaned_metadata() {
   for (const auto &storage : storages_) {
     storage->cleanup_metadata(existing_paths);
   }
-}
-
-std::string PatchRepository::primary_writable_label() const {
-  for (const auto &storage : storages_) {
-    if (storage->is_writable()) {
-      std::string label(storage->label());
-      if (!label.empty()) {
-        return label;
-      }
-    }
-  }
-  return "user";
-}
-
-bool PatchRepository::patch_name_conflicts(const std::string &name) const {
-  for (const auto &storage : storages_) {
-    if (auto has = storage->has_patch_named(name)) {
-      if (*has) {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 const PatchEntry *

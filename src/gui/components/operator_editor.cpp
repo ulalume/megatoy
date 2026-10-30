@@ -664,17 +664,13 @@ bool operator_drop_target(PatchEditorContext &context,
     const auto copied = ym2612::copy_operator(
         from_other_patch ? source_document->patch().instrument : instrument,
         source);
-    if (context.begin_history) {
-      context.begin_history(label, {}, context.session.current_patch());
-    }
+    context.begin_history(label, {});
     if (copy) {
       ym2612::paste_operator(instrument, slot, copied);
     } else {
       ym2612::swap_operators(instrument, source, slot);
     }
-    if (context.commit_history) {
-      context.commit_history();
-    }
+    context.commit_history();
     // The change happened here, so the keys (Undo among them) follow it.
     ImGui::SetWindowFocus();
     megatoy::status::success(copy ? "Copied " + from + " to " + to + "."
@@ -984,18 +980,12 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::OpenPopup("##operator_menu");
   }
   if (ImGui::BeginPopup("##operator_menu")) {
-    OperatorCommandContext commands{
-        patch.instrument, state, context.operator_clipboard,
-        [&context](const std::string &label) {
-          if (context.begin_history) {
-            context.begin_history(label, {}, context.session.current_patch());
-          }
-        },
-        [&context]() {
-          if (context.commit_history) {
-            context.commit_history();
-          }
-        }};
+    OperatorCommandContext commands{patch.instrument, state,
+                                    context.operator_clipboard,
+                                    [&context](const std::string &label) {
+                                      context.begin_history(label, {});
+                                    },
+                                    [&context]() { context.commit_history(); }};
     render_operator_command_items(commands);
     ImGui::EndPopup();
   }

@@ -96,7 +96,7 @@ bool run_frame(RuntimeContext &runtime) {
     app_state.set_connected_midi_inputs(std::move(*ports));
   }
 
-  services.gui_manager.begin_frame(app_state.ui_state().prefs);
+  services.gui_manager.begin_frame();
   ui::handle_history_shortcuts(*runtime.app_context);
   // The envelope graphs are drawn at this note. Pushed in before the frame
   // rather than compared against the saved preferences after it, because the

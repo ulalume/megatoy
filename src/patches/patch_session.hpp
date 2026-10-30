@@ -164,7 +164,6 @@ public:
    * document in its place, as a preview.
    */
   bool close_document(DocumentId id);
-  bool any_document_modified() const;
   std::size_t modified_document_count() const;
   void mark_all_clean();
 

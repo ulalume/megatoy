@@ -653,7 +653,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
         ImGui::EndChild();
         ImGui::EndTabItem();
       }
-      if (context.allow_workspace_ui && ImGui::BeginTabItem("Patches")) {
+      if (ImGui::BeginTabItem("Patches")) {
         ImGui::BeginChild("##patches");
         render_patches_tab(context);
         ImGui::EndChild();

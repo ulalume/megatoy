@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 struct EmbeddedResource {
   const uint8_t *data;
@@ -29,9 +28,6 @@ public:
   // Check if resource exists
   bool has_resource(const std::string &name) const;
   bool has_resource(const std::filesystem::path &path) const;
-
-  // Get list of all available resources
-  std::vector<std::string> get_resource_names() const;
 
 private:
   ResourceManager();

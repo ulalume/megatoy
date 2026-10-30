@@ -89,8 +89,6 @@ public:
   /// Notes currently sounding, in channel order.
   std::vector<ym2612::Note> published_notes() const;
   bool published_contains(const ym2612::Note &note) const;
-  /// Which voices are busy, for the channel display.
-  std::array<bool, 6> published_channels() const;
 
   /**
    * What every channel is playing, or was playing until its key came up.

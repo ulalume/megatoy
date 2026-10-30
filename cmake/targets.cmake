@@ -182,7 +182,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   list(APPEND MEGATOY_LOGIC_SOURCES
     src/audio/webaudio_transport.cpp
     src/platform/web/web_platform_services.cpp
-    src/platform/web/web_file_system.cpp
     src/platform/web/web_download.cpp
     src/platform/web/local_storage.cpp
     src/platform/web/web_folder_delete.cpp
@@ -207,7 +206,6 @@ else()
   list(APPEND MEGATOY_LOGIC_SOURCES
     src/midi/rtmidi_backend.cpp
     src/patches/background_folder_scan.cpp
-    src/platform/native/native_file_system.cpp
     src/platform/native/desktop_platform_services.cpp
   )
 endif()

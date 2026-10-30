@@ -57,7 +57,7 @@ void test_file_move(const fs::path &root) {
   patches::PatchMetadata metadata;
   metadata.star_rating = 4;
   metadata.category = "Lead";
-  CHECK(repository.save_patch_metadata(relative, make_patch(3), metadata));
+  CHECK(repository.update_patch_metadata(relative, metadata));
 
   const auto file = entry_at(repository, folder / "lead.gin");
   const auto pads = entry_at(repository, folder / "pads");
@@ -110,7 +110,7 @@ void test_directory_move(const fs::path &root) {
   patches::PatchMetadata metadata;
   metadata.star_rating = 5;
   metadata.category = "Bass";
-  CHECK(repository.save_patch_metadata(nested, make_patch(2), metadata));
+  CHECK(repository.update_patch_metadata(nested, metadata));
 
   const auto bass = entry_at(repository, folder / "bass");
   const auto inner = entry_at(repository, folder / "bass" / "inner");

@@ -59,7 +59,7 @@ void test_repository_rename(const fs::path &root) {
       repository.to_relative_path(saved.path).generic_string();
   patches::PatchMetadata exact_metadata;
   exact_metadata.star_rating = 5;
-  CHECK(repository.save_patch_metadata(old_relative, patch, exact_metadata));
+  CHECK(repository.update_patch_metadata(old_relative, exact_metadata));
   patches::PatchMetadata child_metadata;
   child_metadata.category = "latest";
   CHECK(repository.update_patch_metadata(old_relative + "/latest",
@@ -132,7 +132,7 @@ void test_directory_rename(const fs::path &root) {
           .generic_string();
   patches::PatchMetadata metadata;
   metadata.star_rating = 3;
-  CHECK(repository.save_patch_metadata(nested, patch, metadata));
+  CHECK(repository.update_patch_metadata(nested, metadata));
 
   const auto *folder = find_entry(repository.tree(), writable / "bass");
   CHECK(folder != nullptr);
@@ -208,7 +208,7 @@ void test_workspace_root_rename(const fs::path &root) {
       repository.to_relative_path(saved.path).generic_string();
   patches::PatchMetadata metadata;
   metadata.star_rating = 4;
-  CHECK(repository.save_patch_metadata(relative, patch, metadata));
+  CHECK(repository.update_patch_metadata(relative, metadata));
 
   const auto *root_entry = find_entry(repository.tree(), original);
   CHECK(root_entry != nullptr);

@@ -84,10 +84,6 @@ public:
   const std::string &last_seen_version() const;
   void set_last_seen_version(const std::string &version);
 
-  /// Name of the window layout in use; empty means the default one.
-  const std::string &layout() const;
-  void set_layout(const std::string &name);
-
   std::filesystem::path get_imgui_ini_file() const;
 
   void set_theme(ui::styles::ThemeId theme);
@@ -123,7 +119,6 @@ private:
   std::vector<OpenPatchRecord> open_patches_;
   int active_open_patch_ = -1;
   std::string last_seen_version_;
-  std::string layout_;
   bool show_builtin_presets_ = true;
   std::unique_ptr<PreferenceStorage> storage_;
 

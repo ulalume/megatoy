@@ -6,7 +6,7 @@
 #include "patches/folder_metadata.hpp"
 #include "patches/patch_session.hpp"
 #include "patches/patch_write.hpp"
-#include "platform/native/native_file_system.hpp"
+#include "platform/std_file_system.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
@@ -27,7 +27,7 @@
 namespace {
 
 void test_fresh_workspace(const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
 
   const auto fresh_config = root / "fresh-config";
   {
@@ -39,7 +39,7 @@ void test_fresh_workspace(const std::filesystem::path &root) {
 
 void test_failed_preferences_load_can_be_repaired(
     const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "corrupt-preferences-config";
   std::filesystem::create_directories(config);
   {
@@ -64,7 +64,7 @@ void test_failed_preferences_load_can_be_repaired(
 
 void test_velocity_sensitivity_preference_round_trip(
     const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "velocity-preference-config";
   std::filesystem::remove_all(config);
   std::filesystem::create_directories(config);
@@ -94,7 +94,7 @@ void test_velocity_sensitivity_preference_round_trip(
 
 void test_envelope_reference_note_preference_round_trip(
     const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "envelope-reference-note-config";
   std::filesystem::remove_all(config);
   std::filesystem::create_directories(config);
@@ -123,7 +123,7 @@ void test_envelope_reference_note_preference_round_trip(
 }
 
 void test_chip_type_preference_round_trip(const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "chip-type-preference-config";
   std::filesystem::remove_all(config);
   std::filesystem::create_directories(config);
@@ -174,7 +174,7 @@ void test_chip_type_preference_round_trip(const std::filesystem::path &root) {
 }
 
 void test_core_preference_round_trip(const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "core-preference-config";
   std::filesystem::remove_all(config);
   std::filesystem::create_directories(config);
@@ -219,7 +219,7 @@ void test_core_preference_round_trip(const std::filesystem::path &root) {
 
 void test_load_reading_preference_round_trip(
     const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "load-reading-preference-config";
   std::filesystem::remove_all(config);
   std::filesystem::create_directories(config);
@@ -265,7 +265,7 @@ void test_load_reading_preference_round_trip(
 }
 
 void test_last_patch_preference_round_trip(const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "last-patch-preference-config";
   std::filesystem::remove_all(config);
   std::filesystem::create_directories(config);
@@ -296,7 +296,7 @@ void test_last_patch_preference_round_trip(const std::filesystem::path &root) {
 struct TestEnvironment {
   std::filesystem::path root;
   std::filesystem::path patches_folder;
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   megatoy::system::PathService directories;
   PreferenceManager preferences;
   AudioManager audio;
@@ -501,9 +501,7 @@ void test_buffer_size_change_reopens_the_device(TestEnvironment &env) {
 
   // The note the reopen interrupted is released, not left sounding.
   CHECK(!audio.notes().published_contains(c4));
-  for (bool active : audio.notes().published_channels()) {
-    CHECK(!active);
-  }
+  CHECK(audio.notes().published_notes().empty());
   CHECK(audio.load_meter().history().count == 0);
 
   // The patch came across, so the same note plays at the same level.
@@ -541,7 +539,7 @@ void test_workspace_folder_is_visible(TestEnvironment &env) {
 }
 
 void test_normal_workspace_folder_removal(const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "normal-removal-config";
   const auto folder = root / "normal-removal-folder";
   std::filesystem::create_directories(folder);
@@ -554,7 +552,7 @@ void test_normal_workspace_folder_removal(const std::filesystem::path &root) {
 
 void test_session_path_survives_workspace_relabel(
     const std::filesystem::path &root) {
-  NativeFileSystem fs;
+  platform::StdFileSystem fs;
   const auto config = root / "path-relabel-config";
   const auto first_input = root / "path-relabel-first" / "patches";
   const auto second_input = root / "path-relabel-second" / "patches";
@@ -603,20 +601,24 @@ void test_save_and_metadata_roundtrip(TestEnvironment &env) {
   CHECK(std::filesystem::exists(saved.path));
 
   repository.refresh();
-  const auto relative =
-      repository.to_relative_path(saved.path).generic_string();
+  const auto *saved_entry = repository.find_entry(
+      repository.to_relative_path(saved.path).generic_string());
+  CHECK(saved_entry != nullptr);
+  const auto relative = saved_entry->relative_path;
 
   patches::PatchMetadata metadata;
   metadata.star_rating = 4;
   metadata.category = "bass";
-  CHECK(repository.save_patch_metadata(relative, env.session.current_patch(),
-                                       metadata));
+  CHECK(repository.update_patch_metadata(relative, metadata));
 
   // The sidecar lives inside the folder, not in the user's config directory.
   const auto sidecar = env.patches_folder / ".megatoy" / "patches.json";
   CHECK(std::filesystem::exists(sidecar));
 
-  const auto stored = repository.get_patch_metadata(relative);
+  repository.refresh();
+  const auto *entry = repository.find_entry(relative);
+  CHECK(entry != nullptr);
+  const auto &stored = entry->metadata;
   CHECK(stored.has_value());
   CHECK(stored->star_rating == 4);
   CHECK(stored->category == "bass");
@@ -626,7 +628,9 @@ void test_save_and_metadata_roundtrip(TestEnvironment &env) {
   megatoy::workspace::Workspace reopened;
   CHECK(reopened.add(env.patches_folder));
   patches::PatchRepository second(env.fs, reopened);
-  const auto reloaded = second.get_patch_metadata(relative);
+  const auto *reopened_entry = second.find_entry(relative);
+  CHECK(reopened_entry != nullptr);
+  const auto &reloaded = reopened_entry->metadata;
   CHECK(reloaded.has_value());
   CHECK(reloaded->star_rating == 4);
 }
@@ -1048,9 +1052,7 @@ void test_note_allocation(TestEnvironment &env) {
   CHECK(env.audio.submit(audio::AudioCommand::note_off(c4)));
   CHECK(!env.audio.notes().published_contains(c4));
   env.audio.submit(audio::AudioCommand::all_notes_off());
-  for (bool active : env.audio.notes().published_channels()) {
-    CHECK(!active);
-  }
+  CHECK(env.audio.notes().published_notes().empty());
 }
 
 } // namespace

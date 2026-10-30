@@ -62,7 +62,7 @@ void test_writable_storage_deletes_patch(const fs::path &root) {
       repository.to_relative_path(saved.path).generic_string();
   patches::PatchMetadata metadata;
   metadata.star_rating = 5;
-  CHECK(repository.save_patch_metadata(relative, patch, metadata));
+  CHECK(repository.update_patch_metadata(relative, metadata));
 
   const auto *found = find_entry(repository.tree(), saved.path);
   CHECK(found != nullptr);

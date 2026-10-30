@@ -4,12 +4,12 @@
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
+#include "gui/layouts.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "platform/platform_config.hpp"
 #include <filesystem>
-#include <fstream>
 #include <imgui.h>
 #if defined(MEGATOY_PLATFORM_WEB)
 #define IMGUI_IMPL_OPENGL_ES3 1
@@ -18,7 +18,6 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_internal.h>
 #include <iostream>
-#include <iterator>
 #include <string>
 
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -214,12 +213,10 @@ bool GuiManager::get_should_close() const { return !window_ || should_close_; }
 
 void GuiManager::set_should_close(bool value) { should_close_ = value; }
 
-void GuiManager::begin_frame(UIPreferences &window_prefs) {
+void GuiManager::begin_frame() {
   if (!initialized_) {
     return;
   }
-
-  apply_pending_layout(window_prefs);
 
   // Start the Dear ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
@@ -254,72 +251,8 @@ void GuiManager::setup_default_layout(unsigned int dockspace_id) {
   ImGui::DockBuilderRemoveNode(dockspace_id);
   ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
   ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
-  ui::layouts::definition(current_layout_).build(dockspace_id);
+  ui::layouts::build_default_layout(dockspace_id);
   ImGui::DockBuilderFinish(dockspace_id);
-}
-
-void GuiManager::switch_layout(ui::layouts::LayoutId layout) {
-  if (layout == current_layout_ && !pending_layout_) {
-    return;
-  }
-  pending_layout_ = layout;
-}
-
-// Runs between frames: ImGui's settings are only replaced outside
-// NewFrame/Render, and the dockspace is rebuilt from them by the
-// DockSpaceOverViewport that follows.
-void GuiManager::apply_pending_layout(UIPreferences &window_prefs) {
-  if (pending_layout_ && *pending_layout_ != current_layout_) {
-    store_layout_ini();
-    current_layout_ = *pending_layout_;
-    preferences_.set_layout(
-        std::string(ui::layouts::definition(current_layout_).name));
-    ImGui::ClearIniSettings();
-    sync_imgui_ini();
-    const bool loaded = load_layout_ini();
-    first_frame_ = !loaded;
-    check_loaded_layout_ = true;
-    web_layout_loaded_ = megatoy::platform::is_web() && loaded;
-    pending_window_visibility_ = true;
-  }
-  pending_layout_.reset();
-
-  if (pending_window_visibility_) {
-    pending_window_visibility_ = false;
-    ui::layouts::apply_windows(
-        ui::layouts::definition(current_layout_).windows, window_prefs);
-  }
-}
-
-void GuiManager::store_layout_ini() {
-  if (megatoy::platform::is_web()) {
-    if (web_ini_loaded_) {
-      ui::save_web_layout_ini(ui::layouts::definition(current_layout_).name,
-                              /*immediately=*/true);
-    }
-    return;
-  }
-  if (!imgui_ini_file_path_.empty()) {
-    ImGui::SaveIniSettingsToDisk(imgui_ini_file_path_.c_str());
-  }
-}
-
-bool GuiManager::load_layout_ini() {
-  if (megatoy::platform::is_web()) {
-    return ui::load_web_layout_ini(
-        ui::layouts::definition(current_layout_).name);
-  }
-  if (imgui_ini_file_path_.empty()) {
-    return false;
-  }
-  std::ifstream file(imgui_ini_file_path_, std::ios::binary);
-  const std::string text((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
-  if (text.empty()) {
-    return false;
-  }
-  ImGui::LoadIniSettingsFromMemory(text.c_str(), text.size());
-  return true;
 }
 
 void GuiManager::end_frame() {
@@ -335,8 +268,7 @@ void GuiManager::end_frame() {
   }
 
   if (web_ini_loaded_) {
-    ui::save_web_layout_ini(ui::layouts::definition(current_layout_).name,
-                            /*immediately=*/false);
+    ui::save_web_layout_ini();
   }
 
   // Rendering
@@ -407,11 +339,7 @@ bool GuiManager::poll_events(int timeout_ms) {
 }
 
 void GuiManager::sync_imgui_ini() {
-  current_layout_ = ui::layouts::resolve_layout(preferences_.layout());
-  const auto ini_path = ui::layouts::ini_file_path(
-      preferences_.get_imgui_ini_file(),
-      ui::layouts::definition(current_layout_).name);
-  set_imgui_ini_file(ini_path.generic_string());
+  set_imgui_ini_file(preferences_.get_imgui_ini_file().generic_string());
 }
 
 void GuiManager::apply_theme() {
@@ -462,8 +390,6 @@ void GuiManager::set_fullscreen(bool enable) {
     }
   }
 }
-
-void GuiManager::toggle_fullscreen() { set_fullscreen(!fullscreen_); }
 
 bool GuiManager::supports_fullscreen() const {
   return megatoy::platform::is_desktop();
@@ -541,8 +467,7 @@ void GuiManager::sync_web_imgui_ini() {
       ImGui::GetCurrentContext() == nullptr) {
     return;
   }
-  web_layout_loaded_ =
-      ui::load_web_layout_ini(ui::layouts::definition(current_layout_).name);
+  web_layout_loaded_ = ui::load_web_layout_ini();
   first_frame_ = !web_layout_loaded_;
   check_loaded_layout_ = true;
   web_ini_loaded_ = true;

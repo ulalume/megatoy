@@ -1,5 +1,5 @@
 #include "../test_check.hpp"
-#include "platform/native/native_file_system.hpp"
+#include "platform/std_file_system.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 
@@ -14,7 +14,7 @@ namespace {
 
 struct TestEnvironment {
   fs::path root;
-  NativeFileSystem file_system;
+  platform::StdFileSystem file_system;
   megatoy::system::PathService directories;
 
   explicit TestEnvironment(const fs::path &path)
@@ -36,7 +36,6 @@ void test_settings_are_persisted_without_waiting_for_destruction(
   preferences.set_last_patch_path(
       (fs::path("Bass") / "warm.gin").generic_string());
   preferences.set_last_seen_version("v1.2.3");
-  preferences.set_layout("Sound");
   preferences.set_show_builtin_presets(false);
   preferences.set_theme(ui::styles::ThemeId::MegatoyLight);
   const std::vector<OpenPatchRecord> records{{"warm.gin", true},
@@ -52,7 +51,6 @@ void test_settings_are_persisted_without_waiting_for_destruction(
   PreferenceManager loaded(env.directories);
   CHECK(loaded.last_patch_path() == preferences.last_patch_path());
   CHECK(loaded.last_seen_version() == "v1.2.3");
-  CHECK(loaded.layout() == "Sound");
   CHECK(!loaded.show_builtin_presets());
   CHECK(loaded.theme() == ui::styles::ThemeId::MegatoyLight);
   CHECK(loaded.open_patches() == records);
