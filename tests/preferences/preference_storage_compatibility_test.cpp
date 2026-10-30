@@ -53,6 +53,26 @@ void check_every_field_survives(const fs::path &fixtures,
   CHECK(read_json(output) == all);
 }
 
+void check_unknown_keys_are_ignored(const fs::path &fixtures,
+                                    const fs::path &output) {
+  const auto defaults = read_json(fixtures / "default.json");
+  auto input = defaults;
+  input["data_directory"] = "/unused";
+  input["legacy_workspace_migration"] = 1;
+  input["legacy_metadata_migration"] = 1;
+  {
+    std::ofstream stream(output);
+    stream << input;
+    CHECK(stream.good());
+  }
+
+  platform::StdFileSystem vfs;
+  PreferenceData loaded;
+  CHECK(make_json_preference_storage(output, vfs)->load(loaded));
+  CHECK(make_json_preference_storage(output, vfs)->save(loaded));
+  CHECK(read_json(output) == defaults);
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -74,6 +94,7 @@ int main(int argc, char **argv) {
   expected.ui_preferences.custom_typing_octave_up_key = 605;
   check_fixture(fixtures, output, "custom.json", "custom.json", expected);
   check_every_field_survives(fixtures, output);
+  check_unknown_keys_are_ignored(fixtures, output);
 
   fs::remove(output);
 }

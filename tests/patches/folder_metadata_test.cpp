@@ -9,7 +9,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-void test_bare_ginpkg_metadata_gains_latest_twin(const fs::path &root) {
+void test_metadata_load_clamps_rating(const fs::path &root) {
   const auto sidecar = root / ".megatoy" / "patches.json";
   fs::create_directories(sidecar.parent_path());
   {
@@ -17,7 +17,7 @@ void test_bare_ginpkg_metadata_gains_latest_twin(const fs::path &root) {
     file << R"({
   "version": 1,
   "patches": {
-    "banks/Favorites.GINPKG": {
+    "banks/Favorites.GINPKG/latest": {
       "star_rating": 9,
       "category": "lead"
     }
@@ -27,7 +27,6 @@ void test_bare_ginpkg_metadata_gains_latest_twin(const fs::path &root) {
 
   patches::FolderMetadataStore store(sidecar);
   CHECK(store.load());
-  CHECK(store.get("banks/Favorites.GINPKG").has_value());
   const auto latest = store.get("banks/Favorites.GINPKG/latest");
   CHECK(latest.has_value());
   CHECK(latest->path == "banks/Favorites.GINPKG/latest");
@@ -46,7 +45,7 @@ int main() {
   fs::remove_all(root);
   fs::create_directories(root);
 
-  test_bare_ginpkg_metadata_gains_latest_twin(root);
+  test_metadata_load_clamps_rating(root);
 
   fs::remove_all(root);
   std::cout << "All folder metadata tests passed\n";

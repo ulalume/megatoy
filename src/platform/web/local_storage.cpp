@@ -81,29 +81,6 @@ bool remove_local_storage(const std::string &key) {
   // clang-format on
 }
 
-bool remove_local_storage_if_equals(const std::string &key,
-                                    const std::string &expected_value) {
-  // Keep compare + remove in one JavaScript call so another old-version tab
-  // cannot replace the library between two separate operations.
-  // clang-format off
-  return EM_ASM_INT(
-             {
-               try {
-                 const k = UTF8ToString($0);
-                 const expected = UTF8ToString($1);
-                 if (typeof localStorage === "undefined") return 0;
-                 if (localStorage.getItem(k) !== expected) return 0;
-                 localStorage.removeItem(k);
-                 return 1;
-               } catch (e) {
-                 console.error("conditional localStorage.removeItem failed", e);
-                 return 0;
-               }
-             },
-      key.c_str(), expected_value.c_str()) != 0;
-  // clang-format on
-}
-
 } // namespace platform::web
 
 #else
@@ -119,10 +96,6 @@ bool write_local_storage(const std::string &, const std::string &) {
 }
 
 bool remove_local_storage(const std::string &) { return false; }
-
-bool remove_local_storage_if_equals(const std::string &, const std::string &) {
-  return false;
-}
 
 } // namespace platform::web
 

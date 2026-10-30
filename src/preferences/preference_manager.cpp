@@ -10,11 +10,9 @@
 #include "platform/web/web_storage_bootstrap.hpp"
 #else
 #include "patches/background_folder_scan.hpp"
-#include "patches/legacy_metadata_migration.hpp"
 #endif
 #include "preference_storage.hpp"
 #include <cstdlib>
-#include <iostream>
 #include <system_error>
 
 PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
@@ -42,7 +40,6 @@ bool PreferenceManager::add_workspace_folder(
   if (!workspace_.add(path)) {
     return false;
   }
-  migrate_legacy_metadata();
   save_preferences();
   return true;
 }
@@ -316,37 +313,7 @@ bool PreferenceManager::load_preferences() {
     return false;
   }
 
-#if !defined(MEGATOY_PLATFORM_WEB)
-  if (!data.legacy_workspace_migration_complete) {
-    // Old releases created this tree without necessarily writing preferences.
-    // The first workspace release could also save workspace_folders: [] after
-    // discarding data_directory, so only our dedicated marker proves that the
-    // one-time compatibility check has already run.
-    if (data.workspace_folders.empty()) {
-      const auto legacy =
-          megatoy::system::PathService::legacy_default_patches_directory();
-      std::error_code error;
-      if (paths_.file_system().is_directory(legacy, error)) {
-        data.workspace_folders = {legacy};
-      } else if (error) {
-        std::cerr << "Legacy workspace migration will be retried: "
-                  << error.message() << "\n";
-        apply_loaded_data(data);
-        return true;
-      }
-    }
-    data.legacy_workspace_migration_complete = true;
-    data.migrated_legacy_workspace = true;
-  }
-#endif
-
   apply_loaded_data(data);
-  const bool metadata_migrated =
-      migrate_legacy_metadata(data.legacy_metadata_workspace);
-  if (data.migrated_legacy_workspace || metadata_migrated) {
-    // Rewrite immediately so the migration is one-shot.
-    return save_preferences();
-  }
   return true;
 }
 
@@ -393,9 +360,6 @@ PreferenceData PreferenceManager::to_data() const {
   data.last_seen_version = last_seen_version_;
   data.layout = layout_;
   data.show_builtin_presets = show_builtin_presets_;
-  data.legacy_workspace_migration_complete =
-      legacy_workspace_migration_complete_;
-  data.legacy_metadata_migration_complete = legacy_metadata_migration_complete_;
   data.theme = theme_;
   data.ui_preferences = ui_preferences_;
   return data;
@@ -410,32 +374,6 @@ void PreferenceManager::apply_loaded_data(const PreferenceData &data) {
   last_seen_version_ = data.last_seen_version;
   layout_ = data.layout;
   show_builtin_presets_ = data.show_builtin_presets;
-  legacy_workspace_migration_complete_ =
-      data.legacy_workspace_migration_complete;
-  legacy_metadata_migration_complete_ = data.legacy_metadata_migration_complete;
   theme_ = data.theme;
   ui_preferences_ = data.ui_preferences;
-}
-
-bool PreferenceManager::migrate_legacy_metadata(
-    const std::filesystem::path &preferred_workspace) {
-#if defined(MEGATOY_PLATFORM_WEB)
-  (void)preferred_workspace;
-  return false;
-#else
-  if (legacy_metadata_migration_complete_) {
-    return false;
-  }
-  const auto result = patches::migrate_legacy_metadata(
-      paths_.paths().legacy_patch_metadata_db, workspace_, preferred_workspace);
-  if (!result.complete) {
-    if (!result.error.empty()) {
-      std::cerr << "Legacy patch metadata migration will be retried: "
-                << result.error << "\n";
-    }
-    return false;
-  }
-  legacy_metadata_migration_complete_ = true;
-  return true;
-#endif
 }
