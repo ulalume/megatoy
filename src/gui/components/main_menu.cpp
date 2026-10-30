@@ -263,8 +263,7 @@ bool begin_app_menu() {
   if (icon == ImTextureID{}) {
     return ImGui::BeginMenu("megatoy");
   }
-  // As tall as the menu bar's items, a little larger than the text.
-  const float size = ImGui::GetFrameHeight();
+  const float size = ImGui::GetTextLineHeight() + ui::scale::px(8.0f);
   const float space = ImGui::CalcTextSize(" ").x;
   const std::string label =
       std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
@@ -287,6 +286,11 @@ bool begin_app_menu() {
 void render_main_menu(MainMenuContext &context) {
   bool open_about = false;
   const ImGuiIO &io = ImGui::GetIO();
+  // A taller bar than the frame padding alone would give. It stays pushed
+  // until the bar ends so the items centre in it and the menus open below it.
+  const ImVec2 padding = ImGui::GetStyle().FramePadding;
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                      ImVec2(padding.x, padding.y + ui::scale::px(4.0f)));
   if (ImGui::BeginMainMenuBar()) {
     if (begin_app_menu()) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
@@ -514,6 +518,7 @@ void render_main_menu(MainMenuContext &context) {
 
     ImGui::EndMainMenuBar();
   }
+  ImGui::PopStyleVar();
 
   if (open_about) {
     open_about_dialog();
