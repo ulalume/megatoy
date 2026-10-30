@@ -41,11 +41,19 @@ public:
   bool empty() const { return folders_.empty(); }
 
   /**
-   * Add a folder. Returns false if the path is not a directory or is already
-   * present -- comparison is on the resolved path, so the same folder reached
-   * by different routes is not added twice.
+   * Add a folder. Returns false if the path is not a directory, is already
+   * present, or lies inside a folder that is -- comparison is on the resolved
+   * path, so the same folder reached by different routes is not added twice.
+   * A folder holding registered ones is added beside them; folding those in
+   * is the caller's.
    */
   bool add(const std::filesystem::path &path);
+
+  /// The outermost registered folder `path` lies strictly inside, if any.
+  const Folder *enclosing(const std::filesystem::path &path) const;
+  /// The registered folders lying strictly inside `path`.
+  std::vector<const Folder *>
+  enclosed_by(const std::filesystem::path &path) const;
 
   bool remove(const std::filesystem::path &path);
 

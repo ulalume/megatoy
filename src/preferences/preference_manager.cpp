@@ -105,7 +105,7 @@ bool PreferenceManager::folder_add_is_import() {
 }
 
 void PreferenceManager::request_add_workspace_folder(
-    std::function<void()> on_changed) {
+    std::function<void()> on_changed, ConfirmReplace confirm) {
 #if defined(MEGATOY_PLATFORM_WEB)
   platform::web::import_folder(
       megatoy::system::PathService::web_storage_root(),
@@ -146,24 +146,58 @@ void PreferenceManager::request_add_workspace_folder(
   // Warm the same path the workspace will store, or the cache keys miss.
   const auto folder = megatoy::workspace::normalize_path(chosen);
   const std::string folder_name = folder.filename().string();
-  const bool started = patches::background_folder_scan::begin(
-      folder, [this, folder, folder_name, on_changed](bool cancelled) {
-        if (cancelled) {
-          megatoy::status::info("Folder scan cancelled.");
-          return;
-        }
-        if (add_workspace_folder(folder)) {
-          if (on_changed) {
-            on_changed();
-          }
-        } else {
-          megatoy::status::warning("\"" + folder_name +
-                                   "\" is already in the workspace.");
-        }
-      });
-  if (!started) {
-    megatoy::status::warning("Another folder scan is in progress.");
+  if (const auto *outer = workspace_.enclosing(folder)) {
+    megatoy::status::warning("\"" + folder_name +
+                             "\" is already in the workspace, inside \"" +
+                             outer->name + "\".");
+    return;
   }
+  const auto inside = workspace_.enclosed_by(folder);
+  std::string replaced;
+  for (const auto *inner : inside) {
+    if (workspace_folder_is_protected(inner->path)) {
+      megatoy::status::warning("\"" + folder_name + "\" holds \"" +
+                               inner->name +
+                               "\", which cannot leave the workspace.");
+      return;
+    }
+    replaced += (replaced.empty() ? "\"" : ", \"") + inner->name + "\"";
+  }
+
+  auto add = [this, folder, folder_name, on_changed]() {
+    const bool started = patches::background_folder_scan::begin(
+        folder, [this, folder, folder_name, on_changed](bool cancelled) {
+          if (cancelled) {
+            megatoy::status::info("Folder scan cancelled.");
+            return;
+          }
+          if (add_workspace_folder(folder)) {
+            if (on_changed) {
+              on_changed();
+            }
+          } else {
+            megatoy::status::warning("\"" + folder_name +
+                                     "\" is already in the workspace.");
+          }
+        });
+    if (!started) {
+      megatoy::status::warning("Another folder scan is in progress.");
+    }
+  };
+  if (inside.empty()) {
+    add();
+    return;
+  }
+  if (!confirm) {
+    megatoy::status::warning("\"" + folder_name +
+                             "\" holds folders already in the workspace.");
+    return;
+  }
+  confirm("\"" + folder_name + "\" holds " + replaced +
+              ", already in the workspace. It will take " +
+              (inside.size() == 1 ? "its" : "their") +
+              " place; ratings and categories are kept.",
+          std::move(add));
 #endif
 }
 

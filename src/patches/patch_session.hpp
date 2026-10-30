@@ -336,6 +336,14 @@ private:
   /// Note when the document's file was last written, as megatoy read or
   /// saved it.
   void remember_disk_time(const PatchDocument &document);
+  /**
+   * Fold every workspace folder that lies inside another into the outer one:
+   * its ratings and categories move to the outer folder's sidecar, it leaves
+   * the list with the outer one taking its place, and the documents, the
+   * remembered ones and the last patch are re-pointed at the outer folder's
+   * paths. My Patches is never let go of.
+   */
+  void absorb_nested_folders();
   /// The entry's metadata with `change` applied, written and the tree
   /// rebuilt to show it.
   template <typename Change>
@@ -347,6 +355,12 @@ private:
   void set_document_selection_path(PatchDocument &document,
                                    const std::filesystem::path &path);
   std::string selection_key(const std::filesystem::path &path) const;
+  /**
+   * Where a repository-relative path points on disk, written the same way
+   * every time, so two paths naming one file compare equal whatever folder
+   * they reach it through. One no folder resolves stays as it is.
+   */
+  std::string file_identity(const std::string &relative_path) const;
   /**
    * Put `patch` in the preview document, or in a new one when there is no
    * preview, it has unsaved changes or `reuse_preview` is false, and

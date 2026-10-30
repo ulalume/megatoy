@@ -463,6 +463,45 @@ void test_rating_and_category_are_kept_with_the_entry() {
   CHECK(env.entry_at(fixture.warm).metadata->category == "pad");
 }
 
+void test_a_nested_folder_is_folded_into_the_outer_one() {
+  TestEnvironment env;
+  auto &session = env.session;
+  const auto bass = env.patches_folder / "bass";
+  fs::create_directories(bass);
+  const auto lead = bass / "lead.gin";
+  CHECK(patches::write_patch(make_patch(3), lead));
+
+  // Only the inner folder at first, with a rating and an open document.
+  env.preferences.workspace().set_paths({bass});
+  session.sync_workspace();
+  CHECK(session.set_entry_rating(env.entry_at(lead), 4));
+  const auto opened = session.open_or_activate(env.entry_at(lead), true);
+  CHECK(opened.has_value());
+  session.remember_open_documents();
+  const auto inner_path = session.find_document(*opened)->path();
+
+  // Saved like this before nesting was turned away: the outer one beside it.
+  env.preferences.workspace().set_paths({bass, env.patches_folder});
+  session.sync_workspace();
+
+  CHECK(env.preferences.workspace().folders().size() == 1);
+  CHECK(env.preferences.workspace().folders().front().path ==
+        env.patches_folder);
+  const auto *document = session.find_document(*opened);
+  CHECK(document->path() != inner_path);
+  CHECK(session.repository().to_absolute_path(document->path()) == lead);
+  CHECK(session.repository().to_absolute_path(document->selection_path()) ==
+        lead);
+  CHECK(env.preferences.open_patches().size() == 1);
+  CHECK(env.preferences.open_patches().front().path == document->path());
+  const auto entry = env.entry_at(lead);
+  CHECK(entry.metadata.has_value() && entry.metadata->star_rating == 4);
+
+  // Opening it again finds the same document.
+  CHECK(session.open_or_activate(env.entry_at(lead), true) == opened);
+  CHECK(session.find_document_by_selection_path(lead) == opened);
+}
+
 void test_open_entry_activates_open_document() {
   BrowserFixture fixture;
   auto &env = fixture.env;
@@ -705,6 +744,7 @@ int main() {
   test_own_save_is_not_reported();
   test_keeping_edits_over_an_outside_write();
   test_rating_and_category_are_kept_with_the_entry();
+  test_a_nested_folder_is_folded_into_the_outer_one();
   test_open_entry_activates_open_document();
   test_modified_preview_is_kept();
   test_pinning();

@@ -402,11 +402,13 @@ void render_main_menu(MainMenuContext &context) {
     if (context.open_add_folder_dialog) {
       context.open_add_folder_dialog = false;
       auto sync = context.sync_workspace;
-      context.preferences.request_add_workspace_folder([sync]() {
-        if (sync) {
-          sync();
-        }
-      });
+      context.preferences.request_add_workspace_folder(
+          [sync]() {
+            if (sync) {
+              sync();
+            }
+          },
+          context.confirm_replace_folders);
     }
 
     // Not gated on supports_quit(): saving has nothing to do with whether

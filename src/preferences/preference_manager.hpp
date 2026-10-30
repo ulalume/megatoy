@@ -47,8 +47,16 @@ public:
    * into persistent storage instead, and because the picker and the reads are
    * asynchronous `on_changed` may run several frames later. It is not called
    * if the user cancels.
+   *
+   * A folder already inside one in the workspace is turned away. One holding
+   * folders in the workspace takes their place, once `confirm` has had the
+   * user agree to `message` and called `proceed`; without `confirm` it is
+   * turned away too.
    */
-  void request_add_workspace_folder(std::function<void()> on_changed);
+  using ConfirmReplace = std::function<void(const std::string &message,
+                                            std::function<void()> proceed)>;
+  void request_add_workspace_folder(std::function<void()> on_changed,
+                                    ConfirmReplace confirm = {});
 
   /// True when adding a folder copies it rather than referencing it.
   static bool folder_add_is_import();

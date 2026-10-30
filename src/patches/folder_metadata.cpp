@@ -231,6 +231,40 @@ bool FolderMetadataStore::put(PatchMetadata metadata) {
   return save();
 }
 
+std::vector<PatchMetadata> FolderMetadataStore::entries() const {
+  std::vector<PatchMetadata> all;
+  all.reserve(entries_.size());
+  for (const auto &[path, metadata] : entries_) {
+    all.push_back(metadata);
+  }
+  return all;
+}
+
+bool FolderMetadataStore::merge_newer(
+    const std::vector<PatchMetadata> &metadata, std::size_t &changed) {
+  changed = 0;
+  for (const auto &entry : metadata) {
+    if (entry.path.empty()) {
+      continue;
+    }
+    // ISO 8601 in UTC, so later sorts after; an empty stamp is oldest.
+    const auto existing = entries_.find(entry.path);
+    if (existing == entries_.end() ||
+        existing->second.updated_at < entry.updated_at) {
+      entries_[entry.path] = entry;
+      ++changed;
+    }
+  }
+  if (changed == 0) {
+    return true;
+  }
+  if (save()) {
+    return true;
+  }
+  load();
+  return false;
+}
+
 bool FolderMetadataStore::merge_missing(
     const std::vector<PatchMetadata> &metadata, std::size_t &inserted) {
   inserted = 0;

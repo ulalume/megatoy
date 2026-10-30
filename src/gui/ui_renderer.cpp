@@ -750,6 +750,10 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
       [&ctx]() {
         request_close_document(ctx,
                                ctx.services.patch_session.active_document_id());
+      },
+      [&ctx](const std::string &message, std::function<void()> proceed) {
+        ctx.ui_state().danger_confirmation_state.request(
+            "Replace Folders?", message, "Replace", std::move(proceed));
       }};
 }
 

@@ -51,6 +51,17 @@ public:
   bool merge_missing(const std::vector<PatchMetadata> &metadata,
                      std::size_t &inserted);
 
+  /// Every entry, in key order.
+  std::vector<PatchMetadata> entries() const;
+
+  /**
+   * Take entries in as they are, timestamps included: one not present is
+   * added, one present is replaced only by a later updated_at. Persisted in
+   * one write.
+   */
+  bool merge_newer(const std::vector<PatchMetadata> &metadata,
+                   std::size_t &changed);
+
   bool remove(const std::string &relative_path);
 
   /// Move one key and all descendant keys to a new path prefix, then persist

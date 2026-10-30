@@ -40,7 +40,50 @@ Folder make_folder(const fs::path &resolved) {
   return folder;
 }
 
+/// Whether `path` lies strictly inside `folder`; both resolved already.
+bool is_strictly_inside(const fs::path &path, const fs::path &folder) {
+  auto inner = path.begin();
+  for (auto outer = folder.begin(); outer != folder.end(); ++outer, ++inner) {
+    if (outer->empty()) {
+      continue;
+    }
+    if (inner == path.end() || *inner != *outer) {
+      return false;
+    }
+  }
+  for (; inner != path.end(); ++inner) {
+    if (!inner->empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
+
+const Folder *Workspace::enclosing(const fs::path &path) const {
+  const auto resolved = normalize_path(path);
+  const Folder *outermost = nullptr;
+  for (const auto &folder : folders_) {
+    if (is_strictly_inside(resolved, folder.path) &&
+        (outermost == nullptr ||
+         is_strictly_inside(outermost->path, folder.path))) {
+      outermost = &folder;
+    }
+  }
+  return outermost;
+}
+
+std::vector<const Folder *> Workspace::enclosed_by(const fs::path &path) const {
+  const auto resolved = normalize_path(path);
+  std::vector<const Folder *> inside;
+  for (const auto &folder : folders_) {
+    if (is_strictly_inside(folder.path, resolved)) {
+      inside.push_back(&folder);
+    }
+  }
+  return inside;
+}
 
 bool Workspace::add(const fs::path &path) {
   const auto resolved = normalize_path(path);
@@ -49,7 +92,7 @@ bool Workspace::add(const fs::path &path) {
   if (!fs::is_directory(resolved, ec) || ec) {
     return false;
   }
-  if (contains(resolved)) {
+  if (contains(resolved) || enclosing(resolved) != nullptr) {
     return false;
   }
 
