@@ -62,9 +62,19 @@ float render_add_folder_icon(PatchSelectorContext &context) {
 }
 
 void render_tree(PatchSelectorContext &context) {
-  // Scrolls on its own, so the filter row above stays in place.
-  if (ImGui::BeginChild("PresetTree", ImGui::GetContentRegionAvail(),
-                        ImGuiChildFlags_None)) {
+  // Scrolls on its own, so the filter row above stays in place. It reaches
+  // the window's edges; its own padding keeps the rows where they were.
+  ImGuiWindow *window = ImGui::GetCurrentWindow();
+  const ImRect inner = window->InnerRect;
+  const float top = ImGui::GetCursorScreenPos().y;
+  ImGui::SetCursorScreenPos(ImVec2(inner.Min.x, top));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(ImGui::GetStyle().WindowPadding.x, 0.0f));
+  const bool visible = ImGui::BeginChild(
+      "PresetTree", ImVec2(inner.GetWidth(), inner.Max.y - top),
+      ImGuiChildFlags_AlwaysUseWindowPadding);
+  ImGui::PopStyleVar();
+  if (visible) {
     const std::string query_lower =
         search_key(context.prefs.metadata_search_query);
     const bool rendered =
@@ -95,7 +105,10 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   // Match the waveform panel: no tab bar while this window is docked alone.
   areas::keep_in_area(areas::Area::Sidebar, title,
                       ImGuiDockNodeFlags_AutoHideTabBar);
-  if (!ImGui::Begin(title, &prefs.show_patch_selector)) {
+  // Only the tree scrolls; it runs to the bottom edge.
+  if (!ImGui::Begin(title, &prefs.show_patch_selector,
+                    ImGuiWindowFlags_NoScrollbar |
+                        ImGuiWindowFlags_NoScrollWithMouse)) {
     ImGui::End();
     return;
   }
