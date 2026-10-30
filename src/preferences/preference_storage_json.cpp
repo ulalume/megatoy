@@ -107,6 +107,7 @@ public:
         data.last_patch_path = j["last_patch_path"].get<std::string>();
       }
       if (j.contains("open_patches") && j["open_patches"].is_array()) {
+        data.open_patches.clear();
         for (const auto &item : j["open_patches"]) {
           if (!item.is_object() || !item.contains("path") ||
               !item["path"].is_string()) {

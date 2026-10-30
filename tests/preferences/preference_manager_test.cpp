@@ -56,6 +56,10 @@ void test_settings_are_persisted_without_waiting_for_destruction(
   CHECK(!loaded.show_builtin_presets());
   CHECK(loaded.theme() == ui::styles::ThemeId::MegatoyLight);
   CHECK(loaded.open_patches() == records);
+  CHECK(loaded.load_preferences());
+  CHECK(loaded.open_patches() == records);
+  CHECK(loaded.load_preferences());
+  CHECK(loaded.open_patches() == records);
   CHECK(loaded.active_open_patch() == 1);
   CHECK(loaded.ui_preferences() == ui);
 }
