@@ -135,6 +135,20 @@ void check_keyboard_typing(
     key_pressed_last_frame[octave_up] = up_pressed_now;
   }
 
+  for (auto it = input.active_keyboard_notes.begin();
+       it != input.active_keyboard_notes.end();) {
+    const auto key = static_cast<ImGuiKey>(it->first);
+    if (!ImGui::IsKeyDown(key)) {
+      if (context.key_off) {
+        context.key_off(it->second);
+      }
+      key_pressed_last_frame[key] = false;
+      it = input.active_keyboard_notes.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
   for (auto &[imgui_key, note] : key_mappings) {
     bool key_pressed_now = ImGui::IsKeyDown(imgui_key);
     bool key_was_pressed = key_pressed_last_frame[imgui_key];
@@ -144,14 +158,6 @@ void check_keyboard_typing(
         context.key_on(note, 127);
       }
       input.active_keyboard_notes[static_cast<int>(imgui_key)] = note;
-    } else if (!key_pressed_now && key_was_pressed) {
-      auto it = input.active_keyboard_notes.find(static_cast<int>(imgui_key));
-      if (it != input.active_keyboard_notes.end()) {
-        if (context.key_off) {
-          context.key_off(it->second);
-        }
-        input.active_keyboard_notes.erase(it); // Remove from active notes
-      }
     }
     key_pressed_last_frame[imgui_key] = key_pressed_now;
   }

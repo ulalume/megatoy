@@ -164,6 +164,27 @@ void test_release_uses_the_note_started_before_a_remap() {
   CHECK(env.on.back().first == remapped.at(ImGuiKey_A));
 }
 
+void test_release_after_key_leaves_mapping() {
+  TestEnvironment env;
+  const Mapping mapping{{ImGuiKey_A, {4, Key::C}}};
+  env.press(ImGuiKey_A, true, mapping);
+  env.frame({});
+  CHECK(env.on.size() == 1);
+  CHECK(env.off.empty());
+  CHECK(env.input.active_keyboard_notes.contains(ImGuiKey_A));
+  env.press(ImGuiKey_A, false, {});
+  CHECK(env.off.size() == 1);
+  CHECK(env.off.front() == mapping.at(ImGuiKey_A));
+  CHECK(env.input.active_keyboard_notes.empty());
+  env.frame({});
+  CHECK(env.off.size() == 1);
+  env.press(ImGuiKey_A, true, mapping);
+  CHECK(env.on.size() == 2);
+  CHECK(env.on.back().first == mapping.at(ImGuiKey_A));
+  env.press(ImGuiKey_A, false, mapping);
+  CHECK(env.off.size() == 2);
+}
+
 void test_octave_keys_are_edge_triggered_and_bounded() {
   TestEnvironment env;
   env.input.keyboard_typing_octave = 0;
@@ -210,6 +231,7 @@ int main() {
   test_custom_layouts_allow_empty_short_and_unterminated_input();
   test_press_hold_and_release_emit_one_pair_of_events();
   test_release_uses_the_note_started_before_a_remap();
+  test_release_after_key_leaves_mapping();
   test_octave_keys_are_edge_triggered_and_bounded();
   test_disabled_octave_keys_and_absent_callbacks_are_supported();
   std::cout << "All keyboard typing tests passed\n";
