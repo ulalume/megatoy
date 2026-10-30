@@ -863,15 +863,32 @@ std::vector<PatchSession::DiskVersion> PatchSession::take_disk_versions() {
                                 ? document->path()
                                 : document->selection_path();
     const auto *entry = find_entry(selection);
+    const auto format = formats::adapter::format_for_extension(
+        lowercase_extension(document->path()));
+    const bool multi_patch =
+        format && formats::adapter::is_multi_patch(*format);
     ym2612::Patch patch;
-    if (entry == nullptr || !repository_->load_patch(*entry, patch)) {
-      continue;
+    if (entry != nullptr) {
+      if (!repository_->load_patch(*entry, patch)) {
+        continue;
+      }
+    } else {
+      // A file outside the workspace is not in the tree. An instrument picked
+      // from a bank out there cannot be found again by its path.
+      if (multi_patch ||
+          !std::filesystem::path(document->path()).is_absolute()) {
+        continue;
+      }
+      auto loaded = formats::load_patch_from_file(absolute);
+      if (loaded.status != formats::PatchLoadStatus::Success ||
+          loaded.patches.empty()) {
+        continue;
+      }
+      patch = std::move(loaded.patches[0]);
     }
     // Named as opening the file names it, so only a change in the file
     // itself tells it apart.
-    const auto format = formats::adapter::format_for_extension(
-        lowercase_extension(document->path()));
-    if (!format || !formats::adapter::is_multi_patch(*format)) {
+    if (!multi_patch) {
       patch.name = absolute.stem().string();
     }
     if (patch != document->original_patch()) {
@@ -879,6 +896,23 @@ std::vector<PatchSession::DiskVersion> PatchSession::take_disk_versions() {
     }
   }
   return versions;
+}
+
+bool PatchSession::outside_file_changed() const {
+  for (const auto &document : documents_) {
+    const auto recorded = disk_times_.find(document->id());
+    if (recorded == disk_times_.end() ||
+        !std::filesystem::path(document->path()).is_absolute()) {
+      continue;
+    }
+    std::error_code error;
+    const auto time =
+        std::filesystem::last_write_time(document->path(), error);
+    if (!error && time != recorded->second) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void PatchSession::accept_disk_version(DocumentId id,

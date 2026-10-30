@@ -144,6 +144,12 @@ public:
    * contents. Each write is reported once.
    */
   std::vector<DiskVersion> take_disk_versions();
+  /**
+   * Whether a file open from outside the workspace has been written since
+   * take_disk_versions() last looked. Those files have no folder being
+   * watched, so this asks each of them.
+   */
+  bool outside_file_changed() const;
   /// Take `patch` as what the document's file holds, and show it in place of
   /// the contents when `replace`.
   void accept_disk_version(DocumentId id, const ym2612::Patch &patch,

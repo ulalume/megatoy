@@ -165,19 +165,20 @@ void save_and_exit(AppContext &ctx, patches::DocumentId id) {
 }
 
 /**
- * Pick up what changed in the workspace's folders outside megatoy: the
- * browser's tree, and the open documents whose file was written. One without
- * unsaved changes shows the file's new contents; one with them keeps its own
- * and asks.
+ * Pick up what changed outside megatoy: the browser's tree, and the open
+ * documents whose file was written, in the workspace or, when
+ * `check_outside_files`, beyond it. One without unsaved changes shows the
+ * file's new contents; one with them keeps its own and asks.
  */
-void follow_outside_changes(AppContext &ctx) {
+void follow_outside_changes(AppContext &ctx, bool check_outside_files) {
   auto &session = ctx.services.patch_session;
   auto &repository = session.repository();
   const bool outside = repository.take_outside_change();
-  if (!outside && !repository.has_directory_changed()) {
+  if (outside || repository.has_directory_changed()) {
+    repository.refresh();
+  } else if (!check_outside_files || !session.outside_file_changed()) {
     return;
   }
-  repository.refresh();
   for (auto &version : session.take_disk_versions()) {
     const auto *document = session.find_document(version.document);
     if (document == nullptr) {
@@ -1065,14 +1066,15 @@ void render_all(AppContext &ctx) {
 
   static auto next_workspace_refresh = std::chrono::steady_clock::time_point{};
   const auto now = std::chrono::steady_clock::now();
-  if (now >= next_workspace_refresh) {
+  const bool periodic_check = now >= next_workspace_refresh;
+  if (periodic_check) {
     next_workspace_refresh = now + std::chrono::seconds(2);
     if (ctx.services.preference_manager.refresh_workspace_availability()) {
       ctx.services.patch_session.sync_workspace();
     }
   }
 
-  follow_outside_changes(ctx);
+  follow_outside_changes(ctx, periodic_check);
 
   // Per-frame values; everything else in the contexts is stable references.
   contexts.patch_selector.workspace_is_empty =
