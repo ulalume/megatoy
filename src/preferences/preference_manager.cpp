@@ -139,7 +139,15 @@ void PreferenceManager::request_add_workspace_folder(
       platform::file_dialog::DialogResult::Ok) {
     return;
   }
+  add_chosen_workspace_folder(chosen, std::move(on_changed),
+                              std::move(confirm));
+#endif
+}
 
+#if !defined(MEGATOY_PLATFORM_WEB)
+void PreferenceManager::add_chosen_workspace_folder(
+    const std::filesystem::path &chosen, std::function<void()> on_changed,
+    ConfirmReplace confirm) {
   // Warm the parse cache on a worker before the folder joins the workspace:
   // the sync that follows re-walks it on the UI thread, and for a folder of
   // thousands of banks that first parse is a freeze measured in seconds.
@@ -198,8 +206,8 @@ void PreferenceManager::request_add_workspace_folder(
               (inside.size() == 1 ? "it" : "them") + " into \"" +
               folder_name + "\"?\n\nRatings and categories are kept.",
           std::move(add));
-#endif
 }
+#endif
 
 void PreferenceManager::set_show_builtin_presets(bool show) {
   if (show == show_builtin_presets_) {

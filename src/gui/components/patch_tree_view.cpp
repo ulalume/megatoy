@@ -257,7 +257,7 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
     ImGui::PopStyleColor();
   }
   entry_context_menu(context, item);
-  show_patch_tooltip(item);
+  show_patch_tooltip(context.repository, item);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
 
@@ -270,7 +270,7 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
   const bool format_clicked = row_selectable(item.format.c_str());
   ImGui::PopStyleColor();
   entry_context_menu(context, item);
-  show_patch_tooltip(item);
+  show_patch_tooltip(context.repository, item);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
 

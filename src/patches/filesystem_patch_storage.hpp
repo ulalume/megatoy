@@ -55,6 +55,8 @@ public:
   bool can_edit_metadata(const PatchEntry &entry) const override;
   bool is_writable() const override { return writable_; }
   std::string_view label() const override { return label_; }
+  /// What the folder itself is listed as, in place of its label.
+  void set_display_name(std::string name) { display_name_ = std::move(name); }
   bool save_patch_metadata(const std::string &relative_path,
                            const ym2612::Patch &patch,
                            const PatchMetadata &metadata) override;
@@ -98,6 +100,7 @@ private:
   std::string root_label_;
   bool writable_;
   std::string label_;
+  std::string display_name_;
   std::unique_ptr<FolderMetadataStore> metadata_;
   PersistentParseCache *persistent_cache_;
   mutable std::unordered_map<std::filesystem::path, ParseCacheEntry>

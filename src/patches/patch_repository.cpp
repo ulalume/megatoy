@@ -75,10 +75,12 @@ void PatchRepository::rebuild_storages() {
   used_labels.emplace_back(kBuiltinRootName);
 
   for (const auto &folder : workspace_.folders()) {
-    storages_.push_back(std::make_unique<FilesystemPatchStorage>(
+    auto storage = std::make_unique<FilesystemPatchStorage>(
         vfs_, folder.path, unique_label(folder.name), folder.writable,
         folder.writable ? folder.metadata_path() : std::filesystem::path{},
-        persistent_cache_));
+        persistent_cache_);
+    storage->set_display_name(workspace_.display_name(folder));
+    storages_.push_back(std::move(storage));
     if (folder.available) {
       watched_directories_.push_back(folder.path);
     }
@@ -337,6 +339,18 @@ PatchRepository::to_relative_path(const std::filesystem::path &path) const {
     }
   }
   return path;
+}
+
+std::string PatchRepository::display_path(const std::string &relative) const {
+  for (const auto &root : tree_cache_) {
+    if (relative == root.relative_path) {
+      return root.name;
+    }
+    if (relative.starts_with(root.relative_path + "/")) {
+      return root.name + relative.substr(root.relative_path.size());
+    }
+  }
+  return relative;
 }
 
 std::filesystem::path

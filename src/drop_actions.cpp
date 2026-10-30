@@ -3,6 +3,7 @@
 #include "app_services.hpp"
 #include "core/status.hpp"
 #include "formats/patch_loader.hpp"
+#include "platform/platform_config.hpp"
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -49,6 +50,7 @@ void handle_drop(Environment &env, const std::filesystem::path &path) {
   // gesture as dragging a folder into an editor. Files keep the old behavior.
   std::error_code ec;
   if (std::filesystem::is_directory(path, ec)) {
+#if defined(MEGATOY_PLATFORM_WEB)
     if (env.services.preference_manager.add_workspace_folder(path)) {
       env.services.patch_session.sync_workspace();
       megatoy::status::success("Added \"" + path.filename().string() +
@@ -57,6 +59,20 @@ void handle_drop(Environment &env, const std::filesystem::path &path) {
       megatoy::status::warning("\"" + path.filename().string() +
                                "\" is already in the workspace.");
     }
+#else
+    auto &services = env.services;
+    auto &danger = env.ui_state.danger_confirmation_state;
+    services.preference_manager.add_chosen_workspace_folder(
+        path,
+        [&services, name = path.filename().string()]() {
+          services.patch_session.sync_workspace();
+          megatoy::status::success("Added \"" + name +
+                                   "\" to the workspace.");
+        },
+        [&danger](const std::string &message, std::function<void()> proceed) {
+          danger.request_merge_folders(message, std::move(proceed));
+        });
+#endif
     reset_drop_state(drop);
     return;
   }

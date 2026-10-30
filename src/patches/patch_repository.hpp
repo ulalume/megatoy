@@ -107,6 +107,9 @@ public:
   bool can_move_patch(const PatchEntry &entry,
                       const PatchEntry &destination) const;
   bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
+  /// A relative path as the user sees it: starting with what its folder is
+  /// listed as.
+  std::string display_path(const std::string &relative) const;
   bool can_edit_metadata(const PatchEntry &entry) const;
 
   // Batch operations

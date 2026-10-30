@@ -34,6 +34,8 @@ PatchSession::PatchSession(megatoy::system::PathService &directories,
           directories_.paths().builtin_presets_metadata, persistent_cache)) {
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
   active_id_ = create_document(/*pinned=*/false).id();
+  // A saved list can still hold a folder inside another.
+  absorb_nested_folders();
 }
 
 const std::vector<std::unique_ptr<PatchDocument>> &

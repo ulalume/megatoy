@@ -197,6 +197,35 @@ void test_metadata_sidecar(const fs::path &root) {
 
 } // namespace
 
+void test_same_named_folders_are_told_apart(const fs::path &root) {
+  using megatoy::workspace::Workspace;
+  const auto first = root / "names" / "work" / "songs" / "patches";
+  const auto second = root / "names" / "home" / "desk" / "patches";
+  const auto third = root / "names" / "other" / "work" / "songs" / "patches";
+  const auto alone = root / "names" / "bank";
+  for (const auto &path : {first, second, third, alone}) {
+    fs::create_directories(path);
+  }
+  Workspace workspace;
+  CHECK(workspace.add(first));
+  CHECK(workspace.add(alone));
+  CHECK(workspace.display_name(*workspace.find(first)) == "patches");
+  CHECK(workspace.add(second));
+  CHECK(workspace.display_name(*workspace.find(alone)) == "bank");
+  CHECK(workspace.display_name(*workspace.find(first)) ==
+        "patches (work/songs)");
+  CHECK(workspace.display_name(*workspace.find(second)) ==
+        "patches (home/desk)");
+  // Two folders above are the same for these, so a third is shown.
+  CHECK(workspace.add(third));
+  CHECK(workspace.display_name(*workspace.find(first)) ==
+        "patches (names/work/songs)");
+  CHECK(workspace.display_name(*workspace.find(third)) ==
+        "patches (other/work/songs)");
+  CHECK(workspace.display_name(*workspace.find(second)) ==
+        "patches (home/desk)");
+}
+
 int main() {
   const auto root = make_root();
 
@@ -206,6 +235,7 @@ int main() {
   test_refresh_recovers_folder_availability(root);
   test_owner_lookup(root);
   test_nesting_is_seen_both_ways(root);
+  test_same_named_folders_are_told_apart(root);
   test_revision_tracks_changes(root);
   test_path_comparison_policy(root);
   test_metadata_sidecar(root);

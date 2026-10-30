@@ -601,8 +601,10 @@ writable_entry_folder(AppContext &ctx, const patches::PatchEntry &entry) {
 void announce_saved_patch(AppContext &ctx, const std::filesystem::path &path) {
   const auto relative =
       ctx.services.patch_session.repository().to_relative_path(path);
-  megatoy::status::success("Saved " +
-                           display_preset_path(relative.generic_string()));
+  megatoy::status::success(
+      "Saved " + display_preset_path(
+                     ctx.services.patch_session.repository().display_path(
+                         relative.generic_string())));
 }
 
 /// Open a copy just written, kept open. `patch` is what was written, for a
@@ -769,8 +771,8 @@ MainMenuContext make_main_menu_context(AppContext &ctx) {
                                ctx.services.patch_session.active_document_id());
       },
       [&ctx](const std::string &message, std::function<void()> proceed) {
-        ctx.ui_state().danger_confirmation_state.request(
-            "Merge Folders?", message, "OK", std::move(proceed));
+        ctx.ui_state().danger_confirmation_state.request_merge_folders(
+            message, std::move(proceed));
       }};
 }
 

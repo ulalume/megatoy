@@ -177,9 +177,12 @@ void render_save_export_buttons(PatchEditorContext &context,
   }
 
   ImGui::SameLine();
-  auto relative_path =
-      patch_session.repository().to_relative_path(document.path());
-  ImGui::Text("%s", display_preset_path(relative_path).c_str());
+  const auto &repository = patch_session.repository();
+  const auto relative_path =
+      repository.to_relative_path(document.path()).generic_string();
+  ImGui::Text("%s",
+              display_preset_path(repository.display_path(relative_path))
+                  .c_str());
   render_patch_metadata(context, document, ui);
 
   // Render popups in the same window/ID stack as the actions that open them.

@@ -14,7 +14,8 @@
 namespace ui::selector_detail {
 
 /// Tooltip with format, path and metadata for the last drawn item.
-void show_patch_tooltip(const patches::PatchEntry &entry);
+void show_patch_tooltip(const patches::PatchRepository &repository,
+                        const patches::PatchEntry &entry);
 
 /// Whether the entry offers Rename and Delete, in its menu and by key.
 bool entry_can_rename(const PatchSelectorContext &context,

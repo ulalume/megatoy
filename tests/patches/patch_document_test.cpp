@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -502,6 +503,71 @@ void test_a_nested_folder_is_folded_into_the_outer_one() {
   CHECK(session.find_document_by_selection_path(lead) == opened);
 }
 
+void test_nesting_saved_earlier_is_folded_when_a_session_starts() {
+  TestEnvironment env;
+  const auto bass = env.patches_folder / "bass";
+  fs::create_directories(bass);
+  const auto lead = bass / "lead.gin";
+  CHECK(patches::write_patch(make_patch(3), lead));
+  env.preferences.workspace().set_paths({bass});
+  env.session.sync_workspace();
+  CHECK(env.session.set_entry_rating(env.entry_at(lead), 2));
+
+  env.preferences.workspace().set_paths({bass, env.patches_folder});
+  patches::PatchSession started(env.directories, env.preferences, env.audio);
+  CHECK(env.preferences.workspace().folders().size() == 1);
+  CHECK(env.preferences.workspace().folders().front().path ==
+        env.patches_folder);
+  const auto *entry = started.find_entry(
+      started.repository().to_relative_path(lead).generic_string());
+  CHECK(entry != nullptr);
+  CHECK(entry->metadata.has_value() && entry->metadata->star_rating == 2);
+}
+
+void test_adding_a_chosen_folder_asks_before_merging() {
+  TestEnvironment env;
+  const auto bass = env.patches_folder / "bass";
+  fs::create_directories(bass);
+  env.preferences.workspace().set_paths({bass});
+
+  int asked = 0;
+  std::string message;
+  const auto confirm = [&](const std::string &text, std::function<void()>) {
+    ++asked;
+    message = text;
+  };
+  env.preferences.add_chosen_workspace_folder(env.patches_folder, {}, confirm);
+  CHECK(asked == 1);
+  CHECK(message.find("\"bass\"") != std::string::npos);
+  // Nothing changes until the answer.
+  CHECK(env.preferences.workspace().paths() == std::vector<fs::path>{bass});
+
+  // A folder inside one already there is turned away without asking.
+  env.preferences.workspace().set_paths({env.patches_folder});
+  env.preferences.add_chosen_workspace_folder(bass, {}, confirm);
+  CHECK(asked == 1);
+  CHECK(env.preferences.workspace().paths() ==
+        std::vector<fs::path>{env.patches_folder});
+}
+
+void test_display_path_tells_same_named_folders_apart() {
+  TestEnvironment env;
+  auto &session = env.session;
+  const auto other = env.root / "elsewhere" / "patches";
+  fs::create_directories(other);
+  const auto file = other / "lead.gin";
+  CHECK(patches::write_patch(make_patch(3), file));
+  env.preferences.workspace().set_paths({env.patches_folder, other});
+  session.sync_workspace();
+  const auto relative = env.relative(file);
+  const auto parent = env.root.filename().generic_string();
+  CHECK(relative == "patches (2)/lead.gin");
+  CHECK(session.repository().display_path(relative) ==
+        "patches (" + parent + "/elsewhere)/lead.gin");
+  CHECK(session.repository().display_path("/not/in/the/tree.gin") ==
+        "/not/in/the/tree.gin");
+}
+
 void test_open_entry_activates_open_document() {
   BrowserFixture fixture;
   auto &env = fixture.env;
@@ -844,6 +910,9 @@ int main() {
   test_keeping_edits_over_an_outside_write();
   test_rating_and_category_are_kept_with_the_entry();
   test_a_nested_folder_is_folded_into_the_outer_one();
+  test_nesting_saved_earlier_is_folded_when_a_session_starts();
+  test_adding_a_chosen_folder_asks_before_merging();
+  test_display_path_tells_same_named_folders_apart();
   test_open_entry_activates_open_document();
   test_modified_preview_is_kept();
   test_pinning();

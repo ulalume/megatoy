@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/platform_config.hpp"
 #include "preferences_data.hpp"
 #include "system/path_service.hpp"
 #include "workspace/workspace.hpp"
@@ -57,6 +58,12 @@ public:
                                             std::function<void()> proceed)>;
   void request_add_workspace_folder(std::function<void()> on_changed,
                                     ConfirmReplace confirm = {});
+#if !defined(MEGATOY_PLATFORM_WEB)
+  /// The same for a folder already chosen, by the picker or by a drop.
+  void add_chosen_workspace_folder(const std::filesystem::path &chosen,
+                                   std::function<void()> on_changed,
+                                   ConfirmReplace confirm);
+#endif
 
   /// True when adding a folder copies it rather than referencing it.
   static bool folder_add_is_import();

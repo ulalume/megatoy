@@ -3,7 +3,10 @@
 #include "workspace/path_policy.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
 #include <system_error>
+#include <vector>
 
 namespace megatoy::workspace {
 
@@ -60,6 +63,50 @@ bool is_strictly_inside(const fs::path &path, const fs::path &folder) {
 }
 
 } // namespace
+
+namespace {
+
+/// The last `depth` folders above `path`, outermost first.
+std::string folders_above(const fs::path &path, std::size_t depth) {
+  std::vector<std::string> names;
+  for (auto parent = path.parent_path();
+       names.size() < depth && parent.has_relative_path();
+       parent = parent.parent_path()) {
+    names.push_back(parent.filename().generic_string());
+  }
+  std::string joined;
+  for (auto name = names.rbegin(); name != names.rend(); ++name) {
+    joined += (joined.empty() ? "" : "/") + *name;
+  }
+  return joined;
+}
+
+} // namespace
+
+std::string Workspace::display_name(const Folder &folder) const {
+  std::vector<const Folder *> others;
+  for (const auto &other : folders_) {
+    if (other.path != folder.path && other.name == folder.name) {
+      others.push_back(&other);
+    }
+  }
+  if (others.empty()) {
+    return folder.name;
+  }
+  // Paths are distinct, so enough folders above always tell them apart.
+  std::size_t depth = 2;
+  const auto taken = [&](std::size_t levels) {
+    const auto hint = folders_above(folder.path, levels);
+    return std::any_of(others.begin(), others.end(), [&](const Folder *other) {
+      return folders_above(other->path, levels) == hint;
+    });
+  };
+  const auto levels = std::distance(folder.path.begin(), folder.path.end());
+  while (taken(depth) && static_cast<std::ptrdiff_t>(depth) < levels) {
+    ++depth;
+  }
+  return folder.name + " (" + folders_above(folder.path, depth) + ")";
+}
 
 const Folder *Workspace::enclosing(const fs::path &path) const {
   const auto resolved = normalize_path(path);

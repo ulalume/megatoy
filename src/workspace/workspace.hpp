@@ -49,6 +49,13 @@ public:
    */
   bool add(const std::filesystem::path &path);
 
+  /**
+   * What the user sees `folder` called: its name, and when another folder
+   * has the same one, the folders above it that tell them apart, as in
+   * "patches (Desktop/songs)". At least two are shown.
+   */
+  std::string display_name(const Folder &folder) const;
+
   /// The outermost registered folder `path` lies strictly inside, if any.
   const Folder *enclosing(const std::filesystem::path &path) const;
   /// The registered folders lying strictly inside `path`.

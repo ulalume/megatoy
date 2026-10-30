@@ -31,7 +31,8 @@ namespace {
 std::string saved_path_label(const patches::PatchSession &session,
                              const std::filesystem::path &path) {
   const auto relative = session.repository().to_relative_path(path);
-  return display_preset_path(relative.generic_string());
+  return display_preset_path(
+      session.repository().display_path(relative.generic_string()));
 }
 
 void announce_save(patches::PatchSession &session,

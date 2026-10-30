@@ -110,7 +110,7 @@ void render_patch_save_dialog(
       std::string folder_preview = state.folder.filename().string();
       for (const auto &folder : choices) {
         if (folder.path == state.folder) {
-          folder_preview = folder.name;
+          folder_preview = workspace.display_name(folder);
           break;
         }
       }
@@ -120,7 +120,8 @@ void render_patch_save_dialog(
           // Two folders can carry the same display name.
           ImGui::PushID(folder.path.string().c_str());
           const bool selected = folder.path == state.folder;
-          if (ImGui::Selectable(folder.name.c_str(), selected)) {
+          if (ImGui::Selectable(workspace.display_name(folder).c_str(),
+                                selected)) {
             state.folder = folder.path;
           }
           if (selected) {

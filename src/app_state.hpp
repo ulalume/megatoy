@@ -160,6 +160,13 @@ struct UIState {
       on_confirm = std::move(confirm_action);
     }
 
+    /// Whether a folder being added may take in the ones inside it.
+    void request_merge_folders(std::string dialog_message,
+                               std::function<void()> confirm_action) {
+      request("Merge Folders?", std::move(dialog_message), "OK",
+              std::move(confirm_action));
+    }
+
     void clear() {
       requested = false;
       title.clear();

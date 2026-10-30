@@ -30,16 +30,18 @@ struct EntryDisplay {
   std::string label;
 };
 
-void collect_entries(const std::vector<patches::PatchEntry> &tree,
+void collect_entries(const patches::PatchRepository &repository,
+                     const std::vector<patches::PatchEntry> &tree,
                      std::vector<EntryDisplay> &out) {
   for (const auto &entry : tree) {
     if (entry.is_directory) {
-      collect_entries(entry.children, out);
+      collect_entries(repository, entry.children, out);
     } else {
       EntryDisplay display;
       display.entry = &entry;
       if (!entry.relative_path.empty()) {
-        display.label = display_preset_path(entry.relative_path);
+        display.label =
+            display_preset_path(repository.display_path(entry.relative_path));
       } else if (!entry.name.empty()) {
         display.label = entry.name;
       } else {
@@ -53,7 +55,7 @@ void collect_entries(const std::vector<patches::PatchEntry> &tree,
 std::vector<EntryDisplay>
 build_entry_list(const patches::PatchRepository &repository) {
   std::vector<EntryDisplay> entries;
-  collect_entries(repository.tree(), entries);
+  collect_entries(repository, repository.tree(), entries);
   std::sort(entries.begin(), entries.end(),
             [](const EntryDisplay &lhs, const EntryDisplay &rhs) {
               return lhs.label < rhs.label;
@@ -91,8 +93,10 @@ bool resolve_source(const patches::PatchSession &session,
     return false;
   }
   if (label != nullptr) {
-    *label = entry->name.empty() ? display_preset_path(entry->relative_path)
-                                 : entry->name;
+    *label = entry->name.empty()
+                 ? display_preset_path(session.repository().display_path(
+                       entry->relative_path))
+                 : entry->name;
   }
   return patch == nullptr || session.repository().load_patch(*entry, *patch);
 }
