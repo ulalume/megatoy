@@ -23,6 +23,16 @@
 namespace ui {
 namespace {
 
+const std::vector<EntryDisplay> &
+current_entries(PatchLabState &state,
+                const patches::PatchRepository &repository) {
+  if (state.entries_revision != repository.revision()) {
+    state.entries = build_entry_list(repository);
+    state.entries_revision = repository.revision();
+  }
+  return state.entries;
+}
+
 /// What a source is called and what it holds; false when its entry has gone.
 bool resolve_source(const patches::PatchSession &session,
                     const PatchLabSource &source, std::string *label,
@@ -426,12 +436,12 @@ void render_patch_lab(const char *title, PatchLabContext &context,
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem(ICON_FA_SHUFFLE " Mix")) {
-        const auto entries = build_entry_list(repository);
+        const auto &entries = current_entries(state, repository);
         render_merge_section(context, state, entries);
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem(ICON_FA_FLASK_VIAL " Morph")) {
-        const auto entries = build_entry_list(repository);
+        const auto &entries = current_entries(state, repository);
         render_morph_section(context, state, entries);
         ImGui::EndTabItem();
       }
