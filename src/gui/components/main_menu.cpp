@@ -193,7 +193,8 @@ void render_load_menu(MainMenuContext &context) {
 /// The load graph, at the right-hand end of the bar.
 void render_audio_load(MainMenuContext &context) {
   const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 size(ui::scale::px(kLoadGraphWidth), ImGui::GetTextLineHeight());
+  const ImVec2 size(ui::scale::px(kLoadGraphWidth),
+                    ImGui::GetTextLineHeight() + ui::scale::px(4.0f));
 
   const auto history = context.audio_load.history();
   const LoadWindow window = load_window(history, size.x);
@@ -209,12 +210,13 @@ void render_audio_load(MainMenuContext &context) {
                            ImGui::GetWindowWidth() - size.x - reading_width -
                                style.ItemSpacing.x -
                                style.FramePadding.x * 2.0f);
-  const float y = (ImGui::GetWindowHeight() - row) * 0.5f;
-  ImGui::SetCursorPos(ImVec2(x, y));
+  // Text in the bar is drawn the frame padding below the cursor.
+  ImGui::SetCursorPos(ImVec2(
+      x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
   ImGui::TextUnformatted(reading);
 
-  ImGui::SetCursorPos(
-      ImVec2(x + reading_width + style.ItemSpacing.x, y));
+  ImGui::SetCursorPos(ImVec2(x + reading_width + style.ItemSpacing.x,
+                             (ImGui::GetWindowHeight() - size.y) * 0.5f));
   const Panel panel = begin_panel(size, "##audio_load");
   const bool clicked = ImGui::IsItemClicked();
   const bool hovered = ImGui::IsItemHovered();
@@ -258,10 +260,19 @@ ImTextureID app_icon() {
  * blank space as wide as the icon, which is drawn over it afterwards so the
  * menu's hover highlight stays underneath.
  */
+/// A menu in the bar, highlighted from the bar's top to its bottom.
+bool begin_bar_menu(const char *label) {
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing,
+                       ImGui::GetStyle().FramePadding.y * 2.0f);
+  const bool open = ImGui::BeginMenu(label);
+  ImGui::PopStyleVar();
+  return open;
+}
+
 bool begin_app_menu() {
   const ImTextureID icon = app_icon();
   if (icon == ImTextureID{}) {
-    return ImGui::BeginMenu("megatoy");
+    return begin_bar_menu("megatoy");
   }
   const float size = ImGui::GetTextLineHeight() + ui::scale::px(8.0f);
   const float space = ImGui::CalcTextSize(" ").x;
@@ -271,7 +282,7 @@ bool begin_app_menu() {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const ImVec2 start = ImGui::GetCursorScreenPos();
   const float label_width = ImGui::CalcTextSize(label.c_str(), nullptr, true).x;
-  const bool open = ImGui::BeginMenu(label.c_str());
+  const bool open = begin_bar_menu(label.c_str());
   // A menu bar item's label starts half an item spacing in.
   const float x = start.x + ImGui::GetStyle().ItemSpacing.x * 0.5f +
                   (label_width - size) * 0.5f;
@@ -313,7 +324,7 @@ void render_main_menu(MainMenuContext &context) {
     const bool is_patch_modified = session.is_modified();
     const bool is_user_patch = session.current_patch_is_user_patch();
     const bool save_disabled = is_user_patch && !is_patch_modified;
-    if (ImGui::BeginMenu("File")) {
+    if (begin_bar_menu("File")) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
       const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -433,7 +444,7 @@ void render_main_menu(MainMenuContext &context) {
       request_save_as(context.save_state);
     }
 
-    if (ImGui::BeginMenu("Edit")) {
+    if (begin_bar_menu("Edit")) {
       auto &history = context.history();
       const ImGuiIO &io = ImGui::GetIO();
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
@@ -485,7 +496,7 @@ void render_main_menu(MainMenuContext &context) {
       ImGui::EndMenu();
     }
 
-    if (ImGui::BeginMenu("View")) {
+    if (begin_bar_menu("View")) {
       auto &ui_prefs = context.ui_prefs;
 
       if (context.gui.supports_fullscreen()) {
