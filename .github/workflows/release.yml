@@ -80,7 +80,7 @@ jobs:
       - name: Build
         run: cmake --build "$BUILD_DIR" --config $BUILD_TYPE --parallel
       - name: Test
-        run: ctest --test-dir "$BUILD_DIR" --output-on-failure
+        run: ctest --test-dir "$BUILD_DIR" --timeout 120 --output-on-failure
       - name: Install
         run: cmake --install "$BUILD_DIR" --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
       - name: Package Artifact
@@ -140,7 +140,7 @@ jobs:
       - name: Build
         run: cmake --build build-release --config $BUILD_TYPE --parallel
       - name: Test
-        run: ctest --test-dir build-release --output-on-failure
+        run: ctest --test-dir build-release --timeout 120 --output-on-failure
       - name: Install
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
       - name: Package Artifact
@@ -184,7 +184,7 @@ jobs:
       - name: Build
         run: cmake --build build-release --config $BUILD_TYPE --parallel
       - name: Test
-        run: ctest --test-dir build-release --output-on-failure
+        run: ctest --test-dir build-release --timeout 120 --output-on-failure
       - name: Install
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"
       - name: Package Artifact
@@ -243,7 +243,7 @@ jobs:
         run: cmake --build build-release --config $BUILD_TYPE --parallel
       - name: Test
         shell: bash
-        run: ctest --test-dir build-release --build-config $BUILD_TYPE --output-on-failure
+        run: ctest --test-dir build-release --timeout 120 --build-config $BUILD_TYPE --output-on-failure
       - name: Install
         shell: bash
         run: cmake --install build-release --config $BUILD_TYPE --prefix "$INSTALL_PREFIX"

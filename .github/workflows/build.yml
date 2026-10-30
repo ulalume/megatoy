@@ -48,7 +48,7 @@ jobs:
         run: cmake --build build --config Release --parallel
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --timeout 120 --output-on-failure
 
       - name: Install artifacts
         run: cmake --install build --config Release
@@ -67,7 +67,7 @@ jobs:
         run: cmake --build build --config Release --parallel
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --timeout 120 --output-on-failure
 
       - name: Install artifacts
         run: cmake --install build --config Release
@@ -86,7 +86,7 @@ jobs:
         run: cmake --build build --config Release --parallel
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --timeout 120 --output-on-failure
 
       - name: Install artifacts
         run: cmake --install build --config Release
@@ -121,7 +121,7 @@ jobs:
 
       - name: Test
         shell: pwsh
-        run: ctest --test-dir build --build-config Release --output-on-failure
+        run: ctest --test-dir build --timeout 120 --build-config Release --output-on-failure
 
       - name: Install artifacts
         shell: pwsh
