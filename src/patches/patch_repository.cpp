@@ -22,8 +22,10 @@ PatchRepository::PatchRepository(
     platform::VirtualFileSystem &vfs,
     const megatoy::workspace::Workspace &workspace,
     const std::filesystem::path &builtin_presets_dir,
+    const std::filesystem::path &builtin_presets_metadata,
     PersistentParseCache *persistent_cache)
     : workspace_(workspace), builtin_presets_directory_(builtin_presets_dir),
+      builtin_presets_metadata_(builtin_presets_metadata),
       vfs_(vfs), persistent_cache_(persistent_cache) {
   rebuild_storages();
   refresh();
@@ -75,16 +77,22 @@ void PatchRepository::rebuild_storages() {
   for (const auto &folder : workspace_.folders()) {
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, folder.path, unique_label(folder.name), folder.writable,
-        /*enable_metadata=*/folder.writable, persistent_cache_));
+        folder.writable ? folder.metadata_path() : std::filesystem::path{},
+        persistent_cache_));
     if (folder.available) {
       watched_directories_.push_back(folder.path);
     }
   }
 
   if (show_builtin_presets_ && !builtin_presets_directory_.empty()) {
+    // Without the presets there would be nothing to keep, and the cleanup
+    // after a scan would drop every rating.
+    const bool keep_metadata = vfs_.is_directory(builtin_presets_directory_);
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, builtin_presets_directory_, kBuiltinRootName,
-        /*writable=*/false, /*enable_metadata=*/false, persistent_cache_));
+        /*writable=*/false,
+        keep_metadata ? builtin_presets_metadata_ : std::filesystem::path{},
+        persistent_cache_));
     watched_directories_.push_back(builtin_presets_directory_);
   }
 

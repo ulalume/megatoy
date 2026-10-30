@@ -15,6 +15,9 @@ namespace megatoy::system {
  */
 struct DirectoryPaths {
   std::filesystem::path builtin_presets_root;
+  /// Ratings and categories for the built-in presets, which cannot hold a
+  /// sidecar of their own.
+  std::filesystem::path builtin_presets_metadata;
   std::filesystem::path preferences_file;
   std::filesystem::path imgui_ini_file;
   /// SQLite metadata database written by pre-workspace desktop releases.

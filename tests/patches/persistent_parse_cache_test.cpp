@@ -169,7 +169,7 @@ void test_filesystem_storage_integration(const fs::path &root) {
   first_cache.load(cache_path);
   patches::FilesystemPatchStorage first_storage(
       file_system, library, "library", /*writable=*/true,
-      /*enable_metadata=*/false, &first_cache);
+      /*metadata_file=*/{}, &first_cache);
   std::vector<patches::PatchEntry> first_tree;
   first_storage.append_entries(first_tree);
   CHECK(first_storage.container_parse_count_for_testing() == 1);
@@ -181,7 +181,7 @@ void test_filesystem_storage_integration(const fs::path &root) {
   second_cache.load(cache_path);
   patches::FilesystemPatchStorage second_storage(
       file_system, library, "library", /*writable=*/true,
-      /*enable_metadata=*/false, &second_cache);
+      /*metadata_file=*/{}, &second_cache);
   std::vector<patches::PatchEntry> second_tree;
   second_storage.append_entries(second_tree);
   CHECK(second_storage.container_parse_count_for_testing() == 0);

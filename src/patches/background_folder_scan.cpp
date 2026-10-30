@@ -45,7 +45,7 @@ void scan_and_warm(const std::filesystem::path &folder,
                    ScanProgress &progress) {
   platform::StdFileSystem file_system;
   FilesystemPatchStorage storage(file_system, folder, std::string(root_label),
-                                 /*writable=*/true, /*enable_metadata=*/false,
+                                 /*writable=*/true, /*metadata_file=*/{},
                                  cache);
   FilesystemPatchStorage::ScanObserver observer;
   observer.on_file = [&progress, &storage](const std::filesystem::path &) {

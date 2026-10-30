@@ -18,8 +18,8 @@ namespace patches {
 
 FilesystemPatchStorage::FilesystemPatchStorage(
     platform::VirtualFileSystem &vfs, std::filesystem::path root,
-    std::string relative_root_label, bool writable, bool enable_metadata,
-    PersistentParseCache *persistent_cache)
+    std::string relative_root_label, bool writable,
+    std::filesystem::path metadata_file, PersistentParseCache *persistent_cache)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)), writable_(writable),
       label_(root_label_), persistent_cache_(persistent_cache) {
@@ -27,9 +27,8 @@ FilesystemPatchStorage::FilesystemPatchStorage(
     label_ = root_.filename().generic_string();
     root_label_ = label_;
   }
-  if (enable_metadata) {
-    metadata_ = std::make_unique<FolderMetadataStore>(root_ / ".megatoy" /
-                                                      "patches.json");
+  if (!metadata_file.empty()) {
+    metadata_ = std::make_unique<FolderMetadataStore>(std::move(metadata_file));
     metadata_->load();
   }
 }

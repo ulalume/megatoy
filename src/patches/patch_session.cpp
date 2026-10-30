@@ -30,7 +30,8 @@ PatchSession::PatchSession(megatoy::system::PathService &directories,
     : directories_(directories), preferences_(preferences), audio_(audio),
       repository_(std::make_unique<PatchRepository>(
           directories_.file_system(), preferences_.workspace(),
-          directories_.paths().builtin_presets_root, persistent_cache)) {
+          directories_.paths().builtin_presets_root,
+          directories_.paths().builtin_presets_metadata, persistent_cache)) {
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
   active_id_ = create_document(/*pinned=*/false).id();
 }

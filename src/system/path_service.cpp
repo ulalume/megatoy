@@ -160,10 +160,18 @@ PathService::PathService(::platform::VirtualFileSystem &vfs,
     : vfs_(vfs) {
   paths_.builtin_presets_root = builtin_presets_directory();
   if (config_root.empty()) {
+#if defined(MEGATOY_PLATFORM_WEB)
+    // Inside the persistent mount, unlike the rest of the configuration.
+    paths_.builtin_presets_metadata =
+        web_storage_root() / ".builtin-presets.json";
+#else
+    paths_.builtin_presets_metadata = config_path("builtin_presets.json");
+#endif
     paths_.preferences_file = preferences_file_path();
     paths_.imgui_ini_file = imgui_ini_file_path();
     paths_.legacy_patch_metadata_db = config_path("patch_metadata.db");
   } else {
+    paths_.builtin_presets_metadata = config_root / "builtin_presets.json";
     paths_.preferences_file = config_root / "preferences.json";
     paths_.imgui_ini_file = config_root / "imgui.ini";
     paths_.legacy_patch_metadata_db = config_root / "patch_metadata.db";

@@ -105,7 +105,7 @@ void test_warm_then_scan_is_parse_free(const fs::path &root) {
   platform::StdFileSystem file_system;
   patches::FilesystemPatchStorage storage(file_system, library.folder, label,
                                           /*writable=*/true,
-                                          /*enable_metadata=*/false, &cache);
+                                          /*metadata_file=*/{}, &cache);
   std::vector<patches::PatchEntry> tree;
   storage.append_entries(tree);
 

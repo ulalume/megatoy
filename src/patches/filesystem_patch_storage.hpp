@@ -26,15 +26,15 @@ class PersistentParseCache;
  *
  * Metadata lives in a sidecar inside the folder itself and is therefore keyed
  * by a path relative to `root`, not to the repository -- that is what lets a
- * folder be moved or shared without losing its ratings. Read-only folders
- * (the presets directory, a mounted archive) get no store at all.
+ * folder be moved or shared without losing its ratings. A read-only folder
+ * keeps its metadata elsewhere, or has none.
  */
 class FilesystemPatchStorage final : public PatchStorage {
 public:
   FilesystemPatchStorage(platform::VirtualFileSystem &vfs,
                          std::filesystem::path root,
                          std::string relative_root_label, bool writable,
-                         bool enable_metadata,
+                         std::filesystem::path metadata_file,
                          PersistentParseCache *persistent_cache = nullptr);
 
   void append_entries(std::vector<PatchEntry> &tree) const override;

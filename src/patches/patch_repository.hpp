@@ -55,6 +55,7 @@ public:
   PatchRepository(platform::VirtualFileSystem &vfs,
                   const megatoy::workspace::Workspace &workspace,
                   const std::filesystem::path &builtin_presets_dir = {},
+                  const std::filesystem::path &builtin_presets_metadata = {},
                   PersistentParseCache *persistent_cache = nullptr);
 
   /// Rebuild the storage list if the workspace has changed since last call.
@@ -130,6 +131,7 @@ private:
 
   const megatoy::workspace::Workspace &workspace_;
   std::filesystem::path builtin_presets_directory_;
+  std::filesystem::path builtin_presets_metadata_;
   platform::VirtualFileSystem &vfs_;
   PersistentParseCache *persistent_cache_;
 
