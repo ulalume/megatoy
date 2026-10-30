@@ -2,16 +2,13 @@
 #include "patches/document_confirmation.hpp"
 #include "patches/save_controls.hpp"
 
-#include <optional>
 #include <string>
 
 namespace {
 
 void check_document(decision_tests::Environment &env,
                     patches::PatchDocument &document, bool in_place,
-                    const std::string &label,
-                    std::optional<std::string> unsaved_tooltip =
-                        "Choose a filename and format") {
+                    const std::string &label) {
   auto &session = env.session;
   session.mark_all_clean();
   CHECK(session.can_save_in_place(document) == in_place);
@@ -24,8 +21,8 @@ void check_document(decision_tests::Environment &env,
   CHECK(std::string(clean.save_label) == label);
   if (in_place) {
     CHECK(clean.save_tooltip == "Patch is not modified");
-  } else if (unsaved_tooltip) {
-    CHECK(clean.save_tooltip == *unsaved_tooltip);
+  } else {
+    CHECK(clean.save_tooltip == "Choose a filename and format");
   }
   CHECK(!patches::exit_confirmation(session).show_unsaved_changes_dialog);
 
@@ -42,8 +39,8 @@ void check_document(decision_tests::Environment &env,
   CHECK(std::string(changed.save_label) == label);
   if (in_place) {
     CHECK(changed.save_tooltip.empty());
-  } else if (unsaved_tooltip) {
-    CHECK(changed.save_tooltip == *unsaved_tooltip);
+  } else {
+    CHECK(changed.save_tooltip == "Choose a filename and format");
   }
 
   const auto exit = patches::exit_confirmation(session);
@@ -97,6 +94,10 @@ void test_document_flows() {
 
   auto &package = env.open(env.folder / "versions.ginpkg");
   check_document(env, package, true, "Save Version");
+  auto &upper_package = env.open(env.folder / "VERSIONS.GINPKG");
+  check_document(env, upper_package, true, "Save Version");
+  CHECK(package.selection_path().ends_with("/latest"));
+  CHECK(upper_package.selection_path().ends_with("/latest"));
   auto &preset =
       env.open(env.directories.paths().builtin_presets_root / "init.dmp");
   check_document(env, preset, false, "Save As...");
@@ -116,7 +117,7 @@ void test_document_flows() {
   check_document(env, outside, true, "Overwrite");
   env.set_read_only();
   check_document(env, writable, false, "Save As...");
-  check_document(env, package, false, "Save As...", std::nullopt);
+  check_document(env, package, false, "Save As...");
   check_document(env, outside, true, "Overwrite");
 
   writable.patch().instrument.feedback = 6;
