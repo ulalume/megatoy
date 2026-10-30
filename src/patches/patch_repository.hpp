@@ -27,6 +27,9 @@ struct PatchEntry {
   bool is_directory;
   /// A directory with nothing on disk but dotfiles.
   bool holds_nothing = false;
+  /// For a workspace folder sharing its name with another: the folders above
+  /// it that tell them apart, as "songs/".
+  std::string telling_parents;
   std::vector<PatchEntry> children;
 
   // Metadata (only valid for files, not directories)

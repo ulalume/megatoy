@@ -182,6 +182,16 @@ float row_margin() {
 
 float row_height() { return ImGui::GetTextLineHeight() + row_margin(); }
 
+/// Text after what is already on the row, `drop` below the row's top. A folder
+/// row's text is already placed by its frame padding, so it takes none.
+void row_trailing_text(const char *text, const ImVec4 &color, float drop) {
+  ImGui::SameLine();
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + drop);
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+  ImGui::TextColored(color, "%s", text);
+  ImGui::PopStyleVar();
+}
+
 bool row_selectable(const char *label) {
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
@@ -234,6 +244,12 @@ void render_directory_row(PatchSelectorContext &context, const TreeRow &row,
   if (open != row.is_open && !filtering) {
     cache.set_open(item.relative_path, open);
   }
+  if (!item.telling_parents.empty()) {
+    row_trailing_text(item.telling_parents.c_str(),
+                      color_with_alpha_vec4(
+                          ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f),
+                      0.0f);
+  }
   ImGui::PopID();
 }
 
@@ -276,13 +292,9 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
 
   if (const int stars = item.metadata ? item.metadata->star_rating : 0;
       stars > 0) {
-    ImGui::SameLine();
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + row_margin() * 0.5f);
-    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-    ImGui::TextDisabled("%s", kStarLabels[static_cast<std::size_t>(
-                                  std::min(stars, 5))]
-                                  .data());
-    ImGui::PopStyleVar();
+    row_trailing_text(
+        kStarLabels[static_cast<std::size_t>(std::min(stars, 5))].data(),
+        ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), row_margin() * 0.5f);
   }
 
   // A click previews the patch, a double click keeps it open.

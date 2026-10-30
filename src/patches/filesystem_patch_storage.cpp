@@ -58,7 +58,8 @@ void FilesystemPatchStorage::append_entries(
   scan_aborted_ = false;
 
   PatchEntry root_entry;
-  root_entry.name = display_name_.empty() ? label_ : display_name_;
+  root_entry.name = listed_name_.empty() ? label_ : listed_name_;
+  root_entry.telling_parents = listed_parents_;
   root_entry.relative_path = root_label_;
   root_entry.full_path = root_;
   root_entry.is_directory = true;

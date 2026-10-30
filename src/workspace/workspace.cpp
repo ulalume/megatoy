@@ -66,7 +66,7 @@ bool is_strictly_inside(const fs::path &path, const fs::path &folder) {
 
 namespace {
 
-/// The last `depth` folders above `path`, outermost first.
+/// The last `depth` folders above `path`, outermost first, each with a slash.
 std::string folders_above(const fs::path &path, std::size_t depth) {
   std::vector<std::string> names;
   for (auto parent = path.parent_path();
@@ -76,14 +76,14 @@ std::string folders_above(const fs::path &path, std::size_t depth) {
   }
   std::string joined;
   for (auto name = names.rbegin(); name != names.rend(); ++name) {
-    joined += (joined.empty() ? "" : "/") + *name;
+    joined += *name + "/";
   }
   return joined;
 }
 
 } // namespace
 
-std::string Workspace::display_name(const Folder &folder) const {
+std::string Workspace::telling_parents(const Folder &folder) const {
   std::vector<const Folder *> others;
   for (const auto &other : folders_) {
     if (other.path != folder.path && other.name == folder.name) {
@@ -91,21 +91,26 @@ std::string Workspace::display_name(const Folder &folder) const {
     }
   }
   if (others.empty()) {
-    return folder.name;
+    return {};
   }
   // Paths are distinct, so enough folders above always tell them apart.
-  std::size_t depth = 2;
   const auto taken = [&](std::size_t levels) {
-    const auto hint = folders_above(folder.path, levels);
+    const auto parents = folders_above(folder.path, levels);
     return std::any_of(others.begin(), others.end(), [&](const Folder *other) {
-      return folders_above(other->path, levels) == hint;
+      return folders_above(other->path, levels) == parents;
     });
   };
-  const auto levels = std::distance(folder.path.begin(), folder.path.end());
-  while (taken(depth) && static_cast<std::ptrdiff_t>(depth) < levels) {
+  const auto levels = static_cast<std::size_t>(
+      std::distance(folder.path.begin(), folder.path.end()));
+  std::size_t depth = 1;
+  while (taken(depth) && depth < levels) {
     ++depth;
   }
-  return folder.name + " (" + folders_above(folder.path, depth) + ")";
+  return folders_above(folder.path, depth);
+}
+
+std::string Workspace::display_name(const Folder &folder) const {
+  return telling_parents(folder) + folder.name;
 }
 
 const Folder *Workspace::enclosing(const fs::path &path) const {

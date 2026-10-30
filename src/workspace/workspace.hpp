@@ -50,10 +50,12 @@ public:
   bool add(const std::filesystem::path &path);
 
   /**
-   * What the user sees `folder` called: its name, and when another folder
-   * has the same one, the folders above it that tell them apart, as in
-   * "patches (Desktop/songs)". At least two are shown.
+   * The folders above `folder` that tell it from others with the same name,
+   * as few as it takes, each followed by a slash: "songs/". Empty when no
+   * other folder has its name.
    */
+  std::string telling_parents(const Folder &folder) const;
+  /// What `folder` is called on one line: "songs/patches".
   std::string display_name(const Folder &folder) const;
 
   /// The outermost registered folder `path` lies strictly inside, if any.

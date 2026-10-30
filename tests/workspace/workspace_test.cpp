@@ -199,9 +199,9 @@ void test_metadata_sidecar(const fs::path &root) {
 
 void test_same_named_folders_are_told_apart(const fs::path &root) {
   using megatoy::workspace::Workspace;
-  const auto first = root / "names" / "work" / "songs" / "patches";
+  const auto first = root / "names" / "songs" / "patches";
   const auto second = root / "names" / "home" / "desk" / "patches";
-  const auto third = root / "names" / "other" / "work" / "songs" / "patches";
+  const auto third = root / "names" / "other" / "songs" / "patches";
   const auto alone = root / "names" / "bank";
   for (const auto &path : {first, second, third, alone}) {
     fs::create_directories(path);
@@ -209,21 +209,18 @@ void test_same_named_folders_are_told_apart(const fs::path &root) {
   Workspace workspace;
   CHECK(workspace.add(first));
   CHECK(workspace.add(alone));
+  CHECK(workspace.telling_parents(*workspace.find(first)).empty());
   CHECK(workspace.display_name(*workspace.find(first)) == "patches");
   CHECK(workspace.add(second));
   CHECK(workspace.display_name(*workspace.find(alone)) == "bank");
-  CHECK(workspace.display_name(*workspace.find(first)) ==
-        "patches (work/songs)");
-  CHECK(workspace.display_name(*workspace.find(second)) ==
-        "patches (home/desk)");
-  // Two folders above are the same for these, so a third is shown.
+  CHECK(workspace.telling_parents(*workspace.find(first)) == "songs/");
+  CHECK(workspace.telling_parents(*workspace.find(second)) == "desk/");
+  CHECK(workspace.display_name(*workspace.find(second)) == "desk/patches");
+  // The folder above is the same for these, so the next one up is shown.
   CHECK(workspace.add(third));
-  CHECK(workspace.display_name(*workspace.find(first)) ==
-        "patches (names/work/songs)");
-  CHECK(workspace.display_name(*workspace.find(third)) ==
-        "patches (other/work/songs)");
-  CHECK(workspace.display_name(*workspace.find(second)) ==
-        "patches (home/desk)");
+  CHECK(workspace.telling_parents(*workspace.find(first)) == "names/songs/");
+  CHECK(workspace.telling_parents(*workspace.find(third)) == "other/songs/");
+  CHECK(workspace.telling_parents(*workspace.find(second)) == "desk/");
 }
 
 int main() {

@@ -79,7 +79,7 @@ void PatchRepository::rebuild_storages() {
         vfs_, folder.path, unique_label(folder.name), folder.writable,
         folder.writable ? folder.metadata_path() : std::filesystem::path{},
         persistent_cache_);
-    storage->set_display_name(workspace_.display_name(folder));
+    storage->set_listed_as(folder.name, workspace_.telling_parents(folder));
     storages_.push_back(std::move(storage));
     if (folder.available) {
       watched_directories_.push_back(folder.path);
@@ -344,10 +344,11 @@ PatchRepository::to_relative_path(const std::filesystem::path &path) const {
 std::string PatchRepository::display_path(const std::string &relative) const {
   for (const auto &root : tree_cache_) {
     if (relative == root.relative_path) {
-      return root.name;
+      return root.telling_parents + root.name;
     }
     if (relative.starts_with(root.relative_path + "/")) {
-      return root.name + relative.substr(root.relative_path.size());
+      return root.telling_parents + root.name +
+             relative.substr(root.relative_path.size());
     }
   }
   return relative;

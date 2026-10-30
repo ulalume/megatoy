@@ -560,10 +560,12 @@ void test_display_path_tells_same_named_folders_apart() {
   env.preferences.workspace().set_paths({env.patches_folder, other});
   session.sync_workspace();
   const auto relative = env.relative(file);
-  const auto parent = env.root.filename().generic_string();
   CHECK(relative == "patches (2)/lead.gin");
   CHECK(session.repository().display_path(relative) ==
-        "patches (" + parent + "/elsewhere)/lead.gin");
+        "elsewhere/patches/lead.gin");
+  const auto &root = session.repository().tree()[1];
+  CHECK(root.name == "patches");
+  CHECK(root.telling_parents == "elsewhere/");
   CHECK(session.repository().display_path("/not/in/the/tree.gin") ==
         "/not/in/the/tree.gin");
 }
