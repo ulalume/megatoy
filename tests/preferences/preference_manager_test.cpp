@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <imgui.h>
 #include <iostream>
 
 namespace fs = std::filesystem;

@@ -1,0 +1,53 @@
+{
+  "active_open_patch": 0,
+  "last_patch_path": "songs/lead.gin",
+  "last_save_directory": "exports",
+  "last_seen_version": "v1.2.3",
+  "layout": "Sound",
+  "legacy_metadata_migration": 1,
+  "legacy_workspace_migration": 1,
+  "open_patches": [
+    {
+      "path": "songs/lead.gin",
+      "pinned": false
+    }
+  ],
+  "show_builtin_presets": false,
+  "theme": "megatoy-light",
+  "ui": {
+    "audio_buffer_frames": 1024,
+    "audio_load_reading": 1,
+    "custom_typing_layout_keys": [
+      571,
+      569,
+      548
+    ],
+    "custom_typing_octave_down_key": 603,
+    "custom_typing_octave_up_key": 605,
+    "envelope_reference_midi_note": 72,
+    "midi_keyboard_key": 2,
+    "midi_keyboard_layout": 2,
+    "midi_keyboard_scale": 1,
+    "midi_keyboard_typing_octave": 3,
+    "multi_operator_edit_absolute": true,
+    "show_audio_controls": false,
+    "show_midi_keyboard": false,
+    "show_mml_console": false,
+    "show_patch_editor": false,
+    "show_patch_lab": false,
+    "show_patch_selector": false,
+    "show_preferences": false,
+    "show_wave_viewer": false,
+    "steal_oldest_note_when_full": false,
+    "ui_scale": 1.5,
+    "use_mod_wheel": true,
+    "use_pitch_bend": false,
+    "use_velocity": false,
+    "velocity_sensitivity_depth": 45,
+    "ym2612_chip_type": 1,
+    "ym2612_core": 0
+  },
+  "workspace_folders": [
+    "songs"
+  ]
+}

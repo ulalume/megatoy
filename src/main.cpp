@@ -7,6 +7,7 @@
 #include "core/status.hpp"
 #include "drop_actions.hpp"
 #include "gui/envelope/envelope_curve.hpp"
+#include "gui/input/history_shortcuts.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
@@ -25,6 +26,7 @@
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
+#include <utility>
 
 namespace {
 
@@ -101,10 +103,12 @@ bool run_frame(RuntimeContext &runtime) {
 #endif
 
   runtime.midi->poll();
-  runtime.midi->dispatch(*runtime.app_context);
+  if (auto ports = runtime.midi->take_changed_ports()) {
+    app_state.set_connected_midi_inputs(std::move(*ports));
+  }
 
   services.gui_manager.begin_frame(app_state.ui_state().prefs);
-  services.history().handle_shortcuts(*runtime.app_context);
+  ui::handle_history_shortcuts(*runtime.app_context);
   // The envelope graphs are drawn at this note. Pushed in before the frame
   // rather than compared against the saved preferences after it, because the
   // frame that changes the setting is the last one an idle app draws: read

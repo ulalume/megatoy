@@ -3,8 +3,8 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 
 #include "core/status.hpp"
+#include "gui/clipboard.hpp"
 #include "gui/components/common.hpp"
-#include "platform/clipboard.hpp"
 #include "platform/import_pipeline.hpp"
 #include "platform/web/web_storage_persistence.hpp"
 

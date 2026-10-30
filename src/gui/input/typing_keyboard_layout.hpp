@@ -1,32 +1,15 @@
 #pragma once
 
-#include <array>
-#include <cstddef>
+#include "preferences/typing_keyboard_layout.hpp"
 #include <imgui.h>
 #include <utility>
 #include <vector>
 
 namespace ui {
 
-enum class TypingKeyboardLayout : int {
-  Qwerty = 0,
-  Azerty = 1,
-  Custom = 2,
-};
-
-inline constexpr std::array<const char *, 3> typing_keyboard_layout_names{
-    "QWERTY", "AZERTY", "Custom"};
-
-inline constexpr std::size_t typing_layout_default_slot_count = 17;
-inline constexpr std::size_t typing_layout_builtin_entry_count =
-    typing_layout_default_slot_count + 1;
-inline constexpr std::size_t typing_layout_min_custom_slots = 12;
-inline constexpr std::size_t typing_layout_max_custom_slots = 32;
-
 using BuiltinTypingLayoutArray =
     std::array<ImGuiKey, typing_layout_builtin_entry_count>;
 using TypingLayout = std::vector<ImGuiKey>;
-using TypingLayoutPreference = std::vector<int>;
 
 inline constexpr BuiltinTypingLayoutArray qwerty_typing_layout_keys{
     ImGuiKey_A, ImGuiKey_W,         ImGuiKey_S,   ImGuiKey_E, ImGuiKey_D,
@@ -38,6 +21,18 @@ inline constexpr BuiltinTypingLayoutArray azerty_typing_layout_keys{
     ImGuiKey_Q, ImGuiKey_Z, ImGuiKey_S, ImGuiKey_E, ImGuiKey_D, ImGuiKey_F,
     ImGuiKey_T, ImGuiKey_G, ImGuiKey_Y, ImGuiKey_H, ImGuiKey_U, ImGuiKey_J,
     ImGuiKey_K, ImGuiKey_O, ImGuiKey_L, ImGuiKey_P, ImGuiKey_M, ImGuiKey_None};
+
+static_assert(typing_key_none == ImGuiKey_None);
+static_assert(default_typing_octave_down_key == ImGuiKey_Comma);
+static_assert(default_typing_octave_up_key == ImGuiKey_Period);
+static_assert([] {
+  for (std::size_t i = 0; i < default_typing_layout_keys.size(); ++i) {
+    if (default_typing_layout_keys[i] != qwerty_typing_layout_keys[i]) {
+      return false;
+    }
+  }
+  return true;
+}());
 
 inline TypingLayout builtin_typing_layout(TypingKeyboardLayout layout) {
   TypingLayout layout_vec;

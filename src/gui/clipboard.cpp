@@ -1,4 +1,4 @@
-#include "platform/clipboard.hpp"
+#include "gui/clipboard.hpp"
 #include "platform/platform_config.hpp"
 
 #include <string>

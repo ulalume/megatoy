@@ -3,7 +3,6 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
-#include <imgui.h>
 #include <ostream>
 #include <string>
 #include <vector>
