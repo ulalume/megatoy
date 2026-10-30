@@ -21,7 +21,8 @@ namespace ui::selector_detail {
 
 namespace {
 
-constexpr float kDepthIndent = 4.0f;
+/// How far each level's names sit in from the level above.
+constexpr float kDepthIndent = 8.0f;
 
 /**
  * The visible rows, rebuilt only when the tree, the filters or the expansion
@@ -136,20 +137,15 @@ void handle_row_keys(PatchSelectorContext &context,
 }
 
 /**
- * How far a row is indented. Files step in one IndentSpacing per level plus
- * kDepthIndent. A folder's name lines up with the files of its level, its
- * arrow standing out to the left of them.
+ * How far a row is indented. Every level's names sit kDepthIndent in from
+ * the level above, a folder's and a file's alike; a folder's arrow stands
+ * out to the left of its name.
  */
-float row_indent(const TreeRow &row, float indent_spacing) {
-  const float depth = static_cast<float>(row.depth);
-  const float file_indent =
-      row.depth == 0
-          ? indent_spacing
-          : depth * indent_spacing + ui::scale::px(kDepthIndent) * depth;
-  if (!row.is_directory) {
-    return file_indent;
-  }
-  return std::max(0.0f, file_indent - ImGui::GetTreeNodeToLabelSpacing());
+float row_indent(const TreeRow &row) {
+  const float label_spacing = ImGui::GetTreeNodeToLabelSpacing();
+  const float name_x = label_spacing + ui::scale::px(kDepthIndent) *
+                                           static_cast<float>(row.depth);
+  return row.is_directory ? name_x - label_spacing : name_x;
 }
 
 /// While filtering, every directory leading to a match is shown open, and a
@@ -359,7 +355,6 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
 
   // Every row is exactly one text line high, which is what lets the clipper
   // skip the rows outside the view.
-  const float indent_spacing = ImGui::GetStyle().IndentSpacing;
   const float left = ImGui::GetCursorScreenPos().x;
   const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
   const bool can_drop = static_cast<bool>(context.move_patch);
@@ -372,7 +367,7 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       const auto index = static_cast<std::size_t>(i);
       const auto &row = rows[index];
       const float top = ImGui::GetCursorScreenPos().y;
-      const float offset = row_indent(row, indent_spacing);
+      const float offset = row_indent(row);
       if (offset > 0.0f) {
         ImGui::Indent(offset);
       }
@@ -407,7 +402,7 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
                            1) *
             row_height;
     draw_drop_frame(
-        ImVec2(left + row_indent(rows[hover->folder], indent_spacing),
+        ImVec2(left + row_indent(rows[hover->folder]),
                folder_top),
         ImVec2(right, bottom));
   }
