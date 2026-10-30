@@ -22,7 +22,7 @@ namespace ui::selector_detail {
 namespace {
 
 /// How far each level's names sit in from the level above.
-constexpr float kDepthIndent = 8.0f;
+constexpr float kDepthIndent = 10.0f;
 
 /**
  * The visible rows, rebuilt only when the tree, the filters or the expansion
