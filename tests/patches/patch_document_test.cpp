@@ -779,6 +779,59 @@ void test_a_file_outside_the_workspace_reports_outside_writes() {
   CHECK(session.take_disk_versions().empty());
 }
 
+void test_a_file_outside_the_workspace_keeps_its_path_through_a_sync() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  const auto outside = env.root / "desktop" / "dropped.dmp";
+  fs::create_directories(outside.parent_path());
+  CHECK(patches::write_patch(make_patch(5), outside));
+  session.open_or_activate_patch(
+      formats::load_patch_from_file(outside).patches[0], outside, true);
+  CHECK(session.current_patch_path() == outside.generic_string());
+  session.sync_workspace();
+  CHECK(session.current_patch_path() == outside.generic_string());
+  CHECK(session.can_save_in_place());
+
+  // Folding nested folders is a sync too, and it renames what is open.
+  session.remember_open_documents();
+  const auto bass = env.patches_folder / "bass";
+  fs::create_directories(bass);
+  env.preferences.workspace().set_paths({bass, env.patches_folder});
+  session.sync_workspace();
+  CHECK(env.preferences.workspace().folders().size() == 1);
+  CHECK(session.current_patch_path() == outside.generic_string());
+  CHECK(env.preferences.open_patches().size() == 1);
+  CHECK(env.preferences.open_patches().front().path ==
+        outside.generic_string());
+}
+
+void test_an_open_package_version_survives_a_sync() {
+  TestEnvironment env;
+  auto &session = env.session;
+  const auto package = env.patches_folder / "lead.ginpkg";
+  CHECK(patches::write_patch(make_patch(3), package));
+  session.open_document(make_patch(3), package);
+  auto &document = *session.documents().back();
+  CHECK(document.selection_path().ends_with("/latest"));
+  CHECK(session.activate(document.id()));
+  session.set_current_patch_selection_path(env.relative(package) + "/older");
+  const auto file_identity = document.path();
+
+  session.sync_workspace();
+  CHECK(document.path() == file_identity);
+  CHECK(document.selection_path() == env.relative(package) + "/older");
+
+  // A new label for its folder is followed too.
+  const auto other = env.root / "elsewhere" / "patches";
+  fs::create_directories(other);
+  env.preferences.workspace().set_paths({other, env.patches_folder});
+  session.sync_workspace();
+  CHECK(document.path() == env.relative(package));
+  CHECK(document.path() != file_identity);
+  CHECK(document.selection_path() == env.relative(package) + "/older");
+}
+
 void test_presets_and_untitled_do_not_save_in_place() {
   BrowserFixture fixture;
   auto &env = fixture.env;
@@ -1098,6 +1151,8 @@ int main() {
   test_dropped_patch_follows_the_preview_rules();
   test_a_file_outside_the_workspace_saves_in_place();
   test_a_file_outside_the_workspace_reports_outside_writes();
+  test_a_file_outside_the_workspace_keeps_its_path_through_a_sync();
+  test_an_open_package_version_survives_a_sync();
   test_presets_and_untitled_do_not_save_in_place();
   test_new_patch_opens_pinned();
   test_new_document_is_untitled();

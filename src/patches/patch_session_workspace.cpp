@@ -10,34 +10,43 @@ namespace patches {
 void PatchSession::sync_workspace() {
   // Resolved before the repository changes: a relabelled folder changes the
   // relative path a file is known by.
-  std::vector<std::pair<PatchDocument *, std::optional<std::filesystem::path>>>
-      resolved_paths;
+  struct ResolvedDocument {
+    PatchDocument *document;
+    std::optional<std::filesystem::path> path;
+    std::optional<std::filesystem::path> selection;
+  };
+  const auto resolve =
+      [this](
+          const std::string &relative) -> std::optional<std::filesystem::path> {
+    auto resolved = repository_->to_absolute_path(relative);
+    if (relative.empty() || !resolved.is_absolute()) {
+      return std::nullopt;
+    }
+    return resolved;
+  };
+  std::vector<ResolvedDocument> resolved_documents;
   for (auto &document : documents_) {
-    if (document->path().empty()) {
-      continue;
+    if (!document->path().empty()) {
+      resolved_documents.push_back({document.get(), resolve(document->path()),
+                                    resolve(document->selection_path())});
     }
-    std::optional<std::filesystem::path> absolute;
-    auto resolved = repository_->to_absolute_path(document->path());
-    if (resolved.is_absolute()) {
-      absolute = std::move(resolved);
-    }
-    resolved_paths.emplace_back(document.get(), std::move(absolute));
   }
 
   repository_->set_show_builtin_presets(preferences_.show_builtin_presets());
   repository_->sync_workspace();
 
-  for (auto &[document, absolute] : resolved_paths) {
-    if (!absolute) {
+  for (const auto &[document, path, selection] : resolved_documents) {
+    if (!path) {
       set_document_path(*document, {});
       continue;
     }
-    const auto relative = repository_->to_relative_path(*absolute);
-    if (relative.is_absolute()) {
-      set_document_path(*document, {});
-      continue;
+    // A file outside the workspace stays known by its absolute path.
+    set_document_path(*document, repository_->to_relative_path(*path));
+    // Setting the path selects a package's latest version; keep the one open.
+    if (selection) {
+      set_document_selection_path(*document,
+                                  repository_->to_relative_path(*selection));
     }
-    set_document_path(*document, relative);
   }
 
   absorb_nested_folders();
@@ -150,9 +159,7 @@ void PatchSession::absorb_nested_folders() {
         if (!absolute) {
           return std::string{};
         }
-        const auto relative = repository_->to_relative_path(*absolute);
-        return relative.is_absolute() ? std::string{}
-                                      : relative.generic_string();
+        return repository_->to_relative_path(*absolute).generic_string();
       };
   for (const auto &[document, path, selection] : document_paths) {
     if (path) {
