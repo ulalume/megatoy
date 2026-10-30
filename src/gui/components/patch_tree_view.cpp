@@ -41,6 +41,12 @@ struct PatchTreeCache {
   std::unordered_set<std::string> open_directories;
   std::vector<TreeRow> rows;
 
+  /// The current patch, and whether the tree has yet to be brought to it. A
+  /// patch the tree does not hold is tried again when the tree changes.
+  std::string revealed_selection;
+  bool reveal_pending = false;
+  std::uint64_t reveal_tried_revision = 0;
+
   const std::vector<TreeRow> &
   get(const std::vector<patches::PatchEntry> &source, std::uint64_t revision,
       const std::string &query_lower, int min_star_rating) {
@@ -77,6 +83,37 @@ struct PatchTreeCache {
     }
     open_directories.insert(followed.begin(), followed.end());
     ++open_revision;
+  }
+
+  /**
+   * Opens the directories above the current patch once it has become current.
+   * True when the view should be brought to it. While filtering the rows
+   * already follow the matches, and what was open is left as it was.
+   */
+  bool reveal(const std::vector<patches::PatchEntry> &source,
+              const std::string &selection, std::uint64_t revision,
+              bool filtering) {
+    if (selection != revealed_selection) {
+      revealed_selection = selection;
+      reveal_pending = !selection.empty();
+    } else if (!reveal_pending || reveal_tried_revision == revision) {
+      return false;
+    }
+    if (!reveal_pending) {
+      return false;
+    }
+    reveal_tried_revision = revision;
+    const auto above = directories_above(source, selection);
+    if (!above) {
+      return false;
+    }
+    reveal_pending = false;
+    if (!filtering) {
+      for (const auto &directory : *above) {
+        set_open(directory, true);
+      }
+    }
+    return true;
   }
 };
 
@@ -136,6 +173,25 @@ void handle_row_keys(PatchSelectorContext &context,
   }
 }
 
+/// A row's height: a text line and the margin around it, all of which the row
+/// answers the mouse in. Rows are set with no spacing between them, so their
+/// highlights meet.
+float row_margin() {
+  return ImGui::GetStyle().ItemSpacing.y + ui::scale::px(4.0f);
+}
+
+float row_height() { return ImGui::GetTextLineHeight() + row_margin(); }
+
+bool row_selectable(const char *label) {
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+  const bool clicked =
+      ImGui::Selectable(label, false, ImGuiSelectableFlags_AllowDoubleClick,
+                        ImVec2(0.0f, row_height()));
+  ImGui::PopStyleVar(2);
+  return clicked;
+}
+
 /**
  * How far a row is indented. Every level's names sit kDepthIndent in from
  * the level above, a folder's and a file's alike; a folder's arrow stands
@@ -163,9 +219,13 @@ void render_directory_row(PatchSelectorContext &context, const TreeRow &row,
   // The row list owns the open state, so the node is driven rather than left
   // to ImGui's storage; a toggle is picked up from the returned value.
   ImGui::SetNextItemOpen(row.is_open, ImGuiCond_Always);
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+  ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, row_margin() * 0.5f);
   const bool open = ImGui::TreeNodeEx(display_name.c_str(),
                                       ImGuiTreeNodeFlags_SpanFullWidth |
+                                          ImGuiTreeNodeFlags_FramePadding |
                                           ImGuiTreeNodeFlags_NoTreePushOnOpen);
+  ImGui::PopStyleVar(2);
   entry_context_menu(context, item,
                      row.depth == 0 &&
                          item.relative_path != kBuiltinPresetRoot);
@@ -192,8 +252,7 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
   // Name and dimmed format label, either of which loads the patch. The
   // context menu and tooltip attach to whichever was drawn last, so both
   // are registered after each selectable.
-  const bool name_clicked = ImGui::Selectable(
-      item.name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+  const bool name_clicked = row_selectable(item.name.c_str());
   if (is_current) {
     ImGui::PopStyleColor();
   }
@@ -208,8 +267,7 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
                  : ImGui::GetStyleColorVec4(ImGuiCol_Text);
   ImGui::PushStyleColor(ImGuiCol_Text,
                         color_with_alpha_vec4(format_color, 0.5f));
-  const bool format_clicked = ImGui::Selectable(
-      item.format.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+  const bool format_clicked = row_selectable(item.format.c_str());
   ImGui::PopStyleColor();
   entry_context_menu(context, item);
   show_patch_tooltip(item);
@@ -219,9 +277,12 @@ void render_patch_row(PatchSelectorContext &context, const TreeRow &row) {
   if (const int stars = item.metadata ? item.metadata->star_rating : 0;
       stars > 0) {
     ImGui::SameLine();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + row_margin() * 0.5f);
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
     ImGui::TextDisabled("%s", kStarLabels[static_cast<std::size_t>(
                                   std::min(stars, 5))]
                                   .data());
+    ImGui::PopStyleVar();
   }
 
   // A click previews the patch, a double click keeps it open.
@@ -335,6 +396,24 @@ void draw_drop_frame(const ImVec2 &min, const ImVec2 &max) {
 
 } // namespace
 
+/// Scrolls row `index`, in a list starting at `list_top`, into view: only as
+/// far as it takes for a row partly in view, otherwise to the middle.
+void scroll_to_row(std::size_t index, float list_top) {
+  const float height = row_height();
+  const float view = ImGui::GetWindowHeight();
+  const float scroll = ImGui::GetScrollY();
+  const float top = list_top + static_cast<float>(index) * height;
+  const float bottom = top + height;
+  if (top >= scroll && bottom <= scroll + view) {
+    return;
+  }
+  if (bottom <= scroll || top >= scroll + view) {
+    ImGui::SetScrollY(top - (view - height) * 0.5f);
+  } else {
+    ImGui::SetScrollY(top < scroll ? top : bottom - view);
+  }
+}
+
 void open_tree_directory(const std::string &relative_path) {
   tree_cache().set_open(relative_path, true);
 }
@@ -347,14 +426,28 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
                        PatchSelectorContext &context,
                        const std::string &query_lower, int min_star_rating) {
   PatchTreeCache &cache = tree_cache();
+  const auto &selection = context.session.current_patch_selection_path();
+  const bool reveal =
+      cache.reveal(tree, selection, context.repository.revision(),
+                   !query_lower.empty() || min_star_rating > 0);
   const auto &rows = cache.get(tree, context.repository.revision(), query_lower,
                                min_star_rating);
   if (rows.empty()) {
     return false;
   }
 
-  // Every row is exactly one text line high, which is what lets the clipper
-  // skip the rows outside the view.
+  if (reveal) {
+    const auto row = std::find_if(rows.begin(), rows.end(), [&](const auto &r) {
+      return r.entry->relative_path == selection;
+    });
+    if (row != rows.end()) {
+      scroll_to_row(static_cast<std::size_t>(row - rows.begin()),
+                    ImGui::GetCursorPosY());
+    }
+  }
+
+  // Every row is the same height, which is what lets the clipper skip the
+  // rows outside the view.
   const float left = ImGui::GetCursorScreenPos().x;
   const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
   const bool can_drop = static_cast<bool>(context.move_patch);

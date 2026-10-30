@@ -241,6 +241,32 @@ void test_empty_tree_is_handled() {
 
 } // namespace
 
+void test_directories_above_an_entry() {
+  patches::PatchEntry inner;
+  inner.name = "inner";
+  inner.relative_path = "root/inner";
+  inner.is_directory = true;
+  inner.children.push_back(make_file("lead.dmp", "root/inner/lead.dmp", 0));
+  patches::PatchEntry root;
+  root.name = "root";
+  root.relative_path = "root";
+  root.is_directory = true;
+  root.children.push_back(inner);
+  // A name starting like a directory's is not inside it.
+  root.children.push_back(make_file("inner2.dmp", "root/inner2.dmp", 0));
+  const std::vector<patches::PatchEntry> tree = {root};
+
+  using ui::selector_detail::directories_above;
+  const auto lead = directories_above(tree, "root/inner/lead.dmp");
+  CHECK(lead.has_value());
+  CHECK((*lead == std::vector<std::string>{"root", "root/inner"}));
+  CHECK(directories_above(tree, "root/inner2.dmp") ==
+        std::vector<std::string>{"root"});
+  CHECK(directories_above(tree, "root")->empty());
+  CHECK(!directories_above(tree, "root/inner/missing.dmp").has_value());
+  CHECK(!directories_above(tree, "/elsewhere/lead.dmp").has_value());
+}
+
 void test_search_key_ignores_surrounding_spaces() {
   using ui::selector_detail::search_key;
   CHECK(search_key("  Acoustic Bass ") == "acoustic bass");
@@ -259,6 +285,7 @@ int main() {
   test_a_directory_holding_nothing_is_listed_only_without_filters();
   test_a_directory_holding_only_an_empty_one_is_listed();
   test_empty_tree_is_handled();
+  test_directories_above_an_entry();
   test_search_key_ignores_surrounding_spaces();
 
   std::cout << "All patch tree flatten tests passed\n";

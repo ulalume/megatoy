@@ -97,4 +97,26 @@ flatten_visible_rows(const std::vector<patches::PatchEntry> &tree,
   return rows;
 }
 
+std::optional<std::vector<std::string>>
+directories_above(const std::vector<patches::PatchEntry> &tree,
+                  const std::string &relative_path) {
+  std::vector<std::string> above;
+  const auto *entries = &tree;
+  while (entries != nullptr) {
+    const std::vector<patches::PatchEntry> *below = nullptr;
+    for (const auto &entry : *entries) {
+      if (entry.relative_path == relative_path) {
+        return above;
+      }
+      if (relative_path.rfind(entry.relative_path + "/", 0) == 0) {
+        above.push_back(entry.relative_path);
+        below = &entry.children;
+        break;
+      }
+    }
+    entries = below;
+  }
+  return std::nullopt;
+}
+
 } // namespace ui::selector_detail
