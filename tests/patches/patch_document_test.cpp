@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <memory>
 #include <string>
@@ -885,6 +886,170 @@ void test_nothing_to_restore() {
   CHECK(env.session.documents().size() == 1);
 }
 
+void test_failed_loads_preserve_unsaved_contents_and_paths() {
+  TestEnvironment env;
+  auto &session = env.session;
+  session.set_current_patch(make_patch(2), env.patches_folder / "original.gin");
+  session.current_patch().instrument.feedback = 5;
+  const auto snapshot = session.capture_snapshot();
+  const auto active = session.active_document_id();
+  const auto remembered = env.preferences.last_patch_path();
+  patches::PatchEntry missing;
+  missing.full_path = env.patches_folder / "missing.gin";
+  missing.relative_path = env.relative(missing.full_path);
+  CHECK(!session.open_entry(missing));
+  CHECK(!session.open_or_activate(missing, false));
+  CHECK(!session.load_patch_from_entry(missing));
+  CHECK(!session.open_path(env.patches_folder / "missing.gin", true));
+  CHECK(!session.restore_patch({}));
+  CHECK(!session.restore_patch(missing.relative_path));
+  CHECK(!session.find_entry(""));
+  CHECK(!session.find_entry(missing.relative_path));
+  CHECK(session.capture_snapshot() == snapshot);
+  CHECK(session.active_document_id() == active);
+  CHECK(session.documents().size() == 1);
+  CHECK(session.is_modified());
+  CHECK(env.preferences.last_patch_path() == remembered);
+}
+
+void test_rejected_creation_preserves_the_active_document() {
+  TestEnvironment env;
+  auto &session = env.session;
+  session.current_patch().instrument.feedback = 4;
+  const auto snapshot = session.capture_snapshot();
+  const auto active = session.active_document_id();
+  CHECK(!session.can_create_patch_in(env.root / "outside"));
+  const auto outside =
+      session.create_patch_in(env.root / "outside", "bass", ".gin");
+  CHECK(outside.is_error());
+  CHECK(!outside.error_message.empty());
+  CHECK(session.create_folder_in(env.root / "outside", "bass").is_error());
+  for (const std::string stem : {"", "../escape", " bad", "a:b"}) {
+    CHECK(session.create_patch_in(env.patches_folder, stem, ".gin").is_error());
+    CHECK(session.create_folder_in(env.patches_folder, stem).is_error());
+  }
+  const auto existing = env.patches_folder / "existing.gin";
+  CHECK(patches::write_patch(make_patch(3), existing));
+  CHECK(session.create_patch_in(env.patches_folder, "existing", ".gin")
+            .is_error());
+  CHECK(formats::load_patch_from_file(existing)
+            .patches.front()
+            .instrument.algorithm == 3);
+  CHECK(session.create_patch_in(env.patches_folder, "unsupported", ".unknown")
+            .is_error());
+  CHECK(!fs::exists(env.patches_folder / "unsupported.unknown"));
+  CHECK(session.capture_snapshot() == snapshot);
+  CHECK(session.active_document_id() == active);
+  CHECK(session.documents().size() == 1);
+}
+
+void test_creating_a_folder_keeps_edits_and_lists_the_folder() {
+  TestEnvironment env;
+  auto &session = env.session;
+  session.current_patch().instrument.feedback = 5;
+  const auto snapshot = session.capture_snapshot();
+  const auto result =
+      session.create_folder_in(env.patches_folder, "Bass patches");
+  CHECK(result.is_success());
+  CHECK(result.path == env.patches_folder / "Bass patches");
+  CHECK(fs::is_directory(result.path));
+  CHECK(env.entry_at(result.path).is_directory);
+  CHECK(session.capture_snapshot() == snapshot);
+  CHECK(session.is_modified());
+  CHECK(
+      session.create_folder_in(env.patches_folder, "Bass patches").is_error());
+  CHECK(session.capture_snapshot() == snapshot);
+}
+
+void test_failed_in_place_save_preserves_edits_and_the_clean_snapshot() {
+  TestEnvironment env;
+  auto &session = env.session;
+  const auto blocker = env.root / "blocker";
+  {
+    std::ofstream stream(blocker);
+    stream << "not a directory";
+    CHECK(stream.good());
+  }
+  session.set_current_patch(make_patch(2), blocker / "bass.gin");
+  const auto clean = session.capture_snapshot();
+  session.current_patch().instrument.feedback = 6;
+  const auto edited = session.capture_snapshot();
+  const auto result = session.save_current_patch();
+  CHECK(result.is_error());
+  CHECK(!result.error_message.empty());
+  CHECK(session.capture_snapshot() == edited);
+  CHECK(session.is_modified());
+  session.restore_snapshot(clean);
+  CHECK(session.capture_snapshot() == clean);
+  CHECK(!session.is_modified());
+}
+
+void test_restore_skips_unreadable_records_and_keeps_only_one_preview() {
+  TestEnvironment env;
+  auto &session = env.session;
+  const auto first = env.root / "first.gin";
+  const auto second = env.root / "second.gin";
+  const auto invalid = env.root / "invalid.gin";
+  CHECK(patches::write_patch(make_patch(2), first));
+  CHECK(patches::write_patch(make_patch(4), second));
+  {
+    std::ofstream stream(invalid);
+    stream << "not a patch";
+    CHECK(stream.good());
+  }
+  env.preferences.set_open_patches(
+      {{"missing-relative.gin", true},
+       {invalid.generic_string(), true},
+       {first.generic_string(), false},
+       {second.generic_string(), false},
+       {(env.root / "gone.gin").generic_string(), true}},
+      4);
+  const auto initial = session.active_document_id();
+  CHECK(session.restore_open_documents());
+  CHECK(session.documents().size() == 2);
+  CHECK(!session.find_document(initial));
+  const auto &a = *session.documents()[0];
+  const auto &b = *session.documents()[1];
+  CHECK(a.patch().instrument.algorithm == 2);
+  CHECK(b.patch().instrument.algorithm == 4);
+  CHECK(!a.pinned());
+  CHECK(b.pinned());
+  CHECK(session.active_document_id() == a.id());
+  CHECK(session.preview_document_id() == a.id());
+  CHECK(env.preferences.last_patch_path() == a.path());
+}
+
+void test_invalid_document_ids_do_not_replace_the_active_patch() {
+  TestEnvironment env;
+  auto &session = env.session;
+  session.current_patch().instrument.feedback = 3;
+  const auto snapshot = session.capture_snapshot();
+  const auto unknown = session.active_document_id() + 100;
+  CHECK(!session.pin(unknown));
+  session.accept_disk_version(unknown, make_patch(5), true);
+  session.restore_snapshot(unknown, snapshot);
+  CHECK(session.capture_snapshot() == snapshot);
+  CHECK(session.documents().size() == 1);
+  CHECK(session.is_modified());
+}
+
+void test_metadata_is_rejected_for_directories_and_unknown_entries() {
+  TestEnvironment env;
+  auto &session = env.session;
+  patches::PatchEntry directory;
+  directory.is_directory = true;
+  directory.full_path = env.patches_folder;
+  patches::PatchEntry missing;
+  missing.full_path = env.root / "missing.gin";
+  missing.relative_path = "unknown/missing.gin";
+  const auto snapshot = session.capture_snapshot();
+  for (const auto &entry : {directory, missing}) {
+    CHECK(!session.set_entry_rating(entry, 3));
+    CHECK(!session.set_entry_category(entry, "Bass"));
+  }
+  CHECK(session.capture_snapshot() == snapshot);
+}
+
 } // namespace
 
 void test_find_document_with_sound() {
@@ -939,5 +1104,12 @@ int main() {
   test_open_documents_round_trip();
   test_nothing_to_restore();
   test_find_document_with_sound();
+  test_failed_loads_preserve_unsaved_contents_and_paths();
+  test_rejected_creation_preserves_the_active_document();
+  test_creating_a_folder_keeps_edits_and_lists_the_folder();
+  test_failed_in_place_save_preserves_edits_and_the_clean_snapshot();
+  test_restore_skips_unreadable_records_and_keeps_only_one_preview();
+  test_invalid_document_ids_do_not_replace_the_active_patch();
+  test_metadata_is_rejected_for_directories_and_unknown_entries();
   return 0;
 }
