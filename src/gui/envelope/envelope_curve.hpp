@@ -66,8 +66,10 @@ EnvelopeCurve build_envelope_curve(const ym2612::OperatorSettings &op,
 /// One operator's curve, at whatever the reference note currently is.
 class EnvelopeCurveCache {
 public:
-  const EnvelopeCurve &get(const ym2612::OperatorSettings &op) {
-    return impl_.get(to_operator_params(op), reference_pitch());
+  /// `min_span_ms` is the axis being drawn.
+  const EnvelopeCurve &get(const ym2612::OperatorSettings &op,
+                           double min_span_ms = 0.0) {
+    return impl_.get(to_operator_params(op), reference_pitch(), min_span_ms);
   }
 
   using Clock = ym2612_eg::graph::EnvelopeCurveCache::Clock;
