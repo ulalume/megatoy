@@ -127,6 +127,18 @@ const std::vector<std::string> &supported_extensions() {
   return extensions;
 }
 
+std::string import_summary(const std::string &folder_name, std::size_t imported,
+                           std::size_t skipped) {
+  const auto files = [](std::size_t count) {
+    return std::to_string(count) + (count == 1 ? " file" : " files");
+  };
+  std::string summary = "Imported " + files(imported) + " into " + folder_name;
+  if (skipped > 0) {
+    return summary + " (" + files(skipped) + " skipped.)";
+  }
+  return summary + ".";
+}
+
 bool supports_extension(std::string_view extension) {
   auto normalized = lowercase(std::string(extension));
   if (!normalized.empty() && normalized.front() != '.') {

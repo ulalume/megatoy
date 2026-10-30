@@ -4,10 +4,8 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 
 #include "core/status.hpp"
-#include "gui/clipboard.hpp"
 #include "gui/components/common.hpp"
 #include "platform/web/web_folder_import.hpp"
-#include <algorithm>
 #include <imgui.h>
 #include <sstream>
 
@@ -204,76 +202,6 @@ void render_folder_import_ui() {
         ImGui::EndDisabled();
         ImGui::EndPopup();
       }
-    }
-  }
-
-  static bool open_report = true;
-  if (folder_import_report() && open_report && folder_import_report_ready()) {
-    ImGui::OpenPopup("Folder Import Complete");
-    open_report = false;
-  }
-  if (const auto *result = folder_import_report()) {
-    const auto &report = *result;
-    ui::center_next_window();
-    // AlwaysAutoResize keeps the dialog hugging its content; without it the
-    // window inherits whatever size the ini remembered.
-    if (ImGui::BeginPopupModal("Folder Import Complete", nullptr,
-                               ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_AlwaysAutoResize)) {
-      ui::force_center_window();
-      ImGui::TextWrapped("Imported %zu files into %s.", report.file_count,
-                         report.folder_name.c_str());
-      if (report.filtered_count > 0) {
-        ImGui::Text("%zu files skipped (unsupported type)",
-                    report.filtered_count);
-      }
-      if (!report.validation_failures.empty()) {
-        ImGui::Text("%zu files failed validation:",
-                    report.validation_failures.size());
-        // The list hugs its rows up to a cap, then scrolls.
-        const float row_height = ImGui::GetTextLineHeightWithSpacing();
-        const float list_height = std::min(
-            200.0f, row_height * (static_cast<float>(
-                                      report.validation_failures.size()) +
-                                  0.5f) +
-                        ImGui::GetStyle().WindowPadding.y * 2.0f);
-        ImGui::BeginChild("validation_failures", ImVec2(640, list_height),
-                          true);
-        for (const auto &failure : report.validation_failures) {
-          // ASCII separator: the bundled font has no em-dash glyph.
-          ImGui::BulletText("%s - %s",
-                            failure.relative_path.generic_string().c_str(),
-                            failure.reason.c_str());
-        }
-        ImGui::EndChild();
-      }
-      ImGui::Spacing();
-      if (ImGui::Button("OK", ImVec2(120, 0))) {
-        ImGui::CloseCurrentPopup();
-        dismiss_folder_import_report();
-        open_report = true;
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("Copy List", ImVec2(120, 0))) {
-        std::string text = "Imported " + std::to_string(report.file_count) +
-                           " files into " + report.folder_name + ".\n";
-        if (report.filtered_count > 0) {
-          text += std::to_string(report.filtered_count) +
-                  " files skipped (unsupported type)\n";
-        }
-        if (!report.validation_failures.empty()) {
-          text += std::to_string(report.validation_failures.size()) +
-                  " files failed validation:\n";
-          for (const auto &failure : report.validation_failures) {
-            text += failure.relative_path.generic_string() + " - " +
-                    failure.reason + "\n";
-          }
-        }
-        platform::clipboard::copy_text(text);
-        megatoy::status::success("Copied the import report.");
-      }
-      ImGui::EndPopup();
     }
   }
 }

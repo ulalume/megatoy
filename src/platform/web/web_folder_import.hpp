@@ -100,9 +100,6 @@ void cancel_folder_selection();
 std::optional<FolderImportProgress> folder_import_progress();
 void decide_folder_import(bool proceed);
 void cancel_folder_import();
-const FolderImportResult *folder_import_report();
-bool folder_import_report_ready();
-void dismiss_folder_import_report();
 
 } // namespace platform::web
 

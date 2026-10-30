@@ -118,12 +118,9 @@ void PreferenceManager::request_add_workspace_folder(
           return;
         }
         if (add_workspace_folder(result.path)) {
-          if (result.filtered_count == 0 &&
-              result.validation_failures.empty()) {
-            megatoy::status::success(
-                "Imported \"" + result.folder_name + "\" (" +
-                std::to_string(result.file_count) + " files)");
-          }
+          megatoy::status::success(platform::import_pipeline::import_summary(
+              result.folder_name, result.file_count,
+              result.filtered_count + result.validation_failures.size()));
           if (on_changed) {
             on_changed();
           }

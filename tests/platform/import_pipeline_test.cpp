@@ -178,6 +178,13 @@ int main() {
   fs::create_directories(root, ec);
   CHECK(!ec);
 
+  CHECK(pipeline::import_summary("songs", 3, 0) ==
+        "Imported 3 files into songs.");
+  CHECK(pipeline::import_summary("songs", 3, 4) ==
+        "Imported 3 files into songs (4 files skipped.)");
+  CHECK(pipeline::import_summary("songs", 1, 1) ==
+        "Imported 1 file into songs (1 file skipped.)");
+
   // The web filter and repository browser must never drift apart.
   const auto repository_extensions =
       patches::PatchRepository::supported_extensions();
