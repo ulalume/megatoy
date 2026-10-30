@@ -263,7 +263,8 @@ bool begin_app_menu() {
   if (icon == ImTextureID{}) {
     return ImGui::BeginMenu("megatoy");
   }
-  const float size = ImGui::GetTextLineHeight();
+  // As tall as the menu bar's items, a little larger than the text.
+  const float size = ImGui::GetFrameHeight();
   const float space = ImGui::CalcTextSize(" ").x;
   const std::string label =
       std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
