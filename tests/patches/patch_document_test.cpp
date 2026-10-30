@@ -761,6 +761,17 @@ void test_a_file_outside_the_workspace_reports_outside_writes() {
   CHECK(session.current_patch().instrument.algorithm == 2);
   CHECK(session.is_modified());
 
+  // A later write with other contents is reported again. One with the same
+  // contents has nothing to tell.
+  write_outside(make_patch(7), outside);
+  auto again = session.take_disk_versions();
+  CHECK(again.size() == 1);
+  CHECK(again.front().patch.instrument.algorithm == 7);
+  session.accept_disk_version(id, again.front().patch, false);
+  write_outside(make_patch(7), outside);
+  CHECK(session.outside_file_changed());
+  CHECK(session.take_disk_versions().empty());
+
   // Its own save is not an outside write.
   CHECK(session.save_current_patch().is_success());
   CHECK(!session.outside_file_changed());

@@ -274,7 +274,7 @@ bool begin_app_menu() {
   if (icon == ImTextureID{}) {
     return begin_bar_menu("megatoy");
   }
-  const float size = ImGui::GetTextLineHeight() + ui::scale::px(8.0f);
+  const float size = ImGui::GetTextLineHeight() + ui::scale::px(6.0f);
   const float space = ImGui::CalcTextSize(" ").x;
   const std::string label =
       std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
