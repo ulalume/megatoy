@@ -314,6 +314,15 @@ add_test(NAME logic_include_test
          COMMAND ${CMAKE_COMMAND} -DMEGATOY_SOURCE_DIR=${CMAKE_SOURCE_DIR}
                  -P ${CMAKE_SOURCE_DIR}/tests/core/logic_include_test.cmake)
 
+add_executable(session_audio_test tests/audio/session_audio_test.cpp)
+target_link_libraries(session_audio_test PRIVATE megatoy_logic)
+add_test(NAME session_audio_test COMMAND session_audio_test)
+add_executable(patch_save_test tests/patches/patch_save_test.cpp)
+target_link_libraries(patch_save_test PRIVATE megatoy_logic)
+add_test(NAME patch_save_test COMMAND patch_save_test)
+add_executable(current_patch_path_test tests/patches/current_patch_path_test.cpp)
+target_link_libraries(current_patch_path_test PRIVATE megatoy_logic)
+add_test(NAME current_patch_path_test COMMAND current_patch_path_test)
 add_executable(document_decisions_test
   tests/patches/document_decisions_test.cpp)
 target_link_libraries(document_decisions_test PRIVATE megatoy_logic)
@@ -354,7 +363,8 @@ endforeach()
 # Convenience target to build and run tests
 add_custom_target(check
   DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test scale_test
-          subsystem_tests ym2612_render_test analyzer_test command_queue_test
+          session_audio_test patch_save_test current_patch_path_test
+          ym2612_render_test analyzer_test command_queue_test
           performance_test load_meter_test
           ginpkg_history_test patch_write_test patch_lab_test status_test
           filename_utils_test utf8_utils_test

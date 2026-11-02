@@ -8,11 +8,28 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
-namespace decision_tests {
+namespace session_tests {
 
 namespace fs = std::filesystem;
 
+inline const patches::PatchEntry *
+find_patch_entry(const std::vector<patches::PatchEntry> &entries,
+                 const fs::path &path) {
+  for (const auto &entry : entries) {
+    if (entry.full_path == path) {
+      return &entry;
+    }
+    if (const auto *found = find_patch_entry(entry.children, path)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
+// Everything lives under a temporary root, including the configuration, so a
+// test run can never touch the developer's real preferences or patches.
 struct Environment {
   fs::path root;
   fs::path folder;
@@ -26,6 +43,8 @@ struct Environment {
     auto root = fs::temp_directory_path() / ("megatoy_" + name);
     fs::remove_all(root);
     fs::create_directories(root / "patches");
+    // The workspace resolves symlinks, and on macOS the temp directory is one;
+    // resolve here too so path comparisons line up.
     return fs::weakly_canonical(root);
   }
 
@@ -39,6 +58,7 @@ struct Environment {
       set_read_only();
     }
     session.sync_workspace();
+    session.initialize_patch_defaults();
   }
 
   ~Environment() { fs::remove_all(root); }
@@ -65,4 +85,4 @@ struct Environment {
   }
 };
 
-} // namespace decision_tests
+} // namespace session_tests
