@@ -8,11 +8,11 @@
 
 namespace {
 
-using session_tests::Environment;
+using session_tests::LaunchedEnvironment;
 using session_tests::find_patch_entry;
 
 void test_workspace_folder_is_visible() {
-  Environment env("patch_save_test");
+  LaunchedEnvironment env("patch_save_test");
   const auto &folders = env.preferences.workspace().folders();
   CHECK(folders.size() == 1);
   CHECK(folders[0].available);
@@ -32,7 +32,7 @@ void test_workspace_folder_is_visible() {
 // Saving must land in the workspace folder, and its metadata must end up in
 // the folder's own sidecar rather than anywhere global.
 void test_save_and_metadata_roundtrip() {
-  Environment env("patch_save_test");
+  LaunchedEnvironment env("patch_save_test");
   env.session.current_patch().name = "workspace test";
   env.session.current_patch().instrument.algorithm = 5;
 
@@ -80,7 +80,7 @@ void test_save_and_metadata_roundtrip() {
 }
 
 void test_default_save_format_is_gin() {
-  Environment env("patch_save_test");
+  LaunchedEnvironment env("patch_save_test");
   const auto saved = env.session.repository().save_patch(
       env.session.current_patch(), "default format", /*overwrite=*/true, {});
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
@@ -88,7 +88,7 @@ void test_default_save_format_is_gin() {
 }
 
 void test_ginpkg_versions_appear_as_container_items() {
-  Environment env("patch_save_test");
+  LaunchedEnvironment env("patch_save_test");
   auto patch = env.session.current_patch();
   patch.name = "package patch";
   const auto package_path = env.folder / "versions.ginpkg";
@@ -141,7 +141,7 @@ void test_ginpkg_versions_appear_as_container_items() {
 
 // Save must not overwrite a file it cannot safely rewrite.
 void test_save_in_place_rules() {
-  Environment env("patch_save_test");
+  LaunchedEnvironment env("patch_save_test");
   auto &repository = env.session.repository();
   const auto saved = repository.save_patch(
       env.session.current_patch(), "in place", /*overwrite=*/true, ".gin");
@@ -167,7 +167,7 @@ void test_save_in_place_rules() {
 }
 
 void test_create_patch_in_folder() {
-  Environment env("patch_save_test");
+  LaunchedEnvironment env("patch_save_test");
   auto &session = env.session;
   const auto defaults = session.default_patch();
 

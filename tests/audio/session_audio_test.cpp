@@ -12,7 +12,7 @@
 
 namespace {
 
-using session_tests::Environment;
+using session_tests::LaunchedEnvironment;
 
 class TestAudioTransport final : public AudioTransport {
 public:
@@ -87,7 +87,7 @@ ym2612::Patch make_session_audio_patch(uint8_t total_level) {
 }
 
 void test_session_applies_direct_patch_mutation() {
-  Environment env("session_audio_test");
+  LaunchedEnvironment env("session_audio_test");
   auto transport = std::make_unique<TestAudioTransport>();
   auto *test_transport = transport.get();
   AudioManager audio(std::move(transport));
@@ -115,7 +115,7 @@ void test_session_applies_direct_patch_mutation() {
 }
 
 void test_performance_commands_do_not_dirty_session() {
-  Environment env("session_audio_test");
+  LaunchedEnvironment env("session_audio_test");
   auto transport = std::make_unique<TestAudioTransport>();
   auto *test_transport = transport.get();
   AudioManager audio(std::move(transport));
@@ -144,7 +144,7 @@ void test_performance_commands_do_not_dirty_session() {
 // to survive it, nothing may be left keyed on, and the load history cannot
 // carry entries recorded at the previous size.
 void test_buffer_size_change_reopens_the_device() {
-  Environment env("session_audio_test");
+  LaunchedEnvironment env("session_audio_test");
   auto transport = std::make_unique<TestAudioTransport>();
   auto *test_transport = transport.get();
   AudioManager audio(std::move(transport));
@@ -200,7 +200,7 @@ void test_buffer_size_change_reopens_the_device() {
 }
 
 void test_note_allocation() {
-  Environment env("session_audio_test");
+  LaunchedEnvironment env("session_audio_test");
   PreferenceManager::UIPreferences prefs{};
   prefs.use_velocity = true;
   prefs.steal_oldest_note_when_full = true;

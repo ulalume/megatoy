@@ -58,7 +58,6 @@ struct Environment {
       set_read_only();
     }
     session.sync_workspace();
-    session.initialize_patch_defaults();
   }
 
   ~Environment() { fs::remove_all(root); }
@@ -82,6 +81,14 @@ struct Environment {
         preferences.workspace().find(folder));
     CHECK(owner != nullptr);
     owner->writable = false;
+  }
+};
+
+/// A session that opened the patch a fresh launch does, taken from the built-in
+/// presets when they sit beside the executable.
+struct LaunchedEnvironment : Environment {
+  explicit LaunchedEnvironment(const std::string &name) : Environment(name) {
+    session.initialize_patch_defaults();
   }
 };
 

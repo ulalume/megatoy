@@ -9,11 +9,11 @@
 
 namespace {
 
-using session_tests::Environment;
+using session_tests::LaunchedEnvironment;
 using session_tests::find_patch_entry;
 
 void test_current_patch_rename_preserves_clean_identity() {
-  Environment env("current_patch_path_test");
+  LaunchedEnvironment env("current_patch_path_test");
   auto patch = env.session.current_patch();
   patch.name = "embedded old name";
   const auto source_path = env.folder / "session-old.gin";
@@ -47,7 +47,7 @@ void test_current_patch_rename_preserves_clean_identity() {
 }
 
 void test_current_patch_path_recording() {
-  Environment env("current_patch_path_test");
+  LaunchedEnvironment env("current_patch_path_test");
   env.preferences.set_last_patch_path("patches/remembered.gin");
   const auto url_patch = env.session.current_patch();
   env.session.set_current_patch(url_patch, {},
@@ -67,7 +67,7 @@ void test_current_patch_path_recording() {
 // Renaming a folder that holds the current patch has to carry the patch with
 // it, and renaming an unrelated one has to leave it alone.
 void test_folder_rename_follows_the_current_patch() {
-  Environment env("current_patch_path_test");
+  LaunchedEnvironment env("current_patch_path_test");
   const auto folder = env.folder / "pads";
   std::filesystem::create_directories(folder);
   std::filesystem::create_directories(env.folder / "elsewhere");
@@ -115,7 +115,7 @@ void test_folder_rename_follows_the_current_patch() {
 // Moving the folder that holds the current patch, or the patch itself, has to
 // carry the editor's path, the browser selection and the remembered path.
 void test_move_follows_the_current_patch() {
-  Environment env("current_patch_path_test");
+  LaunchedEnvironment env("current_patch_path_test");
   auto &repository = env.session.repository();
   const auto crate = env.folder / "crate";
   const auto shelf = env.folder / "shelf";
@@ -198,7 +198,7 @@ void test_move_follows_the_current_patch() {
 // A workspace folder is registered by path, so renaming one has to move the
 // registration with it or the folder comes back missing.
 void test_workspace_root_rename_follows_the_preference() {
-  Environment env("current_patch_path_test");
+  LaunchedEnvironment env("current_patch_path_test");
   const auto *root =
       find_patch_entry(env.session.repository().tree(), env.folder);
   CHECK(root != nullptr);
@@ -221,7 +221,7 @@ void test_workspace_root_rename_follows_the_preference() {
 }
 
 void test_restore_last_patch() {
-  Environment env("current_patch_path_test");
+  LaunchedEnvironment env("current_patch_path_test");
   auto patch = env.session.current_patch();
   patch.name = "embedded name";
   patch.instrument.algorithm = 6;
@@ -253,7 +253,7 @@ void test_restore_last_patch() {
 }
 
 void test_missing_last_patch_falls_back_silently() {
-  Environment env("current_patch_path_test");
+  LaunchedEnvironment env("current_patch_path_test");
   env.session.initialize_patch_defaults();
   const auto fallback = env.session.capture_snapshot();
   const std::string missing = "patches/missing.gin";
@@ -267,7 +267,7 @@ void test_missing_last_patch_falls_back_silently() {
 }
 
 void test_patch_snapshot_roundtrip() {
-  Environment env("current_patch_path_test");
+  LaunchedEnvironment env("current_patch_path_test");
   auto before = env.session.capture_snapshot();
   env.session.current_patch().name = "modified";
   env.session.restore_snapshot(before);
