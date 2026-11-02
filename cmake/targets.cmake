@@ -99,6 +99,7 @@ set(MEGATOY_LOGIC_SOURCES
   src/workspace/path_policy.cpp
   src/workspace/workspace.cpp
   src/patches/patch_lab.cpp
+  src/patches/patch_tweak.cpp
   src/patches/persistent_parse_cache.cpp
   src/patches/folder_watcher.cpp
   src/patches/patch_repository.cpp

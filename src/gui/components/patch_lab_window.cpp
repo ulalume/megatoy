@@ -8,6 +8,7 @@
 #include "patch_selector.hpp"
 #include "patches/patch_lab.hpp"
 #include "patches/patch_lab_sources.hpp"
+#include "patches/patch_tweak.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chrono>
@@ -266,6 +267,49 @@ void remember_result(PatchLabState &state, std::string label,
                                                .patch = patch});
 }
 
+void render_tweak_slider(PatchLabContext &context, PatchLabState &state,
+                         const char *label, patch_lab::Tweak tweak) {
+  auto &instrument = context.session.current_patch().instrument;
+  const auto value = patch_lab::tweak_value(instrument, tweak);
+  const auto range =
+      patch_lab::tweak_range(state.tweak_base.value_or(instrument), tweak);
+  const auto text = patch_lab::tweak_text(instrument, tweak);
+
+  int shown = value.value_or(range.min);
+  ImGui::BeginDisabled(!value);
+  // No typing: a slider that moves two registers has no one number to type.
+  const bool changed = ImGui::SliderInt(label, &shown, range.min, range.max,
+                                        text.c_str(), ImGuiSliderFlags_NoInput);
+  ImGui::EndDisabled();
+
+  if (ImGui::IsItemActivated()) {
+    state.tweak_base = instrument;
+    // Empty merge key: each drag is its own undo step.
+    context.begin_history(std::string("Tweak ") + label, {});
+  }
+  if (changed && state.tweak_base) {
+    instrument = patch_lab::with_tweak(*state.tweak_base, tweak, shown);
+  }
+  if (ImGui::IsItemDeactivated()) {
+    state.tweak_base.reset();
+  }
+  if (ImGui::IsItemDeactivatedAfterEdit()) {
+    context.commit_history();
+  }
+}
+
+void render_tweak_section(PatchLabContext &context, PatchLabState &state) {
+  ImGui::TextWrapped("Shapes the current patch as a whole.");
+  ImGui::Spacing();
+
+  render_tweak_slider(context, state, "Volume", patch_lab::Tweak::Volume);
+  render_tweak_slider(context, state, "Brightness",
+                      patch_lab::Tweak::Brightness);
+  render_tweak_slider(context, state, "Attack", patch_lab::Tweak::Attack);
+  render_tweak_slider(context, state, "Decay", patch_lab::Tweak::Decay);
+  render_tweak_slider(context, state, "Release", patch_lab::Tweak::Release);
+}
+
 void render_random_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::TextWrapped("Generates a new patch each time.");
   ImGui::Spacing();
@@ -426,6 +470,10 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     if (ImGui::BeginTabBar("##Patch Lab Operators",
                            ImGuiTabBarFlags_SaveSettings)) {
       auto &repository = context.session.repository();
+      if (ImGui::BeginTabItem(ICON_FA_SLIDERS " Tweak")) {
+        render_tweak_section(context, state);
+        ImGui::EndTabItem();
+      }
       if (ImGui::BeginTabItem(ICON_FA_DICE " Random")) {
         render_random_section(context, state);
         ImGui::EndTabItem();

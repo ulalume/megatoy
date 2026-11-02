@@ -335,6 +335,9 @@ add_executable(patch_tree_navigation_test
   tests/patches/patch_tree_navigation_test.cpp)
 target_link_libraries(patch_tree_navigation_test PRIVATE megatoy_logic)
 add_test(NAME patch_tree_navigation_test COMMAND patch_tree_navigation_test)
+add_executable(patch_tweak_test tests/patches/patch_tweak_test.cpp)
+target_link_libraries(patch_tweak_test PRIVATE megatoy_logic)
+add_test(NAME patch_tweak_test COMMAND patch_tweak_test)
 add_executable(patch_lab_sources_test tests/patches/patch_lab_sources_test.cpp)
 target_link_libraries(patch_lab_sources_test PRIVATE megatoy_logic)
 add_test(NAME patch_lab_sources_test COMMAND patch_lab_sources_test)
@@ -372,7 +375,7 @@ add_custom_target(check
           patch_repository_move_test patch_document_test folder_watcher_test
           folder_metadata_test patch_tree_flatten_test
           document_decisions_test patch_entry_actions_test
-          patch_tree_navigation_test patch_lab_sources_test
+          patch_tree_navigation_test patch_lab_sources_test patch_tweak_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test
           preference_storage_compatibility_test
           version_test import_pipeline_test web_patch_url_test
