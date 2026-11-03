@@ -1,11 +1,11 @@
 #include "gui_manager.hpp"
 #include "fonts/icon_font.hpp"
+#include "gui/app_window.hpp"
 #include "gui/areas.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/layouts.hpp"
-#include "gui/panel.hpp"
 #if defined(__APPLE__)
 #include "gui/mac_window_menu.hpp"
 #endif
@@ -233,7 +233,7 @@ void GuiManager::begin_frame() {
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
 
-  ui::push_panel_tab_padding();
+  ui::push_window_tab_padding();
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
   ImGui::PopStyleVar();
 

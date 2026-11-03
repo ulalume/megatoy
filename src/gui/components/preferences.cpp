@@ -1,10 +1,10 @@
 #include "preferences.hpp"
 #include "audio/load_meter.hpp"
+#include "gui/app_window.hpp"
 #include "gui/areas.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
-#include "gui/panel.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
@@ -644,7 +644,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
   }
 
   areas::keep_in_area(areas::Area::Main, title);
-  if (ui::begin_panel(title, &ui_prefs.show_preferences)) {
+  if (ui::begin_window(title, &ui_prefs.show_preferences)) {
     if (ui::begin_tab_bar("##preference_tabs")) {
       // Each tab scrolls in its own child so the tab bar stays put. Input in
       // particular is taller than the window once a few devices show up.

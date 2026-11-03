@@ -1,5 +1,5 @@
 #include "midi_keyboard.hpp"
-#include "gui/panel.hpp"
+#include "gui/app_window.hpp"
 
 #include "core/types.hpp"
 #include "gui/areas.hpp"
@@ -260,7 +260,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 180)),
                            ImGuiCond_FirstUseEver);
   areas::keep_in_area(areas::Area::FooterRight, title);
-  if (!ui::begin_panel(title, &ui_prefs.show_midi_keyboard)) {
+  if (!ui::begin_window(title, &ui_prefs.show_midi_keyboard)) {
     ImGui::End();
     return;
   }

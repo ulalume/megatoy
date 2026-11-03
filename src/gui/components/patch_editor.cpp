@@ -1,6 +1,6 @@
 #include "patch_editor.hpp"
 #include "audio/audio_manager.hpp"
-#include "gui/panel.hpp"
+#include "gui/app_window.hpp"
 
 #include "common.hpp"
 #include "gui/areas.hpp"
@@ -557,7 +557,7 @@ void render_document_window(PatchEditorContext &context,
   }
   // Marked unsaved, a document's tab stays in place when its close button
   // is pressed, while the user is asked about the changes.
-  const bool visible = ui::begin_panel(
+  const bool visible = ui::begin_window(
       title.c_str(), &open,
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
           (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
