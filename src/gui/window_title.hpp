@@ -27,9 +27,11 @@ inline std::string patch_editor_window_id(int slot) {
   return id;
 }
 
-inline std::string patch_editor_window_title(const std::string &label, int slot,
-                                             bool is_modified) {
-  return label + (is_modified ? " *###" : "###") + patch_editor_window_id(slot);
+/// An editor window's title. Unsaved changes are marked on its tab by
+/// ImGuiWindowFlags_UnsavedDocument rather than in the title.
+inline std::string patch_editor_window_title(const std::string &label,
+                                             int slot) {
+  return label + "###" + patch_editor_window_id(slot);
 }
 
 /// The title of the application's own window.

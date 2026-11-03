@@ -7,6 +7,7 @@
 #include "patch_actions.hpp"
 #include "platform/platform_config.hpp"
 #include <imgui_internal.h>
+#include <string_view>
 #include <utility>
 
 namespace ui::renderer_detail {
@@ -110,8 +111,33 @@ void follow_outside_changes(AppContext &ctx, bool check_outside_files) {
   }
 }
 
-/// Cmd/Ctrl+W closes the active document while an editor window or the
-/// browser has the keyboard. The browser keeps the key for its own tab.
+namespace {
+
+/// The View menu's switch for a panel the keyboard can close.
+bool *panel_switch(UIPreferences &prefs, std::string_view name) {
+  if (name == PATCH_LAB_TITLE) {
+    return &prefs.show_patch_lab;
+  }
+  if (name == SOFT_KEYBOARD_TITLE) {
+    return &prefs.show_midi_keyboard;
+  }
+  if (name == MML_CONSOLE_TITLE) {
+    return &prefs.show_mml_console;
+  }
+  if (name == WAVEFORM_TITLE) {
+    return &prefs.show_waveform;
+  }
+  if (name == PREFERENCES_TITLE) {
+    return &prefs.show_preferences;
+  }
+  return nullptr;
+}
+
+} // namespace
+
+/// Cmd/Ctrl+W closes the panel that has the keyboard. From an editor window
+/// or the browser it closes the active document, the one a click in the
+/// browser opens. The browser keeps the key for its own tab.
 void handle_close_shortcut(AppContext &ctx) {
 #if defined(MEGATOY_PLATFORM_WEB)
   (void)ctx;
@@ -122,13 +148,18 @@ void handle_close_shortcut(AppContext &ctx) {
     return;
   }
   const ImGuiWindow *focused = GImGui->NavWindow;
-  const bool browser_focused =
-      focused != nullptr &&
-      focused->RootWindow == ImGui::FindWindowByName(PATCH_BROWSER_TITLE);
-  if (!browser_focused && !patch_editor_has_focus()) {
+  if (focused == nullptr) {
     return;
   }
-  request_close_document(ctx, ctx.services.patch_session.active_document_id());
+  const std::string_view name = focused->RootWindow->Name;
+  if (bool *shown = panel_switch(ctx.ui_state().prefs, name)) {
+    *shown = false;
+    return;
+  }
+  if (name == PATCH_BROWSER_TITLE || patch_editor_has_focus()) {
+    request_close_document(ctx,
+                           ctx.services.patch_session.active_document_id());
+  }
 #endif
 }
 

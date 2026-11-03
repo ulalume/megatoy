@@ -479,8 +479,8 @@ void render_document_window(PatchEditorContext &context,
   auto &ui = context.document_ui(id);
   auto &session = context.session;
 
-  const auto title = patch_editor_window_title(
-      document_label(document), ui.window_slot, document.is_modified());
+  const auto title =
+      patch_editor_window_title(document_label(document), ui.window_slot);
   const ImGuiWindow *existing = ImGui::FindWindowByName(title.c_str());
   ImGuiDockNode *node = existing != nullptr ? existing->DockNode : nullptr;
   areas::keep_in_area(areas::Area::Main, title.c_str(), 0,
@@ -553,9 +553,12 @@ void render_document_window(PatchEditorContext &context,
         ImGuiCol_TabDimmedSelectedOverline,
         ImGui::GetStyleColorVec4(ImGuiCol_TabSelectedOverline));
   }
-  const bool visible = ImGui::Begin(title.c_str(), &open,
-                                    ImGuiWindowFlags_NoFocusOnAppearing |
-                                        ImGuiWindowFlags_NoCollapse);
+  // Marked unsaved, a document's tab stays in place when its close button
+  // is pressed, while the user is asked about the changes.
+  const bool visible = ImGui::Begin(
+      title.c_str(), &open,
+      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
+          (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
   if (was_active) {
     ImGui::PopStyleColor(2);
   }
