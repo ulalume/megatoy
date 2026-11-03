@@ -57,6 +57,7 @@ void derive_widget_colors() {
   set(MegatoyCol::SpectrumGrid, faded(imgui[ImGuiCol_Border], 0.5f));
   set(MegatoyCol::SpectrumLabel, faded(color(MegatoyCol::TextMuted), 0.9f));
   set(MegatoyCol::PreviewBorder, imgui[ImGuiCol_Separator]);
+  set(MegatoyCol::PatchEditorBg, imgui[ImGuiCol_WindowBg]);
 }
 
 const ImVec4 &color(MegatoyCol col) {

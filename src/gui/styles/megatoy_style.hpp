@@ -60,6 +60,8 @@ enum class MegatoyCol : int {
   SpectrumLabel,
   /// The frame around the algorithm and SSG-EG pictures.
   PreviewBorder,
+  /// Behind a Patch Editor window; the others take ImGuiCol_WindowBg.
+  PatchEditorBg,
   COUNT
 };
 

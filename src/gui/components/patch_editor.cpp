@@ -555,15 +555,15 @@ void render_document_window(PatchEditorContext &context,
         ImGuiCol_TabDimmedSelectedOverline,
         ImGui::GetStyleColorVec4(ImGuiCol_TabSelectedOverline));
   }
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                        styles::color(styles::MegatoyCol::PatchEditorBg));
   // Marked unsaved, a document's tab stays in place when its close button
   // is pressed, while the user is asked about the changes.
   const bool visible = ui::begin_window(
       title.c_str(), &open,
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
           (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
-  if (was_active) {
-    ImGui::PopStyleColor(2);
-  }
+  ImGui::PopStyleColor(was_active ? 3 : 1);
   if (preview) {
     pop_preview_label_style();
   }
