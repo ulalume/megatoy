@@ -181,8 +181,8 @@ void render_save_export_buttons(PatchEditorContext &context,
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Low Frequency Oscillator");
   bool lfo_enable = patch.global.lfo_enable;
-  if (ImGui::Checkbox("LFO Enable", &lfo_enable)) {
-    track_instant_patch_history(context, "LFO Enable",
+  if (ImGui::Checkbox("LFO", &lfo_enable)) {
+    track_instant_patch_history(context, "LFO",
                                 [&] { patch.global.lfo_enable = lfo_enable; });
   }
 

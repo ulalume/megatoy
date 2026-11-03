@@ -801,9 +801,9 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::SetCursorPosY(feedback_gap.y + ImGui::GetFrameHeightWithSpacing());
   }
 
-  operator_checkbox(
-      widget, "Amplitude Modulation Enable", "Amplitude Modulation",
-      &ym2612::OperatorSettings::amplitude_modulation_enable, true);
+  operator_checkbox(widget, "Amplitude Modulation", "Amplitude Modulation",
+                    &ym2612::OperatorSettings::amplitude_modulation_enable,
+                    true);
   ImGui::Spacing();
 
   // TL runs down the left of the panel in every layout; the graph and the rate
@@ -855,7 +855,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
   ImGui::SameLine();
 
-  operator_checkbox(widget, "SSG EG Enable", "SSG EG Enable",
+  operator_checkbox(widget, "SSG-EG", "SSG-EG",
                     &ym2612::OperatorSettings::ssg_enable, true);
 
   const bool ssg_enable = op.ssg_enable;
