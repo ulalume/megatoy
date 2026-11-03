@@ -3,7 +3,10 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 
+#include <imgui_internal.h>
+
 #include <algorithm>
+#include <vector>
 
 namespace ui {
 namespace {
@@ -84,6 +87,41 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss, float width,
 }
 
 void end_modal() { ImGui::EndPopup(); }
+
+void dialog_text(std::string_view text) {
+  ImFont *font = ImGui::GetFont();
+  const float size = ImGui::GetFontSize();
+  const float x = ImGui::GetCursorPosX();
+  const float wrap_width = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
+
+  struct Line {
+    const char *begin;
+    const char *end;
+  };
+  std::vector<Line> lines;
+  const char *pos = text.data();
+  const char *const text_end = pos + text.size();
+  do {
+    const char *line_end =
+        font->CalcWordWrapPosition(size, pos, text_end, wrap_width);
+    if (line_end == pos && pos < text_end && *pos != '\n') {
+      ++line_end; // a word wider than the line still takes a line
+    }
+    lines.push_back({pos, line_end});
+    pos = ImTextCalcWordWrapNextLineStart(line_end, text_end);
+  } while (pos < text_end);
+
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::scale::px(4.0f));
+  for (std::size_t i = 0; i < lines.size(); ++i) {
+    if (i + 1 == lines.size()) {
+      ImGui::PopStyleVar();
+    }
+    if (i > 0) {
+      ImGui::SetCursorPosX(x);
+    }
+    ImGui::TextUnformatted(lines[i].begin, lines[i].end);
+  }
+}
 
 float dialog_button_width() { return ui::scale::px(kDialogButtonWidth); }
 

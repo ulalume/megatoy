@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <initializer_list>
+#include <string_view>
 
 namespace ui {
 
@@ -50,5 +51,10 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss,
 
 /// Only when the scope was visible.
 void end_modal();
+
+/// A dialog's prose: wrapped to the space left on the line, each wrapped line
+/// starting where the first did, and the lines spaced further apart than
+/// ImGui's, which sets them at the font's height.
+void dialog_text(std::string_view text);
 
 } // namespace ui

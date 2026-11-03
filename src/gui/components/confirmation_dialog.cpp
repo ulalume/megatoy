@@ -132,7 +132,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     }
   }
   if (unsaved.visible) {
-    ImGui::TextWrapped("%s", confirmation_state.dialog_message.c_str());
+    dialog_text(confirmation_state.dialog_message);
     ImGui::Spacing();
 
     const bool closing = confirmation_state.operation ==
@@ -210,7 +210,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
                                                          ModalDismiss::Escape);
   cancel_danger = danger_modal.dismissed;
   if (danger_modal.visible) {
-    ImGui::TextWrapped("%s", danger.message.c_str());
+    dialog_text(danger.message);
     ImGui::Spacing();
 
     // The confirm label is whatever the caller named the action, so it is
