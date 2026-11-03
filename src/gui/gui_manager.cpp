@@ -232,7 +232,11 @@ void GuiManager::begin_frame() {
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
 
+  // The docked windows' tab bars, taller than the frames inside them.
+  ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,
+                       ImGui::GetStyle().FramePadding.y + ui::scale::px(2.0f));
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
+  ImGui::PopStyleVar();
 
   // An arrangement saved before the areas were fixed may have views where
   // they no longer go; it is laid out afresh.

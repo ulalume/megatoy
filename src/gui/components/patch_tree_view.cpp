@@ -162,7 +162,7 @@ void handle_row_keys(PatchSelectorContext &context,
 /// answers the mouse in. Rows are set with no spacing between them, so their
 /// highlights meet.
 float row_margin() {
-  return ImGui::GetStyle().ItemSpacing.y + ui::scale::px(4.0f);
+  return ImGui::GetStyle().ItemSpacing.y + ui::scale::px(6.0f);
 }
 
 float row_height() { return ImGui::GetTextLineHeight() + row_margin(); }

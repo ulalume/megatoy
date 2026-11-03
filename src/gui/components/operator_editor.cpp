@@ -47,7 +47,7 @@ update_slider_state(UIState::EnvelopeState::SliderState &slider_state) {
 namespace {
 
 // Room between an operator's border and its contents.
-float frame_padding() { return ui::scale::px(6.0f); }
+float frame_padding() { return ui::scale::px(8.0f); }
 // Clearance either side of the header where the top border breaks for it.
 float header_gap() { return ui::scale::px(4.0f); }
 
@@ -142,28 +142,35 @@ void draw_operator_fill(const OperatorEditState &state, int slot,
 }
 
 /**
- * The frame, cut open at the corner the header sits across: the top border
- * resumes past the label, the left border below the checkbox.
+ * The frame, cut open at the corners the header and the Carrier badge sit
+ * across: the top border runs from past the label to short of the badge, the
+ * left border starts below the checkbox and the right one below the badge.
  *
  * The half-pixel inset is what AddRect does internally; without it the line
  * falls between two pixels and blurs.
  */
 void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
-                         float top_resume_x, float left_resume_y, ImU32 color) {
+                         float top_resume_x, float top_end_x,
+                         float left_resume_y, float right_resume_y,
+                         ImU32 color) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float left = min.x + 0.5f;
   const float top = min.y + 0.5f;
   const float right = max.x - 0.5f;
   const float bottom = max.y - 0.5f;
 
-  if (top_resume_x < right) {
-    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(right, top), color);
+  const float top_end = std::min(top_end_x, right);
+  if (top_resume_x < top_end) {
+    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(top_end, top), color);
   }
   if (left_resume_y < bottom) {
     draw_list->AddLine(ImVec2(left, left_resume_y), ImVec2(left, bottom),
                        color);
   }
-  draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
+  if (right_resume_y < bottom) {
+    draw_list->AddLine(ImVec2(right, std::max(top, right_resume_y)),
+                       ImVec2(right, bottom), color);
+  }
   draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
 }
 
@@ -570,6 +577,7 @@ struct OperatorHeader {
   float end_x;
   /// The name takes clicks for dragging, so it reports them to select with.
   bool name_clicked;
+  bool is_carrier;
 };
 
 /// Inside an open drag source: what is carried and the tooltip that follows
@@ -624,33 +632,24 @@ void drag_from_background(OperatorEditState &state,
   }
 }
 
-/// The operator's name followed by a Carrier badge as tall as the checkbox
-/// beside it. One item, so the name's drag source covers the badge too.
-void carrier_label(const std::string &name) {
+/// The Carrier badge, as tall as the checkbox across the other end of the
+/// top border, its right edge at `right`. Returns its left edge.
+float draw_carrier_badge(float right, float top) {
   constexpr const char *kBadge = "Carrier";
   const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 name_size = ImGui::CalcTextSize(name.c_str());
-  const ImVec2 badge_text = ImGui::CalcTextSize(kBadge);
-  const float badge_x = name_size.x + style.ItemInnerSpacing.x;
-  const ImVec2 badge_size(badge_text.x + style.FramePadding.x * 2.0f,
-                          ImGui::GetFrameHeight());
-
-  const ImVec2 pos = ImGui::GetCursorScreenPos();
-  ImGui::Dummy(ImVec2(badge_x + badge_size.x, badge_size.y));
-
+  const ImVec2 text_size = ImGui::CalcTextSize(kBadge);
+  const ImVec2 size(text_size.x + style.FramePadding.x * 2.0f,
+                    ImGui::GetFrameHeight());
+  const ImVec2 min(right - size.x, top);
+  const ImVec2 max(right, top + size.y);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  const ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
-  draw_list->AddText(ImVec2(pos.x, pos.y + style.FramePadding.y), text_color,
-                     name.c_str());
-  const ImVec2 badge_min(pos.x + badge_x, pos.y);
-  const ImVec2 badge_max(badge_min.x + badge_size.x,
-                         badge_min.y + badge_size.y);
-  draw_list->AddRectFilled(badge_min, badge_max,
+  draw_list->AddRectFilled(min, max,
                            styles::color_u32(styles::MegatoyCol::CarrierBadge),
-                           badge_size.y * 0.5f);
-  draw_list->AddText(ImVec2(badge_min.x + style.FramePadding.x,
-                            badge_min.y + style.FramePadding.y),
-                     text_color, kBadge);
+                           size.y * 0.5f);
+  draw_list->AddText(
+      ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y),
+      ImGui::GetColorU32(ImGuiCol_Text), kBadge);
+  return min.x;
 }
 
 /// The operator's enable checkbox and name, sitting in the frame's top
@@ -668,15 +667,11 @@ OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
   operator_checkbox(widget, "##Operator Enable", "Enable",
                     &ym2612::OperatorSettings::enable, false);
   ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-  if (is_modulator) {
-    ImGui::TextUnformatted(operator_slot_label(slot).c_str());
-  } else {
-    carrier_label(operator_slot_label(slot));
-  }
+  ImGui::TextUnformatted(operator_slot_label(slot).c_str());
   const bool name_clicked =
       operator_name_drag_source(widget.editor.document, slot);
   ImGui::EndGroup();
-  return {ImGui::GetItemRectMax().x, name_clicked};
+  return {ImGui::GetItemRectMax().x, name_clicked, !is_modulator};
 }
 
 /// The whole frame takes an operator dropped from another one: swapped, or
@@ -983,6 +978,12 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   const float top_resume_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
   const float left_resume_y = block_min.y + header_height + header_gap();
+  const float frame_right = frame_min.x + frame_width;
+  const float top_end_x =
+      header.is_carrier
+          ? draw_carrier_badge(frame_right, block_min.y) - header_gap()
+          : frame_right;
+  const float right_resume_y = header.is_carrier ? left_resume_y : frame_min.y;
 
   ImGui::SetCursorScreenPos(
       ImVec2(frame_min.x + frame_padding(),
@@ -1049,13 +1050,13 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndPopup();
   }
 
-  draw_operator_frame(frame_min, frame_max, top_resume_x, left_resume_y,
-                      receiving
-                          ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
-                          : operator_frame_color(
-                                state.selection.contains(slot),
-                                state.selection.primary == slot,
-                                background_hovered));
+  draw_operator_frame(
+      frame_min, frame_max, top_resume_x, top_end_x, left_resume_y,
+      right_resume_y,
+      receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
+                : operator_frame_color(state.selection.contains(slot),
+                                       state.selection.primary == slot,
+                                       background_hovered));
 
   ImGui::PopID();
 }
