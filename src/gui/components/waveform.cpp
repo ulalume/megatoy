@@ -1,4 +1,5 @@
 #include "waveform.hpp"
+#include "gui/panel.hpp"
 
 #include "audio/scope_trigger.hpp"
 #include "gui/areas.hpp"
@@ -223,7 +224,7 @@ void render_waveform(const char *title, WaveformContext &context) {
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(420.0f, 240.0f)),
                            ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin(title, &ui_prefs.show_waveform)) {
+  if (!ui::begin_panel(title, &ui_prefs.show_waveform)) {
     ImGui::End();
     return;
   }

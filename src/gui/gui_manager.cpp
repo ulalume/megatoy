@@ -5,6 +5,7 @@
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/layouts.hpp"
+#include "gui/panel.hpp"
 #if defined(__APPLE__)
 #include "gui/mac_window_menu.hpp"
 #endif
@@ -232,9 +233,7 @@ void GuiManager::begin_frame() {
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
 
-  // The docked windows' tab bars, taller than the frames inside them.
-  ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,
-                       ImGui::GetStyle().FramePadding.y + ui::scale::px(2.0f));
+  ui::push_panel_tab_padding();
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
   ImGui::PopStyleVar();
 

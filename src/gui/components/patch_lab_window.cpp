@@ -1,4 +1,5 @@
 #include "patch_lab_window.hpp"
+#include "gui/panel.hpp"
 
 #include "common.hpp"
 #include "gui/areas.hpp"
@@ -466,7 +467,7 @@ void render_patch_lab(const char *title, PatchLabContext &context,
                            ImGuiCond_FirstUseEver);
 
   areas::keep_in_area(areas::Area::FooterRight, title);
-  if (!ImGui::Begin(title, &context.prefs.show_patch_lab)) {
+  if (!ui::begin_panel(title, &context.prefs.show_patch_lab)) {
     ImGui::End();
     return;
   }

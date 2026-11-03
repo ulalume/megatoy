@@ -1,4 +1,5 @@
 #include "patch_selector.hpp"
+#include "gui/panel.hpp"
 
 #include "gui/areas.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -106,9 +107,9 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   areas::keep_in_area(areas::Area::Sidebar, title,
                       ImGuiDockNodeFlags_AutoHideTabBar);
   // Only the tree scrolls; it runs to the bottom edge.
-  if (!ImGui::Begin(title, &prefs.show_patch_selector,
-                    ImGuiWindowFlags_NoScrollbar |
-                        ImGuiWindowFlags_NoScrollWithMouse)) {
+  if (!ui::begin_panel(title, &prefs.show_patch_selector,
+                       ImGuiWindowFlags_NoScrollbar |
+                           ImGuiWindowFlags_NoScrollWithMouse)) {
     ImGui::End();
     return;
   }
