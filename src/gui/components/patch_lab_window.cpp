@@ -475,28 +475,28 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   const float available = ImGui::GetContentRegionAvail().x;
   const float left_width = std::max(320.0f, available * 0.62f);
   if (ImGui::BeginChild("##PatchLabControls", ImVec2(left_width, 0), false)) {
-    if (ImGui::BeginTabBar("##Patch Lab Operators",
-                           ImGuiTabBarFlags_SaveSettings)) {
+    if (ui::begin_tab_bar("##Patch Lab Operators",
+                          ImGuiTabBarFlags_SaveSettings)) {
       auto &repository = context.session.repository();
-      if (ImGui::BeginTabItem(ICON_FA_SLIDERS " Tweak")) {
+      if (ui::begin_tab_item(ICON_FA_SLIDERS " Tweak")) {
         render_tweak_section(context, state);
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem(ICON_FA_DICE " Random")) {
+      if (ui::begin_tab_item(ICON_FA_DICE " Random")) {
         render_random_section(context, state);
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem(ICON_FA_SHUFFLE " Mix")) {
+      if (ui::begin_tab_item(ICON_FA_SHUFFLE " Mix")) {
         const auto &entries = current_entries(state, repository);
         render_merge_section(context, state, entries);
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem(ICON_FA_FLASK_VIAL " Morph")) {
+      if (ui::begin_tab_item(ICON_FA_FLASK_VIAL " Morph")) {
         const auto &entries = current_entries(state, repository);
         render_morph_section(context, state, entries);
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem(ICON_FA_VIRUS " Mutate")) {
+      if (ui::begin_tab_item(ICON_FA_VIRUS " Mutate")) {
         render_mutate_section(context, state);
         ImGui::EndTabItem();
       }

@@ -645,30 +645,30 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
   areas::keep_in_area(areas::Area::Main, title);
   if (ui::begin_panel(title, &ui_prefs.show_preferences)) {
-    if (ImGui::BeginTabBar("##preference_tabs")) {
+    if (ui::begin_tab_bar("##preference_tabs")) {
       // Each tab scrolls in its own child so the tab bar stays put. Input in
       // particular is taller than the window once a few devices show up.
-      if (ImGui::BeginTabItem("General")) {
+      if (ui::begin_tab_item("General")) {
         ImGui::BeginChild("##general");
         render_general_tab(context);
         ImGui::EndChild();
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem("Patches")) {
+      if (ui::begin_tab_item("Patches")) {
         ImGui::BeginChild("##patches");
         render_patches_tab(context);
         ImGui::EndChild();
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem("Sound", nullptr,
-                              open_sound_tab ? ImGuiTabItemFlags_SetSelected
-                                             : ImGuiTabItemFlags_None)) {
+      if (ui::begin_tab_item("Sound", nullptr,
+                             open_sound_tab ? ImGuiTabItemFlags_SetSelected
+                                            : ImGuiTabItemFlags_None)) {
         ImGui::BeginChild("##sound");
         render_sound_tab(context);
         ImGui::EndChild();
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem("Input")) {
+      if (ui::begin_tab_item("Input")) {
         ImGui::BeginChild("##input");
         render_input_tab(context);
         ImGui::EndChild();

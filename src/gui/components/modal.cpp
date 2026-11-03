@@ -60,8 +60,13 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss, float width,
   // A dialog keeps the window colour while menus take the brighter popup one.
   ImGui::PushStyleColor(ImGuiCol_PopupBg,
                         styles::color(styles::MegatoyCol::ModalBg));
+  // The title bar's height is FramePadding's at Begin: a dialog's stands
+  // taller than other frames.
+  ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,
+                       ImGui::GetStyle().FramePadding.y + ui::scale::px(4.0f));
   const bool open = ImGui::BeginPopupModal(
       title, nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+  ImGui::PopStyleVar();
   ImGui::PopStyleColor();
   if (!open) {
     return scope;
