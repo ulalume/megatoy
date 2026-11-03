@@ -628,9 +628,11 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   if (!wanted) {
     return {};
   }
+  // The dots drawn twice the library's size; its grab box already covers
+  // that.
   const ui::envelope::HandleMetrics unscaled;
   const ui::envelope::HandleMetrics metrics{
-      ui::scale::px(unscaled.radius),
+      ui::scale::px(unscaled.radius * 2.0f),
       ui::scale::px(unscaled.grab),
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
