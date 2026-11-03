@@ -29,7 +29,8 @@ void show_patch_tooltip(const patches::PatchRepository &repository,
       display_preset_path(repository.display_path(entry.relative_path));
 
   if (entry.metadata) {
-    tooltip += "\nStars: " + std::to_string(entry.metadata->star_rating) + "/5";
+    tooltip +=
+        "\nRating: " + std::to_string(entry.metadata->star_rating) + "/5";
     if (!entry.metadata->category.empty()) {
       tooltip += "\nCategory: " + entry.metadata->category;
     }
@@ -225,7 +226,7 @@ void render_filter_bar(PatchSelectorContext &context) {
   }
 
   ImGui::SameLine();
-  star_rating_slider("##Stars", prefs.metadata_star_filter, "Stars");
+  star_rating_slider("##Rating", prefs.metadata_star_filter, "Rating");
 }
 
 } // namespace ui::selector_detail
