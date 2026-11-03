@@ -1,7 +1,9 @@
 #include "preview.hpp"
 
 #include "gui/image/resource_manager.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
+#include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
 #include <cstdint>
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -14,6 +16,22 @@
 #include <type_traits>
 
 namespace ui {
+
+void preview_image(const PreviewTexture &preview) {
+  ImGui::Image(preview.texture_id, ui::scale::px(preview.size));
+  // Over the picture's outermost pixels, which the images leave clear for it.
+  const ImVec2 min = ImGui::GetItemRectMin();
+  const ImVec2 max = ImGui::GetItemRectMax();
+  const float width = ui::scale::px(1.0f);
+  const ImU32 color = styles::color_u32(styles::MegatoyCol::PreviewBorder);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  draw_list->AddRectFilled(min, ImVec2(max.x, min.y + width), color);
+  draw_list->AddRectFilled(ImVec2(min.x, max.y - width), max, color);
+  draw_list->AddRectFilled(ImVec2(min.x, min.y + width),
+                           ImVec2(min.x + width, max.y - width), color);
+  draw_list->AddRectFilled(ImVec2(max.x - width, min.y + width),
+                           ImVec2(max.x, max.y - width), color);
+}
 namespace {
 
 template <typename TextureId>

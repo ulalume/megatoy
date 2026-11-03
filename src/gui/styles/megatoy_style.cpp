@@ -56,6 +56,7 @@ void derive_widget_colors() {
   set(MegatoyCol::SpectrumBar, faded(imgui[ImGuiCol_PlotHistogram], 0.85f));
   set(MegatoyCol::SpectrumGrid, faded(imgui[ImGuiCol_Border], 0.5f));
   set(MegatoyCol::SpectrumLabel, faded(color(MegatoyCol::TextMuted), 0.9f));
+  set(MegatoyCol::PreviewBorder, imgui[ImGuiCol_Separator]);
 }
 
 const ImVec4 &color(MegatoyCol col) {

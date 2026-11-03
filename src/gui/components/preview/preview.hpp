@@ -18,6 +18,10 @@ struct PreviewTexture {
   }
 };
 
+/// The image, at the interface scale, with the theme's frame drawn around its
+/// edge.
+void preview_image(const PreviewTexture &preview);
+
 class PreviewImageList {
 public:
   explicit PreviewImageList(std::vector<std::string> filenames);

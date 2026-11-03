@@ -58,6 +58,8 @@ enum class MegatoyCol : int {
   SpectrumBar,
   SpectrumGrid,
   SpectrumLabel,
+  /// The frame around the algorithm and SSG-EG pictures.
+  PreviewBorder,
   COUNT
 };
 

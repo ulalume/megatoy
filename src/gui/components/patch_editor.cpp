@@ -248,7 +248,7 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
 
   if (const auto *preview =
           get_algorithm_preview_texture(patch.instrument.algorithm)) {
-    ImGui::Image(preview->texture_id, ui::scale::px(preview->size));
+    preview_image(*preview);
   }
 
   int algorithm = patch.instrument.algorithm;
