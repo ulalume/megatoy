@@ -36,4 +36,8 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
                             bool space_for_feedback,
                             const EnvelopeVoices &voices);
+
+/// Give each selected operator what the others in the selection light, as
+/// UIState::EnvelopeState::echoed. Called before the operators are drawn.
+void echo_selection_highlights(PatchEditorContext &context);
 } // namespace ui

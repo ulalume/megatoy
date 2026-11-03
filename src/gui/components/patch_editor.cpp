@@ -286,6 +286,7 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
   // reports what it needed and the tallest wins the next frame.
   context.operator_edit().pending_frame_height = 0.0f;
   context.operator_edit().click_claimed = false;
+  echo_selection_highlights(context);
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_state(slot),
                            space_for_feedbacks[slot], voices);

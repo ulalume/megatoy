@@ -38,6 +38,9 @@ struct UIState {
       Hover,
       Active,
     };
+    static SliderState stronger(SliderState a, SliderState b) {
+      return static_cast<int>(a) > static_cast<int>(b) ? a : b;
+    }
     SliderState total_level = SliderState::None;
     SliderState attack_rate = SliderState::None;
     SliderState decay_rate = SliderState::None;
@@ -55,6 +58,11 @@ struct UIState {
       SliderState sustain_rate = SliderState::None;
       SliderState release_rate = SliderState::None;
     } handles;
+    /// The six as the other selected operators light them, by slider or by
+    /// handle, so a change that spreads across the selection shows on every
+    /// operator it reaches. Gathered from the last frame before the
+    /// operators are drawn.
+    HandleLit echoed;
     /// A handle on the graph is being dragged, which holds the time axis
     /// still.
     bool handle_active = false;

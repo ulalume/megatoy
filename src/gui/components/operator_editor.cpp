@@ -246,7 +246,8 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
   const auto labels = field_labels(field);
 
   // The handle on the graph and the slider set the same register, so pointing
-  // at either shows on both.
+  // at either shows on both -- as does pointing at the same field on another
+  // selected operator, which the change spreads to.
   const bool lit_elsewhere =
       handle_lit != UIState::EnvelopeState::SliderState::None;
   if (lit_elsewhere) {
@@ -348,6 +349,17 @@ struct HandleDrag {
 HandleDrag &handle_drag() {
   static HandleDrag drag;
   return drag;
+}
+
+using Lit = UIState::EnvelopeState::HandleLit;
+using SliderState = UIState::EnvelopeState::SliderState;
+
+/// How a field is lit from outside its slider: by its handle on the graph,
+/// or by the same field on another selected operator.
+SliderState lit_from_outside(const UIState::EnvelopeState &state,
+                             SliderState Lit::*field) {
+  return UIState::EnvelopeState::stronger(state.handles.*field,
+                                          state.echoed.*field);
 }
 
 /// Where a field lights up on the graph, or nullptr for one the graph says
@@ -513,7 +525,8 @@ HandleTouch operator_handle(OperatorWidget &widget,
 /// which is what holds the time axis still.
 bool render_envelope_handles(OperatorWidget &widget,
                              const ui::envelope::EnvelopeHandles &handles,
-                             UIState::EnvelopeState::HandleLit &handle_states) {
+                             UIState::EnvelopeState::HandleLit &handle_states,
+                             UIState::EnvelopeState::HandleLit echoed) {
   constexpr size_t count = std::size(kHandleSpecs);
   const ui::envelope::HandleIndex nearest = ui::envelope::nearest_handle(
       handles, ui::envelope::to_point(ImGui::GetIO().MousePos));
@@ -531,7 +544,18 @@ bool render_envelope_handles(OperatorWidget &widget,
       continue;
     }
     active |= touched[i].lit == UIState::EnvelopeState::SliderState::Active;
-    draw_envelope_handle(handles, kHandleSpecs[i].handle, touched[i].lit);
+    // Lit too when another selected operator is changing what it stands for.
+    SliderState lit = touched[i].lit;
+    const HandleAxes axes = axes_of(kHandleSpecs[i].handle);
+    for (const auto &field : {axes.across, axes.down}) {
+      if (!field) {
+        continue;
+      }
+      if (const auto *from = slider_state_for(echoed, *field)) {
+        lit = UIState::EnvelopeState::stronger(lit, *from);
+      }
+    }
+    draw_envelope_handle(handles, kHandleSpecs[i].handle, lit);
   }
   return active;
 }
@@ -752,7 +776,7 @@ void render_total_level_slider(OperatorWidget &widget,
   text_centered("TL", slider_size.x);
   operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
                   &slider_size, nullptr, &envelope_state.total_level,
-                  envelope_state.handles.total_level);
+                  lit_from_outside(envelope_state, &Lit::total_level));
   ImGui::EndGroup();
 }
 
@@ -787,24 +811,24 @@ void render_envelope_sliders(OperatorWidget &widget,
   ImGui::BeginGroup();
   operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
                   &slider_size, nullptr, &envelope_state.attack_rate,
-                  envelope_state.handles.attack_rate);
+                  lit_from_outside(envelope_state, &Lit::attack_rate));
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::DecayRate, "##Decay Rate",
                   &slider_size, nullptr, &envelope_state.decay_rate,
-                  envelope_state.handles.decay_rate);
+                  lit_from_outside(envelope_state, &Lit::decay_rate));
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::SustainLevel,
                   "##Sustain Level", &slider_size, nullptr,
                   &envelope_state.sustain_level,
-                  envelope_state.handles.sustain_level);
+                  lit_from_outside(envelope_state, &Lit::sustain_level));
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::SustainRate, "##Sustain Rate",
                   &slider_size, nullptr, &envelope_state.sustain_rate,
-                  envelope_state.handles.sustain_rate);
+                  lit_from_outside(envelope_state, &Lit::sustain_rate));
   ImGui::SameLine();
   operator_slider(widget, ym2612::OperatorField::ReleaseRate, "##Release Rate",
                   &slider_size, nullptr, &envelope_state.release_rate,
-                  envelope_state.handles.release_rate);
+                  lit_from_outside(envelope_state, &Lit::release_rate));
   ImGui::EndGroup();
 
   ImGui::EndGroup(); // End ADSR slider block
@@ -879,8 +903,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // Inside the graph's own window, which render_envelope_image leaves open:
   // an item anywhere else could not be hovered over the graph.
   envelope_state.handles = UIState::EnvelopeState::HandleLit{};
-  envelope_state.handle_active =
-      render_envelope_handles(widget, handles, envelope_state.handles);
+  envelope_state.handle_active = render_envelope_handles(
+      widget, handles, envelope_state.handles, envelope_state.echoed);
   end_envelope_image();
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
@@ -1060,6 +1084,47 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                                        background_hovered));
 
   ImGui::PopID();
+}
+
+void echo_selection_highlights(PatchEditorContext &context) {
+  constexpr SliderState UIState::EnvelopeState::*kOwn[] = {
+      &UIState::EnvelopeState::total_level,
+      &UIState::EnvelopeState::attack_rate,
+      &UIState::EnvelopeState::decay_rate,
+      &UIState::EnvelopeState::sustain_level,
+      &UIState::EnvelopeState::sustain_rate,
+      &UIState::EnvelopeState::release_rate,
+  };
+  constexpr SliderState Lit::*kLit[] = {
+      &Lit::total_level,   &Lit::attack_rate,  &Lit::decay_rate,
+      &Lit::sustain_level, &Lit::sustain_rate, &Lit::release_rate,
+  };
+  static_assert(std::size(kOwn) == std::size(kLit));
+
+  const OperatorSelection &selection = context.operator_edit().selection;
+  Lit lit[4];
+  for (int slot = 0; slot < 4; ++slot) {
+    const auto &state = context.envelope_state(slot);
+    for (std::size_t i = 0; i < std::size(kLit); ++i) {
+      lit[slot].*kLit[i] = UIState::EnvelopeState::stronger(
+          state.*kOwn[i], state.handles.*kLit[i]);
+    }
+  }
+  for (int slot = 0; slot < 4; ++slot) {
+    Lit echoed;
+    if (selection.contains(slot)) {
+      for (int other = 0; other < 4; ++other) {
+        if (other == slot || !selection.contains(other)) {
+          continue;
+        }
+        for (const auto field : kLit) {
+          echoed.*field = UIState::EnvelopeState::stronger(echoed.*field,
+                                                           lit[other].*field);
+        }
+      }
+    }
+    context.envelope_state(slot).echoed = echoed;
+  }
 }
 
 } // namespace ui

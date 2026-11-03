@@ -458,6 +458,13 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   raise(state.sustain_level, slider_state.handles.sustain_level);
   raise(state.sustain_rate, slider_state.handles.sustain_rate);
   raise(state.release_rate, slider_state.handles.release_rate);
+  // And by the same parameter changing on another selected operator.
+  raise(state.total_level, slider_state.echoed.total_level);
+  raise(state.attack_rate, slider_state.echoed.attack_rate);
+  raise(state.decay_rate, slider_state.echoed.decay_rate);
+  raise(state.sustain_level, slider_state.echoed.sustain_level);
+  raise(state.sustain_rate, slider_state.echoed.sustain_rate);
+  raise(state.release_rate, slider_state.echoed.release_rate);
 
   PlotArea plot;
   const double target_ms = std::max(curve.span_ms, 1.0);
