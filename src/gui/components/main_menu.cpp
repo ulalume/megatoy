@@ -48,6 +48,7 @@ struct LoadWindow {
   /// Set where any sample folded into the column broke the output.
   std::array<bool, kMaxLoadColumns> dropouts{};
   std::size_t count = 0;
+  float latest = 0.0f;
   float peak = 0.0f;
   float average = 0.0f;
 };
@@ -66,6 +67,7 @@ LoadWindow load_window(const audio::LoadMeter::History &history, float width) {
   const std::size_t columns = std::min<std::size_t>(
       kMaxLoadColumns, std::max<std::size_t>(2, static_cast<std::size_t>(width)));
   out.count = std::min(columns, used);
+  out.latest = history.values[history.count - 1];
   double total = 0.0;
   for (std::size_t i = 0; i < used; ++i) {
     const std::size_t column = out.count < 2 ? 0
@@ -154,9 +156,19 @@ void draw_load_graph(const Panel &panel, const LoadWindow &window) {
 
 /// The remedies for a high load. Each one that has nothing left to give is
 /// disabled and says so.
-void render_load_menu(MainMenuContext &context) {
+/// The graph's readings in words, for its tooltip and the top of its menu.
+void render_load_status(const LoadWindow &window) {
+  ImGui::TextUnformatted("Sound processing load");
+  ImGui::Text("  Now %.0f%%   Peak %.0f%%   Average %.0f%%",
+              static_cast<double>(window.latest) * 100.0,
+              static_cast<double>(window.peak) * 100.0,
+              static_cast<double>(window.average) * 100.0);
+}
+
+void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
   auto &ui_prefs = context.ui_prefs;
 
+  render_load_status(window);
   ImGui::SeparatorText("Improve performance");
 
   const bool core_at_best =
@@ -225,15 +237,16 @@ void render_audio_load(MainMenuContext &context) {
   draw_load_graph(panel, window);
   end_panel(panel);
 
-  if (hovered) {
-    ImGui::SetTooltip("Audio load");
+  if (hovered && ImGui::BeginTooltip()) {
+    render_load_status(window);
+    ImGui::EndTooltip();
   }
 
   if (clicked) {
     ImGui::OpenPopup("##audio_load_menu");
   }
   if (ImGui::BeginPopup("##audio_load_menu")) {
-    render_load_menu(context);
+    render_load_menu(context, window);
     ImGui::EndPopup();
   }
 }
