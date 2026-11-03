@@ -275,11 +275,18 @@ void render_tweak_slider(PatchLabContext &context, PatchLabState &state,
       patch_lab::tweak_range(state.tweak_base.value_or(instrument), tweak);
   const auto text = patch_lab::tweak_text(instrument, tweak);
 
+  // Rates run like the operator editor's sliders: toward the end that
+  // sounds longer.
+  const bool longer_first = tweak == patch_lab::Tweak::Attack ||
+                            tweak == patch_lab::Tweak::Decay ||
+                            tweak == patch_lab::Tweak::Release;
   int shown = value.value_or(range.min);
   ImGui::BeginDisabled(!value);
   // No typing: a slider that moves two registers has no one number to type.
-  const bool changed = ImGui::SliderInt(label, &shown, range.min, range.max,
-                                        text.c_str(), ImGuiSliderFlags_NoInput);
+  const bool changed =
+      ImGui::SliderInt(label, &shown, longer_first ? range.max : range.min,
+                       longer_first ? range.min : range.max, text.c_str(),
+                       ImGuiSliderFlags_NoInput);
   ImGui::EndDisabled();
 
   if (ImGui::IsItemActivated()) {
