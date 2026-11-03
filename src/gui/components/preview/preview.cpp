@@ -5,6 +5,7 @@
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
+#include <algorithm>
 #include <cstdint>
 #if defined(MEGATOY_PLATFORM_WEB)
 #include <GLES3/gl3.h>
@@ -17,14 +18,21 @@
 
 namespace ui {
 
-void preview_image(const PreviewTexture &preview) {
-  ImGui::Image(preview.texture_id, ui::scale::px(preview.size));
-  // Over the picture's outermost pixels, which the images leave clear for it.
+void preview_image(const PreviewTexture &preview, float frame_height) {
+  const ImVec2 image_size = ui::scale::px(preview.size);
+  const float pad = std::max(0.0f, (frame_height - image_size.y) * 0.5f);
+  ImGui::Dummy(ImVec2(image_size.x + pad * 2.0f, image_size.y + pad * 2.0f));
+  // Over the picture's outermost pixels, which the images leave clear for it,
+  // or around the picture when the frame is taller than it.
   const ImVec2 min = ImGui::GetItemRectMin();
   const ImVec2 max = ImGui::GetItemRectMax();
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImVec2 image_min(min.x + pad, min.y + pad);
+  draw_list->AddImage(
+      preview.texture_id, image_min,
+      ImVec2(image_min.x + image_size.x, image_min.y + image_size.y));
   const float width = ui::scale::px(1.0f);
   const ImU32 color = styles::color_u32(styles::MegatoyCol::PreviewBorder);
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
   draw_list->AddRectFilled(min, ImVec2(max.x, min.y + width), color);
   draw_list->AddRectFilled(ImVec2(min.x, max.y - width), max, color);
   draw_list->AddRectFilled(ImVec2(min.x, min.y + width),

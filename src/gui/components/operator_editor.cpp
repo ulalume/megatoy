@@ -928,7 +928,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
                                           : get_ssg_preview_off_texture()) {
     if (preview->valid()) {
-      preview_image(*preview);
+      preview_image(*preview, ImGui::GetFrameHeight());
     }
   }
   ImGui::SameLine();
