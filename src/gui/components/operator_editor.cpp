@@ -1,6 +1,7 @@
 #include "operator_editor.hpp"
-#include "envelope_image.hpp"
 #include "core/status.hpp"
+#include "envelope_image.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/envelope/envelope_handles.hpp"
@@ -1039,7 +1040,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     state.click_claimed = true;
     ImGui::OpenPopup("##operator_menu");
   }
-  if (ImGui::BeginPopup("##operator_menu")) {
+  if (ui::begin_popup("##operator_menu")) {
     OperatorCommandContext commands{patch.instrument, state,
                                     context.operator_clipboard,
                                     [&context](const std::string &label) {
@@ -1047,7 +1048,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                                     },
                                     [&context]() { context.commit_history(); }};
     render_operator_command_items(commands);
-    ImGui::EndPopup();
+    ui::end_popup();
   }
 
   draw_operator_frame(

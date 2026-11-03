@@ -2,6 +2,7 @@
 #include "components/common.hpp"
 #include "components/modal.hpp"
 #include "core/status.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
@@ -90,7 +91,7 @@ void render_save_as_menu(patches::PatchSession &session,
   if (state.save_as_menu_anchor) {
     ImGui::SetNextWindowPos(*state.save_as_menu_anchor);
   }
-  if (!ImGui::BeginPopup(kSaveAsMenuId)) {
+  if (!ui::begin_popup(kSaveAsMenuId)) {
     return;
   }
 
@@ -99,7 +100,7 @@ void render_save_as_menu(patches::PatchSession &session,
   if (ImGui::MenuItem("Save to browser storage...")) {
     save_to_storage = true;
   }
-  ImGui::EndPopup();
+  ui::end_popup();
 
   if (download_extension) {
     download_current_patch(session, *download_extension);
@@ -167,13 +168,13 @@ void trigger_save(patches::PatchSession &session, SaveExportState &state,
 std::optional<std::string>
 download_format_menu(const patches::PatchSession &session) {
   std::optional<std::string> extension;
-  if (ImGui::BeginMenu("Download")) {
+  if (ui::begin_menu("Download")) {
     for (const auto &format : session.save_formats()) {
       if (ImGui::MenuItem(format.display_name().c_str())) {
         extension = format.extension;
       }
     }
-    ImGui::EndMenu();
+    ui::end_menu();
   }
   return extension;
 }
@@ -228,13 +229,13 @@ void render_save_export_popups(patches::PatchSession &session,
       });
 #else
   std::optional<std::string> selected_extension;
-  if (ImGui::BeginPopup("Save As...")) {
+  if (ui::begin_popup("Save As...")) {
     for (const auto &format : session.save_formats()) {
       if (ImGui::MenuItem(format.display_name().c_str())) {
         selected_extension = format.extension;
       }
     }
-    ImGui::EndPopup();
+    ui::end_popup();
   }
   if (selected_extension) {
     auto result = session.save_current_patch_as(*selected_extension);

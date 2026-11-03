@@ -1,4 +1,5 @@
 #include "main_menu.hpp"
+#include "gui/components/menu_rows.hpp"
 
 #include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
@@ -245,9 +246,9 @@ void render_audio_load(MainMenuContext &context) {
   if (clicked) {
     ImGui::OpenPopup("##audio_load_menu");
   }
-  if (ImGui::BeginPopup("##audio_load_menu")) {
+  if (ui::begin_popup("##audio_load_menu")) {
     render_load_menu(context, window);
-    ImGui::EndPopup();
+    ui::end_popup();
   }
 }
 
@@ -281,6 +282,9 @@ bool begin_bar_menu(const char *label) {
                        ImGui::GetStyle().FramePadding.y * 2.0f);
   const bool open = ImGui::BeginMenu(label);
   ImGui::PopStyleVar();
+  if (open) {
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::list_row_spacing());
+  }
   return open;
 }
 
@@ -333,7 +337,7 @@ void render_main_menu(MainMenuContext &context) {
           context.gui.set_should_close(true);
         }
       }
-      ImGui::EndMenu();
+      ui::end_menu();
     }
     auto &session = context.patch_session;
     const auto controls =
@@ -419,7 +423,7 @@ void render_main_menu(MainMenuContext &context) {
             });
         const char *remove_label =
             megatoy::platform::is_web() ? "Delete Folder" : "Remove Folder";
-        if (ImGui::BeginMenu(remove_label, has_removable_folder)) {
+        if (ui::begin_menu(remove_label, has_removable_folder)) {
           std::optional<std::filesystem::path> to_remove;
           for (const auto &folder : folders) {
             if (context.preferences.workspace_folder_is_protected(
@@ -430,14 +434,14 @@ void render_main_menu(MainMenuContext &context) {
               to_remove = folder.path;
             }
           }
-          ImGui::EndMenu();
+          ui::end_menu();
           if (to_remove && context.remove_workspace_folder) {
             context.remove_workspace_folder(*to_remove);
           }
         }
       }
 
-      ImGui::EndMenu();
+      ui::end_menu();
     }
 
     // The folder picker is modal, so it is opened after the menu closes.
@@ -519,7 +523,7 @@ void render_main_menu(MainMenuContext &context) {
           context.commit_patch_history};
       render_operator_command_items(operator_commands);
 
-      ImGui::EndMenu();
+      ui::end_menu();
     }
 
     if (begin_bar_menu("View")) {
@@ -548,7 +552,7 @@ void render_main_menu(MainMenuContext &context) {
       if (ImGui::MenuItem("Reset to Default Layout")) {
         context.gui.reset_layout();
       }
-      ImGui::EndMenu();
+      ui::end_menu();
     }
 
     render_audio_load(context);

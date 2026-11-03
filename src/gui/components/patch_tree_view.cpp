@@ -1,4 +1,5 @@
 #include "patch_tree_view.hpp"
+#include "gui/components/menu_rows.hpp"
 
 #include "common.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -161,9 +162,7 @@ void handle_row_keys(PatchSelectorContext &context,
 /// A row's height: a text line and the margin around it, all of which the row
 /// answers the mouse in. Rows are set with no spacing between them, so their
 /// highlights meet.
-float row_margin() {
-  return ImGui::GetStyle().ItemSpacing.y + ui::scale::px(6.0f);
-}
+float row_margin() { return ui::list_row_spacing(); }
 
 float row_height() { return ImGui::GetTextLineHeight() + row_margin(); }
 
