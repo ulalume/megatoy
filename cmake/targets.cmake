@@ -213,6 +213,7 @@ endif()
 # Add platform-specific source files
 if(APPLE)
   list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm)
+  list(APPEND MEGATOY_CORE_SOURCES src/gui/mac_window_menu.mm)
 elseif(WIN32)
   list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
 else()
