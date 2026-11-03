@@ -116,6 +116,7 @@ inline void apply(const Palette &p = Palette{}) {
   megatoy[at(MegatoyCol::PianoBlackKey)] = p.black_key;
   megatoy[at(MegatoyCol::PianoBlackKeyPressed)] = p.accent;
   megatoy[at(MegatoyCol::ModalBg)] = with_alpha(p.base, 0.98f);
+  ::ui::styles::derive_widget_colors();
 }
 
 } // namespace ui::styles::megatoy_dark

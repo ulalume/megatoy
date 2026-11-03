@@ -4,6 +4,7 @@
 #include "common.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/envelope/envelope_handles.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "ym2612/note.hpp"
 
@@ -45,8 +46,6 @@ constexpr float kFillAlpha = 0.30f;
 /// A handle is a hint until it is wanted: dimmer than the line it sits on
 /// until the pointer is on it, when it takes the stretch's own colour.
 constexpr float kHandleIdleAlpha = 0.55f;
-/// The warning line is a footnote, not an alert.
-constexpr float kWarningAlpha = 0.6f;
 
 /// How a sounding voice is drawn: the ghost curve well below the reference
 /// curve's weight, the cursor well above it, each older voice in a chord
@@ -155,8 +154,8 @@ double approach_span(double current_ms, double target_ms, float dt_sec,
 ImU32 color_from_slider_state(
     const UIState::EnvelopeState::SliderState &state) {
   return state == UIState::EnvelopeState::SliderState::None
-             ? ImGui::GetColorU32(ImGuiCol_Text)
-             : ImGui::GetColorU32(ImGuiCol_FrameBgActive);
+             ? styles::color_u32(styles::MegatoyCol::EnvelopeCurve)
+             : styles::color_u32(styles::MegatoyCol::EnvelopeCurveActive);
 }
 
 /// With a grid `step` below one, fractions of a ms.
@@ -170,7 +169,7 @@ void format_ms(char (&out)[16], double ms, double step) {
 
 /// The one subdued colour for every caption along the top strip.
 ImU32 axis_label_color() {
-  return color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha);
+  return styles::color_u32(styles::MegatoyCol::EnvelopeLabel);
 }
 
 /**
@@ -181,7 +180,7 @@ ImU32 axis_label_color() {
  */
 void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
                     float label_baseline, float label_limit_x) {
-  const ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
+  const ImU32 grid_color = styles::color_u32(styles::MegatoyCol::EnvelopeGrid);
   const ImU32 label_color = axis_label_color();
   // The width being drawn, not the one being animated towards: the lines have
   // to cover what is actually on screen.
@@ -386,10 +385,9 @@ void draw_warning(ImDrawList *draw_list, const std::string &warning,
   const float wrap_width = plot.width() - inset * 2.0f;
   const ImVec2 size = ImGui::CalcTextSize(text, text_end, false, wrap_width);
   const ImVec2 pos(plot.min.x + inset, plot.max.y - size.y - inset);
-  draw_list->AddText(
-      ImGui::GetFont(), ImGui::GetFontSize(), pos,
-      color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha), text,
-      text_end, wrap_width);
+  draw_list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), pos,
+                     styles::color_u32(styles::MegatoyCol::EnvelopeLabel), text,
+                     text_end, wrap_width);
 }
 
 } // namespace
@@ -501,7 +499,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   const ImVec2 canvas_max(canvas_min.x + size.x, canvas_min.y + size.y);
 
   draw_list->AddRect(canvas_min, canvas_max,
-                     ImGui::GetColorU32(ImGuiCol_Separator));
+                     styles::color_u32(styles::MegatoyCol::EnvelopeGrid));
 
   // The time labels get a strip of their own along the top: a curve at full
   // volume runs along the very top of the plot.
@@ -577,7 +575,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
 
   // Ghost curves oldest first, so the newest is the one on top of the others
   // -- and all of them under the curve being edited.
-  const ImU32 ghost_base = ImGui::GetColorU32(ImGuiCol_Text);
+  const ImU32 ghost_base = styles::color_u32(styles::MegatoyCol::EnvelopeVoice);
   for (int i = drawn_count - 1; i >= 0; --i) {
     // Nothing to draw when the note shares the reference note's key-scale
     // value: its curve IS the one already on screen.
@@ -603,7 +601,8 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   draw_held_line(draw_list, curve, plot, colors);
   draw_level_markers(draw_list, curve, state, plot);
   // Over everything, so a cursor is never hidden under the curve it measures.
-  const ImU32 cursor_base = ImGui::GetColorU32(ImGuiCol_FrameBgActive);
+  const ImU32 cursor_base =
+      styles::color_u32(styles::MegatoyCol::EnvelopeVoiceCursor);
   for (int i = drawn_count - 1; i >= 0; --i) {
     if (!drawn[i].cursor_on_axis) {
       continue;

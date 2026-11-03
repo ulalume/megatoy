@@ -91,24 +91,54 @@ void note_operator_edit(OperatorSelection &selection, int slot) {
   }
 }
 
-/**
- * Border colour by state. Selected is the lead's highlight faded rather than
- * a grey, which sat too close to the unselected borders to register. Hover
- * only shows on unselected operators, where it advertises the click.
- */
+/// Border colour by state. Hover only shows on unselected operators, where
+/// it advertises the click.
 ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
-  const ImVec4 highlight = styles::color(styles::MegatoyCol::TextHighlight);
+  using styles::MegatoyCol;
   if (is_primary) {
-    return ImGui::GetColorU32(highlight);
+    return styles::color_u32(MegatoyCol::OperatorBorderPrimary);
   }
   if (selected) {
-    return ImGui::GetColorU32(
-        ImVec4(highlight.x, highlight.y, highlight.z, highlight.w * 0.5f));
+    return styles::color_u32(MegatoyCol::OperatorBorderSelected);
   }
   if (hovered) {
-    return ImGui::GetColorU32(ImGuiCol_SeparatorHovered);
+    return styles::color_u32(MegatoyCol::OperatorBorderHovered);
   }
-  return ImGui::GetColorU32(ImGuiCol_Border);
+  return styles::color_u32(MegatoyCol::OperatorBorder);
+}
+
+/// Fill colour by state, hover again only on unselected operators.
+ImU32 operator_fill_color(bool selected, bool hovered) {
+  using styles::MegatoyCol;
+  if (selected) {
+    return styles::color_u32(MegatoyCol::OperatorBgSelected);
+  }
+  if (hovered) {
+    return styles::color_u32(MegatoyCol::OperatorBgHovered);
+  }
+  return styles::color_u32(MegatoyCol::OperatorBg);
+}
+
+/// The frame's fill, drawn before the contents so it lies under them. Their
+/// size and whether one of them is hovered are only known after, so the
+/// last frame's are used.
+void draw_operator_fill(const OperatorEditState &state, int slot,
+                        const ImVec2 &block_min, const ImVec2 &frame_min,
+                        float frame_width) {
+  if (state.frame_height <= 0.0f) {
+    return;
+  }
+  const ImVec2 frame_max(frame_min.x + frame_width,
+                         frame_min.y + state.frame_height);
+  const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+                       ImGui::IsMouseHoveringRect(block_min, frame_max) &&
+                       !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive();
+  const ImU32 fill =
+      operator_fill_color(state.selection.contains(slot), hovered);
+  if ((fill & IM_COL32_A_MASK) == 0) {
+    return;
+  }
+  ImGui::GetWindowDrawList()->AddRectFilled(frame_min, frame_max, fill);
 }
 
 /**
@@ -594,6 +624,35 @@ void drag_from_background(OperatorEditState &state,
   }
 }
 
+/// The operator's name followed by a Carrier badge as tall as the checkbox
+/// beside it. One item, so the name's drag source covers the badge too.
+void carrier_label(const std::string &name) {
+  constexpr const char *kBadge = "Carrier";
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const ImVec2 name_size = ImGui::CalcTextSize(name.c_str());
+  const ImVec2 badge_text = ImGui::CalcTextSize(kBadge);
+  const float badge_x = name_size.x + style.ItemInnerSpacing.x;
+  const ImVec2 badge_size(badge_text.x + style.FramePadding.x * 2.0f,
+                          ImGui::GetFrameHeight());
+
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  ImGui::Dummy(ImVec2(badge_x + badge_size.x, badge_size.y));
+
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
+  draw_list->AddText(ImVec2(pos.x, pos.y + style.FramePadding.y), text_color,
+                     name.c_str());
+  const ImVec2 badge_min(pos.x + badge_x, pos.y);
+  const ImVec2 badge_max(badge_min.x + badge_size.x,
+                         badge_min.y + badge_size.y);
+  draw_list->AddRectFilled(badge_min, badge_max,
+                           styles::color_u32(styles::MegatoyCol::CarrierBadge),
+                           badge_size.y * 0.5f);
+  draw_list->AddText(ImVec2(badge_min.x + style.FramePadding.x,
+                            badge_min.y + style.FramePadding.y),
+                     text_color, kBadge);
+}
+
 /// The operator's enable checkbox and name, sitting in the frame's top
 /// border.
 OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
@@ -612,8 +671,7 @@ OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
   if (is_modulator) {
     ImGui::TextUnformatted(operator_slot_label(slot).c_str());
   } else {
-    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive),
-                       "%s (Carrier)", operator_slot_label(slot).c_str());
+    carrier_label(operator_slot_label(slot));
   }
   const bool name_clicked =
       operator_name_drag_source(widget.editor.document, slot);
@@ -919,6 +977,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // sections above rather than indented into the frame.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
+  draw_operator_fill(state, slot, block_min, frame_min, frame_width);
   const OperatorHeader header =
       render_operator_header(widget, patch.instrument.algorithm, block_min);
   const float top_resume_x =

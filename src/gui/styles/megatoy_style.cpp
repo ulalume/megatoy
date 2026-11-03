@@ -13,6 +13,34 @@ MegatoyStyle &mutable_style() { return g_style; }
 
 const MegatoyStyle &style() { return g_style; }
 
+void derive_widget_colors() {
+  const ImVec4 *imgui = ImGui::GetStyle().Colors;
+  ImVec4 *colors = g_style.colors;
+  const auto set = [colors](MegatoyCol col, const ImVec4 &value) {
+    colors[static_cast<int>(col)] = value;
+  };
+  const auto faded = [](ImVec4 value, float alpha) {
+    value.w *= alpha;
+    return value;
+  };
+  const ImVec4 clear(0.0f, 0.0f, 0.0f, 0.0f);
+  const ImVec4 highlight = color(MegatoyCol::TextHighlight);
+  set(MegatoyCol::OperatorBg, clear);
+  set(MegatoyCol::OperatorBgHovered, clear);
+  set(MegatoyCol::OperatorBgSelected, clear);
+  set(MegatoyCol::OperatorBorder, imgui[ImGuiCol_Border]);
+  set(MegatoyCol::OperatorBorderHovered, imgui[ImGuiCol_SeparatorHovered]);
+  set(MegatoyCol::OperatorBorderSelected, faded(highlight, 0.5f));
+  set(MegatoyCol::OperatorBorderPrimary, highlight);
+  set(MegatoyCol::CarrierBadge, imgui[ImGuiCol_FrameBgActive]);
+  set(MegatoyCol::EnvelopeCurve, imgui[ImGuiCol_Text]);
+  set(MegatoyCol::EnvelopeCurveActive, imgui[ImGuiCol_FrameBgActive]);
+  set(MegatoyCol::EnvelopeGrid, imgui[ImGuiCol_Separator]);
+  set(MegatoyCol::EnvelopeLabel, faded(imgui[ImGuiCol_Text], 0.6f));
+  set(MegatoyCol::EnvelopeVoice, imgui[ImGuiCol_Text]);
+  set(MegatoyCol::EnvelopeVoiceCursor, imgui[ImGuiCol_FrameBgActive]);
+}
+
 const ImVec4 &color(MegatoyCol col) {
   return g_style.colors[static_cast<int>(col)];
 }

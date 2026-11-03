@@ -32,5 +32,6 @@ inline void apply() {
       colors[ImGuiCol_FrameBgActive];
   palette.colors[static_cast<int>(MegatoyCol::ModalBg)] =
       colors[ImGuiCol_PopupBg];
+  ::ui::styles::derive_widget_colors();
 }
 } // namespace ui::styles::imgui_dark
