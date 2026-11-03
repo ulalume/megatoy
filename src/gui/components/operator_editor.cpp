@@ -59,9 +59,7 @@ float total_level_slider_height() {
 }
 
 /// What the TL column costs the graph beside it: one slider and the gap.
-float total_level_column_width() {
-  return vslider_width() + ImGui::GetStyle().ItemSpacing.x;
-}
+float total_level_column_width() { return vslider_width() + vslider_gap(); }
 
 ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
   return context.prefs.multi_operator_edit_absolute
@@ -783,11 +781,10 @@ void render_total_level_slider(OperatorWidget &widget,
 /**
  * The five rate sliders under the graph, labelled.
  *
- * Five 20 px columns and the gaps between them, which together with the TL
- * column beside them comes to hslider_width(). The graph above is wider than
- * this in the two-column layout, and the sliders deliberately do not follow
- * it -- widening them would claim they share the graph's axis, and a 20 px
- * column is the width these are grabbed at.
+ * Five columns and the gaps between them, which together with the TL column
+ * beside them comes to hslider_width(). The graph above is wider than this in
+ * the two-column layout, and the sliders deliberately do not follow it --
+ * widening them would claim they share the graph's axis.
  */
 void render_envelope_sliders(OperatorWidget &widget,
                              UIState::EnvelopeState &envelope_state) {
@@ -798,13 +795,13 @@ void render_envelope_sliders(OperatorWidget &widget,
 
   ImGui::BeginGroup();
   text_centered("AR", label_width);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   text_centered("DR", label_width);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   text_centered("SL", label_width);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   text_centered("SR", label_width);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   text_centered("RR", label_width);
   ImGui::EndGroup();
 
@@ -812,20 +809,20 @@ void render_envelope_sliders(OperatorWidget &widget,
   operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
                   &slider_size, nullptr, &envelope_state.attack_rate,
                   lit_from_outside(envelope_state, &Lit::attack_rate));
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::DecayRate, "##Decay Rate",
                   &slider_size, nullptr, &envelope_state.decay_rate,
                   lit_from_outside(envelope_state, &Lit::decay_rate));
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::SustainLevel,
                   "##Sustain Level", &slider_size, nullptr,
                   &envelope_state.sustain_level,
                   lit_from_outside(envelope_state, &Lit::sustain_level));
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::SustainRate, "##Sustain Rate",
                   &slider_size, nullptr, &envelope_state.sustain_rate,
                   lit_from_outside(envelope_state, &Lit::sustain_rate));
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::ReleaseRate, "##Release Rate",
                   &slider_size, nullptr, &envelope_state.release_rate,
                   lit_from_outside(envelope_state, &Lit::release_rate));
@@ -888,7 +885,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // sliders start to the right of it.
   const float block_left = ImGui::GetCursorPosX();
   render_total_level_slider(widget, envelope_state);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
 
   // The graph is what the panel is read for, so it spans what the TL column
   // leaves in every layout, with the rate sliders underneath. frame_padding()
