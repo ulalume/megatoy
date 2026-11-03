@@ -30,10 +30,11 @@ enum class MegatoyCol : int {
   OperatorBorderPrimary,
   /// Behind the Carrier label of an operator that reaches the output.
   CarrierBadge,
-  /// The envelope graph: the curve, the stretch a hovered or dragged slider
-  /// sets, the area under the release with and without RR's slider lit, the
-  /// grid and frame, the captions, the curves of sounding voices and their
-  /// cursors.
+  /// The envelope graph: its background, the curve, the stretch a hovered or
+  /// dragged slider sets, the area under the release with and without RR's
+  /// slider lit, the grid and frame, the captions, the curves of sounding
+  /// voices and their cursors.
+  EnvelopeBg,
   EnvelopeCurve,
   EnvelopeCurveActive,
   EnvelopeRelease,

@@ -495,6 +495,8 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   const ImVec2 canvas_min = ImGui::GetCursorScreenPos();
   const ImVec2 canvas_max(canvas_min.x + size.x, canvas_min.y + size.y);
 
+  draw_list->AddRectFilled(canvas_min, canvas_max,
+                           styles::color_u32(styles::MegatoyCol::EnvelopeBg));
   draw_list->AddRect(canvas_min, canvas_max,
                      styles::color_u32(styles::MegatoyCol::EnvelopeGrid));
 

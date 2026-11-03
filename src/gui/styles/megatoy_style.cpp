@@ -33,6 +33,7 @@ void derive_widget_colors() {
   set(MegatoyCol::OperatorBorderSelected, faded(highlight, 0.5f));
   set(MegatoyCol::OperatorBorderPrimary, highlight);
   set(MegatoyCol::CarrierBadge, imgui[ImGuiCol_FrameBgActive]);
+  set(MegatoyCol::EnvelopeBg, clear);
   set(MegatoyCol::EnvelopeCurve, imgui[ImGuiCol_Text]);
   set(MegatoyCol::EnvelopeCurveActive, imgui[ImGuiCol_FrameBgActive]);
   set(MegatoyCol::EnvelopeRelease, faded(imgui[ImGuiCol_Text], 0.3f));
