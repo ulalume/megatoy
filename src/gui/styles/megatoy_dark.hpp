@@ -4,7 +4,7 @@
 namespace ui::styles::megatoy_dark {
 
 /// The colors the theme is built from. Each widget color below is one of
-/// these, often at a lower alpha.
+/// these, often faded.
 struct Palette {
   /// Hovered, active and selected things.
   ImVec4 accent{0.92f, 0.18f, 0.29f, 1.00f};
@@ -28,8 +28,10 @@ struct Palette {
   ImVec4 warning{1.00f, 0.70f, 0.25f, 1.00f};
 };
 
-inline ImVec4 with_alpha(ImVec4 color, float alpha) {
-  color.w = alpha;
+/// `color` at `alpha` of its own opacity, so a translucent palette color
+/// stays translucent wherever it is used.
+inline ImVec4 faded(ImVec4 color, float alpha) {
+  color.w *= alpha;
   return color;
 }
 
@@ -38,68 +40,68 @@ inline void apply(const Palette &p = Palette{}) {
 
   const ImVec4 clear(0.00f, 0.00f, 0.00f, 0.00f);
   ImVec4 *colors = ImGui::GetStyle().Colors;
-  colors[ImGuiCol_Text] = with_alpha(p.text, 0.78f);
-  colors[ImGuiCol_TextDisabled] = with_alpha(p.text, 0.28f);
+  colors[ImGuiCol_Text] = faded(p.text, 0.78f);
+  colors[ImGuiCol_TextDisabled] = faded(p.text, 0.28f);
   colors[ImGuiCol_WindowBg] = p.base;
   colors[ImGuiCol_ChildBg] = clear;
   // Distinct from FrameBg, so a text input or slider inside a popup still
   // reads as a box.
-  colors[ImGuiCol_PopupBg] = with_alpha(p.surface, 0.98f);
+  colors[ImGuiCol_PopupBg] = faded(p.surface, 0.98f);
   colors[ImGuiCol_Border] = p.shade;
   colors[ImGuiCol_BorderShadow] = clear;
   colors[ImGuiCol_FrameBg] = p.surface;
-  colors[ImGuiCol_FrameBgHovered] = with_alpha(p.accent, 0.78f);
+  colors[ImGuiCol_FrameBgHovered] = faded(p.accent, 0.78f);
   colors[ImGuiCol_FrameBgActive] = p.accent;
   colors[ImGuiCol_TitleBg] = p.shade;
   colors[ImGuiCol_TitleBgActive] = p.shade;
-  colors[ImGuiCol_TitleBgCollapsed] = with_alpha(p.surface, 0.75f);
-  colors[ImGuiCol_MenuBarBg] = with_alpha(p.surface, 0.47f);
+  colors[ImGuiCol_TitleBgCollapsed] = faded(p.surface, 0.75f);
+  colors[ImGuiCol_MenuBarBg] = faded(p.surface, 0.47f);
   colors[ImGuiCol_ScrollbarBg] = p.shade;
   colors[ImGuiCol_ScrollbarGrab] = p.surface;
-  colors[ImGuiCol_ScrollbarGrabHovered] = with_alpha(p.accent, 0.78f);
+  colors[ImGuiCol_ScrollbarGrabHovered] = faded(p.accent, 0.78f);
   colors[ImGuiCol_ScrollbarGrabActive] = p.accent;
-  colors[ImGuiCol_CheckMark] = with_alpha(p.text, 0.78f);
-  colors[ImGuiCol_SliderGrab] = with_alpha(p.text, 0.20f);
-  colors[ImGuiCol_SliderGrabActive] = with_alpha(p.text, 0.39f);
-  colors[ImGuiCol_Button] = with_alpha(p.button, 0.14f);
-  colors[ImGuiCol_ButtonHovered] = with_alpha(p.accent, 0.86f);
+  colors[ImGuiCol_CheckMark] = faded(p.text, 0.78f);
+  colors[ImGuiCol_SliderGrab] = faded(p.text, 0.20f);
+  colors[ImGuiCol_SliderGrabActive] = faded(p.text, 0.39f);
+  colors[ImGuiCol_Button] = faded(p.button, 0.14f);
+  colors[ImGuiCol_ButtonHovered] = faded(p.accent, 0.86f);
   colors[ImGuiCol_ButtonActive] = p.accent;
-  colors[ImGuiCol_Header] = with_alpha(p.accent, 0.41f);
-  colors[ImGuiCol_HeaderHovered] = with_alpha(p.accent, 0.86f);
+  colors[ImGuiCol_Header] = faded(p.accent, 0.41f);
+  colors[ImGuiCol_HeaderHovered] = faded(p.accent, 0.86f);
   colors[ImGuiCol_HeaderActive] = p.accent;
-  colors[ImGuiCol_Separator] = with_alpha(p.line, 0.78f);
-  colors[ImGuiCol_SeparatorHovered] = with_alpha(p.accent, 0.78f);
+  colors[ImGuiCol_Separator] = faded(p.line, 0.78f);
+  colors[ImGuiCol_SeparatorHovered] = faded(p.accent, 0.78f);
   colors[ImGuiCol_SeparatorActive] = p.accent;
   colors[ImGuiCol_ResizeGrip] = p.surface;
-  colors[ImGuiCol_ResizeGripHovered] = with_alpha(p.accent, 0.78f);
+  colors[ImGuiCol_ResizeGripHovered] = faded(p.accent, 0.78f);
   colors[ImGuiCol_ResizeGripActive] = p.accent;
   colors[ImGuiCol_InputTextCursor] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-  colors[ImGuiCol_TabHovered] = with_alpha(p.accent, 0.78f);
+  colors[ImGuiCol_TabHovered] = faded(p.accent, 0.78f);
   colors[ImGuiCol_Tab] = p.surface;
-  colors[ImGuiCol_TabSelected] = with_alpha(p.accent, 0.41f);
-  colors[ImGuiCol_TabSelectedOverline] = with_alpha(p.accent, 0.41f);
+  colors[ImGuiCol_TabSelected] = faded(p.accent, 0.41f);
+  colors[ImGuiCol_TabSelectedOverline] = faded(p.accent, 0.41f);
   colors[ImGuiCol_TabDimmed] = p.surface;
   colors[ImGuiCol_TabDimmedSelected] = p.line;
   colors[ImGuiCol_TabDimmedSelectedOverline] = clear;
   colors[ImGuiCol_DockingPreview] = p.shade;
   colors[ImGuiCol_DockingEmptyBg] = p.base;
-  colors[ImGuiCol_PlotLines] = with_alpha(p.text, 0.63f);
+  colors[ImGuiCol_PlotLines] = faded(p.text, 0.63f);
   colors[ImGuiCol_PlotLinesHovered] = p.accent;
-  colors[ImGuiCol_PlotHistogram] = with_alpha(p.text, 0.63f);
+  colors[ImGuiCol_PlotHistogram] = faded(p.text, 0.63f);
   colors[ImGuiCol_PlotHistogramHovered] = p.accent;
   colors[ImGuiCol_TableHeaderBg] = ImVec4(0.19f, 0.19f, 0.20f, 1.00f);
   colors[ImGuiCol_TableBorderStrong] = p.line;
   colors[ImGuiCol_TableBorderLight] = ImVec4(0.23f, 0.23f, 0.25f, 1.00f);
   colors[ImGuiCol_TableRowBg] = clear;
-  colors[ImGuiCol_TableRowBgAlt] = with_alpha(p.shade, 0.80f);
+  colors[ImGuiCol_TableRowBgAlt] = faded(p.shade, 0.80f);
   colors[ImGuiCol_TextLink] = p.text;
-  colors[ImGuiCol_TextSelectedBg] = with_alpha(p.accent, 0.43f);
+  colors[ImGuiCol_TextSelectedBg] = faded(p.accent, 0.43f);
   colors[ImGuiCol_TreeLines] = ImVec4(0.43f, 0.43f, 0.50f, 0.50f);
   colors[ImGuiCol_DragDropTarget] = p.accent;
   colors[ImGuiCol_NavCursor] = p.accent;
   colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
   colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
-  colors[ImGuiCol_ModalWindowDimBg] = with_alpha(p.surface, 0.73f);
+  colors[ImGuiCol_ModalWindowDimBg] = faded(p.surface, 0.73f);
 
   ImVec4 *megatoy = ::ui::styles::mutable_style().colors;
   const auto at = [](MegatoyCol col) { return static_cast<int>(col); };
@@ -115,7 +117,7 @@ inline void apply(const Palette &p = Palette{}) {
   megatoy[at(MegatoyCol::PianoWhiteKeyPressed)] = p.accent;
   megatoy[at(MegatoyCol::PianoBlackKey)] = p.black_key;
   megatoy[at(MegatoyCol::PianoBlackKeyPressed)] = p.accent;
-  megatoy[at(MegatoyCol::ModalBg)] = with_alpha(p.base, 0.98f);
+  megatoy[at(MegatoyCol::ModalBg)] = faded(p.base, 0.98f);
   ::ui::styles::derive_widget_colors();
 }
 
