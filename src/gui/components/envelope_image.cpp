@@ -41,9 +41,6 @@ using ui::envelope::to_point;
 using ui::envelope::TraceVertex;
 using ui::envelope::VoiceCurveCache;
 
-/// A handle is a hint until it is wanted: dimmer than the line it sits on
-/// until the pointer is on it, when it takes the stretch's own colour.
-constexpr float kHandleIdleAlpha = 0.55f;
 
 /// How a sounding voice is drawn: the ghost curve well below the reference
 /// curve's weight, the cursor well above it, each older voice in a chord
@@ -638,12 +635,11 @@ void draw_envelope_handle(const ui::envelope::EnvelopeHandles &handles,
                           ui::envelope::HandleIndex handle,
                           UIState::EnvelopeState::SliderState state) {
   const ui::envelope::EnvelopeHandle &item = handles.items[handle];
-  const ImU32 color = color_from_slider_state(state);
   ImGui::GetWindowDrawList()->AddCircleFilled(
       to_imvec(item.pos), handles.metrics.radius,
-      state == UIState::EnvelopeState::SliderState::None
-          ? color_with_alpha(color, kHandleIdleAlpha)
-          : color);
+      styles::color_u32(state == UIState::EnvelopeState::SliderState::None
+                            ? styles::MegatoyCol::EnvelopeHandle
+                            : styles::MegatoyCol::EnvelopeHandleActive));
 }
 
 void end_envelope_image() { ImGui::EndChild(); }

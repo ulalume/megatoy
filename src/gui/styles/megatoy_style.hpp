@@ -32,13 +32,16 @@ enum class MegatoyCol : int {
   CarrierBadge,
   /// The envelope graph: its background, the curve, the stretch a hovered or
   /// dragged slider sets, the area under the release with and without RR's
-  /// slider lit, the grid and frame, the captions, the curves of sounding
-  /// voices and their cursors.
+  /// slider lit, the handles at rest and under the pointer or dragged, the
+  /// grid and frame, the captions, the curves of sounding voices and their
+  /// cursors.
   EnvelopeBg,
   EnvelopeCurve,
   EnvelopeCurveActive,
   EnvelopeRelease,
   EnvelopeReleaseActive,
+  EnvelopeHandle,
+  EnvelopeHandleActive,
   EnvelopeGrid,
   EnvelopeLabel,
   EnvelopeVoice,

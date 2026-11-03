@@ -39,6 +39,10 @@ void derive_widget_colors() {
   set(MegatoyCol::EnvelopeRelease, faded(imgui[ImGuiCol_Text], 0.3f));
   set(MegatoyCol::EnvelopeReleaseActive,
       faded(imgui[ImGuiCol_FrameBgActive], 0.3f));
+  // A handle is a hint until it is wanted: dimmer than the line it sits on
+  // until the pointer is on it.
+  set(MegatoyCol::EnvelopeHandle, faded(imgui[ImGuiCol_Text], 0.55f));
+  set(MegatoyCol::EnvelopeHandleActive, imgui[ImGuiCol_FrameBgActive]);
   set(MegatoyCol::EnvelopeGrid, imgui[ImGuiCol_Separator]);
   set(MegatoyCol::EnvelopeLabel, faded(imgui[ImGuiCol_Text], 0.6f));
   set(MegatoyCol::EnvelopeVoice, imgui[ImGuiCol_Text]);
