@@ -46,6 +46,18 @@ enum class MegatoyCol : int {
   EnvelopeLabel,
   EnvelopeVoice,
   EnvelopeVoiceCursor,
+  /// The Waveform window: the two areas' background and border, the
+  /// oscilloscope's grid, its left and right channels and both once the
+  /// output clips, and the spectrum's bars, grid and labels.
+  WaveformBg,
+  WaveformBorder,
+  WaveformGrid,
+  WaveformLeft,
+  WaveformRight,
+  WaveformClipped,
+  SpectrumBar,
+  SpectrumGrid,
+  SpectrumLabel,
   COUNT
 };
 

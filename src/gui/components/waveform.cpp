@@ -1,5 +1,5 @@
 #include "waveform.hpp"
-#include "gui/panel.hpp"
+#include "gui/app_window.hpp"
 
 #include "audio/scope_trigger.hpp"
 #include "gui/areas.hpp"
@@ -82,9 +82,9 @@ void draw_scope(const Panel &panel, const std::vector<float> &left,
                 const std::vector<float> &right, const std::vector<float> &mono,
                 bool clipped) {
   const float height = panel.max.y - panel.min.y;
-  const ImU32 grid = with_alpha(ImGui::GetColorU32(ImGuiCol_Border), 0.6f);
+  const ImU32 grid = styles::color_u32(styles::MegatoyCol::WaveformGrid);
 
-  // Zero line plus +/-0.5 markers.
+  // Zero line plus +/-0.5 markers, the markers fainter.
   for (float level : {-0.5f, 0.0f, 0.5f}) {
     const float y = panel.min.y + height * (0.5f - level * 0.5f);
     panel.draw_list->AddLine(ImVec2(panel.min.x, y), ImVec2(panel.max.x, y),
@@ -102,15 +102,17 @@ void draw_scope(const Panel &panel, const std::vector<float> &left,
   const std::size_t start =
       audio::find_trigger(mono.data(), mono.size(), window);
 
+  using styles::MegatoyCol;
+  const ImU32 clipped_color = styles::color_u32(MegatoyCol::WaveformClipped);
   const ImU32 left_color =
-      clipped ? styles::color_u32(styles::MegatoyCol::StatusWarning)
-              : ImGui::GetColorU32(ImGuiCol_PlotLines);
-  const ImU32 right_color =
-      clipped ? styles::color_u32(styles::MegatoyCol::StatusWarning)
-              : styles::color_u32(styles::MegatoyCol::TextHighlight);
+      clipped ? clipped_color : styles::color_u32(MegatoyCol::WaveformLeft);
+  // Clipped, the right channel stays fainter than the left, the way its own
+  // colour usually makes it.
+  const ImU32 right_color = clipped
+                                ? with_alpha(clipped_color, 0.75f)
+                                : styles::color_u32(MegatoyCol::WaveformRight);
 
-  draw_channel(panel, right, start, window, mean_of(right),
-               with_alpha(right_color, 0.75f));
+  draw_channel(panel, right, start, window, mean_of(right), right_color);
   draw_channel(panel, left, start, window, mean_of(left), left_color);
 }
 
@@ -132,9 +134,8 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
   const float log_max = std::log10(nyquist);
   const float log_span = log_max - log_min;
 
-  const ImU32 grid = with_alpha(ImGui::GetColorU32(ImGuiCol_Border), 0.5f);
-  const ImU32 label =
-      with_alpha(styles::color_u32(styles::MegatoyCol::TextMuted), 0.9f);
+  const ImU32 grid = styles::color_u32(styles::MegatoyCol::SpectrumGrid);
+  const ImU32 label = styles::color_u32(styles::MegatoyCol::SpectrumLabel);
 
   auto x_for_hz = [&](float hz) {
     const float t =
@@ -193,8 +194,7 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
   // Below ~1 kHz the bins are wider than a pixel, leaving gaps; carry the
   // previous column's value across them.
   float carried = audio::SpectrumAnalyzer::kFloorDb;
-  const ImU32 fill =
-      with_alpha(ImGui::GetColorU32(ImGuiCol_PlotHistogram), 0.85f);
+  const ImU32 fill = styles::color_u32(styles::MegatoyCol::SpectrumBar);
   for (int column = 0; column < columns; ++column) {
     float db = peaks[static_cast<std::size_t>(column)];
     if (db <= audio::SpectrumAnalyzer::kFloorDb) {
@@ -224,7 +224,7 @@ void render_waveform(const char *title, WaveformContext &context) {
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(420.0f, 240.0f)),
                            ImGuiCond_FirstUseEver);
-  if (!ui::begin_panel(title, &ui_prefs.show_waveform)) {
+  if (!ui::begin_window(title, &ui_prefs.show_waveform)) {
     ImGui::End();
     return;
   }
@@ -248,13 +248,17 @@ void render_waveform(const char *title, WaveformContext &context) {
   const ImVec2 panel_size(std::max(32.0f, (available.x - spacing) * 0.5f),
                           std::max(32.0f, available.y));
 
-  const Panel scope_panel = begin_panel(panel_size, "##scope");
+  const ImU32 background = styles::color_u32(styles::MegatoyCol::WaveformBg);
+  const ImU32 border = styles::color_u32(styles::MegatoyCol::WaveformBorder);
+  const Panel scope_panel =
+      begin_panel(panel_size, "##scope", background, border);
   draw_scope(scope_panel, left, right, mono, clipped);
   end_panel(scope_panel);
 
   ImGui::SameLine();
 
-  const Panel spectrum_panel = begin_panel(panel_size, "##spectrum");
+  const Panel spectrum_panel =
+      begin_panel(panel_size, "##spectrum", background, border);
   draw_spectrum(spectrum_panel, context.spectrum, context.sample_rate);
   end_panel(spectrum_panel);
 
