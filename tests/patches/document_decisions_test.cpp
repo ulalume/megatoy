@@ -1,12 +1,12 @@
-#include "decision_test_environment.hpp"
 #include "patches/document_confirmation.hpp"
 #include "patches/save_controls.hpp"
+#include "session_test_environment.hpp"
 
 #include <string>
 
 namespace {
 
-void check_document(decision_tests::Environment &env,
+void check_document(session_tests::Environment &env,
                     patches::PatchDocument &document, bool in_place,
                     const std::string &label) {
   auto &session = env.session;
@@ -69,7 +69,7 @@ void check_document(decision_tests::Environment &env,
 }
 
 void test_document_flows() {
-  decision_tests::Environment env("document_decisions");
+  session_tests::Environment env("document_decisions");
   auto &session = env.session;
   CHECK(patches::close_document_decision(nullptr).action ==
         patches::CloseDocumentAction::Ignore);

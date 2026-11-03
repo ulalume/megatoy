@@ -469,11 +469,6 @@ endif()
 
 target_include_directories(megatoy PRIVATE ${CMAKE_BINARY_DIR})
 
-add_executable(subsystem_tests tests/subsystem_tests.cpp)
-target_link_libraries(subsystem_tests PRIVATE megatoy_core)
-
-add_test(NAME subsystem_tests COMMAND subsystem_tests)
-
 set(COMPILE_COMMANDS_BINARY "${CMAKE_BINARY_DIR}/compile_commands.json")
 set(COMPILE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/compile_commands.json")
 

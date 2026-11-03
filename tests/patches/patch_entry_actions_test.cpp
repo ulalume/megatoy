@@ -1,5 +1,5 @@
-#include "decision_test_environment.hpp"
 #include "patches/patch_entry_actions.hpp"
+#include "session_test_environment.hpp"
 
 namespace {
 
@@ -20,7 +20,7 @@ patches::EntryMenuCapabilities all_actions() {
 }
 
 void test_current_and_other_patches() {
-  decision_tests::Environment env("entry_actions");
+  session_tests::Environment env("entry_actions");
   auto &session = env.session;
   const auto path = env.folder / "lead.gin";
   CHECK(patches::write_patch({}, path));
@@ -84,7 +84,7 @@ void test_current_and_other_patches() {
 }
 
 void test_folders_and_containers() {
-  decision_tests::Environment env("entry_folder_actions");
+  session_tests::Environment env("entry_folder_actions");
   auto &session = env.session;
   auto folder = env.entry(env.folder, true);
   auto available = all_actions();
@@ -141,7 +141,7 @@ void test_folders_and_containers() {
 }
 
 void test_read_only_and_outside() {
-  decision_tests::Environment env("entry_read_only_actions");
+  session_tests::Environment env("entry_read_only_actions");
   auto &session = env.session;
   for (const auto &path :
        {env.directories.paths().builtin_presets_root / "init.dmp",
@@ -174,7 +174,7 @@ void test_read_only_and_outside() {
 }
 
 void test_read_only_workspace() {
-  decision_tests::Environment env("entry_read_only_workspace", true);
+  session_tests::Environment env("entry_read_only_workspace", true);
   auto &session = env.session;
   const auto path = env.folder / "lead.gin";
   CHECK(patches::write_patch({}, path));

@@ -1,4 +1,4 @@
-#include "../patches/decision_test_environment.hpp"
+#include "../patches/session_test_environment.hpp"
 #include "patches/patch_display.hpp"
 #include "patches/patch_lab_sources.hpp"
 
@@ -7,7 +7,7 @@
 namespace {
 
 void test_source_list() {
-  decision_tests::Environment env("lab_sources");
+  session_tests::Environment env("lab_sources");
   auto &session = env.session;
   session.repository().set_show_builtin_presets(false);
   CHECK(ui::build_entry_list(session.repository()).empty());
@@ -67,7 +67,7 @@ void test_source_list() {
 }
 
 void test_source_labels() {
-  decision_tests::Environment env("lab_source_labels");
+  session_tests::Environment env("lab_source_labels");
   const auto &repository = env.session.repository();
   patches::PatchEntry entry;
   CHECK(ui::patch_lab_entry_label(repository, entry) == "(unnamed patch)");
