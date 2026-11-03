@@ -248,9 +248,10 @@ void render_save_export_popups(patches::PatchSession &session,
   }
 #endif
 
-  // Escape cancels: overwriting destroys the file that is already there, so
-  // it only happens when it is asked for.
-  auto overwrite = begin_modal("Overwrite Confirmation", ModalDismiss::Escape);
+  // Escape or a click outside cancels: overwriting destroys the file that is
+  // already there, so it only happens when it is asked for.
+  auto overwrite =
+      begin_modal("Overwrite Confirmation", ModalDismiss::EscapeOrOutsideClick);
   if (overwrite.dismissed) {
     clear_pending_save_as(state);
   }

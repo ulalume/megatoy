@@ -20,9 +20,10 @@ void render_patch_drop_feedback(PatchDropContext &context) {
     drop.show_picker_for_multiple_instruments = false;
   }
 
-  // Escape cancels: picking nothing means the dropped file is not loaded,
-  // which is what Cancel does.
-  auto picker = begin_modal(kInstrumentPopupTitle, ModalDismiss::Escape);
+  // Escape or a click outside cancels: picking nothing means the dropped file
+  // is not loaded, which is what Cancel does.
+  auto picker =
+      begin_modal(kInstrumentPopupTitle, ModalDismiss::EscapeOrOutsideClick);
   if (picker.dismissed && context.cancel_selection) {
     context.cancel_selection();
   }

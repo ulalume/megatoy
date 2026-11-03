@@ -118,9 +118,10 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
 void render_confirmation_dialog(ConfirmationDialogContext &context) {
   auto &confirmation_state = context.state;
 
-  // Unsaved changes confirmation dialog. Escape stands in for Cancel; keeping
-  // the changes is the answer that loses nothing.
-  auto unsaved = begin_modal("Unsaved Changes", ModalDismiss::Escape);
+  // Unsaved changes confirmation dialog. Escape or a click outside stands in
+  // for Cancel; keeping the changes is the answer that loses nothing.
+  auto unsaved =
+      begin_modal("Unsaved Changes", ModalDismiss::EscapeOrOutsideClick);
   if (unsaved.dismissed) {
     // The flag has to go with it: the reopen at the bottom of this function
     // would otherwise put the dialog straight back up.
@@ -203,11 +204,12 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
 
   bool cancel_danger = false;
   bool confirm_danger = false;
-  // Escape cancels. Deleting is the destructive answer, so it is the one that
-  // has to be asked for explicitly.
-  auto danger_modal = danger.title.empty() ? ModalScope{}
-                                           : begin_modal(danger.title.c_str(),
-                                                         ModalDismiss::Escape);
+  // Escape or a click outside cancels. Deleting is the destructive answer, so
+  // it is the one that has to be asked for explicitly.
+  auto danger_modal = danger.title.empty()
+                          ? ModalScope{}
+                          : begin_modal(danger.title.c_str(),
+                                        ModalDismiss::EscapeOrOutsideClick);
   cancel_danger = danger_modal.dismissed;
   if (danger_modal.visible) {
     dialog_text(danger.message);

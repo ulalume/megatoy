@@ -13,7 +13,9 @@ enum class ModalDismiss {
   None,
   /// Escape, standing in for the modal's own cancel.
   Escape,
-  /// Escape or a click outside. For a modal that only shows things.
+  /// Escape or a click outside. For a modal that only shows things, or asks
+  /// a question whose cancel loses nothing -- not one being typed into,
+  /// where a stray click would throw the typing away.
   EscapeOrOutsideClick,
 };
 
