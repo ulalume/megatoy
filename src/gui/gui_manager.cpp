@@ -40,7 +40,7 @@ GuiManager::GuiManager(PreferenceManager &preferences)
       fullscreen_(false), windowed_pos_x_(0), windowed_pos_y_(0),
       windowed_width_(0), windowed_height_(0), first_frame_(true),
       first_end_frame_(false), pending_imgui_ini_update_(false),
-      imgui_ini_file_path_(), theme_(ui::styles::ThemeId::MegatoyDark),
+      imgui_ini_file_path_(), theme_(ui::styles::ThemeId::Megatoy),
       drop_user_pointer_(nullptr), drop_callback_(nullptr) {}
 
 GuiManager::~GuiManager() { shutdown(); }

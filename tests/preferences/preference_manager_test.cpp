@@ -40,7 +40,7 @@ void test_settings_are_persisted_without_waiting_for_destruction(
       (fs::path("Bass") / "warm.gin").generic_string());
   preferences.set_last_seen_version("v1.2.3");
   preferences.set_show_builtin_presets(false);
-  preferences.set_theme(ui::styles::ThemeId::MegatoyLight);
+  preferences.set_theme(ui::styles::ThemeId::ImGuiLight);
   const std::vector<OpenPatchRecord> records{{"warm.gin", true},
                                              {"cold.gin", false}};
   preferences.set_open_patches(records, 1);
@@ -55,7 +55,7 @@ void test_settings_are_persisted_without_waiting_for_destruction(
   CHECK(loaded.last_patch_path() == preferences.last_patch_path());
   CHECK(loaded.last_seen_version() == "v1.2.3");
   CHECK(!loaded.show_builtin_presets());
-  CHECK(loaded.theme() == ui::styles::ThemeId::MegatoyLight);
+  CHECK(loaded.theme() == ui::styles::ThemeId::ImGuiLight);
   CHECK(loaded.open_patches() == records);
   CHECK(loaded.load_preferences());
   CHECK(loaded.open_patches() == records);

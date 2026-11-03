@@ -132,6 +132,6 @@ struct PreferenceData {
   std::string last_seen_version;
   bool show_builtin_presets = true;
 
-  ui::styles::ThemeId theme = ui::styles::ThemeId::MegatoyDark;
+  ui::styles::ThemeId theme = ui::styles::ThemeId::Megatoy;
   UIPreferences ui_preferences;
 };
