@@ -35,6 +35,9 @@ void derive_widget_colors() {
   set(MegatoyCol::CarrierBadge, imgui[ImGuiCol_FrameBgActive]);
   set(MegatoyCol::EnvelopeCurve, imgui[ImGuiCol_Text]);
   set(MegatoyCol::EnvelopeCurveActive, imgui[ImGuiCol_FrameBgActive]);
+  set(MegatoyCol::EnvelopeRelease, faded(imgui[ImGuiCol_Text], 0.3f));
+  set(MegatoyCol::EnvelopeReleaseActive,
+      faded(imgui[ImGuiCol_FrameBgActive], 0.3f));
   set(MegatoyCol::EnvelopeGrid, imgui[ImGuiCol_Separator]);
   set(MegatoyCol::EnvelopeLabel, faded(imgui[ImGuiCol_Text], 0.6f));
   set(MegatoyCol::EnvelopeVoice, imgui[ImGuiCol_Text]);

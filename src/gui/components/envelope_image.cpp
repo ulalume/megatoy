@@ -41,8 +41,6 @@ using ui::envelope::to_point;
 using ui::envelope::TraceVertex;
 using ui::envelope::VoiceCurveCache;
 
-/// The wash under the release.
-constexpr float kFillAlpha = 0.30f;
 /// A handle is a hint until it is wanted: dimmer than the line it sits on
 /// until the pointer is on it, when it takes the stretch's own colour.
 constexpr float kHandleIdleAlpha = 0.55f;
@@ -260,7 +258,7 @@ void stroke_path(ImDrawList *draw_list, TracePath &path, const PlotArea &plot,
  * anti-aliased fill is off for the run so the quads meet without seams.
  */
 void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
-                       const PlotArea &plot, ImU32 color) {
+                       const PlotArea &plot, ImU32 fill) {
   const auto &points = curve.release.points;
   if (points.size() < 2) {
     return;
@@ -269,7 +267,6 @@ void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
   ui::envelope::build_trace_path(path.vertices, curve.release,
                                  curve.release_tail_slope, plot.span_ms);
   to_pixels(path, plot);
-  const ImU32 fill = color_with_alpha(color, kFillAlpha);
   const ImDrawListFlags saved_flags = draw_list->Flags;
   draw_list->Flags &= ~ImDrawListFlags_AntiAliasedFill;
   const size_t edges = path.pixels.size() < 2 ? 0 : path.pixels.size() - 1;
@@ -596,8 +593,12 @@ render_envelope_image(const ym2612::OperatorSettings &op,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
 
-  draw_release_area(draw_list, curve, plot,
-                    phase_color(colors, ym2612_eg::EgPhase::Release));
+  draw_release_area(
+      draw_list, curve, plot,
+      styles::color_u32(state.release_rate ==
+                                UIState::EnvelopeState::SliderState::None
+                            ? styles::MegatoyCol::EnvelopeRelease
+                            : styles::MegatoyCol::EnvelopeReleaseActive));
   draw_held_line(draw_list, curve, plot, colors);
   draw_level_markers(draw_list, curve, state, plot);
   // Over everything, so a cursor is never hidden under the curve it measures.
