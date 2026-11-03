@@ -5,6 +5,9 @@
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/layouts.hpp"
+#if defined(__APPLE__)
+#include "gui/mac_window_menu.hpp"
+#endif
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -62,6 +65,9 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     std::cerr << "Failed to initialize SDL3: " << SDL_GetError() << std::endl;
     return false;
   }
+#if defined(__APPLE__)
+  megatoy::gui::release_close_window_shortcut();
+#endif
 
   // Decide GL+GLSL versions
 #if defined(IMGUI_IMPL_OPENGL_ES2)
