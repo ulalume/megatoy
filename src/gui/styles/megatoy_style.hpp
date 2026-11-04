@@ -62,6 +62,10 @@ enum class MegatoyCol : int {
   PreviewBorder,
   /// Behind a Patch Editor window; the others take ImGuiCol_WindowBg.
   PatchEditorBg,
+  /// The bordered panes inside a dialog, such as About's license list and
+  /// text.
+  DialogPaneBg,
+  DialogPaneBorder,
   COUNT
 };
 

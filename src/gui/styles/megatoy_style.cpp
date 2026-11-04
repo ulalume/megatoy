@@ -58,6 +58,8 @@ void derive_widget_colors() {
   set(MegatoyCol::SpectrumLabel, faded(color(MegatoyCol::TextMuted), 0.9f));
   set(MegatoyCol::PreviewBorder, imgui[ImGuiCol_Separator]);
   set(MegatoyCol::PatchEditorBg, imgui[ImGuiCol_WindowBg]);
+  set(MegatoyCol::DialogPaneBg, imgui[ImGuiCol_ChildBg]);
+  set(MegatoyCol::DialogPaneBorder, imgui[ImGuiCol_Border]);
 }
 
 const ImVec4 &color(MegatoyCol col) {

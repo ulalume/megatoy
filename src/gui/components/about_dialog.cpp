@@ -290,6 +290,10 @@ void render_licenses(AboutModalState &state) {
                            style.ItemSpacing.x * 2.0f +
                            style.WindowPadding.x * 2.0f;
   const float height = ui::scale::px(240.0f);
+  ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                        styles::color(styles::MegatoyCol::DialogPaneBg));
+  ImGui::PushStyleColor(ImGuiCol_Border,
+                        styles::color(styles::MegatoyCol::DialogPaneBorder));
 
   if (ImGui::BeginChild("##license_list", ImVec2(list_width, height),
                         ImGuiChildFlags_Borders)) {
@@ -321,6 +325,7 @@ void render_licenses(AboutModalState &state) {
     ImGui::PopTextWrapPos();
   }
   ImGui::EndChild();
+  ImGui::PopStyleColor(2);
 }
 
 } // namespace
