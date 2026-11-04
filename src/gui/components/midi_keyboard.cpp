@@ -364,7 +364,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), false,
                         ImGuiWindowFlags_HorizontalScrollbar)) {
     const auto &notes = context.state.display_notes;
-    const float min_key_width = ui::scale::px(14.0f);
+    const float min_key_width = ui::scale::px(16.0f);
     // One pixel kept for the last key's right border.
     const float key_width =
         notes.empty() ? min_key_width
