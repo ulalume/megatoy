@@ -32,6 +32,10 @@ struct EnvelopeVoices {
   Voice items[6]{};
 };
 
+/// Whether the frame just drawn showed a voice on a graph, which moves on by
+/// the next one. Asked between frames, to keep drawing while it does.
+bool envelope_voices_moving();
+
 /// Turn the audio thread's publication into elapsed times and a recency
 /// order. Voices whose release finished long ago are dropped here.
 EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame);

@@ -6,6 +6,7 @@
 #include "audio/audio_command.hpp"
 #include "core/status.hpp"
 #include "drop_actions.hpp"
+#include "gui/components/envelope_image.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/history_shortcuts.hpp"
 #include "gui/ui_renderer.hpp"
@@ -76,12 +77,16 @@ bool run_frame(RuntimeContext &runtime) {
   services.gui_manager.poll_events();
 #else
   constexpr std::uint64_t kSignalTailFrames = AppServices::SampleRate / 10;
-  const bool waveform_is_live =
-      app_state.ui_state().prefs.show_waveform &&
-      services.audio_manager.scope_buffer().signal_within(kSignalTailFrames);
+  // A sounding voice moves along its envelope graph frame by frame, whether
+  // or not the waveform is shown.
+  const bool display_is_live =
+      (app_state.ui_state().prefs.show_waveform &&
+       services.audio_manager.scope_buffer().signal_within(
+           kSignalTailFrames)) ||
+      ui::envelope_voices_moving();
   const auto before_wait = platform::FrameScheduler::Clock::now();
   const auto wait = runtime.frame_scheduler.wait_before_frame(
-      before_wait, services.gui_manager.is_minimized(), waveform_is_live);
+      before_wait, services.gui_manager.is_minimized(), display_is_live);
   const bool received_event =
       services.gui_manager.poll_events(static_cast<int>(wait.count()));
   const auto frame_started = platform::FrameScheduler::Clock::now();

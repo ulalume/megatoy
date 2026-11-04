@@ -11,6 +11,7 @@
 #include <array>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -67,6 +68,50 @@ int &voice_build_budget() {
     budget = kVoiceBuildsPerFrame;
   }
   return budget;
+}
+
+/// The last ImGui frame that drew a sounding voice, or left one waiting for
+/// its curve.
+int &voices_drawn_frame() {
+  static int frame = -1;
+  return frame;
+}
+
+/**
+ * The audio clock as the voices are drawn against it, in samples.
+ *
+ * The audio clock only moves when a whole buffer has been rendered, and the
+ * buffers do not land in step with the frames: from one frame to the next it
+ * advances by none, one or several buffers. Read directly, a cursor moving at
+ * a steady pace would lurch. This one runs on the frame's own time instead and
+ * leans a tenth of the way toward the audio clock every frame, so it keeps
+ * the audio clock's pace without its steps. Never backwards, and a gap of
+ * more than a tenth of a second -- a restart, or frames that were not drawn --
+ * is jumped rather than eased over.
+ *
+ * Advanced once per ImGui frame however many editors ask.
+ */
+double display_clock(uint64_t audio_samples, double rate) {
+  using Clock = std::chrono::steady_clock;
+  static int frame = -1;
+  static Clock::time_point last_wall;
+  static double clock = 0.0;
+  const int now_frame = ImGui::GetFrameCount();
+  if (now_frame == frame) {
+    return clock;
+  }
+  const Clock::time_point wall = Clock::now();
+  const double audio = static_cast<double>(audio_samples);
+  if (frame < 0 || std::abs(audio - clock) > rate * 0.1) {
+    clock = audio;
+  } else {
+    const double run =
+        clock + std::chrono::duration<double>(wall - last_wall).count() * rate;
+    clock = std::max(clock, run + (audio - run) * 0.1);
+  }
+  frame = now_frame;
+  last_wall = wall;
+  return clock;
 }
 
 /// The colour each stretch of the curve is drawn in, indexed by the phase
@@ -390,18 +435,23 @@ void draw_warning(ImDrawList *draw_list, const std::string &warning,
 
 } // namespace
 
+bool envelope_voices_moving() {
+  return voices_drawn_frame() == ImGui::GetFrameCount();
+}
+
 EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   EnvelopeVoices out;
   const double rate =
       frame.sample_rate > 0 ? static_cast<double>(frame.sample_rate) : 44100.0;
   const double ms_per_sample = 1000.0 / rate;
 
-  // `now` is never behind a stamp, but saturating keeps the arithmetic safe
-  // across an engine restart, which puts the clock back to zero.
+  const double now = display_clock(frame.now_samples, rate);
+
+  // Saturating keeps the arithmetic safe across an engine restart, which puts
+  // the clock back to zero.
   const auto elapsed_ms = [&](uint64_t from) {
-    return frame.now_samples > from
-               ? static_cast<double>(frame.now_samples - from) * ms_per_sample
-               : 0.0;
+    const double stamp = static_cast<double>(from);
+    return now > stamp ? (now - stamp) * ms_per_sample : 0.0;
   };
 
   // Newest first: `sequence` counts key-ons across the whole allocator, so it
@@ -558,6 +608,9 @@ render_envelope_image(const ym2612::OperatorSettings &op,
     const EnvelopeCurve *voice_curve =
         slot.voices.get(op, ym2612_eg::NotePitch::from_midi(voice.midi_note),
                         curve, build_budget);
+    // From here the next frame draws something new: a curve built, or a
+    // cursor further along.
+    voices_drawn_frame() = ImGui::GetFrameCount();
     if (voice_curve == nullptr) {
       continue; // its curve is being built next frame
     }
