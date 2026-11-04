@@ -372,8 +372,12 @@ if(UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 endif()
 
 add_embedded_assets(megatoy
+# Shown in the About dialog.
+file(GLOB MEGATOY_LICENSE_TEXTS CONFIGURE_DEPENDS
+     "${CMAKE_SOURCE_DIR}/licenses/*.txt")
   EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/" "\\.txt$"
 )
+  EXTRA_FILES ${MEGATOY_LICENSE_TEXTS}
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set_target_properties(megatoy PROPERTIES SUFFIX ".html")

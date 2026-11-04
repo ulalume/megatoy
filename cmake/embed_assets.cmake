@@ -26,7 +26,9 @@ endfunction()
 function(add_embedded_assets target)
   set(options)
   set(oneValueArgs ASSET_DIR OUTPUT_DIR TARGET_NAME REGISTRY_FILE)
-  set(multiValueArgs EXCLUDE_PATTERNS)
+  # EXTRA_FILES: files outside ASSET_DIR, registered by their path from the
+  # source directory.
+  set(multiValueArgs EXCLUDE_PATTERNS EXTRA_FILES)
   cmake_parse_arguments(EMBED "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   if(NOT TARGET ${target})
@@ -73,14 +75,25 @@ function(add_embedded_assets target)
   set(EMBEDDED_REGISTRY_INCLUDES)
   set(EMBEDDED_REGISTRY_ENTRIES)
 
+  set(EMBEDDED_SOURCES)
   foreach(relative_path ${EMBEDDABLE_ASSET_FILES})
-    file(TO_CMAKE_PATH "${relative_path}" cmake_style_relative_path)
+    list(APPEND EMBEDDED_SOURCES "${EMBED_ASSET_DIR}/${relative_path}")
+  endforeach()
+  list(APPEND EMBEDDED_SOURCES ${EMBED_EXTRA_FILES})
+
+  foreach(source_path ${EMBEDDED_SOURCES})
+    file(TO_CMAKE_PATH "${source_path}" source_path)
+    cmake_path(IS_PREFIX EMBED_ASSET_DIR "${source_path}" NORMALIZE in_asset_dir)
+    if(in_asset_dir)
+      file(RELATIVE_PATH cmake_style_relative_path "${EMBED_ASSET_DIR}" "${source_path}")
+    else()
+      file(RELATIVE_PATH cmake_style_relative_path "${CMAKE_SOURCE_DIR}" "${source_path}")
+    endif()
 
     megatoy_sanitize_identifier("${cmake_style_relative_path}" identifier)
     set(output_file "${EMBED_OUTPUT_DIR}/${identifier}.hpp")
 
-    megatoy_embed_resource("${EMBED_ASSET_DIR}/${cmake_style_relative_path}"
-                           "${output_file}" "${identifier}")
+    megatoy_embed_resource("${source_path}" "${output_file}" "${identifier}")
 
     list(APPEND EMBEDDED_HEADERS "${output_file}")
     list(APPEND EMBEDDED_REGISTRY_INCLUDES
