@@ -306,19 +306,14 @@ void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
 }
 
 /// TL and SL have no segment of their own: they are levels, so they light up
-/// as a rule across the graph at the level they set. SL's is dashed.
+/// as a dashed rule across the graph at the level they set.
 void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
                         const UIState::EnvelopeState &state,
                         const PlotArea &plot) {
   const float thickness = ui::scale::px(1.0f);
+  const float dash = ui::scale::px(3.0f);
   const auto rule = [&](double out, ImU32 color) {
     const float y = plot.y_of(out);
-    draw_list->AddLine(ImVec2(plot.min.x, y), ImVec2(plot.max.x, y), color,
-                       thickness);
-  };
-  const auto dashed_rule = [&](double out, ImU32 color) {
-    const float y = plot.y_of(out);
-    const float dash = ui::scale::px(3.0f);
     for (float x = plot.min.x; x < plot.max.x; x += dash * 2.0f) {
       draw_list->AddLine(ImVec2(x, y),
                          ImVec2(std::min(x + dash, plot.max.x), y), color,
@@ -330,8 +325,7 @@ void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
     rule(curve.peak_out, color_from_slider_state(state.total_level));
   }
   if (state.sustain_level != UIState::EnvelopeState::SliderState::None) {
-    dashed_rule(curve.sustain_out,
-                color_from_slider_state(state.sustain_level));
+    rule(curve.sustain_out, color_from_slider_state(state.sustain_level));
   }
 }
 
