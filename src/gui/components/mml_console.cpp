@@ -3,6 +3,7 @@
 #include "gui/app_window.hpp"
 #include "gui/areas.hpp"
 #include "gui/clipboard.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include <cstring>
 #include <imgui.h>
@@ -31,8 +32,10 @@ void render_mml_console(const char *title, MmlConsoleContext &context) {
   if (ImGui::Button("Copy to Clipboard")) {
     platform::clipboard::copy_text(mml_c);
   }
-  // panel (border)
+  ImGui::PushStyleColor(ImGuiCol_Border,
+                        styles::color(styles::MegatoyCol::PanelBorder));
   ImGui::BeginChild("MML Panel", ImVec2(0, 0), true);
+  ImGui::PopStyleColor();
   ImGui::Text("%s", mml_c);
   ImGui::EndChild();
 

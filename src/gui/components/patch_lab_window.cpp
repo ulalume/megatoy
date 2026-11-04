@@ -3,6 +3,7 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "imgui_internal.h"
@@ -505,7 +506,12 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   }
   ImGui::EndChild();
   ImGui::SameLine();
-  if (ImGui::BeginChild("##PatchLabResults", ImVec2(0, 0), true)) {
+  ImGui::PushStyleColor(ImGuiCol_Border,
+                        styles::color(styles::MegatoyCol::PanelBorder));
+  const bool results_open =
+      ImGui::BeginChild("##PatchLabResults", ImVec2(0, 0), true);
+  ImGui::PopStyleColor();
+  if (results_open) {
     render_result_list(context, state);
   }
   ImGui::EndChild();
