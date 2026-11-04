@@ -11,6 +11,7 @@
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chord_detector.h>
+#include <cmath>
 #include <imgui.h>
 #include <string>
 #include <vector>
@@ -385,13 +386,15 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       bool is_pressed =
           context.key_is_pressed ? context.key_is_pressed(note) : false;
 
-      ImVec2 key_min(x, y);
-      ImVec2 key_max(x + key_width, y + key_height);
+      // On whole pixels, so the borders do not blur across two.
+      ImVec2 key_min(std::floor(x), y);
+      ImVec2 key_max(std::floor(x + key_width), y + key_height);
 
       ImGui::SetCursorScreenPos(key_min);
       ImGui::PushID(note.midi_note());
 
-      ImGui::InvisibleButton("white_key", ImVec2(key_width, key_height));
+      ImGui::InvisibleButton("white_key",
+                             ImVec2(key_max.x - key_min.x, key_height));
 
       bool key_is_active = ImGui::IsItemActive();
       bool key_was_deactivated = ImGui::IsItemDeactivated();
@@ -413,7 +416,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                       ? (is_pressed ? white_key_pressed_col : white_key_col)
                       : (is_pressed ? black_key_pressed_col : black_key_col);
       draw_list->AddRectFilled(key_min, key_max, col);
-      draw_list->AddRect(key_min, key_max, key_border_col, 0, 0, 1.0f);
+      // One pixel further right, onto the next key's left edge, where that
+      // key's own border draws over it again: neighbours share one line.
+      draw_list->AddRect(key_min, ImVec2(key_max.x + 1.0f, key_max.y),
+                         key_border_col, 0, 0, 1.0f);
 
       if (is_key_mapped) {
         ImVec2 key_max_mapped(x + key_width, y + 2);
