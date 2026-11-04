@@ -1,6 +1,7 @@
 #include "operator_editor.hpp"
-#include "envelope_image.hpp"
 #include "core/status.hpp"
+#include "envelope_image.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/envelope/envelope_handles.hpp"
@@ -47,7 +48,7 @@ update_slider_state(UIState::EnvelopeState::SliderState &slider_state) {
 namespace {
 
 // Room between an operator's border and its contents.
-float frame_padding() { return ui::scale::px(6.0f); }
+float frame_padding() { return ui::scale::px(8.0f); }
 // Clearance either side of the header where the top border breaks for it.
 float header_gap() { return ui::scale::px(4.0f); }
 
@@ -58,9 +59,7 @@ float total_level_slider_height() {
 }
 
 /// What the TL column costs the graph beside it: one slider and the gap.
-float total_level_column_width() {
-  return vslider_width() + ImGui::GetStyle().ItemSpacing.x;
-}
+float total_level_column_width() { return vslider_width() + vslider_gap(); }
 
 ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
   return context.prefs.multi_operator_edit_absolute
@@ -91,49 +90,86 @@ void note_operator_edit(OperatorSelection &selection, int slot) {
   }
 }
 
-/**
- * Border colour by state. Selected is the lead's highlight faded rather than
- * a grey, which sat too close to the unselected borders to register. Hover
- * only shows on unselected operators, where it advertises the click.
- */
+/// Border colour by state. Hover only shows on unselected operators, where
+/// it advertises the click.
 ImU32 operator_frame_color(bool selected, bool is_primary, bool hovered) {
-  const ImVec4 highlight = styles::color(styles::MegatoyCol::TextHighlight);
+  using styles::MegatoyCol;
   if (is_primary) {
-    return ImGui::GetColorU32(highlight);
+    return styles::color_u32(MegatoyCol::OperatorBorderPrimary);
   }
   if (selected) {
-    return ImGui::GetColorU32(
-        ImVec4(highlight.x, highlight.y, highlight.z, highlight.w * 0.5f));
+    return styles::color_u32(MegatoyCol::OperatorBorderSelected);
   }
   if (hovered) {
-    return ImGui::GetColorU32(ImGuiCol_SeparatorHovered);
+    return styles::color_u32(MegatoyCol::OperatorBorderHovered);
   }
-  return ImGui::GetColorU32(ImGuiCol_Border);
+  return styles::color_u32(MegatoyCol::OperatorBorder);
+}
+
+/// Fill colour by state, hover again only on unselected operators.
+ImU32 operator_fill_color(bool selected, bool hovered) {
+  using styles::MegatoyCol;
+  if (selected) {
+    return styles::color_u32(MegatoyCol::OperatorBgSelected);
+  }
+  if (hovered) {
+    return styles::color_u32(MegatoyCol::OperatorBgHovered);
+  }
+  return styles::color_u32(MegatoyCol::OperatorBg);
+}
+
+/// The frame's fill, drawn before the contents so it lies under them. Their
+/// size and whether one of them is hovered are only known after, so the
+/// last frame's are used.
+void draw_operator_fill(const OperatorEditState &state, int slot,
+                        const ImVec2 &block_min, const ImVec2 &frame_min,
+                        float frame_width) {
+  if (state.frame_height <= 0.0f) {
+    return;
+  }
+  const ImVec2 frame_max(frame_min.x + frame_width,
+                         frame_min.y + state.frame_height);
+  const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+                       ImGui::IsMouseHoveringRect(block_min, frame_max) &&
+                       !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive();
+  const ImU32 fill =
+      operator_fill_color(state.selection.contains(slot), hovered);
+  if ((fill & IM_COL32_A_MASK) == 0) {
+    return;
+  }
+  ImGui::GetWindowDrawList()->AddRectFilled(frame_min, frame_max, fill);
 }
 
 /**
- * The frame, cut open at the corner the header sits across: the top border
- * resumes past the label, the left border below the checkbox.
+ * The frame, cut open at the corners the header and the Carrier badge sit
+ * across: the top border runs from past the label to short of the badge, the
+ * left border starts below the checkbox and the right one below the badge.
  *
  * The half-pixel inset is what AddRect does internally; without it the line
  * falls between two pixels and blurs.
  */
 void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
-                         float top_resume_x, float left_resume_y, ImU32 color) {
+                         float top_resume_x, float top_end_x,
+                         float left_resume_y, float right_resume_y,
+                         ImU32 color) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float left = min.x + 0.5f;
   const float top = min.y + 0.5f;
   const float right = max.x - 0.5f;
   const float bottom = max.y - 0.5f;
 
-  if (top_resume_x < right) {
-    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(right, top), color);
+  const float top_end = std::min(top_end_x, right);
+  if (top_resume_x < top_end) {
+    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(top_end, top), color);
   }
   if (left_resume_y < bottom) {
     draw_list->AddLine(ImVec2(left, left_resume_y), ImVec2(left, bottom),
                        color);
   }
-  draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
+  if (right_resume_y < bottom) {
+    draw_list->AddLine(ImVec2(right, std::max(top, right_resume_y)),
+                       ImVec2(right, bottom), color);
+  }
   draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
 }
 
@@ -208,7 +244,8 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
   const auto labels = field_labels(field);
 
   // The handle on the graph and the slider set the same register, so pointing
-  // at either shows on both.
+  // at either shows on both -- as does pointing at the same field on another
+  // selected operator, which the change spreads to.
   const bool lit_elsewhere =
       handle_lit != UIState::EnvelopeState::SliderState::None;
   if (lit_elsewhere) {
@@ -310,6 +347,17 @@ struct HandleDrag {
 HandleDrag &handle_drag() {
   static HandleDrag drag;
   return drag;
+}
+
+using Lit = UIState::EnvelopeState::HandleLit;
+using SliderState = UIState::EnvelopeState::SliderState;
+
+/// How a field is lit from outside its slider: by its handle on the graph,
+/// or by the same field on another selected operator.
+SliderState lit_from_outside(const UIState::EnvelopeState &state,
+                             SliderState Lit::*field) {
+  return UIState::EnvelopeState::stronger(state.handles.*field,
+                                          state.echoed.*field);
 }
 
 /// Where a field lights up on the graph, or nullptr for one the graph says
@@ -475,7 +523,8 @@ HandleTouch operator_handle(OperatorWidget &widget,
 /// which is what holds the time axis still.
 bool render_envelope_handles(OperatorWidget &widget,
                              const ui::envelope::EnvelopeHandles &handles,
-                             UIState::EnvelopeState::HandleLit &handle_states) {
+                             UIState::EnvelopeState::HandleLit &handle_states,
+                             UIState::EnvelopeState::HandleLit echoed) {
   constexpr size_t count = std::size(kHandleSpecs);
   const ui::envelope::HandleIndex nearest = ui::envelope::nearest_handle(
       handles, ui::envelope::to_point(ImGui::GetIO().MousePos));
@@ -493,7 +542,18 @@ bool render_envelope_handles(OperatorWidget &widget,
       continue;
     }
     active |= touched[i].lit == UIState::EnvelopeState::SliderState::Active;
-    draw_envelope_handle(handles, kHandleSpecs[i].handle, touched[i].lit);
+    // Lit too when another selected operator is changing what it stands for.
+    SliderState lit = touched[i].lit;
+    const HandleAxes axes = axes_of(kHandleSpecs[i].handle);
+    for (const auto &field : {axes.across, axes.down}) {
+      if (!field) {
+        continue;
+      }
+      if (const auto *from = slider_state_for(echoed, *field)) {
+        lit = UIState::EnvelopeState::stronger(lit, *from);
+      }
+    }
+    draw_envelope_handle(handles, kHandleSpecs[i].handle, lit);
   }
   return active;
 }
@@ -540,6 +600,7 @@ struct OperatorHeader {
   float end_x;
   /// The name takes clicks for dragging, so it reports them to select with.
   bool name_clicked;
+  bool is_carrier;
 };
 
 /// Inside an open drag source: what is carried and the tooltip that follows
@@ -594,6 +655,26 @@ void drag_from_background(OperatorEditState &state,
   }
 }
 
+/// The Carrier badge, as tall as the checkbox across the other end of the
+/// top border, its right edge at `right`. Returns its left edge.
+float draw_carrier_badge(float right, float top) {
+  constexpr const char *kBadge = "Carrier";
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const ImVec2 text_size = ImGui::CalcTextSize(kBadge);
+  const ImVec2 size(text_size.x + style.FramePadding.x * 2.0f,
+                    ImGui::GetFrameHeight());
+  const ImVec2 min(right - size.x, top);
+  const ImVec2 max(right, top + size.y);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  draw_list->AddRectFilled(min, max,
+                           styles::color_u32(styles::MegatoyCol::CarrierBadge),
+                           size.y * 0.5f);
+  draw_list->AddText(
+      ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y),
+      ImGui::GetColorU32(ImGuiCol_Text), kBadge);
+  return min.x;
+}
+
 /// The operator's enable checkbox and name, sitting in the frame's top
 /// border.
 OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
@@ -609,16 +690,11 @@ OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
   operator_checkbox(widget, "##Operator Enable", "Enable",
                     &ym2612::OperatorSettings::enable, false);
   ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-  if (is_modulator) {
-    ImGui::TextUnformatted(operator_slot_label(slot).c_str());
-  } else {
-    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive),
-                       "%s (Carrier)", operator_slot_label(slot).c_str());
-  }
+  ImGui::TextUnformatted(operator_slot_label(slot).c_str());
   const bool name_clicked =
       operator_name_drag_source(widget.editor.document, slot);
   ImGui::EndGroup();
-  return {ImGui::GetItemRectMax().x, name_clicked};
+  return {ImGui::GetItemRectMax().x, name_clicked, !is_modulator};
 }
 
 /// The whole frame takes an operator dropped from another one: swapped, or
@@ -698,18 +774,17 @@ void render_total_level_slider(OperatorWidget &widget,
   text_centered("TL", slider_size.x);
   operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
                   &slider_size, nullptr, &envelope_state.total_level,
-                  envelope_state.handles.total_level);
+                  lit_from_outside(envelope_state, &Lit::total_level));
   ImGui::EndGroup();
 }
 
 /**
  * The five rate sliders under the graph, labelled.
  *
- * Five 20 px columns and the gaps between them, which together with the TL
- * column beside them comes to hslider_width(). The graph above is wider than
- * this in the two-column layout, and the sliders deliberately do not follow
- * it -- widening them would claim they share the graph's axis, and a 20 px
- * column is the width these are grabbed at.
+ * Five columns and the gaps between them, which together with the TL column
+ * beside them comes to hslider_width(). The graph above is wider than this in
+ * the two-column layout, and the sliders deliberately do not follow it --
+ * widening them would claim they share the graph's axis.
  */
 void render_envelope_sliders(OperatorWidget &widget,
                              UIState::EnvelopeState &envelope_state) {
@@ -720,37 +795,37 @@ void render_envelope_sliders(OperatorWidget &widget,
 
   ImGui::BeginGroup();
   text_centered("AR", label_width);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   text_centered("DR", label_width);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   text_centered("SL", label_width);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   text_centered("SR", label_width);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
   text_centered("RR", label_width);
   ImGui::EndGroup();
 
   ImGui::BeginGroup();
   operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
                   &slider_size, nullptr, &envelope_state.attack_rate,
-                  envelope_state.handles.attack_rate);
-  ImGui::SameLine();
+                  lit_from_outside(envelope_state, &Lit::attack_rate));
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::DecayRate, "##Decay Rate",
                   &slider_size, nullptr, &envelope_state.decay_rate,
-                  envelope_state.handles.decay_rate);
-  ImGui::SameLine();
+                  lit_from_outside(envelope_state, &Lit::decay_rate));
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::SustainLevel,
                   "##Sustain Level", &slider_size, nullptr,
                   &envelope_state.sustain_level,
-                  envelope_state.handles.sustain_level);
-  ImGui::SameLine();
+                  lit_from_outside(envelope_state, &Lit::sustain_level));
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::SustainRate, "##Sustain Rate",
                   &slider_size, nullptr, &envelope_state.sustain_rate,
-                  envelope_state.handles.sustain_rate);
-  ImGui::SameLine();
+                  lit_from_outside(envelope_state, &Lit::sustain_rate));
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::ReleaseRate, "##Release Rate",
                   &slider_size, nullptr, &envelope_state.release_rate,
-                  envelope_state.handles.release_rate);
+                  lit_from_outside(envelope_state, &Lit::release_rate));
   ImGui::EndGroup();
 
   ImGui::EndGroup(); // End ADSR slider block
@@ -810,7 +885,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // sliders start to the right of it.
   const float block_left = ImGui::GetCursorPosX();
   render_total_level_slider(widget, envelope_state);
-  ImGui::SameLine();
+  ImGui::SameLine(0.0f, vslider_gap());
 
   // The graph is what the panel is read for, so it spans what the TL column
   // leaves in every layout, with the rate sliders underneath. frame_padding()
@@ -825,8 +900,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // Inside the graph's own window, which render_envelope_image leaves open:
   // an item anywhere else could not be hovered over the graph.
   envelope_state.handles = UIState::EnvelopeState::HandleLit{};
-  envelope_state.handle_active =
-      render_envelope_handles(widget, handles, envelope_state.handles);
+  envelope_state.handle_active = render_envelope_handles(
+      widget, handles, envelope_state.handles, envelope_state.echoed);
   end_envelope_image();
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
@@ -850,7 +925,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
                                           : get_ssg_preview_off_texture()) {
     if (preview->valid()) {
-      ImGui::Image(preview->texture_id, ui::scale::px(preview->size));
+      preview_image(*preview, ImGui::GetFrameHeight());
     }
   }
   ImGui::SameLine();
@@ -919,11 +994,18 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // sections above rather than indented into the frame.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
+  draw_operator_fill(state, slot, block_min, frame_min, frame_width);
   const OperatorHeader header =
       render_operator_header(widget, patch.instrument.algorithm, block_min);
   const float top_resume_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
   const float left_resume_y = block_min.y + header_height + header_gap();
+  const float frame_right = frame_min.x + frame_width;
+  const float top_end_x =
+      header.is_carrier
+          ? draw_carrier_badge(frame_right, block_min.y) - header_gap()
+          : frame_right;
+  const float right_resume_y = header.is_carrier ? left_resume_y : frame_min.y;
 
   ImGui::SetCursorScreenPos(
       ImVec2(frame_min.x + frame_padding(),
@@ -979,7 +1061,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     state.click_claimed = true;
     ImGui::OpenPopup("##operator_menu");
   }
-  if (ImGui::BeginPopup("##operator_menu")) {
+  if (ui::begin_popup("##operator_menu")) {
     OperatorCommandContext commands{patch.instrument, state,
                                     context.operator_clipboard,
                                     [&context](const std::string &label) {
@@ -987,18 +1069,59 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                                     },
                                     [&context]() { context.commit_history(); }};
     render_operator_command_items(commands);
-    ImGui::EndPopup();
+    ui::end_popup();
   }
 
-  draw_operator_frame(frame_min, frame_max, top_resume_x, left_resume_y,
-                      receiving
-                          ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
-                          : operator_frame_color(
-                                state.selection.contains(slot),
-                                state.selection.primary == slot,
-                                background_hovered));
+  draw_operator_frame(
+      frame_min, frame_max, top_resume_x, top_end_x, left_resume_y,
+      right_resume_y,
+      receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
+                : operator_frame_color(state.selection.contains(slot),
+                                       state.selection.primary == slot,
+                                       background_hovered));
 
   ImGui::PopID();
+}
+
+void echo_selection_highlights(PatchEditorContext &context) {
+  constexpr SliderState UIState::EnvelopeState::*kOwn[] = {
+      &UIState::EnvelopeState::total_level,
+      &UIState::EnvelopeState::attack_rate,
+      &UIState::EnvelopeState::decay_rate,
+      &UIState::EnvelopeState::sustain_level,
+      &UIState::EnvelopeState::sustain_rate,
+      &UIState::EnvelopeState::release_rate,
+  };
+  constexpr SliderState Lit::*kLit[] = {
+      &Lit::total_level,   &Lit::attack_rate,  &Lit::decay_rate,
+      &Lit::sustain_level, &Lit::sustain_rate, &Lit::release_rate,
+  };
+  static_assert(std::size(kOwn) == std::size(kLit));
+
+  const OperatorSelection &selection = context.operator_edit().selection;
+  Lit lit[4];
+  for (int slot = 0; slot < 4; ++slot) {
+    const auto &state = context.envelope_state(slot);
+    for (std::size_t i = 0; i < std::size(kLit); ++i) {
+      lit[slot].*kLit[i] = UIState::EnvelopeState::stronger(
+          state.*kOwn[i], state.handles.*kLit[i]);
+    }
+  }
+  for (int slot = 0; slot < 4; ++slot) {
+    Lit echoed;
+    if (selection.contains(slot)) {
+      for (int other = 0; other < 4; ++other) {
+        if (other == slot || !selection.contains(other)) {
+          continue;
+        }
+        for (const auto field : kLit) {
+          echoed.*field = UIState::EnvelopeState::stronger(echoed.*field,
+                                                           lit[other].*field);
+        }
+      }
+    }
+    context.envelope_state(slot).echoed = echoed;
+  }
 }
 
 } // namespace ui

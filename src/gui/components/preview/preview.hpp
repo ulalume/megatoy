@@ -18,6 +18,11 @@ struct PreviewTexture {
   }
 };
 
+/// The image, at the interface scale, with the theme's frame drawn around its
+/// edge. A taller `frame_height` centers the image in a frame that much tall,
+/// with the same margin at the sides.
+void preview_image(const PreviewTexture &preview, float frame_height = 0.0f);
+
 class PreviewImageList {
 public:
   explicit PreviewImageList(std::vector<std::string> filenames);

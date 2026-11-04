@@ -1,10 +1,14 @@
 #include "gui_manager.hpp"
 #include "fonts/icon_font.hpp"
+#include "gui/app_window.hpp"
 #include "gui/areas.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/layouts.hpp"
+#if defined(__APPLE__)
+#include "gui/mac_window_menu.hpp"
+#endif
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -37,7 +41,7 @@ GuiManager::GuiManager(PreferenceManager &preferences)
       fullscreen_(false), windowed_pos_x_(0), windowed_pos_y_(0),
       windowed_width_(0), windowed_height_(0), first_frame_(true),
       first_end_frame_(false), pending_imgui_ini_update_(false),
-      imgui_ini_file_path_(), theme_(ui::styles::ThemeId::MegatoyDark),
+      imgui_ini_file_path_(), theme_(ui::styles::ThemeId::Megatoy),
       drop_user_pointer_(nullptr), drop_callback_(nullptr) {}
 
 GuiManager::~GuiManager() { shutdown(); }
@@ -62,6 +66,9 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     std::cerr << "Failed to initialize SDL3: " << SDL_GetError() << std::endl;
     return false;
   }
+#if defined(__APPLE__)
+  megatoy::gui::release_close_window_shortcut();
+#endif
 
   // Decide GL+GLSL versions
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -226,7 +233,9 @@ void GuiManager::begin_frame() {
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
 
+  ui::push_window_tab_padding();
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
+  ImGui::PopStyleVar();
 
   // An arrangement saved before the areas were fixed may have views where
   // they no longer go; it is laid out afresh.

@@ -1,7 +1,8 @@
 #include "patch_tree_view.hpp"
+#include "gui/components/menu_rows.hpp"
+#include "gui/styles/megatoy_style.hpp"
 
 #include "common.hpp"
-#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_selector_shared.hpp"
 #include "patches/patch_tree_flatten.hpp"
@@ -161,9 +162,7 @@ void handle_row_keys(PatchSelectorContext &context,
 /// A row's height: a text line and the margin around it, all of which the row
 /// answers the mouse in. Rows are set with no spacing between them, so their
 /// highlights meet.
-float row_margin() {
-  return ImGui::GetStyle().ItemSpacing.y + ui::scale::px(4.0f);
-}
+float row_margin() { return ui::list_row_spacing(); }
 
 float row_height() { return ImGui::GetTextLineHeight() + row_margin(); }
 
@@ -177,11 +176,11 @@ void row_trailing_text(const char *text, const ImVec4 &color, float drop) {
   ImGui::PopStyleVar();
 }
 
-bool row_selectable(const char *label) {
+bool row_selectable(const char *label, bool selected = false) {
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
   const bool clicked =
-      ImGui::Selectable(label, false, ImGuiSelectableFlags_AllowDoubleClick,
+      ImGui::Selectable(label, selected, ImGuiSelectableFlags_AllowDoubleClick,
                         ImVec2(0.0f, row_height()));
   ImGui::PopStyleVar(2);
   return clicked;
@@ -232,9 +231,7 @@ void render_directory_row(PatchSelectorContext &context,
   }
   if (!item.telling_parents.empty()) {
     row_trailing_text(item.telling_parents.c_str(),
-                      color_with_alpha_vec4(
-                          ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f),
-                      0.0f);
+                      styles::color(styles::MegatoyCol::TextMuted), 0.0f);
   }
   ImGui::PopID();
 }
@@ -247,29 +244,20 @@ void render_patch_row(PatchSelectorContext &context,
 
   const bool is_current =
       item.relative_path == context.session.current_patch_selection_path();
-  if (is_current) {
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          styles::color(styles::MegatoyCol::TextHighlight));
-  }
 
   // Name and dimmed format label, either of which loads the patch. The
   // context menu and tooltip attach to whichever was drawn last, so both
-  // are registered after each selectable.
-  const bool name_clicked = row_selectable(item.name.c_str());
-  if (is_current) {
-    ImGui::PopStyleColor();
-  }
+  // are registered after each selectable. The name's selectable spans the
+  // row, so it alone carries the current patch's highlight.
+  const bool name_clicked = row_selectable(item.name.c_str(), is_current);
   entry_context_menu(context, item);
   show_patch_tooltip(context.repository, item);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
 
   ImGui::SameLine();
-  const ImVec4 format_color =
-      is_current ? styles::color(styles::MegatoyCol::TextHighlight)
-                 : ImGui::GetStyleColorVec4(ImGuiCol_Text);
   ImGui::PushStyleColor(ImGuiCol_Text,
-                        color_with_alpha_vec4(format_color, 0.5f));
+                        styles::color(styles::MegatoyCol::TextMuted));
   const bool format_clicked = row_selectable(item.format.c_str());
   ImGui::PopStyleColor();
   entry_context_menu(context, item);
@@ -281,7 +269,7 @@ void render_patch_row(PatchSelectorContext &context,
       stars > 0) {
     row_trailing_text(
         kStarLabels[static_cast<std::size_t>(std::min(stars, 5))].data(),
-        ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), row_margin() * 0.5f);
+        styles::color(styles::MegatoyCol::TextMuted), row_margin() * 0.5f);
   }
 
   // A click previews the patch, a double click keeps it open.

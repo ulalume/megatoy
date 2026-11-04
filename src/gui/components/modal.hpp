@@ -1,8 +1,11 @@
 #pragma once
 
+#include "gui/styles/megatoy_style.hpp"
+
 #include <imgui.h>
 
 #include <initializer_list>
+#include <string_view>
 
 namespace ui {
 
@@ -12,7 +15,9 @@ enum class ModalDismiss {
   None,
   /// Escape, standing in for the modal's own cancel.
   Escape,
-  /// Escape or a click outside. For a modal that only shows things.
+  /// Escape or a click outside. For a modal that only shows things, or asks
+  /// a question whose cancel loses nothing -- not one being typed into,
+  /// where a stray click would throw the typing away.
   EscapeOrOutsideClick,
 };
 
@@ -44,11 +49,17 @@ struct ModalScope {
 
 /// Open a modal that centres itself and says how it closed. ImGui never
 /// dismisses modals itself, so every way out here is ours to report.
-ModalScope begin_modal(const char *title, ModalDismiss dismiss,
-                       float width = kDialogWidth,
-                       float height = kDialogAutoHeight);
+ModalScope
+begin_modal(const char *title, ModalDismiss dismiss, float width = kDialogWidth,
+            float height = kDialogAutoHeight,
+            styles::MegatoyCol background = styles::MegatoyCol::ModalBg);
 
 /// Only when the scope was visible.
 void end_modal();
+
+/// A dialog's prose: wrapped to the space left on the line, each wrapped line
+/// starting where the first did, and the lines spaced further apart than
+/// ImGui's, which sets them at the font's height.
+void dialog_text(std::string_view text);
 
 } // namespace ui

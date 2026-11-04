@@ -1,4 +1,5 @@
 #include "midi_keyboard.hpp"
+#include "gui/app_window.hpp"
 
 #include "core/types.hpp"
 #include "gui/areas.hpp"
@@ -10,7 +11,9 @@
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chord_detector.h>
+#include <cmath>
 #include <imgui.h>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -259,7 +262,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 180)),
                            ImGuiCond_FirstUseEver);
   areas::keep_in_area(areas::Area::FooterRight, title);
-  if (!ImGui::Begin(title, &ui_prefs.show_midi_keyboard)) {
+  if (!ui::begin_window(title, &ui_prefs.show_midi_keyboard)) {
     ImGui::End();
     return;
   }
@@ -359,15 +362,15 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   // Scrollable keyboard area
   const ImVec2 available_region = ImGui::GetContentRegionAvail();
 
-  if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), true,
+  if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), false,
                         ImGuiWindowFlags_HorizontalScrollbar)) {
     const auto &notes = context.state.display_notes;
-    const float min_key_width = ui::scale::px(14.0f);
+    const float min_key_width = ui::scale::px(16.0f);
+    // One pixel kept for the last key's right border.
     const float key_width =
-        notes.empty()
-            ? min_key_width
-            : std::max(min_key_width,
-                       (available_region.x - ui::scale::px(16)) / notes.size());
+        notes.empty() ? min_key_width
+                      : std::max(min_key_width,
+                                 (available_region.x - 1.0f) / notes.size());
 
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
@@ -375,6 +378,11 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     float key_height = ImGui::GetContentRegionAvail().y;
     float y = ImGui::GetCursorScreenPos().y;
     float x = cursor.x;
+
+    // A press on any key sounds whichever key the pointer is over, so a drag
+    // plays each key it crosses.
+    bool pointer_held = false;
+    std::optional<ym2612::Note> under_pointer;
 
     for (auto note : notes) {
       bool is_key_mapped = context.state.reverse_mappings.find(note) !=
@@ -384,26 +392,20 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       bool is_pressed =
           context.key_is_pressed ? context.key_is_pressed(note) : false;
 
-      ImVec2 key_min(x, y);
-      ImVec2 key_max(x + key_width, y + key_height);
+      // On whole pixels, so the borders do not blur across two.
+      ImVec2 key_min(std::floor(x), y);
+      ImVec2 key_max(std::floor(x + key_width), y + key_height);
 
       ImGui::SetCursorScreenPos(key_min);
       ImGui::PushID(note.midi_note());
 
-      ImGui::InvisibleButton("white_key", ImVec2(key_width, key_height));
+      ImGui::InvisibleButton("white_key",
+                             ImVec2(key_max.x - key_min.x, key_height));
 
-      bool key_is_active = ImGui::IsItemActive();
-      bool key_was_deactivated = ImGui::IsItemDeactivated();
-      if (key_is_active && !is_pressed) {
-        if (context.key_on) {
-          context.key_on(note, 127);
-        }
-      }
-
-      if (key_was_deactivated && is_pressed) {
-        if (context.key_off) {
-          context.key_off(note);
-        }
+      pointer_held |= ImGui::IsItemActive();
+      if (ImGui::IsItemHovered(
+              ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
+        under_pointer = note;
       }
 
       ImGui::PopID();
@@ -412,7 +414,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                       ? (is_pressed ? white_key_pressed_col : white_key_col)
                       : (is_pressed ? black_key_pressed_col : black_key_col);
       draw_list->AddRectFilled(key_min, key_max, col);
-      draw_list->AddRect(key_min, key_max, key_border_col, 0, 0, 1.0f);
+      // One pixel further right, onto the next key's left edge, where that
+      // key's own border draws over it again: neighbours share one line.
+      draw_list->AddRect(key_min, ImVec2(key_max.x + 1.0f, key_max.y),
+                         key_border_col, 0, 0, 1.0f);
 
       if (is_key_mapped) {
         ImVec2 key_max_mapped(x + key_width, y + 2);
@@ -444,6 +449,20 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         draw_list->AddText(text_pos, text_color, key_text.c_str());
       }
       x += key_width;
+    }
+
+    const auto wanted = pointer_held ? under_pointer : std::nullopt;
+    auto &sounding = context.state.pointer_note;
+    if (sounding != wanted) {
+      if (sounding && context.key_off &&
+          (!context.key_is_pressed || context.key_is_pressed(*sounding))) {
+        context.key_off(*sounding);
+      }
+      if (wanted && context.key_on &&
+          !(context.key_is_pressed && context.key_is_pressed(*wanted))) {
+        context.key_on(*wanted, 127);
+      }
+      sounding = wanted;
     }
   }
   ImGui::EndChild();

@@ -1,6 +1,8 @@
 #pragma once
 
+#include "gui/fonts/megatoy_icons.hpp"
 #include "patches/patch_document.hpp"
+#include <IconsFontAwesome7.h>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -13,6 +15,27 @@ constexpr char MML_CONSOLE_TITLE[] = "MML Console";
 constexpr char WAVEFORM_TITLE[] = "Waveform";
 constexpr char PREFERENCES_TITLE[] = "Preferences";
 constexpr char PATCH_LAB_TITLE[] = "Patch Lab";
+
+constexpr char PATCH_BROWSER_ICON[] = ICON_FA_FOLDER_TREE;
+constexpr char SOFT_KEYBOARD_ICON[] = ICON_MEGATOY_PIANO;
+constexpr char MML_CONSOLE_ICON[] = ICON_FA_CODE;
+constexpr char WAVEFORM_ICON[] = ICON_FA_CHART_LINE;
+constexpr char PREFERENCES_ICON[] = ICON_FA_GEAR;
+constexpr char PATCH_LAB_ICON[] = ICON_FA_FLASK;
+
+/// A panel's title with its icon in front. The window keeps `title` as its
+/// id, so saved layouts still place it.
+inline std::string panel_window_title(const char *icon, const char *title) {
+  return std::string(icon) + " " + title + "###" + title;
+}
+
+/// What a window's name keeps after "###", or the whole name.
+inline std::string_view window_id(std::string_view name) {
+  if (const auto at = name.find("###"); at != std::string_view::npos) {
+    name.remove_prefix(at + 3);
+  }
+  return name;
+}
 
 using patches::document_label;
 using patches::patch_identity;

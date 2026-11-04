@@ -19,6 +19,7 @@ nlohmann::json read_json(const fs::path &path) {
 nlohmann::json current_keys(nlohmann::json value) {
   value.erase("layout");
   value["ui"].erase("show_audio_controls");
+  value["ui"].erase("show_patch_editor");
   return value;
 }
 
@@ -91,7 +92,7 @@ int main(int argc, char **argv) {
   check_fixture(fixtures, output, "default.json", "default.json", expected);
   check_fixture(fixtures, output, "terminated.json", "default.json", expected);
 
-  expected.theme = ui::styles::ThemeId::MegatoyLight;
+  expected.theme = ui::styles::ThemeId::ImGuiLight;
   expected.ui_preferences.show_waveform = false;
   expected.ui_preferences.ui_scale = 1.5f;
   expected.ui_preferences.midi_keyboard_layout = 2;

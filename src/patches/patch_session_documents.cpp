@@ -271,6 +271,17 @@ bool PatchSession::restore_open_documents() {
   return true;
 }
 
+bool PatchSession::can_close_document(DocumentId id) const {
+  const auto *document = find_document(id);
+  if (document == nullptr) {
+    return false;
+  }
+  if (documents_.size() > 1 || document->is_modified()) {
+    return true;
+  }
+  return document->patch() != default_patch();
+}
+
 bool PatchSession::close_document(DocumentId id) {
   const auto found =
       std::find_if(documents_.begin(), documents_.end(),

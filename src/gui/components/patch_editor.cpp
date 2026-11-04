@@ -1,5 +1,6 @@
 #include "patch_editor.hpp"
 #include "audio/audio_manager.hpp"
+#include "gui/app_window.hpp"
 
 #include "common.hpp"
 #include "gui/areas.hpp"
@@ -247,7 +248,7 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
 
   if (const auto *preview =
           get_algorithm_preview_texture(patch.instrument.algorithm)) {
-    ImGui::Image(preview->texture_id, ui::scale::px(preview->size));
+    preview_image(*preview);
   }
 
   int algorithm = patch.instrument.algorithm;
@@ -285,6 +286,7 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
   // reports what it needed and the tallest wins the next frame.
   context.operator_edit().pending_frame_height = 0.0f;
   context.operator_edit().click_claimed = false;
+  echo_selection_highlights(context);
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_state(slot),
                            space_for_feedbacks[slot], voices);
@@ -553,15 +555,15 @@ void render_document_window(PatchEditorContext &context,
         ImGuiCol_TabDimmedSelectedOverline,
         ImGui::GetStyleColorVec4(ImGuiCol_TabSelectedOverline));
   }
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                        styles::color(styles::MegatoyCol::PatchEditorBg));
   // Marked unsaved, a document's tab stays in place when its close button
   // is pressed, while the user is asked about the changes.
-  const bool visible = ImGui::Begin(
-      title.c_str(), &open,
+  const bool visible = ui::begin_window(
+      title.c_str(), session.can_close_document(id) ? &open : nullptr,
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
           (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
-  if (was_active) {
-    ImGui::PopStyleColor(2);
-  }
+  ImGui::PopStyleColor(was_active ? 3 : 1);
   if (preview) {
     pop_preview_label_style();
   }
@@ -653,10 +655,6 @@ void render_patch_editors(PatchEditorContext &context,
       edit.selection.clear();
       edit.baseline.clear();
     }
-  }
-
-  if (!context.prefs.show_patch_editor) {
-    return;
   }
 
   EditorFrame frame;

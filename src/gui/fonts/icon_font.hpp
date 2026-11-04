@@ -1,6 +1,7 @@
 #pragma once
 
 #include "embedded_assets_registry.hpp"
+#include "megatoy_icons.hpp"
 #include <IconsFontAwesome7.h>
 #include <imgui.h>
 #include <iomanip>
@@ -32,5 +33,11 @@ inline void init_icon_font() {
   // merged font then names an explicit one.
   io.Fonts->AddFontFromMemoryTTF((void *)res.data, (int)res.size, 0.0f, &config,
                                  icon_ranges);
+
+  static const ImWchar own_ranges[] = {ICON_MIN_MEGATOY, ICON_MAX_MEGATOY, 0};
+  const auto &own =
+      embedded_assets::resource_registry.at("fonts/megatoy-icons.otf");
+  io.Fonts->AddFontFromMemoryTTF((void *)own.data, (int)own.size, 0.0f, &config,
+                                 own_ranges);
 }
 } // namespace ui

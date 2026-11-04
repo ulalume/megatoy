@@ -1,7 +1,9 @@
 #include "patch_lab_window.hpp"
+#include "gui/app_window.hpp"
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "imgui_internal.h"
@@ -435,7 +437,8 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
 void render_result_list(PatchLabContext &context, PatchLabState &state) {
   ImGui::SeparatorText("Results");
   if (state.results.empty()) {
-    ImGui::TextDisabled("Generated patches appear here.");
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                       "Generated patches appear here.");
     return;
   }
 
@@ -466,7 +469,7 @@ void render_patch_lab(const char *title, PatchLabContext &context,
                            ImGuiCond_FirstUseEver);
 
   areas::keep_in_area(areas::Area::FooterRight, title);
-  if (!ImGui::Begin(title, &context.prefs.show_patch_lab)) {
+  if (!ui::begin_window(title, &context.prefs.show_patch_lab)) {
     ImGui::End();
     return;
   }
@@ -474,28 +477,28 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   const float available = ImGui::GetContentRegionAvail().x;
   const float left_width = std::max(320.0f, available * 0.62f);
   if (ImGui::BeginChild("##PatchLabControls", ImVec2(left_width, 0), false)) {
-    if (ImGui::BeginTabBar("##Patch Lab Operators",
-                           ImGuiTabBarFlags_SaveSettings)) {
+    if (ui::begin_tab_bar("##Patch Lab Operators",
+                          ImGuiTabBarFlags_SaveSettings)) {
       auto &repository = context.session.repository();
-      if (ImGui::BeginTabItem(ICON_FA_SLIDERS " Tweak")) {
+      if (ui::begin_tab_item(ICON_FA_SLIDERS " Tweak")) {
         render_tweak_section(context, state);
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem(ICON_FA_DICE " Random")) {
+      if (ui::begin_tab_item(ICON_FA_DICE " Random")) {
         render_random_section(context, state);
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem(ICON_FA_SHUFFLE " Mix")) {
+      if (ui::begin_tab_item(ICON_FA_SHUFFLE " Mix")) {
         const auto &entries = current_entries(state, repository);
         render_merge_section(context, state, entries);
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem(ICON_FA_FLASK_VIAL " Morph")) {
+      if (ui::begin_tab_item(ICON_FA_FLASK_VIAL " Morph")) {
         const auto &entries = current_entries(state, repository);
         render_morph_section(context, state, entries);
         ImGui::EndTabItem();
       }
-      if (ImGui::BeginTabItem(ICON_FA_VIRUS " Mutate")) {
+      if (ui::begin_tab_item(ICON_FA_VIRUS " Mutate")) {
         render_mutate_section(context, state);
         ImGui::EndTabItem();
       }
@@ -504,7 +507,12 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   }
   ImGui::EndChild();
   ImGui::SameLine();
-  if (ImGui::BeginChild("##PatchLabResults", ImVec2(0, 0), true)) {
+  ImGui::PushStyleColor(ImGuiCol_Border,
+                        styles::color(styles::MegatoyCol::PanelBorder));
+  const bool results_open =
+      ImGui::BeginChild("##PatchLabResults", ImVec2(0, 0), true);
+  ImGui::PopStyleColor();
+  if (results_open) {
     render_result_list(context, state);
   }
   ImGui::EndChild();

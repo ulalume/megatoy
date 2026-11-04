@@ -31,7 +31,8 @@ ResourceManager::get_resource(const std::filesystem::path &path) const {
 
 bool ResourceManager::load_texture_from_resource(const std::string &name,
                                                  unsigned int &texture_id,
-                                                 int &width, int &height) {
+                                                 int &width, int &height,
+                                                 bool smooth) {
   const auto *resource = get_resource(name);
   if (!resource) {
     std::cerr << "Embedded resource not found: " << name << '\n';
@@ -50,7 +51,8 @@ bool ResourceManager::load_texture_from_resource(const std::string &name,
   }
 
   GLuint gl_texture_id = 0;
-  if (!gfx::create_texture_from_rgba(data, width, height, gl_texture_id)) {
+  if (!gfx::create_texture_from_rgba(data, width, height, gl_texture_id,
+                                     smooth)) {
     stbi_image_free(data);
     std::cerr << "Failed to create OpenGL texture for: " << name << '\n';
     return false;

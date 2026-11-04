@@ -7,11 +7,11 @@ namespace ui::styles {
 namespace {
 
 const std::vector<ThemeDefinition> &all_theme_definitions() {
+  // The storage keys predate the current names; saved preferences use them.
   static const std::vector<ThemeDefinition> themes = {
-      {ThemeId::MegatoyDark, "Megatoy Dark", "megatoy-dark", "megatoy_dark"},
-      {ThemeId::MegatoyLight, "Megatoy Light", "megatoy-light",
-       "megatoy_light"},
+      {ThemeId::Megatoy, "Megatoy", "megatoy-dark", "megatoy_dark"},
       {ThemeId::ImGuiDark, "ImGui Dark", "imgui-dark", "imgui_dark"},
+      {ThemeId::ImGuiLight, "ImGui Light", "megatoy-light", "imgui_light"},
   };
   return themes;
 }

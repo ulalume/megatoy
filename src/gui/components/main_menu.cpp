@@ -1,4 +1,5 @@
 #include "main_menu.hpp"
+#include "gui/components/menu_rows.hpp"
 
 #include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
@@ -12,7 +13,7 @@
 #include "gui/components/common.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/components/preferences.hpp"
-#include "gui/image/resource_manager.hpp"
+#include "gui/image/app_icon.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
@@ -22,6 +23,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -245,30 +247,15 @@ void render_audio_load(MainMenuContext &context) {
   if (clicked) {
     ImGui::OpenPopup("##audio_load_menu");
   }
-  if (ImGui::BeginPopup("##audio_load_menu")) {
+  if (ui::begin_popup("##audio_load_menu")) {
     render_load_menu(context, window);
-    ImGui::EndPopup();
+    ui::end_popup();
   }
 }
 
 } // namespace
 
 namespace {
-
-/// The app's icon, loaded once; 0 when it could not be.
-ImTextureID app_icon() {
-  static const ImTextureID icon = [] {
-    unsigned int texture = 0;
-    int width = 0;
-    int height = 0;
-    if (!ResourceManager::instance().load_texture_from_resource(
-            "images/app_icon.png", texture, width, height)) {
-      return ImTextureID{};
-    }
-    return static_cast<ImTextureID>(texture);
-  }();
-  return icon;
-}
 
 /**
  * The menu holding About and Quit, shown as the app's icon. The label is
@@ -281,6 +268,9 @@ bool begin_bar_menu(const char *label) {
                        ImGui::GetStyle().FramePadding.y * 2.0f);
   const bool open = ImGui::BeginMenu(label);
   ImGui::PopStyleVar();
+  if (open) {
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::list_row_spacing());
+  }
   return open;
 }
 
@@ -305,6 +295,14 @@ bool begin_app_menu() {
   draw_list->AddImage(icon, ImVec2(x, y),
                       ImVec2(x + size, y + size));
   return open;
+}
+
+/// A View menu switch for a panel, its icon in a column of its own so the
+/// titles line up.
+void panel_menu_item(const char *icon, const char *title, bool &shown) {
+  if (ImGui::MenuItemEx(title, icon, nullptr, shown)) {
+    shown = !shown;
+  }
 }
 
 } // namespace
@@ -333,7 +331,7 @@ void render_main_menu(MainMenuContext &context) {
           context.gui.set_should_close(true);
         }
       }
-      ImGui::EndMenu();
+      ui::end_menu();
     }
     auto &session = context.patch_session;
     const auto controls =
@@ -419,7 +417,7 @@ void render_main_menu(MainMenuContext &context) {
             });
         const char *remove_label =
             megatoy::platform::is_web() ? "Delete Folder" : "Remove Folder";
-        if (ImGui::BeginMenu(remove_label, has_removable_folder)) {
+        if (ui::begin_menu(remove_label, has_removable_folder)) {
           std::optional<std::filesystem::path> to_remove;
           for (const auto &folder : folders) {
             if (context.preferences.workspace_folder_is_protected(
@@ -430,14 +428,14 @@ void render_main_menu(MainMenuContext &context) {
               to_remove = folder.path;
             }
           }
-          ImGui::EndMenu();
+          ui::end_menu();
           if (to_remove && context.remove_workspace_folder) {
             context.remove_workspace_folder(*to_remove);
           }
         }
       }
 
-      ImGui::EndMenu();
+      ui::end_menu();
     }
 
     // The folder picker is modal, so it is opened after the menu closes.
@@ -519,7 +517,7 @@ void render_main_menu(MainMenuContext &context) {
           context.commit_patch_history};
       render_operator_command_items(operator_commands);
 
-      ImGui::EndMenu();
+      ui::end_menu();
     }
 
     if (begin_bar_menu("View")) {
@@ -533,22 +531,23 @@ void render_main_menu(MainMenuContext &context) {
         ImGui::Separator();
       }
 
-      ImGui::MenuItem(PATCH_BROWSER_TITLE, nullptr,
-                      &ui_prefs.show_patch_selector);
-      ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
-      ImGui::MenuItem(PATCH_LAB_TITLE, nullptr, &ui_prefs.show_patch_lab);
-      ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
-                      &ui_prefs.show_midi_keyboard);
-      ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);
-      ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
-      ImGui::MenuItem(PREFERENCES_TITLE, nullptr, &ui_prefs.show_preferences);
+      panel_menu_item(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE,
+                      ui_prefs.show_patch_selector);
+      panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
+      panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
+                      ui_prefs.show_midi_keyboard);
+      panel_menu_item(MML_CONSOLE_ICON, MML_CONSOLE_TITLE,
+                      ui_prefs.show_mml_console);
+      panel_menu_item(WAVEFORM_ICON, WAVEFORM_TITLE, ui_prefs.show_waveform);
+      panel_menu_item(PREFERENCES_ICON, PREFERENCES_TITLE,
+                      ui_prefs.show_preferences);
 
       ImGui::Separator();
 
       if (ImGui::MenuItem("Reset to Default Layout")) {
         context.gui.reset_layout();
       }
-      ImGui::EndMenu();
+      ui::end_menu();
     }
 
     render_audio_load(context);

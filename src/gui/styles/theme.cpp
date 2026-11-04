@@ -1,12 +1,12 @@
 #include "theme.hpp"
 #include "imgui_dark.hpp"
+#include "imgui_light.hpp"
 #include "megatoy_dark.hpp"
-#include "megatoy_light.hpp"
 
 #include <imgui.h>
 
 namespace ui::styles {
-ThemeId g_current_theme = ThemeId::MegatoyDark;
+ThemeId g_current_theme = ThemeId::Megatoy;
 
 void apply_theme(ThemeId id) {
   g_current_theme = id;
@@ -15,14 +15,14 @@ void apply_theme(ThemeId id) {
   }
 
   switch (id) {
-  case ThemeId::MegatoyDark:
+  case ThemeId::Megatoy:
     ui::styles::megatoy_dark::apply();
-    break;
-  case ThemeId::MegatoyLight:
-    ui::styles::megatoy_light::apply();
     break;
   case ThemeId::ImGuiDark:
     ui::styles::imgui_dark::apply();
+    break;
+  case ThemeId::ImGuiLight:
+    ui::styles::imgui_light::apply();
     break;
   }
 }
@@ -40,7 +40,8 @@ void apply_style(ThemeId id, float scale) {
   style.ScrollbarPadding = 0;
   style.SeparatorTextBorderSize = 1;
   style.DragDropTargetBorderSize = 1;
-  style.FramePadding = ImVec2(4, 2);
+  style.FramePadding = ImVec2(4, 4);
+  style.DockingSeparatorSize = 4;
 
   apply_theme(id);
 

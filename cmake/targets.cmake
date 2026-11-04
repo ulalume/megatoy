@@ -213,6 +213,7 @@ endif()
 # Add platform-specific source files
 if(APPLE)
   list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm)
+  list(APPEND MEGATOY_CORE_SOURCES src/gui/mac_window_menu.mm)
 elseif(WIN32)
   list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
 else()
@@ -370,8 +371,12 @@ if(UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   target_link_libraries(megatoy PRIVATE ${X11_LIBRARIES})
 endif()
 
+# Shown in the About dialog.
+file(GLOB MEGATOY_LICENSE_TEXTS CONFIGURE_DEPENDS
+     "${CMAKE_SOURCE_DIR}/licenses/*.txt")
 add_embedded_assets(megatoy
   EXCLUDE_PATTERNS "\\.DS_Store$" "\\.ase$" "\\.gitkeep$" "^presets/" "\\.txt$"
+  EXTRA_FILES ${MEGATOY_LICENSE_TEXTS}
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")

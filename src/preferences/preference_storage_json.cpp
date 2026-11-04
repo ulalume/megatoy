@@ -94,10 +94,6 @@ public:
 
       if (j.contains("ui")) {
         const auto &ui = j["ui"];
-        if (ui.contains("show_patch_editor")) {
-          data.ui_preferences.show_patch_editor =
-              ui["show_patch_editor"].get<bool>();
-        }
         if (ui.contains("show_midi_keyboard")) {
           data.ui_preferences.show_midi_keyboard =
               ui["show_midi_keyboard"].get<bool>();
@@ -237,7 +233,6 @@ public:
       j["theme"] = ui::styles::storage_key(data.theme);
 
       nlohmann::json ui;
-      ui["show_patch_editor"] = data.ui_preferences.show_patch_editor;
       ui["show_midi_keyboard"] = data.ui_preferences.show_midi_keyboard;
       ui["show_patch_selector"] = data.ui_preferences.show_patch_selector;
       ui["show_mml_console"] = data.ui_preferences.show_mml_console;

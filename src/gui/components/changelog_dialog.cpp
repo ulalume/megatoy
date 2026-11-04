@@ -41,8 +41,7 @@ void render_changelog_dialog() {
       ImGui::SeparatorText(std::string(entry.version).c_str());
       for (const auto &item : entry.items) {
         ImGui::Bullet();
-        ImGui::TextWrapped("%.*s", static_cast<int>(item.text.size()),
-                           item.text.data());
+        dialog_text(item.text);
         if (item.details.empty()) {
           continue;
         }
@@ -51,8 +50,7 @@ void render_changelog_dialog() {
           ImGui::Bullet();
           ImGui::PushStyleColor(ImGuiCol_Text,
                                 styles::color(styles::MegatoyCol::TextMuted));
-          ImGui::TextWrapped("%.*s", static_cast<int>(detail.size()),
-                             detail.data());
+          dialog_text(detail);
           ImGui::PopStyleColor();
         }
         ImGui::Unindent();

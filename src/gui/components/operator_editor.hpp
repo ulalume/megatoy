@@ -9,7 +9,10 @@
 
 namespace ui {
 
-inline float vslider_width() { return ui::scale::px(20.0f); }
+/// A vertical slider is as wide as a horizontal one is tall, and they stand as
+/// far apart as horizontal ones do.
+inline float vslider_width() { return ImGui::GetFrameHeight(); }
+inline float vslider_gap() { return ImGui::GetStyle().ItemSpacing.y; }
 inline float vslider_height() { return ui::scale::px(102.0f); }
 /// The graph is taller than the sliders under it: a handle is dragged through
 /// attenuation, which wants the room more than a slider does.
@@ -18,9 +21,7 @@ inline ImVec2 vslider_size() {
   return ImVec2(vslider_width(), vslider_height());
 }
 /// Six vertical sliders and the gaps between them.
-inline float hslider_width() {
-  return vslider_width() * 6 + ImGui::GetStyle().ItemSpacing.x * 5;
-}
+inline float hslider_width() { return vslider_width() * 6 + vslider_gap() * 5; }
 
 struct PatchEditorContext;
 
@@ -36,4 +37,8 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
                             bool space_for_feedback,
                             const EnvelopeVoices &voices);
+
+/// Give each selected operator what the others in the selection light, as
+/// UIState::EnvelopeState::echoed. Called before the operators are drawn.
+void echo_selection_highlights(PatchEditorContext &context);
 } // namespace ui

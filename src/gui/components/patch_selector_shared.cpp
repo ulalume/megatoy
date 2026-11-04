@@ -1,4 +1,5 @@
 #include "patch_selector_shared.hpp"
+#include "gui/components/menu_rows.hpp"
 
 #include "common.hpp"
 #include "file_manager.hpp"
@@ -29,7 +30,8 @@ void show_patch_tooltip(const patches::PatchRepository &repository,
       display_preset_path(repository.display_path(entry.relative_path));
 
   if (entry.metadata) {
-    tooltip += "\nStars: " + std::to_string(entry.metadata->star_rating) + "/5";
+    tooltip +=
+        "\nRating: " + std::to_string(entry.metadata->star_rating) + "/5";
     if (!entry.metadata->category.empty()) {
       tooltip += "\nCategory: " + entry.metadata->category;
     }
@@ -59,7 +61,7 @@ bool entry_can_delete(const PatchSelectorContext &context,
 void entry_context_menu(PatchSelectorContext &context,
                         const patches::PatchEntry &entry,
                         bool allow_remove_folder) {
-  if (!ImGui::BeginPopupContextItem(nullptr)) {
+  if (!ui::begin_popup_context_item()) {
     return;
   }
 
@@ -147,7 +149,7 @@ void entry_context_menu(PatchSelectorContext &context,
 
   // Written once the tree is drawn: the write rebuilds it, and `entry`
   // with it.
-  if (begin_group(actions.rate) && ImGui::BeginMenu("Rating")) {
+  if (begin_group(actions.rate) && ui::begin_menu("Rating")) {
     const int rating = entry.metadata ? entry.metadata->star_rating : 0;
     for (int stars = 0; stars <= 5; ++stars) {
       const char *label = stars == 0 ? "None" : kStarLabels[stars].data();
@@ -155,7 +157,7 @@ void entry_context_menu(PatchSelectorContext &context,
         context.pending_rating = PendingRating{entry.relative_path, stars};
       }
     }
-    ImGui::EndMenu();
+    ui::end_menu();
   }
 
   // Whether a file manager exists is the composition root's call -- the
@@ -184,7 +186,7 @@ void entry_context_menu(PatchSelectorContext &context,
     }
   }
 
-  ImGui::EndPopup();
+  ui::end_popup();
 }
 
 void render_filter_bar(PatchSelectorContext &context) {
@@ -225,7 +227,7 @@ void render_filter_bar(PatchSelectorContext &context) {
   }
 
   ImGui::SameLine();
-  star_rating_slider("##Stars", prefs.metadata_star_filter, "Stars");
+  star_rating_slider("##Rating", prefs.metadata_star_filter, "Rating");
 }
 
 } // namespace ui::selector_detail

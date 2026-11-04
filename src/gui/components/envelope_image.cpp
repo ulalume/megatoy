@@ -4,12 +4,14 @@
 #include "common.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/envelope/envelope_handles.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "ym2612/note.hpp"
 
 #include <array>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -40,13 +42,6 @@ using ui::envelope::to_point;
 using ui::envelope::TraceVertex;
 using ui::envelope::VoiceCurveCache;
 
-/// The wash under the release.
-constexpr float kFillAlpha = 0.30f;
-/// A handle is a hint until it is wanted: dimmer than the line it sits on
-/// until the pointer is on it, when it takes the stretch's own colour.
-constexpr float kHandleIdleAlpha = 0.55f;
-/// The warning line is a footnote, not an alert.
-constexpr float kWarningAlpha = 0.6f;
 
 /// How a sounding voice is drawn: the ghost curve well below the reference
 /// curve's weight, the cursor well above it, each older voice in a chord
@@ -73,6 +68,50 @@ int &voice_build_budget() {
     budget = kVoiceBuildsPerFrame;
   }
   return budget;
+}
+
+/// The last ImGui frame that drew a sounding voice, or left one waiting for
+/// its curve.
+int &voices_drawn_frame() {
+  static int frame = -1;
+  return frame;
+}
+
+/**
+ * The audio clock as the voices are drawn against it, in samples.
+ *
+ * The audio clock only moves when a whole buffer has been rendered, and the
+ * buffers do not land in step with the frames: from one frame to the next it
+ * advances by none, one or several buffers. Read directly, a cursor moving at
+ * a steady pace would lurch. This one runs on the frame's own time instead and
+ * leans a tenth of the way toward the audio clock every frame, so it keeps
+ * the audio clock's pace without its steps. Never backwards, and a gap of
+ * more than a tenth of a second -- a restart, or frames that were not drawn --
+ * is jumped rather than eased over.
+ *
+ * Advanced once per ImGui frame however many editors ask.
+ */
+double display_clock(uint64_t audio_samples, double rate) {
+  using Clock = std::chrono::steady_clock;
+  static int frame = -1;
+  static Clock::time_point last_wall;
+  static double clock = 0.0;
+  const int now_frame = ImGui::GetFrameCount();
+  if (now_frame == frame) {
+    return clock;
+  }
+  const Clock::time_point wall = Clock::now();
+  const double audio = static_cast<double>(audio_samples);
+  if (frame < 0 || std::abs(audio - clock) > rate * 0.1) {
+    clock = audio;
+  } else {
+    const double run =
+        clock + std::chrono::duration<double>(wall - last_wall).count() * rate;
+    clock = std::max(clock, run + (audio - run) * 0.1);
+  }
+  frame = now_frame;
+  last_wall = wall;
+  return clock;
 }
 
 /// The colour each stretch of the curve is drawn in, indexed by the phase
@@ -155,8 +194,8 @@ double approach_span(double current_ms, double target_ms, float dt_sec,
 ImU32 color_from_slider_state(
     const UIState::EnvelopeState::SliderState &state) {
   return state == UIState::EnvelopeState::SliderState::None
-             ? ImGui::GetColorU32(ImGuiCol_Text)
-             : ImGui::GetColorU32(ImGuiCol_FrameBgActive);
+             ? styles::color_u32(styles::MegatoyCol::EnvelopeCurve)
+             : styles::color_u32(styles::MegatoyCol::EnvelopeCurveActive);
 }
 
 /// With a grid `step` below one, fractions of a ms.
@@ -170,7 +209,7 @@ void format_ms(char (&out)[16], double ms, double step) {
 
 /// The one subdued colour for every caption along the top strip.
 ImU32 axis_label_color() {
-  return color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha);
+  return styles::color_u32(styles::MegatoyCol::EnvelopeLabel);
 }
 
 /**
@@ -181,7 +220,7 @@ ImU32 axis_label_color() {
  */
 void draw_time_grid(ImDrawList *draw_list, const PlotArea &plot,
                     float label_baseline, float label_limit_x) {
-  const ImU32 grid_color = ImGui::GetColorU32(ImGuiCol_Separator);
+  const ImU32 grid_color = styles::color_u32(styles::MegatoyCol::EnvelopeGrid);
   const ImU32 label_color = axis_label_color();
   // The width being drawn, not the one being animated towards: the lines have
   // to cover what is actually on screen.
@@ -261,7 +300,7 @@ void stroke_path(ImDrawList *draw_list, TracePath &path, const PlotArea &plot,
  * anti-aliased fill is off for the run so the quads meet without seams.
  */
 void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
-                       const PlotArea &plot, ImU32 color) {
+                       const PlotArea &plot, ImU32 fill) {
   const auto &points = curve.release.points;
   if (points.size() < 2) {
     return;
@@ -270,7 +309,6 @@ void draw_release_area(ImDrawList *draw_list, const EnvelopeCurve &curve,
   ui::envelope::build_trace_path(path.vertices, curve.release,
                                  curve.release_tail_slope, plot.span_ms);
   to_pixels(path, plot);
-  const ImU32 fill = color_with_alpha(color, kFillAlpha);
   const ImDrawListFlags saved_flags = draw_list->Flags;
   draw_list->Flags &= ~ImDrawListFlags_AntiAliasedFill;
   const size_t edges = path.pixels.size() < 2 ? 0 : path.pixels.size() - 1;
@@ -313,15 +351,19 @@ void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
 }
 
 /// TL and SL have no segment of their own: they are levels, so they light up
-/// as a rule across the graph at the level they set.
+/// as a dashed rule across the graph at the level they set.
 void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
                         const UIState::EnvelopeState &state,
                         const PlotArea &plot) {
   const float thickness = ui::scale::px(1.0f);
+  const float dash = ui::scale::px(3.0f);
   const auto rule = [&](double out, ImU32 color) {
     const float y = plot.y_of(out);
-    draw_list->AddLine(ImVec2(plot.min.x, y), ImVec2(plot.max.x, y), color,
-                       thickness);
+    for (float x = plot.min.x; x < plot.max.x; x += dash * 2.0f) {
+      draw_list->AddLine(ImVec2(x, y),
+                         ImVec2(std::min(x + dash, plot.max.x), y), color,
+                         thickness);
+    }
   };
 
   if (state.total_level != UIState::EnvelopeState::SliderState::None) {
@@ -386,13 +428,16 @@ void draw_warning(ImDrawList *draw_list, const std::string &warning,
   const float wrap_width = plot.width() - inset * 2.0f;
   const ImVec2 size = ImGui::CalcTextSize(text, text_end, false, wrap_width);
   const ImVec2 pos(plot.min.x + inset, plot.max.y - size.y - inset);
-  draw_list->AddText(
-      ImGui::GetFont(), ImGui::GetFontSize(), pos,
-      color_with_alpha(ImGui::GetColorU32(ImGuiCol_Text), kWarningAlpha), text,
-      text_end, wrap_width);
+  draw_list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), pos,
+                     styles::color_u32(styles::MegatoyCol::EnvelopeLabel), text,
+                     text_end, wrap_width);
 }
 
 } // namespace
+
+bool envelope_voices_moving() {
+  return voices_drawn_frame() == ImGui::GetFrameCount();
+}
 
 EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   EnvelopeVoices out;
@@ -400,12 +445,13 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
       frame.sample_rate > 0 ? static_cast<double>(frame.sample_rate) : 44100.0;
   const double ms_per_sample = 1000.0 / rate;
 
-  // `now` is never behind a stamp, but saturating keeps the arithmetic safe
-  // across an engine restart, which puts the clock back to zero.
+  const double now = display_clock(frame.now_samples, rate);
+
+  // Saturating keeps the arithmetic safe across an engine restart, which puts
+  // the clock back to zero.
   const auto elapsed_ms = [&](uint64_t from) {
-    return frame.now_samples > from
-               ? static_cast<double>(frame.now_samples - from) * ms_per_sample
-               : 0.0;
+    const double stamp = static_cast<double>(from);
+    return now > stamp ? (now - stamp) * ms_per_sample : 0.0;
   };
 
   // Newest first: `sequence` counts key-ons across the whole allocator, so it
@@ -466,6 +512,13 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   raise(state.sustain_level, slider_state.handles.sustain_level);
   raise(state.sustain_rate, slider_state.handles.sustain_rate);
   raise(state.release_rate, slider_state.handles.release_rate);
+  // And by the same parameter changing on another selected operator.
+  raise(state.total_level, slider_state.echoed.total_level);
+  raise(state.attack_rate, slider_state.echoed.attack_rate);
+  raise(state.decay_rate, slider_state.echoed.decay_rate);
+  raise(state.sustain_level, slider_state.echoed.sustain_level);
+  raise(state.sustain_rate, slider_state.echoed.sustain_rate);
+  raise(state.release_rate, slider_state.echoed.release_rate);
 
   PlotArea plot;
   const double target_ms = std::max(curve.span_ms, 1.0);
@@ -500,8 +553,10 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   const ImVec2 canvas_min = ImGui::GetCursorScreenPos();
   const ImVec2 canvas_max(canvas_min.x + size.x, canvas_min.y + size.y);
 
+  draw_list->AddRectFilled(canvas_min, canvas_max,
+                           styles::color_u32(styles::MegatoyCol::EnvelopeBg));
   draw_list->AddRect(canvas_min, canvas_max,
-                     ImGui::GetColorU32(ImGuiCol_Separator));
+                     styles::color_u32(styles::MegatoyCol::EnvelopeGrid));
 
   // The time labels get a strip of their own along the top: a curve at full
   // volume runs along the very top of the plot.
@@ -553,6 +608,9 @@ render_envelope_image(const ym2612::OperatorSettings &op,
     const EnvelopeCurve *voice_curve =
         slot.voices.get(op, ym2612_eg::NotePitch::from_midi(voice.midi_note),
                         curve, build_budget);
+    // From here the next frame draws something new: a curve built, or a
+    // cursor further along.
+    voices_drawn_frame() = ImGui::GetFrameCount();
     if (voice_curve == nullptr) {
       continue; // its curve is being built next frame
     }
@@ -577,7 +635,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
 
   // Ghost curves oldest first, so the newest is the one on top of the others
   // -- and all of them under the curve being edited.
-  const ImU32 ghost_base = ImGui::GetColorU32(ImGuiCol_Text);
+  const ImU32 ghost_base = styles::color_u32(styles::MegatoyCol::EnvelopeVoice);
   for (int i = drawn_count - 1; i >= 0; --i) {
     // Nothing to draw when the note shares the reference note's key-scale
     // value: its curve IS the one already on screen.
@@ -598,12 +656,17 @@ render_envelope_image(const ym2612::OperatorSettings &op,
         color_with_alpha(ghost_base, drawn[i].alpha * kVoiceCurveAlpha));
   }
 
-  draw_release_area(draw_list, curve, plot,
-                    phase_color(colors, ym2612_eg::EgPhase::Release));
+  draw_release_area(
+      draw_list, curve, plot,
+      styles::color_u32(state.release_rate ==
+                                UIState::EnvelopeState::SliderState::None
+                            ? styles::MegatoyCol::EnvelopeRelease
+                            : styles::MegatoyCol::EnvelopeReleaseActive));
   draw_held_line(draw_list, curve, plot, colors);
   draw_level_markers(draw_list, curve, state, plot);
   // Over everything, so a cursor is never hidden under the curve it measures.
-  const ImU32 cursor_base = ImGui::GetColorU32(ImGuiCol_FrameBgActive);
+  const ImU32 cursor_base =
+      styles::color_u32(styles::MegatoyCol::EnvelopeVoiceCursor);
   for (int i = drawn_count - 1; i >= 0; --i) {
     if (!drawn[i].cursor_on_axis) {
       continue;
@@ -622,9 +685,11 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   if (!wanted) {
     return {};
   }
+  // The dots drawn twice the library's size; its grab box already covers
+  // that.
   const ui::envelope::HandleMetrics unscaled;
   const ui::envelope::HandleMetrics metrics{
-      ui::scale::px(unscaled.radius),
+      ui::scale::px(unscaled.radius * 2.0f),
       ui::scale::px(unscaled.grab),
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
@@ -636,12 +701,11 @@ void draw_envelope_handle(const ui::envelope::EnvelopeHandles &handles,
                           ui::envelope::HandleIndex handle,
                           UIState::EnvelopeState::SliderState state) {
   const ui::envelope::EnvelopeHandle &item = handles.items[handle];
-  const ImU32 color = color_from_slider_state(state);
   ImGui::GetWindowDrawList()->AddCircleFilled(
       to_imvec(item.pos), handles.metrics.radius,
-      state == UIState::EnvelopeState::SliderState::None
-          ? color_with_alpha(color, kHandleIdleAlpha)
-          : color);
+      styles::color_u32(state == UIState::EnvelopeState::SliderState::None
+                            ? styles::MegatoyCol::EnvelopeHandle
+                            : styles::MegatoyCol::EnvelopeHandleActive));
 }
 
 void end_envelope_image() { ImGui::EndChild(); }

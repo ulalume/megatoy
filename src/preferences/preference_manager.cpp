@@ -17,7 +17,7 @@
 
 PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
     : paths_(paths), directories_initialized(false),
-      theme_(ui::styles::ThemeId::MegatoyDark),
+      theme_(ui::styles::ThemeId::Megatoy),
       storage_(make_json_preference_storage(get_preferences_file_path(),
                                             paths_.file_system())) {
   ensure_directories_exist();
