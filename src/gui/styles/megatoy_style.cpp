@@ -60,6 +60,7 @@ void derive_widget_colors() {
   set(MegatoyCol::PatchEditorBg, imgui[ImGuiCol_WindowBg]);
   set(MegatoyCol::DialogPaneBg, imgui[ImGuiCol_ChildBg]);
   set(MegatoyCol::DialogPaneBorder, imgui[ImGuiCol_Border]);
+  set(MegatoyCol::AboutBg, color(MegatoyCol::ModalBg));
 }
 
 const ImVec4 &color(MegatoyCol col) {

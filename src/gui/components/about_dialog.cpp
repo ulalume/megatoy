@@ -336,7 +336,8 @@ void render_about_dialog() {
   // Nothing here is a decision, so anything that means "I am done looking"
   // closes it.
   auto scope =
-      begin_modal("About megatoy", ModalDismiss::EscapeOrOutsideClick, 720.0f);
+      begin_modal("About megatoy", ModalDismiss::EscapeOrOutsideClick, 720.0f,
+                  kDialogAutoHeight, styles::MegatoyCol::AboutBg);
   if (!scope.visible) {
     if (!ImGui::IsPopupOpen("About megatoy")) {
       state.reset();

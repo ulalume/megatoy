@@ -43,7 +43,7 @@ bool should_dismiss(ModalDismiss dismiss) {
 } // namespace
 
 ModalScope begin_modal(const char *title, ModalDismiss dismiss, float width,
-                       float height) {
+                       float height, styles::MegatoyCol background) {
   ModalScope scope;
 
   // ImGui clamps neither an explicit size nor auto-resize to the viewport,
@@ -61,8 +61,7 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss, float width,
                            ImGuiCond_Always);
   center_next_window();
   // A dialog keeps the window colour while menus take the brighter popup one.
-  ImGui::PushStyleColor(ImGuiCol_PopupBg,
-                        styles::color(styles::MegatoyCol::ModalBg));
+  ImGui::PushStyleColor(ImGuiCol_PopupBg, styles::color(background));
   // The title bar's height is FramePadding's at Begin: a dialog's stands
   // taller than other frames.
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,

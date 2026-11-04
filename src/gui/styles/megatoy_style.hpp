@@ -66,6 +66,8 @@ enum class MegatoyCol : int {
   /// text.
   DialogPaneBg,
   DialogPaneBorder,
+  /// Behind the About dialog; other dialogs take ModalBg.
+  AboutBg,
   COUNT
 };
 

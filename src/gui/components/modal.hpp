@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gui/styles/megatoy_style.hpp"
+
 #include <imgui.h>
 
 #include <initializer_list>
@@ -47,9 +49,10 @@ struct ModalScope {
 
 /// Open a modal that centres itself and says how it closed. ImGui never
 /// dismisses modals itself, so every way out here is ours to report.
-ModalScope begin_modal(const char *title, ModalDismiss dismiss,
-                       float width = kDialogWidth,
-                       float height = kDialogAutoHeight);
+ModalScope
+begin_modal(const char *title, ModalDismiss dismiss, float width = kDialogWidth,
+            float height = kDialogAutoHeight,
+            styles::MegatoyCol background = styles::MegatoyCol::ModalBg);
 
 /// Only when the scope was visible.
 void end_modal();
