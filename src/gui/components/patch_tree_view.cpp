@@ -1,5 +1,6 @@
 #include "patch_tree_view.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/styles/megatoy_style.hpp"
 
 #include "common.hpp"
 #include "gui/ui_scale.hpp"
@@ -230,9 +231,7 @@ void render_directory_row(PatchSelectorContext &context,
   }
   if (!item.telling_parents.empty()) {
     row_trailing_text(item.telling_parents.c_str(),
-                      color_with_alpha_vec4(
-                          ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f),
-                      0.0f);
+                      styles::color(styles::MegatoyCol::TextMuted), 0.0f);
   }
   ImGui::PopID();
 }
@@ -257,9 +256,8 @@ void render_patch_row(PatchSelectorContext &context,
   handle_row_keys(context, item);
 
   ImGui::SameLine();
-  ImGui::PushStyleColor(
-      ImGuiCol_Text,
-      color_with_alpha_vec4(ImGui::GetStyleColorVec4(ImGuiCol_Text), 0.5f));
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::TextMuted));
   const bool format_clicked = row_selectable(item.format.c_str());
   ImGui::PopStyleColor();
   entry_context_menu(context, item);
@@ -271,7 +269,7 @@ void render_patch_row(PatchSelectorContext &context,
       stars > 0) {
     row_trailing_text(
         kStarLabels[static_cast<std::size_t>(std::min(stars, 5))].data(),
-        ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), row_margin() * 0.5f);
+        styles::color(styles::MegatoyCol::TextMuted), row_margin() * 0.5f);
   }
 
   // A click previews the patch, a double click keeps it open.

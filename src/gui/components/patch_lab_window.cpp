@@ -437,7 +437,8 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
 void render_result_list(PatchLabContext &context, PatchLabState &state) {
   ImGui::SeparatorText("Results");
   if (state.results.empty()) {
-    ImGui::TextDisabled("Generated patches appear here.");
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                       "Generated patches appear here.");
     return;
   }
 
