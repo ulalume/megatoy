@@ -61,6 +61,7 @@ void derive_widget_colors() {
   set(MegatoyCol::DialogPaneBg, imgui[ImGuiCol_ChildBg]);
   set(MegatoyCol::DialogPaneBorder, imgui[ImGuiCol_Border]);
   set(MegatoyCol::AboutBg, color(MegatoyCol::ModalBg));
+  set(MegatoyCol::AboutIconBorder, imgui[ImGuiCol_WindowBg]);
 }
 
 const ImVec4 &color(MegatoyCol col) {

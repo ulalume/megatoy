@@ -68,6 +68,8 @@ enum class MegatoyCol : int {
   DialogPaneBorder,
   /// Behind the About dialog; other dialogs take ModalBg.
   AboutBg,
+  /// The outline around the icon in the About dialog.
+  AboutIconBorder,
   COUNT
 };
 

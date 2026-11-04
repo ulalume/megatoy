@@ -283,6 +283,16 @@ void render_header() {
   const float top = ImGui::GetCursorPosY();
   if (icon.texture != ImTextureID{}) {
     ImGui::Image(icon.texture, ImVec2(icon_size, icon_size));
+    // Around the icon's own rounded corners, which take in about a fifth of
+    // its width.
+    const float line = ui::scale::px(1.0f);
+    ImGui::GetWindowDrawList()->AddRect(
+        ImVec2(ImGui::GetItemRectMin().x - line * 0.5f,
+               ImGui::GetItemRectMin().y - line * 0.5f),
+        ImVec2(ImGui::GetItemRectMax().x + line * 0.5f,
+               ImGui::GetItemRectMax().y + line * 0.5f),
+        styles::color_u32(styles::MegatoyCol::AboutIconBorder),
+        icon_size * 0.21f + line * 0.5f, ImDrawFlags_None, line);
     ImGui::SameLine(0.0f, ui::scale::px(12.0f));
     ImGui::SetCursorPosY(top +
                          std::max(0.0f, (icon_size - text_height) * 0.5f));
