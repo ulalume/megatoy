@@ -5,7 +5,6 @@
 #include "menu_rows.hpp"
 #include "modal.hpp"
 
-#include "gui/image/app_icon.hpp"
 #include "gui/image/resource_manager.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
@@ -243,18 +242,64 @@ void render_update_status(const AboutModalState &state) {
   }
 }
 
+/// An embedded picture, filtered to be drawn smaller than it is stored; no
+/// texture when it could not be loaded. The header's are stored at three
+/// times their drawn size, to stay sharp at up to three device pixels per
+/// pixel.
+struct Picture {
+  ImTextureID texture{};
+  ImVec2 size;
+};
+
+Picture load_picture(const char *name) {
+  Picture picture;
+  unsigned int texture = 0;
+  int width = 0;
+  int height = 0;
+  if (ResourceManager::instance().load_texture_from_resource(
+          name, texture, width, height, true)) {
+    picture.texture = static_cast<ImTextureID>(texture);
+    picture.size =
+        ImVec2(static_cast<float>(width), static_cast<float>(height));
+  }
+  return picture;
+}
+
 void render_header() {
   const ImVec4 muted = styles::color(styles::MegatoyCol::TextMuted);
-  const ImTextureID icon = app_icon();
-  if (icon != ImTextureID{}) {
-    const float size = ui::scale::px(48.0f);
-    ImGui::Image(icon, ImVec2(size, size));
+  static const Picture icon = load_picture("images/app_icon_large.png");
+  static const Picture logo = load_picture("images/text_logo.png");
+
+  const float icon_size = ui::scale::px(64.0f);
+  const float logo_height = ui::scale::px(32.0f);
+  const float logo_width = logo.texture == ImTextureID{}
+                               ? 0.0f
+                               : logo_height * logo.size.x / logo.size.y;
+  const float text_height =
+      (logo.texture == ImTextureID{} ? ImGui::GetTextLineHeight()
+                                     : logo_height) +
+      ImGui::GetStyle().ItemSpacing.y + ImGui::GetTextLineHeight();
+
+  const float top = ImGui::GetCursorPosY();
+  if (icon.texture != ImTextureID{}) {
+    ImGui::Image(icon.texture, ImVec2(icon_size, icon_size));
     ImGui::SameLine(0.0f, ui::scale::px(12.0f));
+    ImGui::SetCursorPosY(top +
+                         std::max(0.0f, (icon_size - text_height) * 0.5f));
   }
   ImGui::BeginGroup();
-  ImGui::TextUnformatted("megatoy");
+  if (logo.texture != ImTextureID{}) {
+    ImGui::Image(logo.texture, ImVec2(logo_width, logo_height));
+  } else {
+    ImGui::TextUnformatted("megatoy");
+  }
   ImGui::TextColored(muted, "A YM2612 patch editor for Mega Drive / Genesis.");
   ImGui::EndGroup();
+  if (icon.texture != ImTextureID{}) {
+    ImGui::SetCursorPosY(
+        std::max(ImGui::GetCursorPosY(),
+                 top + icon_size + ImGui::GetStyle().ItemSpacing.y));
+  }
   ImGui::Spacing();
 
   const float label_width =
