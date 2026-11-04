@@ -2,6 +2,7 @@
 
 #include "changelog_dialog.hpp"
 #include "common.hpp"
+#include "menu_rows.hpp"
 #include "modal.hpp"
 
 #include "gui/image/app_icon.hpp"
@@ -251,9 +252,7 @@ void render_header() {
     ImGui::SameLine(0.0f, ui::scale::px(12.0f));
   }
   ImGui::BeginGroup();
-  ImGui::PushFont(nullptr, ImGui::GetFontSize() * 1.5f);
   ImGui::TextUnformatted("megatoy");
-  ImGui::PopFont();
   ImGui::TextColored(muted, "A YM2612 patch editor for Mega Drive / Genesis.");
   ImGui::EndGroup();
   ImGui::Spacing();
@@ -294,6 +293,8 @@ void render_licenses(AboutModalState &state) {
 
   if (ImGui::BeginChild("##license_list", ImVec2(list_width, height),
                         ImGuiChildFlags_Borders)) {
+    // Rows as tall as the patch tree's.
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
     const float right = ImGui::GetContentRegionAvail().x;
     for (int i = 0; i < static_cast<int>(std::size(kLicenses)); ++i) {
       const License &license = kLicenses[i];
@@ -305,6 +306,7 @@ void render_licenses(AboutModalState &state) {
       ImGui::TextColored(muted, "%s", license.license);
       ImGui::PopID();
     }
+    ImGui::PopStyleVar();
   }
   ImGui::EndChild();
 
