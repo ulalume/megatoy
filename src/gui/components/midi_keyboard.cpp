@@ -361,15 +361,15 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   // Scrollable keyboard area
   const ImVec2 available_region = ImGui::GetContentRegionAvail();
 
-  if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), true,
+  if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), false,
                         ImGuiWindowFlags_HorizontalScrollbar)) {
     const auto &notes = context.state.display_notes;
     const float min_key_width = ui::scale::px(14.0f);
+    // One pixel kept for the last key's right border.
     const float key_width =
-        notes.empty()
-            ? min_key_width
-            : std::max(min_key_width,
-                       (available_region.x - ui::scale::px(16)) / notes.size());
+        notes.empty() ? min_key_width
+                      : std::max(min_key_width,
+                                 (available_region.x - 1.0f) / notes.size());
 
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
