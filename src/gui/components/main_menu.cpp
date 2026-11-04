@@ -533,7 +533,6 @@ void render_main_menu(MainMenuContext &context) {
 
       panel_menu_item(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE,
                       ui_prefs.show_patch_selector);
-      panel_menu_item("", PATCH_EDITOR_TITLE, ui_prefs.show_patch_editor);
       panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
       panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
                       ui_prefs.show_midi_keyboard);

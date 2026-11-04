@@ -10,7 +10,6 @@
 #include <vector>
 
 struct UIPreferences {
-  bool show_patch_editor = true;
   bool show_midi_keyboard = true;
   bool show_patch_selector = true;
   bool show_mml_console = true;
@@ -68,8 +67,7 @@ struct UIPreferences {
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
     // Search and star filters are session-scoped. Excluding them prevents
     // typing in the patch browser from dirtying the persistent store.
-    return lhs.show_patch_editor == rhs.show_patch_editor &&
-           lhs.show_midi_keyboard == rhs.show_midi_keyboard &&
+    return lhs.show_midi_keyboard == rhs.show_midi_keyboard &&
            lhs.show_patch_selector == rhs.show_patch_selector &&
            lhs.show_mml_console == rhs.show_mml_console &&
            lhs.show_preferences == rhs.show_preferences &&

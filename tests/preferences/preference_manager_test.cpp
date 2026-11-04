@@ -150,7 +150,6 @@ void test_malformed_reload_and_failed_save_preserve_current_settings(
 
 void test_windows_are_shown_by_default() {
   const UIPreferences preferences;
-  CHECK(preferences.show_patch_editor);
   CHECK(preferences.show_patch_selector);
   CHECK(preferences.show_preferences);
 }

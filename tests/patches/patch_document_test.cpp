@@ -145,6 +145,27 @@ void test_open_activate_close() {
   CHECK(!session.find_document(preview)->pinned());
 }
 
+void test_last_default_document_cannot_close() {
+  TestEnvironment env;
+  auto &session = env.session;
+  const auto first = session.active_document_id();
+  CHECK(!session.can_close_document(first));
+  CHECK(!session.can_close_document(9999));
+
+  const auto second = session.open_document(make_patch(2), {});
+  CHECK(session.can_close_document(first));
+  CHECK(session.close_document(first));
+  // The last document closes while it holds a patch of its own, and leaves
+  // the default one behind.
+  CHECK(session.can_close_document(second));
+  CHECK(session.close_document(second));
+  const auto replacement = session.active_document_id();
+  CHECK(!session.can_close_document(replacement));
+
+  session.current_patch().instrument.algorithm ^= 1;
+  CHECK(session.can_close_document(replacement));
+}
+
 void test_activation_reaches_the_chip() {
   TestEnvironment env;
   auto &session = env.session;
@@ -1126,6 +1147,7 @@ void test_find_document_with_sound() {
 
 int main() {
   test_open_activate_close();
+  test_last_default_document_cannot_close();
   test_activation_reaches_the_chip();
   test_find_by_selection_path();
   test_modified_per_document();

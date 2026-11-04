@@ -29,6 +29,9 @@ void close_document_now(AppContext &ctx, patches::DocumentId id) {
 
 /// Close a document, asking first when it has unsaved changes.
 void request_close_document(AppContext &ctx, patches::DocumentId id) {
+  if (!ctx.services.patch_session.can_close_document(id)) {
+    return;
+  }
   const auto decision = patches::close_document_decision(
       ctx.services.patch_session.find_document(id));
   switch (decision.action) {

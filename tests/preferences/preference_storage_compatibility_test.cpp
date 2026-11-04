@@ -19,6 +19,7 @@ nlohmann::json read_json(const fs::path &path) {
 nlohmann::json current_keys(nlohmann::json value) {
   value.erase("layout");
   value["ui"].erase("show_audio_controls");
+  value["ui"].erase("show_patch_editor");
   return value;
 }
 

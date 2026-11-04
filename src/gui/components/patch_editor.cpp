@@ -560,7 +560,7 @@ void render_document_window(PatchEditorContext &context,
   // Marked unsaved, a document's tab stays in place when its close button
   // is pressed, while the user is asked about the changes.
   const bool visible = ui::begin_window(
-      title.c_str(), &open,
+      title.c_str(), session.can_close_document(id) ? &open : nullptr,
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
           (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
   ImGui::PopStyleColor(was_active ? 3 : 1);
@@ -655,10 +655,6 @@ void render_patch_editors(PatchEditorContext &context,
       edit.selection.clear();
       edit.baseline.clear();
     }
-  }
-
-  if (!context.prefs.show_patch_editor) {
-    return;
   }
 
   EditorFrame frame;

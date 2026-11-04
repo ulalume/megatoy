@@ -164,6 +164,9 @@ public:
    * document in its place, as a preview.
    */
   bool close_document(DocumentId id);
+  /// False for the last document while it holds just the default patch:
+  /// closing it would put the same one back.
+  bool can_close_document(DocumentId id) const;
   std::size_t modified_document_count() const;
   void mark_all_clean();
 
