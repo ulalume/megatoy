@@ -20,7 +20,8 @@ namespace ui {
 
 void preview_image(const PreviewTexture &preview, float frame_height) {
   const ImVec2 image_size = ui::scale::px(preview.size);
-  const float pad = std::max(0.0f, (frame_height - image_size.y) * 0.5f);
+  // Parenthesized past windows.h's max macro, which the GL loader brings in.
+  const float pad = (std::max)(0.0f, (frame_height - image_size.y) * 0.5f);
   ImGui::Dummy(ImVec2(image_size.x + pad * 2.0f, image_size.y + pad * 2.0f));
   // Over the picture's outermost pixels, which the images leave clear for it,
   // or around the picture when the frame is taller than it.
