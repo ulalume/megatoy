@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -296,6 +297,14 @@ bool begin_app_menu() {
   return open;
 }
 
+/// A View menu switch for a panel, its icon in a column of its own so the
+/// titles line up.
+void panel_menu_item(const char *icon, const char *title, bool &shown) {
+  if (ImGui::MenuItemEx(title, icon, nullptr, shown)) {
+    shown = !shown;
+  }
+}
+
 } // namespace
 
 void render_main_menu(MainMenuContext &context) {
@@ -522,15 +531,17 @@ void render_main_menu(MainMenuContext &context) {
         ImGui::Separator();
       }
 
-      ImGui::MenuItem(PATCH_BROWSER_TITLE, nullptr,
-                      &ui_prefs.show_patch_selector);
-      ImGui::MenuItem(PATCH_EDITOR_TITLE, nullptr, &ui_prefs.show_patch_editor);
-      ImGui::MenuItem(PATCH_LAB_TITLE, nullptr, &ui_prefs.show_patch_lab);
-      ImGui::MenuItem(SOFT_KEYBOARD_TITLE, nullptr,
-                      &ui_prefs.show_midi_keyboard);
-      ImGui::MenuItem(MML_CONSOLE_TITLE, nullptr, &ui_prefs.show_mml_console);
-      ImGui::MenuItem(WAVEFORM_TITLE, nullptr, &ui_prefs.show_waveform);
-      ImGui::MenuItem(PREFERENCES_TITLE, nullptr, &ui_prefs.show_preferences);
+      panel_menu_item(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE,
+                      ui_prefs.show_patch_selector);
+      panel_menu_item("", PATCH_EDITOR_TITLE, ui_prefs.show_patch_editor);
+      panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
+      panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
+                      ui_prefs.show_midi_keyboard);
+      panel_menu_item(MML_CONSOLE_ICON, MML_CONSOLE_TITLE,
+                      ui_prefs.show_mml_console);
+      panel_menu_item(WAVEFORM_ICON, WAVEFORM_TITLE, ui_prefs.show_waveform);
+      panel_menu_item(PREFERENCES_ICON, PREFERENCES_TITLE,
+                      ui_prefs.show_preferences);
 
       ImGui::Separator();
 

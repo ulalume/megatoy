@@ -79,10 +79,7 @@ bool is_within(const ImGuiDockNode *node, const ImGuiDockNode *region) {
 } // namespace
 
 bool is_editor_window(std::string_view window_name) {
-  // Saved settings keep only what follows "###".
-  if (const auto at = window_name.find("###"); at != std::string_view::npos) {
-    window_name.remove_prefix(at + 3);
-  }
+  window_name = window_id(window_name);
   const std::string_view title(PATCH_EDITOR_TITLE);
   if (!window_name.starts_with(title)) {
     return false;
@@ -95,6 +92,7 @@ bool is_editor_window(std::string_view window_name) {
 }
 
 std::optional<Area> area_of(std::string_view window_name) {
+  window_name = window_id(window_name);
   if (window_name == PATCH_BROWSER_TITLE) {
     return Area::Sidebar;
   }

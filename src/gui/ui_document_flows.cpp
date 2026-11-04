@@ -151,7 +151,7 @@ void handle_close_shortcut(AppContext &ctx) {
   if (focused == nullptr) {
     return;
   }
-  const std::string_view name = focused->RootWindow->Name;
+  const std::string_view name = window_id(focused->RootWindow->Name);
   if (bool *shown = panel_switch(ctx.ui_state().prefs, name)) {
     *shown = false;
     return;

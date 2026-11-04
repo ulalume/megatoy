@@ -17,6 +17,8 @@ void test_every_view_has_its_area() {
   CHECK(area_of(ui::SOFT_KEYBOARD_TITLE) == Area::FooterRight);
   CHECK(area_of(ui::MML_CONSOLE_TITLE) == Area::FooterRight);
   CHECK(area_of(ui::PATCH_LAB_TITLE) == Area::FooterRight);
+  CHECK(area_of(ui::panel_window_title(
+            ui::WAVEFORM_ICON, ui::WAVEFORM_TITLE)) == Area::FooterLeft);
   // Saved settings keep only the id after "###".
   CHECK(area_of("Patch Editor 2") == Area::Main);
   CHECK(!area_of("Patch Editor Help").has_value());
