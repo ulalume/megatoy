@@ -13,6 +13,7 @@
 #include <chord_detector.h>
 #include <cmath>
 #include <imgui.h>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -378,6 +379,11 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     float y = ImGui::GetCursorScreenPos().y;
     float x = cursor.x;
 
+    // A press on any key sounds whichever key the pointer is over, so a drag
+    // plays each key it crosses.
+    bool pointer_held = false;
+    std::optional<ym2612::Note> under_pointer;
+
     for (auto note : notes) {
       bool is_key_mapped = context.state.reverse_mappings.find(note) !=
                            context.state.reverse_mappings.end();
@@ -396,18 +402,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       ImGui::InvisibleButton("white_key",
                              ImVec2(key_max.x - key_min.x, key_height));
 
-      bool key_is_active = ImGui::IsItemActive();
-      bool key_was_deactivated = ImGui::IsItemDeactivated();
-      if (key_is_active && !is_pressed) {
-        if (context.key_on) {
-          context.key_on(note, 127);
-        }
-      }
-
-      if (key_was_deactivated && is_pressed) {
-        if (context.key_off) {
-          context.key_off(note);
-        }
+      pointer_held |= ImGui::IsItemActive();
+      if (ImGui::IsItemHovered(
+              ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
+        under_pointer = note;
       }
 
       ImGui::PopID();
@@ -451,6 +449,20 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         draw_list->AddText(text_pos, text_color, key_text.c_str());
       }
       x += key_width;
+    }
+
+    const auto wanted = pointer_held ? under_pointer : std::nullopt;
+    auto &sounding = context.state.pointer_note;
+    if (sounding != wanted) {
+      if (sounding && context.key_off &&
+          (!context.key_is_pressed || context.key_is_pressed(*sounding))) {
+        context.key_off(*sounding);
+      }
+      if (wanted && context.key_on &&
+          !(context.key_is_pressed && context.key_is_pressed(*wanted))) {
+        context.key_on(*wanted, 127);
+      }
+      sounding = wanted;
     }
   }
   ImGui::EndChild();
