@@ -332,10 +332,19 @@ void render_ui_scale_combo(PreferencesContext &context) {
   }
 }
 
+/// A section's title, a line's height below the section before it.
+void section_title(const char *title, bool first = false) {
+  if (!first) {
+    ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
+  }
+  ImGui::SeparatorText(title);
+}
+
 void render_general_page(PreferencesContext &context) {
   auto &prefs = context.preferences;
   auto &ui_prefs = context.ui_prefs;
 
+  section_title("Appearance", true);
   const auto &themes = ui::styles::available_themes();
   int current_theme_index = 0;
   auto current_theme = prefs.theme();
@@ -368,8 +377,7 @@ void render_general_page(PreferencesContext &context) {
 
   render_ui_scale_combo(context);
 
-  ImGui::Spacing();
-
+  section_title("Editing");
   static constexpr const char *multi_edit_modes[] = {
       "Relative (keep the distance between operators)",
       "Absolute (set every selected operator to the same value)"};
@@ -385,7 +393,7 @@ void render_general_page(PreferencesContext &context) {
 // switch below it is a patch source too, and it has nowhere to sit under a
 // heading that only admits folders.
 void render_patches_page(PreferencesContext &context) {
-  ImGui::SeparatorText("Sources");
+  section_title("Sources", true);
   ImGui::TextWrapped("megatoy reads patches from the folders you add here.");
   ImGui::Spacing();
 
@@ -475,7 +483,7 @@ void render_patches_page(PreferencesContext &context) {
 
   // After the folders rather than before them: Sources is what the page is
   // named for, and pushing the list down for one slider would bury it.
-  ImGui::SeparatorText("Editor");
+  section_title("Editor");
 
   auto &ui_prefs = context.ui_prefs;
   int reference_note = std::clamp(ui_prefs.envelope_reference_midi_note,
@@ -499,6 +507,7 @@ void render_patches_page(PreferencesContext &context) {
 void render_sound_page(PreferencesContext &context) {
   auto &ui_prefs = context.ui_prefs;
 
+  section_title("Emulation", true);
   static constexpr const char *cores[] = {"Nuked-OPN2 (accurate)",
                                          "ymfm (fast)"};
   ui_prefs.ym2612_core = std::clamp(ui_prefs.ym2612_core, 0, 1);
@@ -511,8 +520,7 @@ void render_sound_page(PreferencesContext &context) {
   ImGui::Combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
                static_cast<int>(std::size(chip_types)));
 
-  ImGui::Spacing();
-
+  section_title("Audio");
   // The frames the device ends up with. The web backend is asked for half of
   // it, because it doubles whatever it is given, so the default is not the
   // same number on every platform.
@@ -553,8 +561,7 @@ void render_sound_page(PreferencesContext &context) {
   ImGui::Combo("Load meter", &ui_prefs.audio_load_reading, load_readings,
                static_cast<int>(std::size(load_readings)));
 
-  ImGui::Spacing();
-
+  section_title("Channels");
   // Not a MIDI setting: the channel allocator runs the same whichever
   // keyboard the note arrived from.
   ImGui::Checkbox("Steal oldest note when all 6 channels are busy",
@@ -566,7 +573,7 @@ void render_sound_page(PreferencesContext &context) {
 void render_input_page(PreferencesContext &context) {
   auto &ui_prefs = context.ui_prefs;
 
-  ImGui::SeparatorText("MIDI");
+  section_title("MIDI", true);
 
   ImGui::Checkbox("Use MIDI velocity", &ui_prefs.use_velocity);
   if (!ui_prefs.use_velocity) {
@@ -607,7 +614,7 @@ void render_input_page(PreferencesContext &context) {
     ImGui::Unindent();
   }
 
-  ImGui::SeparatorText("Typing Keyboard");
+  section_title("Typing Keyboard");
 
   const int layout_count =
       static_cast<int>(ui::typing_keyboard_layout_names.size());
