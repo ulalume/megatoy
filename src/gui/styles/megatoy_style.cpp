@@ -63,6 +63,9 @@ void derive_widget_colors() {
   set(MegatoyCol::AboutBg, color(MegatoyCol::ModalBg));
   set(MegatoyCol::AboutIconBorder, imgui[ImGuiCol_WindowBg]);
   set(MegatoyCol::PanelBorder, imgui[ImGuiCol_Border]);
+  set(MegatoyCol::SectionHeader, imgui[ImGuiCol_FrameBg]);
+  set(MegatoyCol::SectionHeaderHovered, imgui[ImGuiCol_HeaderHovered]);
+  set(MegatoyCol::SectionHeaderActive, imgui[ImGuiCol_HeaderActive]);
 }
 
 const ImVec4 &color(MegatoyCol col) {

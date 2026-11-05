@@ -70,8 +70,12 @@ enum class MegatoyCol : int {
   AboutBg,
   /// The outline around the icon in the About dialog.
   AboutIconBorder,
-  /// The border of the MML Console's text and Patch Lab's results.
+  /// The border of the Patch Editor's MML text and Patch Lab's results.
   PanelBorder,
+  /// The bar of a section that opens and closes, such as Quick Edit.
+  SectionHeader,
+  SectionHeaderHovered,
+  SectionHeaderActive,
   COUNT
 };
 
