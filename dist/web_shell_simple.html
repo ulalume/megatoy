@@ -11,6 +11,11 @@
         margin: 0;
         height: 100%;
         background: #000;
+        /* A long press neither selects the page nor opens its menu. */
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
       }
       canvas {
         width: 100%;

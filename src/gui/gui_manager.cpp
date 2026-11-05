@@ -18,6 +18,7 @@
 #include <imgui.h>
 #if defined(MEGATOY_PLATFORM_WEB)
 #define IMGUI_IMPL_OPENGL_ES3 1
+#include <emscripten/html5.h>
 #endif
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
@@ -63,6 +64,25 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     return true;
   }
 
+#if defined(MEGATOY_PLATFORM_WEB)
+  // The fingers drive the mouse here instead, and a lift the browser loses
+  // is made good when it says none is left.
+  SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+  ui::touch::drive_mouse();
+  const auto all_lifted = [](int, const EmscriptenTouchEvent *event, void *) {
+    for (int i = 0; i < event->numTouches; ++i) {
+      if (!event->touches[i].isChanged) {
+        return false;
+      }
+    }
+    ui::touch::release_all();
+    return false;
+  };
+  emscripten_set_touchend_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr,
+                                   true, all_lifted);
+  emscripten_set_touchcancel_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr,
+                                      true, all_lifted);
+#endif
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     std::cerr << "Failed to initialize SDL3: " << SDL_GetError() << std::endl;
     return false;

@@ -21,6 +21,16 @@ void finger_up(std::uint64_t id);
 std::span<const Finger> fingers();
 
 /**
+ * Makes the first finger down the mouse, instead of SDL. Its own version
+ * holds the button down for good once the browser loses a finger's lift,
+ * which release_all() cannot reach.
+ */
+void drive_mouse();
+
+/// Lifts every finger, for when the browser says none is left on the screen.
+void release_all();
+
+/**
  * A widget that answers to the fingers themselves takes the one SDL also
  * reports as the mouse, so a drag from it does not scroll too.
  */

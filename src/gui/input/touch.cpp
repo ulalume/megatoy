@@ -5,6 +5,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <vector>
 
@@ -28,6 +29,26 @@ Primary &primary() {
   return primary;
 }
 
+bool &mouse_driven() {
+  static bool driven = false;
+  return driven;
+}
+
+void mouse_at(ImVec2 pos) {
+  ImGuiIO &io = ImGui::GetIO();
+  io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+  io.AddMousePosEvent(pos.x, pos.y);
+}
+
+/// The button up where the finger left, then the pointer off the screen, so
+/// nothing stays lit as if hovered.
+void mouse_lifted() {
+  ImGuiIO &io = ImGui::GetIO();
+  io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+  io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+}
+
 /// The window a drag from `window` scrolls: it, or the nearest window
 /// around it, with room to scroll down.
 ImGuiWindow *scrollable(ImGuiWindow *window) {
@@ -49,6 +70,10 @@ void finger_down(std::uint64_t id, ImVec2 pos) {
   auto &fingers = all_fingers();
   if (fingers.empty()) {
     primary() = {id, true, false};
+    if (mouse_driven()) {
+      mouse_at(pos);
+      ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    }
   }
   fingers.push_back({id, pos});
 }
@@ -59,13 +84,31 @@ void finger_moved(std::uint64_t id, ImVec2 pos) {
       finger.pos = pos;
     }
   }
+  if (mouse_driven() && primary().down && primary().id == id) {
+    mouse_at(pos);
+  }
 }
 
 void finger_up(std::uint64_t id) {
   std::erase_if(all_fingers(),
                 [id](const Finger &finger) { return finger.id == id; });
-  if (primary().id == id) {
+  if (primary().down && primary().id == id) {
     primary().down = false;
+    if (mouse_driven()) {
+      mouse_lifted();
+    }
+  }
+}
+
+void drive_mouse() { mouse_driven() = true; }
+
+void release_all() {
+  all_fingers().clear();
+  if (primary().down) {
+    primary().down = false;
+    if (mouse_driven()) {
+      mouse_lifted();
+    }
   }
 }
 
