@@ -243,10 +243,15 @@ void render_waveform(const char *title, WaveformContext &context) {
 
   const bool clipped = context.scope.clipped_within(kClipHoldFrames);
 
+  // Side by side in a wide area, one above the other in a tall one.
   const ImVec2 available = ImGui::GetContentRegionAvail();
-  const float spacing = ImGui::GetStyle().ItemSpacing.x;
-  const ImVec2 panel_size(std::max(32.0f, (available.x - spacing) * 0.5f),
-                          std::max(32.0f, available.y));
+  const bool stacked = available.y > available.x;
+  const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
+  const ImVec2 panel_size =
+      stacked ? ImVec2(std::max(32.0f, available.x),
+                       std::max(32.0f, (available.y - spacing.y) * 0.5f))
+              : ImVec2(std::max(32.0f, (available.x - spacing.x) * 0.5f),
+                       std::max(32.0f, available.y));
 
   const ImU32 background = styles::color_u32(styles::MegatoyCol::WaveformBg);
   const ImU32 border = styles::color_u32(styles::MegatoyCol::WaveformBorder);
@@ -255,7 +260,9 @@ void render_waveform(const char *title, WaveformContext &context) {
   draw_scope(scope_panel, left, right, mono, clipped);
   end_panel(scope_panel);
 
-  ImGui::SameLine();
+  if (!stacked) {
+    ImGui::SameLine();
+  }
 
   const Panel spectrum_panel =
       begin_panel(panel_size, "##spectrum", background, border);
