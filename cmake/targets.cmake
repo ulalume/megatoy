@@ -137,6 +137,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/envelope/envelope_curve.cpp
   src/gui/input/history_shortcuts.cpp
   src/gui/input/keyboard_typing.cpp
+  src/gui/input/touch.cpp
   src/gui/components/main_menu.cpp
   src/gui/components/modal.cpp
   src/gui/components/midi_keyboard.cpp

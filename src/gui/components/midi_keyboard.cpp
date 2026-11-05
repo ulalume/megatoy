@@ -5,6 +5,7 @@
 #include "gui/areas.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/keyboard_typing.hpp"
+#include "gui/input/touch.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "util.hpp"
@@ -13,6 +14,7 @@
 #include <chord_detector.h>
 #include <cmath>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <optional>
 #include <string>
 #include <vector>
@@ -380,9 +382,18 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     float x = cursor.x;
 
     // A press on any key sounds whichever key the pointer is over, so a drag
-    // plays each key it crosses.
+    // plays each key it crosses. On a touch screen the fingers play, each its
+    // own key, and the mouse SDL makes of the first one is left out.
+    const bool by_touch =
+        ImGui::GetIO().MouseSource == ImGuiMouseSource_TouchScreen;
     bool pointer_held = false;
     std::optional<ym2612::Note> under_pointer;
+    struct KeyRect {
+      ImRect rect;
+      ym2612::Note note;
+    };
+    std::vector<KeyRect> key_rects;
+    key_rects.reserve(notes.size());
 
     for (auto note : notes) {
       bool is_key_mapped = context.state.reverse_mappings.find(note) !=
@@ -402,7 +413,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       ImGui::InvisibleButton("white_key",
                              ImVec2(key_max.x - key_min.x, key_height));
 
-      pointer_held |= ImGui::IsItemActive();
+      key_rects.push_back({ImRect(key_min, key_max), note});
+      pointer_held |= ImGui::IsItemActive() && !by_touch;
       if (ImGui::IsItemHovered(
               ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
         under_pointer = note;
@@ -451,19 +463,56 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       x += key_width;
     }
 
-    const auto wanted = pointer_held ? under_pointer : std::nullopt;
-    auto &sounding = context.state.pointer_note;
-    if (sounding != wanted) {
-      if (sounding && context.key_off &&
-          (!context.key_is_pressed || context.key_is_pressed(*sounding))) {
-        context.key_off(*sounding);
-      }
-      if (wanted && context.key_on &&
-          !(context.key_is_pressed && context.key_is_pressed(*wanted))) {
-        context.key_on(*wanted, 127);
-      }
-      sounding = wanted;
+    std::vector<ym2612::Note> wanted;
+    if (pointer_held && under_pointer) {
+      wanted.push_back(*under_pointer);
     }
+    const ImRect visible = ImGui::GetCurrentWindow()->InnerClipRect;
+    auto &on_keyboard = context.state.fingers_on_keyboard;
+    std::erase_if(on_keyboard, [](const auto &entry) {
+      const auto fingers = touch::fingers();
+      return std::none_of(fingers.begin(), fingers.end(),
+                          [&](const auto &f) { return f.id == entry.first; });
+    });
+    for (const auto &finger : touch::fingers()) {
+      const auto [entry, first_seen] =
+          on_keyboard.try_emplace(finger.id, visible.Contains(finger.pos));
+      if (!entry->second) {
+        continue;
+      }
+      if (first_seen) {
+        touch::claim(finger.id);
+      }
+      if (!visible.Contains(finger.pos)) {
+        continue;
+      }
+      for (const auto &key : key_rects) {
+        if (key.rect.Contains(finger.pos)) {
+          if (std::find(wanted.begin(), wanted.end(), key.note) ==
+              wanted.end()) {
+            wanted.push_back(key.note);
+          }
+          break;
+        }
+      }
+    }
+
+    auto &held = context.state.held_notes;
+    for (const auto &note : held) {
+      if (std::find(wanted.begin(), wanted.end(), note) == wanted.end() &&
+          context.key_off &&
+          (!context.key_is_pressed || context.key_is_pressed(note))) {
+        context.key_off(note);
+      }
+    }
+    for (const auto &note : wanted) {
+      if (std::find(held.begin(), held.end(), note) == held.end() &&
+          context.key_on &&
+          !(context.key_is_pressed && context.key_is_pressed(note))) {
+        context.key_on(note, 127);
+      }
+    }
+    held = std::move(wanted);
   }
   ImGui::EndChild();
 

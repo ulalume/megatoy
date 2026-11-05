@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <title>megatoy</title>
     <link rel="icon" type="image/x-icon" href="icon.ico" />
     <style>
@@ -15,6 +16,8 @@
         width: 100%;
         height: 100%;
         display: block;
+        /* Touches go to the app, not to the page's scrolling and zooming. */
+        touch-action: none;
       }
     </style>
   </head>

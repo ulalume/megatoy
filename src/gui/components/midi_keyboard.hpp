@@ -4,6 +4,7 @@
 #include "input_state.hpp"
 #include "preferences/preference_manager.hpp"
 #include "ym2612/note.hpp"
+#include <cstdint>
 #include <functional>
 #include <imgui.h>
 #include <map>
@@ -29,8 +30,11 @@ struct MidiKeyboardState {
     std::vector<ym2612::Note> sequence_snapshot;
   } playback;
   bool initialized = false;
-  /// The key sounding under the mouse or a finger.
-  std::optional<ym2612::Note> pointer_note;
+  /// The keys sounding under the mouse and the fingers.
+  std::vector<ym2612::Note> held_notes;
+  /// Each finger on the screen: whether it came down on the keyboard, which
+  /// is what lets it play.
+  std::map<std::uint64_t, bool> fingers_on_keyboard;
 
   std::map<ImGuiKey, ym2612::Note> key_mappings;
   std::map<ym2612::Note, ImGuiKey> reverse_mappings;

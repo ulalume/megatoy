@@ -5,6 +5,7 @@
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
+#include "gui/input/touch.hpp"
 #include "gui/layouts.hpp"
 #if defined(__APPLE__)
 #include "gui/mac_window_menu.hpp"
@@ -229,6 +230,7 @@ void GuiManager::begin_frame() {
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
+  ui::touch::drag_to_scroll();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
@@ -316,6 +318,25 @@ void GuiManager::process_event(const SDL_Event &event) {
     if (event.window.windowID == window_id_ &&
         ui_scale_preference_ == ui::scale::kAuto) {
       apply_ui_scale(ui_scale_preference_);
+    }
+    break;
+  // Only a screen touched directly: a trackpad's fingers are the pointer's.
+  case SDL_EVENT_FINGER_DOWN:
+  case SDL_EVENT_FINGER_MOTION:
+  case SDL_EVENT_FINGER_UP:
+  case SDL_EVENT_FINGER_CANCELED:
+    if (SDL_GetTouchDeviceType(event.tfinger.touchID) ==
+        SDL_TOUCH_DEVICE_DIRECT) {
+      const ImVec2 size = ImGui::GetIO().DisplaySize;
+      const ImVec2 pos(event.tfinger.x * size.x, event.tfinger.y * size.y);
+      const auto id = static_cast<std::uint64_t>(event.tfinger.fingerID);
+      if (event.type == SDL_EVENT_FINGER_DOWN) {
+        ui::touch::finger_down(id, pos);
+      } else if (event.type == SDL_EVENT_FINGER_MOTION) {
+        ui::touch::finger_moved(id, pos);
+      } else {
+        ui::touch::finger_up(id);
+      }
     }
     break;
   case SDL_EVENT_DROP_FILE:
