@@ -5,7 +5,7 @@
 
 namespace ui {
 
-/// The Macro and MML sections under the operators: side by side when the
+/// The Quick Edit and MML sections under the operators: side by side when the
 /// window is wide, one above the other otherwise.
 void render_patch_editor_tools(PatchEditorContext &context,
                                ym2612::Patch &patch);

@@ -63,9 +63,9 @@ struct UIState {
     /// operator it reaches. Gathered from the last frame before the
     /// operators are drawn.
     HandleLit echoed;
-    /// The six as a Macro slider that moves them lights them, for the next
+    /// The six as a Quick Edit slider that moves them lights them, for the next
     /// frame's echo.
-    HandleLit macro;
+    HandleLit quick_edit;
     /// A handle on the graph is being dragged, which holds the time axis
     /// still.
     bool handle_active = false;
@@ -91,9 +91,9 @@ struct UIState {
     std::optional<std::string> pending_category;
     /// The rating being dragged, written once the slider is let go.
     std::optional<int> pending_rating;
-    /// The instrument as a Macro drag found it, which every step of the drag
-    /// is worked out from.
-    std::optional<ym2612::ChannelInstrument> macro_base;
+    /// The instrument as a Quick Edit drag found it, which every step of the
+    /// drag is worked out from.
+    std::optional<ym2612::ChannelInstrument> quick_edit_base;
   };
   std::map<patches::DocumentId, DocumentUi> documents;
   /// The document whose editor window is brought to the front next frame.

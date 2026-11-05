@@ -113,8 +113,9 @@ public:
         if (ui.contains("show_patch_lab")) {
           data.ui_preferences.show_patch_lab = ui["show_patch_lab"].get<bool>();
         }
-        if (ui.contains("show_macro")) {
-          data.ui_preferences.show_macro = ui["show_macro"].get<bool>();
+        if (ui.contains("show_quick_edit")) {
+          data.ui_preferences.show_quick_edit =
+              ui["show_quick_edit"].get<bool>();
         }
         if (ui.contains("show_mml")) {
           data.ui_preferences.show_mml = ui["show_mml"].get<bool>();
@@ -239,7 +240,7 @@ public:
       ui["show_patch_selector"] = data.ui_preferences.show_patch_selector;
       ui["show_preferences"] = data.ui_preferences.show_preferences;
       ui["show_patch_lab"] = data.ui_preferences.show_patch_lab;
-      ui["show_macro"] = data.ui_preferences.show_macro;
+      ui["show_quick_edit"] = data.ui_preferences.show_quick_edit;
       ui["show_mml"] = data.ui_preferences.show_mml;
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
       ui["ym2612_chip_type"] = data.ui_preferences.ym2612_chip_type;

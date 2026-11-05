@@ -19,26 +19,26 @@ void light_tweak_fields(PatchEditorContext &context,
                         patch_lab::Tweak tweak, SliderState lit) {
   const auto fields = patch_lab::tweak_fields(instrument, tweak);
   for (int slot = 0; slot < 4; ++slot) {
-    auto &macro = context.envelope_state(slot).macro;
+    auto &quick = context.envelope_state(slot).quick_edit;
     const auto &moved = fields[static_cast<std::size_t>(slot)];
     const auto raise = [lit](SliderState &field, bool on) {
       if (on) {
         field = UIState::EnvelopeState::stronger(field, lit);
       }
     };
-    raise(macro.total_level, moved.total_level);
-    raise(macro.attack_rate, moved.attack_rate);
-    raise(macro.decay_rate, moved.decay_rate);
-    raise(macro.sustain_level, moved.sustain_level);
-    raise(macro.sustain_rate, moved.sustain_rate);
-    raise(macro.release_rate, moved.release_rate);
+    raise(quick.total_level, moved.total_level);
+    raise(quick.attack_rate, moved.attack_rate);
+    raise(quick.decay_rate, moved.decay_rate);
+    raise(quick.sustain_level, moved.sustain_level);
+    raise(quick.sustain_rate, moved.sustain_rate);
+    raise(quick.release_rate, moved.release_rate);
   }
 }
 
-void render_macro_slider(PatchEditorContext &context,
-                         ym2612::ChannelInstrument &instrument,
-                         const char *label, patch_lab::Tweak tweak) {
-  auto &base = context.document_ui(context.document).macro_base;
+void render_quick_edit_slider(PatchEditorContext &context,
+                              ym2612::ChannelInstrument &instrument,
+                              const char *label, patch_lab::Tweak tweak) {
+  auto &base = context.document_ui(context.document).quick_edit_base;
   const auto value = patch_lab::tweak_value(instrument, tweak);
   const auto range = patch_lab::tweak_range(base.value_or(instrument), tweak);
   const auto text = patch_lab::tweak_text(instrument, tweak);
@@ -67,7 +67,7 @@ void render_macro_slider(PatchEditorContext &context,
   if (ImGui::IsItemActivated()) {
     base = instrument;
     // Empty merge key: each drag is its own undo step.
-    context.begin_history(std::string("Macro ") + label, {});
+    context.begin_history(std::string("Quick Edit ") + label, {});
   }
   if (changed && base) {
     instrument = patch_lab::with_tweak(*base, tweak, shown);
@@ -80,23 +80,29 @@ void render_macro_slider(PatchEditorContext &context,
   }
 }
 
-void render_macro_section(PatchEditorContext &context, ym2612::Patch &patch) {
-  ImGui::SetNextItemOpen(context.prefs.show_macro, ImGuiCond_Always);
-  context.prefs.show_macro = ImGui::CollapsingHeader("Macro");
-  if (!context.prefs.show_macro) {
+void render_quick_edit_section(PatchEditorContext &context,
+                               ym2612::Patch &patch) {
+  ImGui::SetNextItemOpen(context.prefs.show_quick_edit, ImGuiCond_Always);
+  context.prefs.show_quick_edit = ImGui::CollapsingHeader("Quick Edit");
+  if (!context.prefs.show_quick_edit) {
     return;
   }
+  ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
+                     "Moves the operators together, keeping their balance.");
   const float label_width = ImGui::CalcTextSize("Brightness").x +
                             ImGui::GetStyle().ItemInnerSpacing.x;
   ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - label_width);
   auto &instrument = patch.instrument;
-  render_macro_slider(context, instrument, "Volume", patch_lab::Tweak::Volume);
-  render_macro_slider(context, instrument, "Brightness",
-                      patch_lab::Tweak::Brightness);
-  render_macro_slider(context, instrument, "Attack", patch_lab::Tweak::Attack);
-  render_macro_slider(context, instrument, "Decay", patch_lab::Tweak::Decay);
-  render_macro_slider(context, instrument, "Release",
-                      patch_lab::Tweak::Release);
+  render_quick_edit_slider(context, instrument, "Volume",
+                           patch_lab::Tweak::Volume);
+  render_quick_edit_slider(context, instrument, "Brightness",
+                           patch_lab::Tweak::Brightness);
+  render_quick_edit_slider(context, instrument, "Attack",
+                           patch_lab::Tweak::Attack);
+  render_quick_edit_slider(context, instrument, "Decay",
+                           patch_lab::Tweak::Decay);
+  render_quick_edit_slider(context, instrument, "Release",
+                           patch_lab::Tweak::Release);
   ImGui::PopItemWidth();
 }
 
@@ -133,7 +139,7 @@ void render_patch_editor_tools(PatchEditorContext &context,
   const bool side_by_side =
       ImGui::GetContentRegionAvail().x > ui::scale::px(800.0f);
   ImGui::Columns(side_by_side ? 2 : 1, "##tools_columns", false);
-  render_macro_section(context, patch);
+  render_quick_edit_section(context, patch);
   ImGui::NextColumn();
   render_mml_section(context, patch);
   ImGui::Columns(1);
