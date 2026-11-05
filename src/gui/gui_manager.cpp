@@ -64,11 +64,10 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     return true;
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  // The fingers drive the mouse here instead, and a lift the browser loses
-  // is made good when it says none is left.
+  // The fingers drive the mouse instead: see ui::touch::drag_to_scroll().
   SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
-  ui::touch::drive_mouse();
+#if defined(MEGATOY_PLATFORM_WEB)
+  // A lift the browser loses is made good when it says none is left.
   const auto all_lifted = [](int, const EmscriptenTouchEvent *event, void *) {
     for (int i = 0; i < event->numTouches; ++i) {
       if (!event->touches[i].isChanged) {
