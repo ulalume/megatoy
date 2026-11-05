@@ -1,12 +1,49 @@
 #pragma once
 
+#include <SDL3/SDL.h>
 #include <cctype>
 #include <imgui.h>
+#include <map>
 #include <string>
+
+// imgui_impl_sdl3.cpp defines it without declaring it in its header.
+ImGuiKey ImGui_ImplSDL3_KeyEventToImGuiKey(SDL_Keycode keycode,
+                                           SDL_Scancode scancode);
 
 namespace ui {
 
+/**
+ * The character each key types on the keyboard layout in use. ImGui names a
+ * symbol key by where it sits on a US keyboard, so on another layout -- a
+ * Japanese one, say -- the key that types "[" is ImGuiKey_RightBracket. Only
+ * printable ASCII, which the font has.
+ */
+inline const std::map<ImGuiKey, std::string> &layout_key_names() {
+  static const auto names = [] {
+    std::map<ImGuiKey, std::string> names;
+    for (int code = 0; code < SDL_SCANCODE_COUNT; ++code) {
+      const auto scancode = static_cast<SDL_Scancode>(code);
+      const SDL_Keycode keycode =
+          SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false);
+      if (keycode <= ' ' || keycode >= 0x7F) {
+        continue;
+      }
+      const ImGuiKey key = ImGui_ImplSDL3_KeyEventToImGuiKey(keycode, scancode);
+      if (key != ImGuiKey_None) {
+        names.emplace(key, std::string(1, static_cast<char>(std::toupper(
+                                              static_cast<int>(keycode)))));
+      }
+    }
+    return names;
+  }();
+  return names;
+}
+
 inline std::string short_key_name(ImGuiKey key) {
+  const auto &on_layout = layout_key_names();
+  if (const auto found = on_layout.find(key); found != on_layout.end()) {
+    return found->second;
+  }
   switch (key) {
   case ImGuiKey_Semicolon:
     return ";";
