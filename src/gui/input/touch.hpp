@@ -39,7 +39,8 @@ void claim(std::uint64_t id);
 /**
  * A finger dragged up or down scrolls the window under it, as a touch screen
  * is expected to. A press that a slider has answered by changing its value is
- * left to the slider; one on a button, a list row or nothing turns into the
+ * left to the slider, and one on a scrollbar, a resize edge or a dock's
+ * divider to that; one on a button, a list row or nothing turns into the
  * scroll, and the press is dropped. Called after ImGui::NewFrame().
  */
 void drag_to_scroll();

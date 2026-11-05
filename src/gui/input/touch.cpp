@@ -64,6 +64,29 @@ ImGuiWindow *scrollable(ImGuiWindow *window) {
   return nullptr;
 }
 
+/// Whether the press is on something that is dragged by nature: a
+/// scrollbar, a window's resize edge or corner, or a dock's divider.
+bool dragging_a_control(const ImGuiContext &g) {
+  ImGuiWindow *window = g.ActiveIdWindow;
+  if (g.ActiveId == 0 || window == nullptr) {
+    return false;
+  }
+  if ((window->Flags & ImGuiWindowFlags_DockNodeHost) != 0) {
+    return true;
+  }
+  if (g.ActiveId == ImGui::GetWindowScrollbarID(window, ImGuiAxis_X) ||
+      g.ActiveId == ImGui::GetWindowScrollbarID(window, ImGuiAxis_Y)) {
+    return true;
+  }
+  for (int i = 0; i < 4; ++i) {
+    if (g.ActiveId == ImGui::GetWindowResizeCornerID(window, i) ||
+        g.ActiveId == ImGui::GetWindowResizeBorderID(window, ImGuiDir(i))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 void finger_down(std::uint64_t id, ImVec2 pos) {
@@ -148,6 +171,10 @@ void drag_to_scroll() {
     const float dx = io.MousePos.x - start.x;
     const float dy = io.MousePos.y - start.y;
     const bool slider_moved = g.ActiveId != 0 && g.ActiveIdHasBeenEditedBefore;
+    if (dragging_a_control(g)) {
+      target = nullptr;
+      return;
+    }
     if (std::abs(dy) > ui::scale::px(10.0f) && std::abs(dy) > std::abs(dx) &&
         !slider_moved) {
       scrolling = true;
