@@ -82,6 +82,15 @@ bool GuiManager::initialize(const std::string &window_title, int width,
                                    true, all_lifted);
   emscripten_set_touchcancel_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr,
                                       true, all_lifted);
+  // A finger on the screen as the page is hidden is never heard lifting.
+  emscripten_set_visibilitychange_callback(
+      nullptr, true,
+      [](int, const EmscriptenVisibilityChangeEvent *event, void *) {
+        if (event->hidden) {
+          ui::touch::release_all();
+        }
+        return false;
+      });
 #endif
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     std::cerr << "Failed to initialize SDL3: " << SDL_GetError() << std::endl;

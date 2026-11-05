@@ -35,6 +35,23 @@
         event.preventDefault();
       });
       Module.canvas = canvas;
+      // The browser stops the sound when the phone sleeps or the tab is
+      // hidden; the next touch or key brings it back.
+      function resumeAudio() {
+        var sdl = Module["SDL3"];
+        var context = sdl && sdl.audioContext;
+        if (context && context.state !== "running") {
+          context.resume();
+        }
+      }
+      ["touchend", "pointerup", "keydown"].forEach(function (type) {
+        document.addEventListener(type, resumeAudio, true);
+      });
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden) {
+          resumeAudio();
+        }
+      });
     </script>
     <script src="megatoy.js"></script>
   </body>
