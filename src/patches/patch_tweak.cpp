@@ -276,6 +276,30 @@ std::array<TweakFields, 4> tweak_fields(const ChannelInstrument &instrument,
   return fields;
 }
 
+std::optional<TweakShape> tweak_shape(const ChannelInstrument &instrument) {
+  const auto *loudest = loudest_carrier(instrument);
+  if (loudest == nullptr) {
+    return std::nullopt;
+  }
+  const auto *fastest = fastest_carrier(instrument);
+  const auto *held = held_carrier(instrument);
+  const auto *released = longest_release(instrument);
+  const auto fraction = [](int value, int top) {
+    return static_cast<float>(value) / static_cast<float>(top);
+  };
+  TweakShape shape;
+  shape.level = 1.0f - fraction(loudest->total_level, kSilentTotalLevel);
+  shape.attack = 1.0f - fraction(fastest->attack_rate, 31);
+  // A decay rate of 0 never leaves the peak.
+  shape.decay =
+      held->decay_rate == 0 ? 1.0f : 1.0f - fraction(held->decay_rate, 31);
+  shape.sustain =
+      held->decay_rate == 0 ? 1.0f : 1.0f - fraction(held->sustain_level, 15);
+  shape.hold = fraction(held->sustain_rate, 31);
+  shape.release = 1.0f - fraction(released->release_rate, 15);
+  return shape;
+}
+
 std::string tweak_text(const ChannelInstrument &instrument, Tweak tweak) {
   const auto value = tweak_value(instrument, tweak);
   if (!value) {

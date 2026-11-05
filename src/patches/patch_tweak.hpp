@@ -52,6 +52,25 @@ struct TweakFields {
 std::array<TweakFields, 4>
 tweak_fields(const ym2612::ChannelInstrument &instrument, Tweak tweak);
 
+/**
+ * The envelope the tweaks read, rough enough to sketch: each part from 0 to 1.
+ * `level` is how loud; `attack`, `decay` and `release` how long each takes;
+ * `sustain` how much is left once the decay is over, and `hold` how fast that
+ * fades while the key is held.
+ */
+struct TweakShape {
+  float level = 0.0f;
+  float attack = 0.0f;
+  float decay = 0.0f;
+  float sustain = 0.0f;
+  float hold = 0.0f;
+  float release = 0.0f;
+};
+
+/// None when no carrier is enabled.
+std::optional<TweakShape>
+tweak_shape(const ym2612::ChannelInstrument &instrument);
+
 /// The value as the registers or the ear know it.
 std::string tweak_text(const ym2612::ChannelInstrument &instrument,
                        Tweak tweak);

@@ -126,6 +126,32 @@ void test_volume_leaves_a_silent_carrier_silent() {
   CHECK(louder.operators[3].total_level == 100);
 }
 
+void test_shape_follows_the_carriers() {
+  auto base = make_instrument(4);
+  base.operators[2].total_level = 0;
+  base.operators[3].total_level = 64;
+  const auto shape = patch_lab::tweak_shape(base);
+  CHECK(shape.has_value());
+  CHECK(shape->level == 1.0f);
+  CHECK(shape->attack == 0.0f);
+
+  // Longer and quieter as the tweaks move that way.
+  const auto slower =
+      patch_lab::tweak_shape(with_tweak(base, Tweak::Attack, 10));
+  CHECK(slower->attack > shape->attack);
+  const auto quieter =
+      patch_lab::tweak_shape(with_tweak(base, Tweak::Volume, 60));
+  CHECK(quieter->level < shape->level);
+  const auto longer =
+      patch_lab::tweak_shape(with_tweak(base, Tweak::Release, 2));
+  CHECK(longer->release > shape->release);
+
+  auto none = base;
+  none.operators[2].enable = false;
+  none.operators[3].enable = false;
+  CHECK(!patch_lab::tweak_shape(none));
+}
+
 void test_attack_follows_the_fastest_carrier_and_keeps_sounding() {
   auto base = make_instrument(4);
   base.operators[0].attack_rate = 20;
@@ -249,6 +275,7 @@ int main() {
   test_fields_are_the_ones_a_tweak_moves();
   test_volume_keeps_the_carriers_in_balance();
   test_volume_leaves_a_silent_carrier_silent();
+  test_shape_follows_the_carriers();
   test_attack_follows_the_fastest_carrier_and_keeps_sounding();
   test_decay_moves_rate_and_level_as_a_pair();
   test_release_moves_both_tails_and_leaves_a_held_note_held();
