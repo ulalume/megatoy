@@ -28,7 +28,10 @@ std::span<const Finger> fingers();
  */
 void drive_mouse();
 
-/// Lifts every finger, for when the browser says none is left on the screen.
+/**
+ * Lifts every finger still down at the next frame, for when the browser says
+ * none is left on the screen: the lifts SDL did report are read first.
+ */
 void release_all();
 
 /**

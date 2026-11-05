@@ -8,6 +8,7 @@
 #include <cfloat>
 #include <chrono>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 namespace ui::touch {
@@ -222,8 +223,7 @@ void finger_down(std::uint64_t id, ImVec2 pos) {
       touch = {};
       touch.origin = touch.pos = pos;
       touch.down_at = Clock::now();
-      // Hovered, not pressed: the press waits for what the finger does.
-      mouse_at(pos);
+      // Not even hovered: nothing lights up under a finger until it presses.
     }
   }
   fingers.push_back({id, pos});
@@ -287,18 +287,12 @@ void finger_up(std::uint64_t id) {
 
 void drive_mouse() { mouse_driven() = true; }
 
-void release_all() {
-  all_fingers().clear();
-  if (primary().down) {
-    primary().down = false;
-    if (mouse_driven()) {
-      if (gesture().mode == Gesture::Mode::Pressed) {
-        mouse_lifted();
-      }
-      gesture() = {};
-    }
-  }
+bool &lift_pending() {
+  static bool pending = false;
+  return pending;
 }
+
+void release_all() { lift_pending() = true; }
 
 std::span<const Finger> fingers() { return all_fingers(); }
 
@@ -309,6 +303,18 @@ void claim(std::uint64_t id) {
 }
 
 void before_new_frame() {
+  // The browser says so before SDL's own lifts are read, so only what those
+  // left behind is let go.
+  if (std::exchange(lift_pending(), false)) {
+    all_fingers().clear();
+    if (primary().down) {
+      primary().down = false;
+      if (mouse_driven() && gesture().mode == Gesture::Mode::Pressed) {
+        mouse_lifted();
+      }
+      gesture() = {};
+    }
+  }
   if (!mouse_driven() || !primary().down) {
     return;
   }
