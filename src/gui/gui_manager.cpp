@@ -180,6 +180,10 @@ bool GuiManager::initialize(const std::string &window_title, int width,
       ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
 
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
+#if defined(MEGATOY_PLATFORM_WEB)
+  // On a phone a finger on a window's empty space means to scroll it.
+  io.ConfigWindowsMoveFromTitleBarOnly = true;
+#endif
 
   // Apply theme and scale from preferences
   theme_ = preferences_.theme();

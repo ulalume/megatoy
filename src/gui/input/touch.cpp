@@ -20,8 +20,13 @@ using Clock = std::chrono::steady_clock;
 constexpr float kTapSlop = 10.0f;
 /// Held still this long, a finger presses.
 constexpr auto kPressDelay = std::chrono::milliseconds(150);
-/// Held still this long, a press may be dragged rather than scroll.
+/// Held still this long, a press may be dragged rather than scroll, or lifted
+/// for the context menu.
 constexpr auto kLongPress = std::chrono::milliseconds(450);
+/// A flicked scroll slows by this much each second.
+constexpr float kCoastDecayPerSecond = 0.05f;
+/// Below this, in pixels a second, a flicked scroll stops.
+constexpr float kCoastStop = 20.0f;
 
 std::vector<Finger> &all_fingers() {
   static std::vector<Finger> fingers;
@@ -105,10 +110,17 @@ bool dragging_a_control(const ImGuiContext &g) {
  * presses; lifted before either, it taps. Once pressed, a move up or down
  * before the long press is over still turns into a scroll, unless what was
  * pressed took it -- a slider whose value moved, a scrollbar -- so dragging
- * anything else starts with a long press.
+ * anything else starts with a long press, and a long press lifted where it
+ * began opens the context menu. A scroll flicked off coasts to a stop.
  */
 struct Gesture {
-  enum class Mode { Waiting, Pressed, Scrolling } mode = Mode::Waiting;
+  enum class Mode {
+    Waiting,
+    Pressed,
+    Scrolling,
+    Coasting,
+    OpeningMenu,
+  } mode = Mode::Waiting;
   ImVec2 origin;
   ImVec2 pos;
   Clock::time_point down_at;
@@ -116,6 +128,9 @@ struct Gesture {
   bool following = false;
   /// Scrolled by the finger and not yet applied.
   float scroll_by = 0.0f;
+  /// How fast the finger was scrolling, in pixels a second.
+  float velocity = 0.0f;
+  Clock::time_point moved_at;
   ImGuiWindow *target = nullptr;
   bool target_found = false;
 };
@@ -150,6 +165,12 @@ void follow(Gesture &touch) {
 void start_scrolling(Gesture &touch) {
   touch.mode = Gesture::Mode::Scrolling;
   touch.scroll_by = touch.pos.y - touch.origin.y;
+  touch.velocity = 0.0f;
+  touch.moved_at = Clock::now();
+}
+
+bool held_long(const Gesture &touch) {
+  return Clock::now() - touch.down_at > kLongPress;
 }
 
 /// Scrolls the window under where the finger came down by what it has moved
@@ -257,8 +278,20 @@ void finger_moved(std::uint64_t id, ImVec2 pos) {
       mouse_at(pos);
     }
     break;
-  case Gesture::Mode::Scrolling:
+  case Gesture::Mode::Scrolling: {
     touch.scroll_by += step;
+    const auto now = Clock::now();
+    const float seconds =
+        std::chrono::duration<float>(now - touch.moved_at).count();
+    if (seconds > 0.0f) {
+      // Smoothed, so one uneven event does not decide the flick.
+      touch.velocity = 0.7f * (step / seconds) + 0.3f * touch.velocity;
+    }
+    touch.moved_at = now;
+    break;
+  }
+  case Gesture::Mode::Coasting:
+  case Gesture::Mode::OpeningMenu:
     break;
   }
 }
@@ -274,15 +307,37 @@ void finger_up(std::uint64_t id) {
     return;
   }
   auto &touch = gesture();
-  if (touch.mode == Gesture::Mode::Waiting) {
+  switch (touch.mode) {
+  case Gesture::Mode::Waiting:
     // A tap: the press and the release together, where the finger was.
     press(touch);
-  }
-  if (touch.mode == Gesture::Mode::Pressed) {
     mouse_at(touch.pos);
     mouse_lifted();
+    touch = {};
+    break;
+  case Gesture::Mode::Pressed:
+    if (!touch.following && held_long(touch)) {
+      // Opened at the next frame, once the press is let go of unclicked.
+      touch.mode = Gesture::Mode::OpeningMenu;
+      break;
+    }
+    mouse_at(touch.pos);
+    mouse_lifted();
+    touch = {};
+    break;
+  case Gesture::Mode::Scrolling:
+    // A finger that stopped before it lifted does not flick.
+    if (Clock::now() - touch.moved_at < std::chrono::milliseconds(80) &&
+        std::abs(touch.velocity) > kCoastStop) {
+      touch.mode = Gesture::Mode::Coasting;
+    } else {
+      touch = {};
+    }
+    break;
+  case Gesture::Mode::Coasting:
+  case Gesture::Mode::OpeningMenu:
+    break;
   }
-  touch = {};
 }
 
 void drive_mouse() { mouse_driven() = true; }
@@ -330,19 +385,41 @@ void drag_to_scroll() {
     scroll_from_sdl_mouse();
     return;
   }
+  auto &touch = gesture();
+  if (touch.mode == Gesture::Mode::OpeningMenu) {
+    // The press let go of without a click, then a right click in its place.
+    ImGui::ClearActiveID();
+    ImGuiIO &io = ImGui::GetIO();
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    mouse_at(touch.origin);
+    io.AddMouseButtonEvent(ImGuiMouseButton_Right, true);
+    io.AddMouseButtonEvent(ImGuiMouseButton_Right, false);
+    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    touch = {};
+    return;
+  }
+  if (touch.mode == Gesture::Mode::Coasting) {
+    const float seconds = ImGui::GetIO().DeltaTime;
+    touch.scroll_by = touch.velocity * seconds;
+    touch.velocity *= std::pow(kCoastDecayPerSecond, seconds);
+    apply_scroll(touch);
+    if (std::abs(touch.velocity) < kCoastStop || touch.target == nullptr) {
+      touch = {};
+    }
+    return;
+  }
   if (!primary().down) {
     return;
   }
-  auto &touch = gesture();
   if (touch.mode == Gesture::Mode::Pressed && !touch.following) {
     const ImGuiContext &g = *GImGui;
     const bool taken = (g.ActiveId != 0 && g.ActiveIdHasBeenEditedBefore) ||
                        dragging_a_control(g);
-    const bool long_press = Clock::now() - touch.down_at > kLongPress;
-    if (taken || long_press || primary().claimed ||
-        (moved_beyond_tap(touch) && !mostly_vertical(touch))) {
+    const bool moved = moved_beyond_tap(touch);
+    if (taken || primary().claimed || (moved && !mostly_vertical(touch)) ||
+        (moved && held_long(touch))) {
       follow(touch);
-    } else if (moved_beyond_tap(touch)) {
+    } else if (moved) {
       // Let go of whatever the press reached, without a click.
       ImGui::ClearActiveID();
       mouse_lifted();
