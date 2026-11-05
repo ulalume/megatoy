@@ -23,6 +23,9 @@ inline int side_list(const char *id, std::span<const char *const> labels,
   }
   if (ImGui::BeginChild(id, ImVec2(width, 0.0f))) {
     ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
+    // A row's highlight reaches half the spacing above it, the first one's
+    // too.
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + list_row_spacing() * 0.5f);
     for (int i = 0; i < static_cast<int>(labels.size()); ++i) {
       if (ImGui::Selectable(labels[i], i == chosen)) {
         chosen = i;
