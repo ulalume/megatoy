@@ -94,6 +94,9 @@ struct UIState {
     /// The instrument as a Quick Edit drag found it, which every step of the
     /// drag is worked out from.
     std::optional<ym2612::ChannelInstrument> quick_edit_base;
+    /// The MML shown for the patch, and the patch it was made from.
+    std::string mml;
+    std::optional<ym2612::Patch> mml_patch;
   };
   std::map<patches::DocumentId, DocumentUi> documents;
   /// The document whose editor window is brought to the front next frame.

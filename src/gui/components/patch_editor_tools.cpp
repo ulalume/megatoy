@@ -238,9 +238,14 @@ void render_mml_section(PatchEditorContext &context,
   if (!section_header("MML", context.prefs.show_mml)) {
     return;
   }
-  const auto mml =
-      formats::adapter::serialize_text(ym2612_format::Format::Mml, patch)
-          .value_or(std::string{});
+  // Made again only when the patch changes, not every frame.
+  auto &ui = context.document_ui(context.document);
+  if (!ui.mml_patch || *ui.mml_patch != patch) {
+    ui.mml = formats::adapter::serialize_text(ym2612_format::Format::Mml, patch)
+                 .value_or(std::string{});
+    ui.mml_patch = patch;
+  }
+  const std::string &mml = ui.mml;
   if (ImGui::Button("Copy to Clipboard")) {
     platform::clipboard::copy_text(mml.c_str());
   }
