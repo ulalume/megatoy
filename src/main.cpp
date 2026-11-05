@@ -21,6 +21,7 @@
 #include "system/path_service.hpp"
 #else
 #include "platform/native/desktop_platform_services.hpp"
+#include <SDL3/SDL.h>
 #endif
 #include "runtime_context.hpp"
 #include <algorithm>
@@ -56,6 +57,8 @@ void handle_file_drop(void *user_pointer, int count, const char **paths) {
     drop_actions::handle_drop(env, std::filesystem::path(paths[i]));
   }
 }
+
+void draw_frame(RuntimeContext &runtime);
 
 bool run_frame(RuntimeContext &runtime) {
   auto &services = runtime.app_context->services;
@@ -95,6 +98,33 @@ bool run_frame(RuntimeContext &runtime) {
   }
   runtime.frame_scheduler.note_frame_started(frame_started);
 #endif
+
+  draw_frame(runtime);
+  return true;
+}
+
+#if !defined(MEGATOY_PLATFORM_WEB)
+/**
+ * Draws a frame while the window is being resized. macOS keeps the main loop
+ * waiting in its own until the resize ends, and SDL calls this from there,
+ * on the main thread, for each step of it.
+ */
+bool draw_while_resizing(void *runtime, SDL_Event *event) {
+  static bool drawing = false;
+  if (event->type == SDL_EVENT_WINDOW_EXPOSED && event->window.data1 == 1 &&
+      !drawing) {
+    drawing = true;
+    draw_frame(*static_cast<RuntimeContext *>(runtime));
+    drawing = false;
+  }
+  return true;
+}
+#endif
+
+/// Everything of a frame after its events are in.
+void draw_frame(RuntimeContext &runtime) {
+  auto &services = runtime.app_context->services;
+  auto &app_state = runtime.app_context->state;
 
   runtime.midi->poll();
   if (auto ports = runtime.midi->take_changed_ports()) {
@@ -149,7 +179,6 @@ bool run_frame(RuntimeContext &runtime) {
   }
   services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);
   services.gui_manager.end_frame();
-  return true;
 }
 
 } // namespace
@@ -241,6 +270,9 @@ int main(int argc, char *argv[]) {
 
   MEGATOY_APP_STORAGE RuntimeContext runtime{&app_context, &midi, true};
 
+#if !defined(MEGATOY_PLATFORM_WEB)
+  SDL_AddEventWatch(draw_while_resizing, &runtime);
+#endif
   platform::run_main_loop(runtime, run_frame);
 #if defined(MEGATOY_PLATFORM_WEB)
   // The loop is registered and the app lives in static storage; the page
