@@ -48,18 +48,20 @@ struct PatchLabState {
   // Randomize
   int random_template_iterations = 4;
 
-  // Shared sources for blend/morph
+  // Mix
   PatchLabSource source_a;
   PatchLabSource source_b;
   /// The patches a source can be picked from, as of `entries_revision` of the
   /// repository. They point into its tree, which only changes with it.
   std::vector<EntryDisplay> entries;
   std::uint64_t entries_revision = 0;
-  std::string merge_error;
+  std::string mix_error;
 
-  float morph_mix = 0.5f;
-  bool morph_interpolate_algorithm = true;
-  std::string morph_error;
+  /// How Mix makes its patch: each parameter from one source, or in between.
+  enum class MixMode { Pick, Blend };
+  MixMode mix_mode = MixMode::Pick;
+  float blend = 0.5f;
+  bool blend_interpolate_algorithm = true;
 
   // Mutate
   int mutate_amount = 2;
