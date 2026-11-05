@@ -355,7 +355,8 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
     const float indent =
         ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x;
     ImGui::Indent(indent);
-    ImGui::SliderFloat("Blend", &state.blend, 0.0f, 1.0f);
+    // Its own id: the radio button above is "Blend" too.
+    ImGui::SliderFloat("Blend##amount", &state.blend, 0.0f, 1.0f);
     ImGui::Checkbox("Interpolate algorithm",
                     &state.blend_interpolate_algorithm);
     ImGui::Unindent(indent);
@@ -437,6 +438,8 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   const float available = ImGui::GetContentRegionAvail().x;
   const float controls_width =
       std::max(ui::scale::px(320.0f), available * 0.6f);
+  // One child per page, so each keeps its own scroll.
+  ImGui::PushID(page);
   if (ImGui::BeginChild("##PatchLabControls", ImVec2(controls_width, 0),
                         false)) {
     switch (page) {
@@ -453,6 +456,7 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     }
   }
   ImGui::EndChild();
+  ImGui::PopID();
   ImGui::SameLine();
   ImGui::PushStyleColor(ImGuiCol_Border,
                         styles::color(styles::MegatoyCol::PanelBorder));

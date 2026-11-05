@@ -659,8 +659,10 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     const int page =
         side_list("##preference_pages", kPages, ui::scale::px(140.0f),
                   open_sound_tab ? kSoundPage : -1);
-    // Each page scrolls on its own, beside the list. Input in particular is
-    // taller than the window once a few devices show up.
+    // Each page scrolls on its own, beside the list, and keeps its own place.
+    // Input in particular is taller than the window once a few devices show
+    // up.
+    ImGui::PushID(page);
     if (ImGui::BeginChild("##preference_page")) {
       switch (page) {
       case 0:
@@ -678,6 +680,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
       }
     }
     ImGui::EndChild();
+    ImGui::PopID();
   }
 
   view_patch_drop_target();

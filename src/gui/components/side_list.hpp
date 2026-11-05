@@ -15,12 +15,11 @@ namespace ui {
  */
 inline int side_list(const char *id, std::span<const char *const> labels,
                      float width, int select = -1) {
+  ImGuiStorage *storage = ImGui::GetStateStorage();
   ImGui::PushID(id);
-  int &chosen = *ImGui::GetStateStorage()->GetIntRef(ImGui::GetID("page"), 0);
+  const ImGuiID key = ImGui::GetID("page");
   ImGui::PopID();
-  if (select >= 0) {
-    chosen = select;
-  }
+  int chosen = select >= 0 ? select : storage->GetInt(key, 0);
   if (ImGui::BeginChild(id, ImVec2(width, 0.0f))) {
     ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
     // A row's highlight reaches half the spacing above it, the first one's
@@ -34,6 +33,7 @@ inline int side_list(const char *id, std::span<const char *const> labels,
     ImGui::PopStyleVar();
   }
   ImGui::EndChild();
+  storage->SetInt(key, chosen);
 
   const float gap = ImGui::GetStyle().ItemSpacing.x;
   const float x = ImGui::GetItemRectMax().x + gap;
