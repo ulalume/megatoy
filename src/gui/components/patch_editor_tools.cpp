@@ -129,9 +129,7 @@ constexpr int kTweakCount = 5;
  */
 void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
                             const SliderState (&lit)[kTweakCount],
-                            const ImVec2 &size) {
-  const ImVec2 min = ImGui::GetCursorScreenPos();
-  ImGui::Dummy(size);
+                            const ImVec2 &min, const ImVec2 &size) {
   const ImVec2 max(min.x + size.x, min.y + size.y);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   draw_list->AddRectFilled(min, max,
@@ -192,15 +190,21 @@ void render_quick_edit_section(PatchEditorContext &context,
                      "Moves the operators together, keeping their balance.");
   const float available = ImGui::GetContentRegionAvail().x;
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
-  // The sketch only when the sliders keep a useful width beside it.
-  const float sketch_width =
-      available > ui::scale::px(420.0f)
-          ? std::min(available * 0.4f, ui::scale::px(240.0f))
-          : 0.0f;
+  // Beside the sliders while they keep a useful width, above them otherwise.
+  const bool beside = available > ui::scale::px(420.0f);
   const float label_width = ImGui::CalcTextSize("Brightness").x +
                             ImGui::GetStyle().ItemInnerSpacing.x;
-  ImGui::PushItemWidth(available - label_width -
-                       (sketch_width > 0.0f ? sketch_width + spacing : 0.0f));
+  ImVec2 sketch_size(std::min(available * 0.4f, ui::scale::px(240.0f)), 0.0f);
+  ImVec2 sketch_min;
+  if (beside) {
+    ImGui::PushItemWidth(available - label_width - sketch_size.x - spacing);
+  } else {
+    // Drawn once the sliders have said which of them is pointed at.
+    sketch_size = ImVec2(available, ImGui::GetFrameHeight() * 3.0f);
+    sketch_min = ImGui::GetCursorScreenPos();
+    ImGui::Dummy(sketch_size);
+    ImGui::PushItemWidth(available - label_width);
+  }
   auto &instrument = patch.instrument;
   static constexpr std::pair<const char *, patch_lab::Tweak> kSliders[] = {
       {"Volume", patch_lab::Tweak::Volume},
@@ -219,11 +223,13 @@ void render_quick_edit_section(PatchEditorContext &context,
   ImGui::EndGroup();
   ImGui::PopItemWidth();
 
-  if (sketch_width > 0.0f) {
-    const float height = ImGui::GetItemRectSize().y;
+  if (beside) {
+    sketch_size.y = ImGui::GetItemRectSize().y;
     ImGui::SameLine(0.0f, spacing);
-    draw_quick_edit_sketch(instrument, lit, ImVec2(sketch_width, height));
+    sketch_min = ImGui::GetCursorScreenPos();
+    ImGui::Dummy(sketch_size);
   }
+  draw_quick_edit_sketch(instrument, lit, sketch_min, sketch_size);
 }
 
 void render_mml_section(PatchEditorContext &context,
