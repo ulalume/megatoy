@@ -10,6 +10,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
+#include <utility>
 
 namespace ui {
 namespace {
@@ -70,9 +71,11 @@ bool section_header(const char *label, bool &open) {
   return open;
 }
 
-void render_quick_edit_slider(PatchEditorContext &context,
-                              ym2612::ChannelInstrument &instrument,
-                              const char *label, patch_lab::Tweak tweak) {
+/// Draws one slider; returns how it is pointed at.
+SliderState render_quick_edit_slider(PatchEditorContext &context,
+                                     ym2612::ChannelInstrument &instrument,
+                                     const char *label,
+                                     patch_lab::Tweak tweak) {
   auto &base = context.document_ui(context.document).quick_edit_base;
   const auto value = patch_lab::tweak_value(instrument, tweak);
   const auto range = patch_lab::tweak_range(base.value_or(instrument), tweak);
@@ -93,10 +96,11 @@ void render_quick_edit_slider(PatchEditorContext &context,
                        ImGuiSliderFlags_NoInput);
   ImGui::EndDisabled();
 
-  if (ImGui::IsItemActive()) {
-    light_tweak_fields(context, instrument, tweak, SliderState::Active);
-  } else if (ImGui::IsItemHovered()) {
-    light_tweak_fields(context, instrument, tweak, SliderState::Hover);
+  const SliderState lit = ImGui::IsItemActive()    ? SliderState::Active
+                          : ImGui::IsItemHovered() ? SliderState::Hover
+                                                   : SliderState::None;
+  if (lit != SliderState::None) {
+    light_tweak_fields(context, instrument, tweak, lit);
   }
 
   if (ImGui::IsItemActivated()) {
@@ -113,6 +117,70 @@ void render_quick_edit_slider(PatchEditorContext &context,
   if (ImGui::IsItemDeactivatedAfterEdit()) {
     context.commit_history();
   }
+  return lit;
+}
+
+constexpr int kTweakCount = 5;
+
+/**
+ * A sketch of the envelope the sliders move, drawn the way an operator's
+ * graph is: the held line, and the release as an area from the start. Not
+ * to scale; it shows which way each slider takes the shape.
+ */
+void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
+                            const SliderState (&lit)[kTweakCount],
+                            const ImVec2 &size) {
+  const ImVec2 min = ImGui::GetCursorScreenPos();
+  ImGui::Dummy(size);
+  const ImVec2 max(min.x + size.x, min.y + size.y);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  draw_list->AddRectFilled(min, max,
+                           styles::color_u32(styles::MegatoyCol::EnvelopeBg));
+  draw_list->AddRect(min, max,
+                     styles::color_u32(styles::MegatoyCol::EnvelopeGrid));
+  const auto shape = patch_lab::tweak_shape(instrument);
+  if (!shape) {
+    return;
+  }
+
+  const auto is_lit = [&lit](patch_lab::Tweak tweak) {
+    return lit[static_cast<int>(tweak)] != SliderState::None;
+  };
+  const auto curve_color = [&](patch_lab::Tweak tweak) {
+    return styles::color_u32(is_lit(tweak) || is_lit(patch_lab::Tweak::Volume)
+                                 ? styles::MegatoyCol::EnvelopeCurveActive
+                                 : styles::MegatoyCol::EnvelopeCurve);
+  };
+
+  const float pad = ui::scale::px(4.0f);
+  const float left = min.x + pad;
+  const float right = max.x - pad;
+  const float top = min.y + pad;
+  const float floor = max.y - pad;
+  const float width = right - left;
+  const float height = floor - top;
+  // Never flat on the floor, so a quiet patch still has a shape to show.
+  const float peak = floor - height * (0.15f + 0.85f * shape->level);
+  const float attack_end = left + width * (0.02f + 0.22f * shape->attack);
+  const float decay_end = attack_end + width * (0.03f + 0.28f * shape->decay);
+  const float sustain = floor - (floor - peak) * shape->sustain;
+  const float held_end = sustain + (floor - sustain) * shape->hold;
+  const float release_end =
+      std::min(right, left + width * (0.04f + 0.9f * shape->release));
+
+  draw_list->AddTriangleFilled(
+      ImVec2(left, peak), ImVec2(release_end, floor), ImVec2(left, floor),
+      styles::color_u32(is_lit(patch_lab::Tweak::Release)
+                            ? styles::MegatoyCol::EnvelopeReleaseActive
+                            : styles::MegatoyCol::EnvelopeRelease));
+
+  const float thickness = ui::scale::px(1.5f);
+  draw_list->AddLine(ImVec2(left, floor), ImVec2(attack_end, peak),
+                     curve_color(patch_lab::Tweak::Attack), thickness);
+  draw_list->AddLine(ImVec2(attack_end, peak), ImVec2(decay_end, sustain),
+                     curve_color(patch_lab::Tweak::Decay), thickness);
+  draw_list->AddLine(ImVec2(decay_end, sustain), ImVec2(right, held_end),
+                     curve_color(patch_lab::Tweak::Volume), thickness);
 }
 
 void render_quick_edit_section(PatchEditorContext &context,
@@ -122,21 +190,40 @@ void render_quick_edit_section(PatchEditorContext &context,
   }
   ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                      "Moves the operators together, keeping their balance.");
+  const float available = ImGui::GetContentRegionAvail().x;
+  const float spacing = ImGui::GetStyle().ItemSpacing.x;
+  // The sketch only when the sliders keep a useful width beside it.
+  const float sketch_width =
+      available > ui::scale::px(420.0f)
+          ? std::min(available * 0.4f, ui::scale::px(240.0f))
+          : 0.0f;
   const float label_width = ImGui::CalcTextSize("Brightness").x +
                             ImGui::GetStyle().ItemInnerSpacing.x;
-  ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - label_width);
+  ImGui::PushItemWidth(available - label_width -
+                       (sketch_width > 0.0f ? sketch_width + spacing : 0.0f));
   auto &instrument = patch.instrument;
-  render_quick_edit_slider(context, instrument, "Volume",
-                           patch_lab::Tweak::Volume);
-  render_quick_edit_slider(context, instrument, "Brightness",
-                           patch_lab::Tweak::Brightness);
-  render_quick_edit_slider(context, instrument, "Attack",
-                           patch_lab::Tweak::Attack);
-  render_quick_edit_slider(context, instrument, "Decay",
-                           patch_lab::Tweak::Decay);
-  render_quick_edit_slider(context, instrument, "Release",
-                           patch_lab::Tweak::Release);
+  static constexpr std::pair<const char *, patch_lab::Tweak> kSliders[] = {
+      {"Volume", patch_lab::Tweak::Volume},
+      {"Brightness", patch_lab::Tweak::Brightness},
+      {"Attack", patch_lab::Tweak::Attack},
+      {"Decay", patch_lab::Tweak::Decay},
+      {"Release", patch_lab::Tweak::Release},
+  };
+  static_assert(std::size(kSliders) == kTweakCount);
+  SliderState lit[kTweakCount]{};
+  ImGui::BeginGroup();
+  for (const auto &[label, tweak] : kSliders) {
+    lit[static_cast<int>(tweak)] =
+        render_quick_edit_slider(context, instrument, label, tweak);
+  }
+  ImGui::EndGroup();
   ImGui::PopItemWidth();
+
+  if (sketch_width > 0.0f) {
+    const float height = ImGui::GetItemRectSize().y;
+    ImGui::SameLine(0.0f, spacing);
+    draw_quick_edit_sketch(instrument, lit, ImVec2(sketch_width, height));
+  }
 }
 
 void render_mml_section(PatchEditorContext &context,
