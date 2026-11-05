@@ -82,6 +82,18 @@ bool on_visibility_change(int, const EmscriptenVisibilityChangeEvent *event,
   return false;
 }
 
+/// SDL keeps the browser's player for the next device; without it, the
+/// device opened next makes a new one.
+void drop_sound_player() {
+  EM_ASM({
+    var sdl = Module['SDL3'];
+    if (sdl && sdl.audioContext) {
+      sdl.audioContext.close();
+      sdl.audioContext = undefined;
+    }
+  });
+}
+
 bool sound_is_running() {
   return EM_ASM_INT({
     const sdl = Module['SDL3'];
@@ -110,6 +122,7 @@ bool run_frame(RuntimeContext &runtime) {
 #if defined(MEGATOY_PLATFORM_WEB)
   services.gui_manager.poll_events();
   if (std::exchange(page_shown_again, false) && !sound_is_running()) {
+    drop_sound_player();
     services.audio_manager.reopen_device();
   }
 #else
@@ -144,19 +157,27 @@ bool run_frame(RuntimeContext &runtime) {
  * on the main thread, for each step of it.
  */
 bool draw_while_resizing(void *runtime, SDL_Event *event) {
-  static bool drawing = false;
-  if (event->type == SDL_EVENT_WINDOW_EXPOSED && event->window.data1 == 1 &&
-      !drawing) {
-    drawing = true;
+  if (event->type == SDL_EVENT_WINDOW_EXPOSED && event->window.data1 == 1) {
     draw_frame(*static_cast<RuntimeContext *>(runtime));
-    drawing = false;
   }
   return true;
 }
 #endif
 
-/// Everything of a frame after its events are in.
+/// Everything of a frame after its events are in. Not again inside itself:
+/// a resize step can arrive from an event loop a frame runs, such as a
+/// native dialog's.
 void draw_frame(RuntimeContext &runtime) {
+  static bool drawing = false;
+  if (drawing) {
+    return;
+  }
+  drawing = true;
+  struct Done {
+    bool &flag;
+    ~Done() { flag = false; }
+  } done{drawing};
+
   auto &services = runtime.app_context->services;
   auto &app_state = runtime.app_context->state;
 
