@@ -9,6 +9,7 @@
 #include "gui/styles/theme.hpp"
 #include "gui/ui_scale.hpp"
 #include "platform/platform_config.hpp"
+#include "side_list.hpp"
 #include "view_patch_drop.hpp"
 #include "ym2612/note.hpp"
 #include <algorithm>
@@ -331,7 +332,7 @@ void render_ui_scale_combo(PreferencesContext &context) {
   }
 }
 
-void render_general_tab(PreferencesContext &context) {
+void render_general_page(PreferencesContext &context) {
   auto &prefs = context.preferences;
   auto &ui_prefs = context.ui_prefs;
 
@@ -383,7 +384,7 @@ void render_general_tab(PreferencesContext &context) {
 // Named for what the list is rather than what it holds: the built-in presets
 // switch below it is a patch source too, and it has nowhere to sit under a
 // heading that only admits folders.
-void render_patches_tab(PreferencesContext &context) {
+void render_patches_page(PreferencesContext &context) {
   ImGui::SeparatorText("Sources");
   ImGui::TextWrapped("megatoy reads patches from the folders you add here.");
   ImGui::Spacing();
@@ -472,7 +473,7 @@ void render_patches_tab(PreferencesContext &context) {
     }
   }
 
-  // After the folders rather than before them: Sources is what the tab is
+  // After the folders rather than before them: Sources is what the page is
   // named for, and pushing the list down for one slider would bury it.
   ImGui::SeparatorText("Editor");
 
@@ -495,7 +496,7 @@ void render_patches_tab(PreferencesContext &context) {
       "makes an envelope depend on pitch.");
 }
 
-void render_sound_tab(PreferencesContext &context) {
+void render_sound_page(PreferencesContext &context) {
   auto &ui_prefs = context.ui_prefs;
 
   static constexpr const char *cores[] = {"Nuked-OPN2 (accurate)",
@@ -560,9 +561,9 @@ void render_sound_tab(PreferencesContext &context) {
                   &ui_prefs.steal_oldest_note_when_full);
 }
 
-// MIDI and the typing keyboard share a tab because they answer the same
+// MIDI and the typing keyboard share a page because they answer the same
 // question -- how notes get in -- and neither fills one on its own.
-void render_input_tab(PreferencesContext &context) {
+void render_input_page(PreferencesContext &context) {
   auto &ui_prefs = context.ui_prefs;
 
   ImGui::SeparatorText("MIDI");
@@ -645,37 +646,31 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
 
   areas::keep_in_area(areas::Area::Main, title);
   if (ui::begin_window(title, &ui_prefs.show_preferences)) {
-    if (ui::begin_tab_bar("##preference_tabs")) {
-      // Each tab scrolls in its own child so the tab bar stays put. Input in
-      // particular is taller than the window once a few devices show up.
-      if (ui::begin_tab_item("General")) {
-        ImGui::BeginChild("##general");
-        render_general_tab(context);
-        ImGui::EndChild();
-        ImGui::EndTabItem();
+    static constexpr const char *kPages[] = {"General", "Patches", "Sound",
+                                             "Input"};
+    constexpr int kSoundPage = 2;
+    const int page =
+        side_list("##preference_pages", kPages, ui::scale::px(140.0f),
+                  open_sound_tab ? kSoundPage : -1);
+    // Each page scrolls on its own, beside the list. Input in particular is
+    // taller than the window once a few devices show up.
+    if (ImGui::BeginChild("##preference_page")) {
+      switch (page) {
+      case 0:
+        render_general_page(context);
+        break;
+      case 1:
+        render_patches_page(context);
+        break;
+      case kSoundPage:
+        render_sound_page(context);
+        break;
+      default:
+        render_input_page(context);
+        break;
       }
-      if (ui::begin_tab_item("Patches")) {
-        ImGui::BeginChild("##patches");
-        render_patches_tab(context);
-        ImGui::EndChild();
-        ImGui::EndTabItem();
-      }
-      if (ui::begin_tab_item("Sound", nullptr,
-                             open_sound_tab ? ImGuiTabItemFlags_SetSelected
-                                            : ImGuiTabItemFlags_None)) {
-        ImGui::BeginChild("##sound");
-        render_sound_tab(context);
-        ImGui::EndChild();
-        ImGui::EndTabItem();
-      }
-      if (ui::begin_tab_item("Input")) {
-        ImGui::BeginChild("##input");
-        render_input_tab(context);
-        ImGui::EndChild();
-        ImGui::EndTabItem();
-      }
-      ImGui::EndTabBar();
     }
+    ImGui::EndChild();
   }
 
   view_patch_drop_target();
