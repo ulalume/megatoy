@@ -30,7 +30,7 @@ struct MidiKeyboardState {
     std::vector<ym2612::Note> sequence_snapshot;
   } playback;
   bool initialized = false;
-  /// The keys sounding under the mouse and the fingers.
+  /// The keys this keyboard turned on, under the mouse and the fingers.
   std::vector<ym2612::Note> held_notes;
   /// Each finger on the screen: whether it came down on the keyboard, which
   /// is what lets it play.

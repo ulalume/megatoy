@@ -474,9 +474,20 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       return std::none_of(fingers.begin(), fingers.end(),
                           [&](const auto &f) { return f.id == entry.first; });
     });
+    // A finger plays only if it came down on the keyboard itself, not on a
+    // dialog or a window over it.
+    const auto lands_here = [&visible](ImVec2 pos) {
+      if (!visible.Contains(pos) || ImGui::GetTopMostPopupModal() != nullptr) {
+        return false;
+      }
+      ImGuiWindow *hovered = nullptr;
+      ImGuiWindow *under_moving = nullptr;
+      ImGui::FindHoveredWindowEx(pos, false, &hovered, &under_moving);
+      return hovered == ImGui::GetCurrentWindow();
+    };
     for (const auto &finger : touch::fingers()) {
       const auto [entry, first_seen] =
-          on_keyboard.try_emplace(finger.id, visible.Contains(finger.pos));
+          on_keyboard.try_emplace(finger.id, lands_here(finger.pos));
       if (!entry->second) {
         continue;
       }
@@ -497,22 +508,28 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       }
     }
 
+    // Only what this keyboard turned on, and each of those let go for sure:
+    // the chip's own list of sounding notes lags a frame behind, so a quick
+    // slide would find a note it had just started not sounding yet.
     auto &held = context.state.held_notes;
-    for (const auto &note : held) {
-      if (std::find(wanted.begin(), wanted.end(), note) == wanted.end() &&
-          context.key_off &&
-          (!context.key_is_pressed || context.key_is_pressed(note))) {
+    std::erase_if(held, [&](const ym2612::Note &note) {
+      if (std::find(wanted.begin(), wanted.end(), note) != wanted.end()) {
+        return false;
+      }
+      if (context.key_off) {
         context.key_off(note);
       }
-    }
+      return true;
+    });
     for (const auto &note : wanted) {
+      // Not one another keyboard is already holding.
       if (std::find(held.begin(), held.end(), note) == held.end() &&
-          context.key_on &&
-          !(context.key_is_pressed && context.key_is_pressed(note))) {
+          !(context.key_is_pressed && context.key_is_pressed(note)) &&
+          context.key_on) {
         context.key_on(note, 127);
+        held.push_back(note);
       }
     }
-    held = std::move(wanted);
   }
   ImGui::EndChild();
 
