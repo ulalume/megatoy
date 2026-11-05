@@ -33,6 +33,8 @@
     "show_mml_console": false,
     "show_patch_editor": false,
     "show_patch_lab": false,
+    "show_macro": true,
+    "show_mml": true,
     "show_patch_selector": false,
     "show_preferences": false,
     "show_wave_viewer": false,

@@ -11,14 +11,12 @@ namespace ui {
 constexpr char PATCH_EDITOR_TITLE[] = "Patch Editor";
 constexpr char PATCH_BROWSER_TITLE[] = "Patch Browser";
 constexpr char SOFT_KEYBOARD_TITLE[] = "Soft Keyboard";
-constexpr char MML_CONSOLE_TITLE[] = "MML Console";
 constexpr char WAVEFORM_TITLE[] = "Waveform";
 constexpr char PREFERENCES_TITLE[] = "Preferences";
 constexpr char PATCH_LAB_TITLE[] = "Patch Lab";
 
 constexpr char PATCH_BROWSER_ICON[] = ICON_FA_FOLDER_TREE;
 constexpr char SOFT_KEYBOARD_ICON[] = ICON_MEGATOY_PIANO;
-constexpr char MML_CONSOLE_ICON[] = ICON_FA_CODE;
 constexpr char WAVEFORM_ICON[] = ICON_FA_CHART_LINE;
 constexpr char PREFERENCES_ICON[] = ICON_FA_GEAR;
 constexpr char PATCH_LAB_ICON[] = ICON_FA_FLASK;

@@ -45,9 +45,6 @@ struct PatchLabState {
   std::vector<SessionResult> results;
   std::uint64_t next_result_id = 1;
 
-  /// The instrument the slider being dragged calculates from.
-  std::optional<ym2612::ChannelInstrument> tweak_base;
-
   // Randomize
   int random_template_iterations = 4;
 

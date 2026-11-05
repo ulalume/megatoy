@@ -282,16 +282,6 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
   };
 }
 
-MmlConsoleContext make_mml_console_context(AppContext &ctx) {
-  auto &ui_state = ctx.app_state().ui_state();
-  return {
-      ui_state.prefs,
-      [&ctx]() -> const ym2612::Patch & {
-        return ctx.services.patch_session.current_patch();
-      },
-  };
-}
-
 WaveformContext make_waveform_context(AppContext &ctx) {
   return {
       ctx.app_state().ui_state().prefs,
@@ -311,7 +301,6 @@ FrameContexts::FrameContexts(AppContext &ctx)
       patch_selector(make_patch_selector_context(ctx)),
       preferences(make_preferences_context(ctx)),
       midi_keyboard(make_midi_keyboard_context(ctx)),
-      mml_console(make_mml_console_context(ctx)),
       patch_lab(make_patch_lab_context(ctx)),
       waveform(make_waveform_context(ctx)) {
   patch_editor.begin_history = [&ctx, this](const std::string &label,

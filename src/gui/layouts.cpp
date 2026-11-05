@@ -50,7 +50,6 @@ void build_default_layout(unsigned int dockspace_id) {
   ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
 
   ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);
-  ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, doc_id_down);
   ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
 
   ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, doc_id_down_left);

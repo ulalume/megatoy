@@ -102,8 +102,7 @@ std::optional<Area> area_of(std::string_view window_name) {
   if (window_name == WAVEFORM_TITLE) {
     return Area::FooterLeft;
   }
-  if (window_name == SOFT_KEYBOARD_TITLE || window_name == MML_CONSOLE_TITLE ||
-      window_name == PATCH_LAB_TITLE) {
+  if (window_name == SOFT_KEYBOARD_TITLE || window_name == PATCH_LAB_TITLE) {
     return Area::FooterRight;
   }
   return std::nullopt;

@@ -20,6 +20,7 @@ nlohmann::json current_keys(nlohmann::json value) {
   value.erase("layout");
   value["ui"].erase("show_audio_controls");
   value["ui"].erase("show_patch_editor");
+  value["ui"].erase("show_mml_console");
   return value;
 }
 

@@ -536,8 +536,6 @@ void render_main_menu(MainMenuContext &context) {
       panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
       panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
                       ui_prefs.show_midi_keyboard);
-      panel_menu_item(MML_CONSOLE_ICON, MML_CONSOLE_TITLE,
-                      ui_prefs.show_mml_console);
       panel_menu_item(WAVEFORM_ICON, WAVEFORM_TITLE, ui_prefs.show_waveform);
       panel_menu_item(PREFERENCES_ICON, PREFERENCES_TITLE,
                       ui_prefs.show_preferences);

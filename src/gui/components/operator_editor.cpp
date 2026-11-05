@@ -1120,7 +1120,13 @@ void echo_selection_highlights(PatchEditorContext &context) {
         }
       }
     }
-    context.envelope_state(slot).echoed = echoed;
+    auto &state = context.envelope_state(slot);
+    for (const auto field : kLit) {
+      echoed.*field =
+          UIState::EnvelopeState::stronger(echoed.*field, state.macro.*field);
+    }
+    state.macro = {};
+    state.echoed = echoed;
   }
 }
 

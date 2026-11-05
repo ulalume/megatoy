@@ -98,8 +98,6 @@ void render_all(AppContext &ctx) {
       panel_window_title(PREFERENCES_ICON, PREFERENCES_TITLE);
   static const std::string soft_keyboard =
       panel_window_title(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE);
-  static const std::string mml_console =
-      panel_window_title(MML_CONSOLE_ICON, MML_CONSOLE_TITLE);
   static const std::string patch_lab =
       panel_window_title(PATCH_LAB_ICON, PATCH_LAB_TITLE);
   static const std::string waveform =
@@ -107,7 +105,6 @@ void render_all(AppContext &ctx) {
   render_patch_selector(patch_browser.c_str(), contexts.patch_selector);
   render_preferences_window(preferences.c_str(), contexts.preferences);
   render_midi_keyboard(soft_keyboard.c_str(), contexts.midi_keyboard);
-  render_mml_console(mml_console.c_str(), contexts.mml_console);
   render_patch_lab(patch_lab.c_str(), contexts.patch_lab, patch_lab_state());
   render_waveform(waveform.c_str(), contexts.waveform);
   if (const auto drop = take_view_patch_drop()) {

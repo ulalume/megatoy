@@ -11,6 +11,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
+#include "patch_editor_tools.hpp"
 #include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
@@ -619,6 +620,7 @@ void render_document_window(PatchEditorContext &context,
     // Only the active document is what the chip is playing.
     render_operator_section(context, patch,
                             is_active ? frame.voices : EnvelopeVoices{});
+    render_patch_editor_tools(context, patch);
     handle_operator_deselect(context);
     handle_operator_shortcuts(context, patch);
     ImGui::PopID();
