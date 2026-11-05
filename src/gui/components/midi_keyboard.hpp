@@ -18,9 +18,8 @@ struct MidiKeyboardState {
   Scale cached_scale = Scale::CHROMATIC;
   Key cached_key = Key::C;
   uint8_t cached_octave = 0;
-  TypingKeyboardLayout cached_layout = TypingKeyboardLayout::Qwerty;
-  TypingLayout cached_custom_layout =
-      builtin_typing_layout(TypingKeyboardLayout::Qwerty);
+  TypingKeyboardLayout cached_layout = TypingKeyboardLayout::Auto;
+  TypingLayout cached_custom_layout;
   struct PlaybackState {
     bool playing = false;
     float timer = 0.0f;

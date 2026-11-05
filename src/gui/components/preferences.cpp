@@ -50,11 +50,22 @@ void normalize_custom_layout(UIPreferences &prefs) {
   } else if (keys.size() > ui::typing_layout_max_custom_slots) {
     keys.resize(ui::typing_layout_max_custom_slots);
   }
-  const auto defaults = default_octave_keys(TypingKeyboardLayout::Custom);
+  const auto defaults = keyboard_octave_keys();
   prefs.custom_typing_octave_down_key = static_cast<int>(
       key_from_preference(prefs.custom_typing_octave_down_key, defaults.first));
   prefs.custom_typing_octave_up_key = static_cast<int>(
       key_from_preference(prefs.custom_typing_octave_up_key, defaults.second));
+}
+
+/// The custom layout made again from the places of the keyboard in use, as
+/// Auto has it.
+void reset_to_keyboard(UIPreferences &prefs) {
+  copy_layout_to_preferences(prefs.custom_typing_layout_keys,
+                             keyboard_typing_layout());
+  const auto [down, up] = keyboard_octave_keys();
+  prefs.custom_typing_octave_down_key = static_cast<int>(down);
+  prefs.custom_typing_octave_up_key = static_cast<int>(up);
+  normalize_custom_layout(prefs);
 }
 
 void clamp_capture_state(CustomLayoutEditorState &state,
@@ -342,16 +353,8 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   octave_key_button("octave_up", prefs.custom_typing_octave_up_key, state,
                     CustomLayoutEditorState::OctaveCaptureTarget::Up);
 
-  if (ImGui::Button("Reset to QWERTY")) {
-    copy_builtin_to_preferences(prefs.custom_typing_layout_keys,
-                                qwerty_typing_layout_keys);
-    normalize_custom_layout(prefs);
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("Reset to AZERTY")) {
-    copy_builtin_to_preferences(prefs.custom_typing_layout_keys,
-                                azerty_typing_layout_keys);
-    normalize_custom_layout(prefs);
+  if (ImGui::Button("Reset to this keyboard")) {
+    reset_to_keyboard(prefs);
   }
 
   std::string duplicates;
@@ -690,14 +693,26 @@ void render_input_page(PreferencesContext &context) {
 
   section_title("Typing Keyboard");
 
-  const int layout_count =
-      static_cast<int>(ui::typing_keyboard_layout_names.size());
-  ui_prefs.midi_keyboard_layout =
-      std::clamp(ui_prefs.midi_keyboard_layout, 0, layout_count - 1);
-  int current_layout = ui_prefs.midi_keyboard_layout;
-  if (ImGui::Combo("Layout", &current_layout,
-                   ui::typing_keyboard_layout_names.data(), layout_count)) {
-    ui_prefs.midi_keyboard_layout = current_layout;
+  static constexpr const char *kLayouts[] = {"Auto (this keyboard)", "Custom"};
+  constexpr TypingKeyboardLayout kLayoutValues[] = {
+      TypingKeyboardLayout::Auto, TypingKeyboardLayout::Custom};
+  const auto stored = clamp_layout_pref(ui_prefs.midi_keyboard_layout);
+  ui_prefs.midi_keyboard_layout = static_cast<int>(stored);
+  int current_layout = stored == TypingKeyboardLayout::Custom ? 1 : 0;
+  if (ImGui::Combo("Layout", &current_layout, kLayouts,
+                   static_cast<int>(std::size(kLayouts)))) {
+    const auto chosen = kLayoutValues[current_layout];
+    // A custom layout never touched starts from this keyboard rather than
+    // from the US one it is stored as.
+    const bool untouched =
+        std::equal(ui_prefs.custom_typing_layout_keys.begin(),
+                   ui_prefs.custom_typing_layout_keys.end(),
+                   ui::default_typing_layout_keys.begin(),
+                   ui::default_typing_layout_keys.end());
+    if (chosen == TypingKeyboardLayout::Custom && untouched) {
+      reset_to_keyboard(ui_prefs);
+    }
+    ui_prefs.midi_keyboard_layout = static_cast<int>(chosen);
   }
   const auto selected_layout = clamp_layout_pref(ui_prefs.midi_keyboard_layout);
   if (selected_layout == TypingKeyboardLayout::Custom) {

@@ -188,7 +188,7 @@ const char *typing_label(const MidiKeyboardState &state) {
 std::pair<ImGuiKey, ImGuiKey>
 octave_keys_for_layout(TypingKeyboardLayout layout,
                        const PreferenceManager::UIPreferences &prefs) {
-  const auto defaults = default_octave_keys(layout);
+  const auto defaults = keyboard_octave_keys();
   if (layout != TypingKeyboardLayout::Custom) {
     return defaults;
   }

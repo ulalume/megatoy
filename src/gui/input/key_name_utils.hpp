@@ -1,14 +1,10 @@
 #pragma once
 
-#include <SDL3/SDL.h>
+#include "gui/input/key_positions.hpp"
 #include <cctype>
 #include <imgui.h>
 #include <map>
 #include <string>
-
-// imgui_impl_sdl3.cpp defines it without declaring it in its header.
-ImGuiKey ImGui_ImplSDL3_KeyEventToImGuiKey(SDL_Keycode keycode,
-                                           SDL_Scancode scancode);
 
 namespace ui {
 

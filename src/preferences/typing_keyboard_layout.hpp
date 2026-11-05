@@ -6,14 +6,12 @@
 
 namespace ui {
 
+/// Stored as an int. 1 was AZERTY, which Auto took over with QWERTY.
 enum class TypingKeyboardLayout : int {
-  Qwerty = 0,
-  Azerty = 1,
+  /// Keys by their places on the keyboard in use: see keyboard_typing_layout().
+  Auto = 0,
   Custom = 2,
 };
-
-inline constexpr std::array<const char *, 3> typing_keyboard_layout_names{
-    "QWERTY", "AZERTY", "Custom"};
 
 inline constexpr std::size_t typing_layout_default_slot_count = 17;
 inline constexpr std::size_t typing_layout_builtin_entry_count =
@@ -23,8 +21,10 @@ inline constexpr std::size_t typing_layout_max_custom_slots = 32;
 
 using TypingLayoutPreference = std::vector<int>;
 
-// Key integers are part of the preferences file format. The GUI checks these
-// defaults against its key enum so settings keep the same meaning.
+// Key integers are part of the preferences file format. The GUI checks the
+// octave keys against its key enum so settings keep the same meaning. The
+// layout is a US keyboard's: what Custom holds until it is reset to the
+// keyboard in use.
 inline constexpr int typing_key_none = 0;
 inline constexpr int default_typing_octave_down_key = 597;
 inline constexpr int default_typing_octave_up_key = 599;

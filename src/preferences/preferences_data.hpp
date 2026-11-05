@@ -59,7 +59,7 @@ struct UIPreferences {
   int midi_keyboard_scale = static_cast<int>(Scale::CHROMATIC);
   int midi_keyboard_key = static_cast<int>(Key::C);
   int midi_keyboard_typing_octave = 4;
-  int midi_keyboard_layout = static_cast<int>(ui::TypingKeyboardLayout::Qwerty);
+  int midi_keyboard_layout = static_cast<int>(ui::TypingKeyboardLayout::Auto);
   ui::TypingLayoutPreference custom_typing_layout_keys =
       ui::TypingLayoutPreference(ui::default_typing_layout_keys.begin(),
                                  ui::default_typing_layout_keys.end());
