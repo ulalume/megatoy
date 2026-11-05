@@ -16,6 +16,7 @@
 #include <array>
 #include <cmath>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <map>
 #include <optional>
 #include <string>
@@ -77,11 +78,10 @@ void poll_custom_layout_capture(CustomLayoutEditorState &state,
         CustomLayoutEditorState::OctaveCaptureTarget::None;
     return;
   }
-  for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; ++key) {
+  // Keyboard keys only: the click on Cancel, or any other, is a key to
+  // ImGui too.
+  for (int key = ImGuiKey_Keyboard_BEGIN; key < ImGuiKey_Keyboard_END; ++key) {
     ImGuiKey imgui_key = static_cast<ImGuiKey>(key);
-    if (imgui_key == ImGuiKey_None) {
-      continue;
-    }
     if (ImGui::IsKeyPressed(imgui_key)) {
       if (state.slot_capture_index >= 0 &&
           static_cast<std::size_t>(state.slot_capture_index) <
