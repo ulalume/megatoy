@@ -186,8 +186,6 @@ void render_quick_edit_section(PatchEditorContext &context,
   if (!section_header("Quick Edit", context.prefs.show_quick_edit)) {
     return;
   }
-  ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
-                     "Moves the operators together, keeping their balance.");
   const float available = ImGui::GetContentRegionAvail().x;
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   // Beside the sliders while they keep a useful width, above them otherwise.
