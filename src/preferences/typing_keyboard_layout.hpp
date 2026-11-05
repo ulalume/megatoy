@@ -6,10 +6,10 @@
 
 namespace ui {
 
-/// Stored as an int. 1 was AZERTY, which Auto took over with QWERTY.
+/// Stored as an int. 1 was AZERTY, which Piano took over with QWERTY.
 enum class TypingKeyboardLayout : int {
   /// Keys by their places on the keyboard in use: see keyboard_typing_layout().
-  Auto = 0,
+  Piano = 0,
   Custom = 2,
 };
 

@@ -59,7 +59,7 @@ struct TestEnvironment {
   }
 };
 
-void test_auto_layout_maps_semitones_and_octave_rollover() {
+void test_piano_layout_maps_semitones_and_octave_rollover() {
   const std::vector<ym2612::Note> expected{
       {3, Key::C},       {3, Key::C_SHARP}, {3, Key::D},
       {3, Key::D_SHARP}, {3, Key::E},       {3, Key::F},
@@ -69,7 +69,7 @@ void test_auto_layout_maps_semitones_and_octave_rollover() {
       {4, Key::D_SHARP}, {4, Key::E},       {4, Key::F},
       {4, Key::F_SHARP}, {4, Key::G}};
   const auto mapping = ui::create_key_mappings(Scale::CHROMATIC, Key::C, 3,
-                                               TypingKeyboardLayout::Auto, {});
+                                               TypingKeyboardLayout::Piano, {});
   const auto keys = ui::keyboard_typing_layout();
   CHECK(keys.size() == expected.size() + 1);
   CHECK(mapping.size() == expected.size());
@@ -84,7 +84,7 @@ void test_auto_layout_maps_semitones_and_octave_rollover() {
 
 void test_non_chromatic_scales_use_white_key_positions() {
   const auto major = ui::create_key_mappings(Scale::MAJOR, Key::G, 2,
-                                             TypingKeyboardLayout::Auto, {});
+                                             TypingKeyboardLayout::Piano, {});
   const std::vector<ImGuiKey> keys{
       ImGuiKey_A, ImGuiKey_S,         ImGuiKey_D,          ImGuiKey_F,
       ImGuiKey_G, ImGuiKey_H,         ImGuiKey_J,          ImGuiKey_K,
@@ -230,7 +230,7 @@ void test_disabled_octave_keys_and_absent_callbacks_are_supported() {
 } // namespace
 
 int main() {
-  test_auto_layout_maps_semitones_and_octave_rollover();
+  test_piano_layout_maps_semitones_and_octave_rollover();
   test_non_chromatic_scales_use_white_key_positions();
   test_custom_layouts_allow_empty_short_and_unterminated_input();
   test_press_hold_and_release_emit_one_pair_of_events();

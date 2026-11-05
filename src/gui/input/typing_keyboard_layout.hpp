@@ -63,7 +63,7 @@ inline constexpr TypingKeyboardLayout clamp_layout_pref(int value) {
   return static_cast<TypingKeyboardLayout>(value) ==
                  TypingKeyboardLayout::Custom
              ? TypingKeyboardLayout::Custom
-             : TypingKeyboardLayout::Auto;
+             : TypingKeyboardLayout::Piano;
 }
 
 inline TypingLayout
