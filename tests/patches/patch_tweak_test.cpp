@@ -107,6 +107,25 @@ void test_volume_keeps_the_carriers_in_balance() {
   CHECK(tweak_value(quiet, Tweak::Volume) == 30);
 }
 
+void test_volume_leaves_a_silent_carrier_silent() {
+  auto base = make_instrument(4);
+  base.operators[2].total_level = 0;
+  base.operators[3].total_level = 127;
+  CHECK(tweak_value(base, Tweak::Volume) == 127);
+
+  const auto quieter = with_tweak(base, Tweak::Volume, 100);
+  CHECK(quieter.operators[2].total_level == 27);
+  CHECK(quieter.operators[3].total_level == 127);
+  CHECK(tweak_value(quieter, Tweak::Volume) == 100);
+
+  // With every carrier silent, they all come up together.
+  auto silent = base;
+  silent.operators[2].total_level = 127;
+  const auto louder = with_tweak(silent, Tweak::Volume, 27);
+  CHECK(louder.operators[2].total_level == 100);
+  CHECK(louder.operators[3].total_level == 100);
+}
+
 void test_attack_follows_the_fastest_carrier_and_keeps_sounding() {
   auto base = make_instrument(4);
   base.operators[0].attack_rate = 20;
@@ -229,6 +248,7 @@ int main() {
   test_brightness_needs_a_modulator();
   test_fields_are_the_ones_a_tweak_moves();
   test_volume_keeps_the_carriers_in_balance();
+  test_volume_leaves_a_silent_carrier_silent();
   test_attack_follows_the_fastest_carrier_and_keeps_sounding();
   test_decay_moves_rate_and_level_as_a_pair();
   test_release_moves_both_tails_and_leaves_a_held_note_held();

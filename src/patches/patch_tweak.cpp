@@ -16,6 +16,7 @@ constexpr int kMinAttack = 4;
 constexpr int kMaxDecay = 31 + 15 * 2;
 constexpr int kMaxShift = 127;
 constexpr double kDecibelsPerTotalLevel = 0.75;
+constexpr int kSilentTotalLevel = 127;
 
 bool is_carrier(const ChannelInstrument &instrument, std::size_t index) {
   return index >= ym2612::algorithm_modulator_count[instrument.algorithm];
@@ -85,21 +86,34 @@ uint8_t moved(int value, int shift, int low, int high) {
 }
 
 void shift_volume(ChannelInstrument &instrument, int shift) {
+  // A silent carrier adds nothing to the mix, so it stays silent and stops
+  // nothing -- unless every carrier is silent, when they all come up.
+  bool any_audible = false;
+  for (std::size_t i = 0; i < 4; ++i) {
+    const auto &op = instrument.operators[i];
+    any_audible |= op.enable && is_carrier(instrument, i) &&
+                   op.total_level < kSilentTotalLevel;
+  }
+  const auto moves = [&](std::size_t i) {
+    const auto &op = instrument.operators[i];
+    return op.enable && is_carrier(instrument, i) &&
+           (!any_audible || op.total_level < kSilentTotalLevel);
+  };
+
   // Carriers stay in balance: all of them stop when the first one reaches an
   // end, since the mix between them is part of the sound.
   int quietest = 0;
-  int loudest = 127;
+  int loudest = kSilentTotalLevel;
   for (std::size_t i = 0; i < 4; ++i) {
-    const auto &op = instrument.operators[i];
-    if (op.enable && is_carrier(instrument, i)) {
-      quietest = std::max<int>(quietest, op.total_level);
-      loudest = std::min<int>(loudest, op.total_level);
+    if (moves(i)) {
+      quietest = std::max<int>(quietest, instrument.operators[i].total_level);
+      loudest = std::min<int>(loudest, instrument.operators[i].total_level);
     }
   }
-  const int amount = std::clamp(shift, quietest - 127, loudest);
+  const int amount = std::clamp(shift, quietest - kSilentTotalLevel, loudest);
   for (std::size_t i = 0; i < 4; ++i) {
-    auto &op = instrument.operators[i];
-    if (op.enable && is_carrier(instrument, i)) {
+    if (moves(i)) {
+      auto &op = instrument.operators[i];
       op.total_level = static_cast<uint8_t>(op.total_level - amount);
     }
   }
