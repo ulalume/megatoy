@@ -106,11 +106,11 @@ void test_volume_keeps_the_carriers_in_balance() {
   CHECK(patch_lab::tweak_change_text(loud, base, Tweak::Volume) == "-7.5 dB");
   CHECK(patch_lab::tweak_change_text(base, base, Tweak::Volume) == "+0.0 dB");
 
-  // Both stop once the quieter one is out of room.
+  // Both stop once the quieter one is out of room, short of silence.
   const auto quiet = with_tweak(base, Tweak::Volume, 0);
-  CHECK(quiet.operators[2].total_level == 97);
-  CHECK(quiet.operators[3].total_level == 127);
-  CHECK(tweak_value(quiet, Tweak::Volume) == 30);
+  CHECK(quiet.operators[2].total_level == 96);
+  CHECK(quiet.operators[3].total_level == 126);
+  CHECK(tweak_value(quiet, Tweak::Volume) == 31);
 }
 
 void test_volume_leaves_a_silent_carrier_silent() {
@@ -123,6 +123,16 @@ void test_volume_leaves_a_silent_carrier_silent() {
   CHECK(quieter.operators[2].total_level == 27);
   CHECK(quieter.operators[3].total_level == 127);
   CHECK(tweak_value(quieter, Tweak::Volume) == 100);
+
+  // Down as far as it goes and up again, the silent one stays silent.
+  const auto bottom = with_tweak(base, Tweak::Volume, 0);
+  CHECK(bottom.operators[2].total_level == 126);
+  const auto back = with_tweak(bottom, Tweak::Volume, 127);
+  CHECK(back.operators[2].total_level == 0);
+  CHECK(back.operators[3].total_level == 127);
+  // Volume lights only the carrier it moves.
+  const auto fields = tweak_fields(base, Tweak::Volume);
+  CHECK(fields[2].total_level && !fields[3].total_level);
 
   // With every carrier silent, they all come up together.
   auto silent = base;

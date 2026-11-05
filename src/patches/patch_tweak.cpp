@@ -85,34 +85,44 @@ uint8_t moved(int value, int shift, int low, int high) {
   return static_cast<uint8_t>(std::clamp(value + shift, low, high));
 }
 
-void shift_volume(ChannelInstrument &instrument, int shift) {
-  // A silent carrier adds nothing to the mix, so it stays silent and stops
-  // nothing -- unless every carrier is silent, when they all come up.
-  bool any_audible = false;
+bool any_carrier_audible(const ChannelInstrument &instrument) {
   for (std::size_t i = 0; i < 4; ++i) {
     const auto &op = instrument.operators[i];
-    any_audible |= op.enable && is_carrier(instrument, i) &&
-                   op.total_level < kSilentTotalLevel;
+    if (op.enable && is_carrier(instrument, i) &&
+        op.total_level < kSilentTotalLevel) {
+      return true;
+    }
   }
-  const auto moves = [&](std::size_t i) {
-    const auto &op = instrument.operators[i];
-    return op.enable && is_carrier(instrument, i) &&
-           (!any_audible || op.total_level < kSilentTotalLevel);
-  };
+  return false;
+}
 
+/// Whether Volume moves operator `i`. A silent carrier adds nothing to the
+/// mix, so it stays silent -- unless every carrier is, when they all come up.
+bool moved_by_volume(const ChannelInstrument &instrument, std::size_t i,
+                     bool any_audible) {
+  const auto &op = instrument.operators[i];
+  return op.enable && is_carrier(instrument, i) &&
+         (!any_audible || op.total_level < kSilentTotalLevel);
+}
+
+void shift_volume(ChannelInstrument &instrument, int shift) {
+  const bool any_audible = any_carrier_audible(instrument);
   // Carriers stay in balance: all of them stop when the first one reaches an
-  // end, since the mix between them is part of the sound.
+  // end, since the mix between them is part of the sound. One that sounds
+  // stops short of silence, so turning the volume down and up again never
+  // wakes a carrier that was silent on purpose.
+  const int floor = any_audible ? kSilentTotalLevel - 1 : kSilentTotalLevel;
   int quietest = 0;
   int loudest = kSilentTotalLevel;
   for (std::size_t i = 0; i < 4; ++i) {
-    if (moves(i)) {
+    if (moved_by_volume(instrument, i, any_audible)) {
       quietest = std::max<int>(quietest, instrument.operators[i].total_level);
       loudest = std::min<int>(loudest, instrument.operators[i].total_level);
     }
   }
-  const int amount = std::clamp(shift, quietest - kSilentTotalLevel, loudest);
+  const int amount = std::clamp(shift, std::min(0, quietest - floor), loudest);
   for (std::size_t i = 0; i < 4; ++i) {
-    if (moves(i)) {
+    if (moved_by_volume(instrument, i, any_audible)) {
       auto &op = instrument.operators[i];
       op.total_level = static_cast<uint8_t>(op.total_level - amount);
     }
@@ -247,6 +257,7 @@ std::array<TweakFields, 4> tweak_fields(const ChannelInstrument &instrument,
   if (!tweak_value(instrument, tweak)) {
     return fields;
   }
+  const bool any_audible = any_carrier_audible(instrument);
   for (std::size_t i = 0; i < 4; ++i) {
     const auto &op = instrument.operators[i];
     if (!op.enable) {
@@ -255,7 +266,7 @@ std::array<TweakFields, 4> tweak_fields(const ChannelInstrument &instrument,
     auto &field = fields[i];
     switch (tweak) {
     case Tweak::Volume:
-      field.total_level = is_carrier(instrument, i);
+      field.total_level = moved_by_volume(instrument, i, any_audible);
       break;
     case Tweak::Brightness:
       field.total_level = !is_carrier(instrument, i);
