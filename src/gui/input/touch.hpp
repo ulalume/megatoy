@@ -23,7 +23,8 @@ std::span<const Finger> fingers();
 /**
  * Makes the first finger down the mouse, instead of SDL. Its own version
  * holds the button down for good once the browser loses a finger's lift,
- * which release_all() cannot reach.
+ * which release_all() cannot reach. The finger then presses only once it is
+ * clear it means to: see drag_to_scroll().
  */
 void drive_mouse();
 
@@ -36,12 +37,18 @@ void release_all();
  */
 void claim(std::uint64_t id);
 
+/// Presses for a finger held still long enough. Called before
+/// ImGui::NewFrame().
+void before_new_frame();
+
 /**
  * A finger dragged up or down scrolls the window under it, as a touch screen
  * is expected to. A press that a slider has answered by changing its value is
  * left to the slider, and one on a scrollbar, a resize edge or a dock's
  * divider to that; one on a button, a list row or nothing turns into the
- * scroll, and the press is dropped. Called after ImGui::NewFrame().
+ * scroll, and the press is dropped. When the fingers drive the mouse, moving
+ * off at once scrolls without pressing at all, a tap clicks, and anything
+ * else is dragged after a long press. Called after ImGui::NewFrame().
  */
 void drag_to_scroll();
 

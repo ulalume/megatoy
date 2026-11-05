@@ -249,6 +249,7 @@ void GuiManager::begin_frame() {
   // Start the Dear ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
+  ui::touch::before_new_frame();
   ImGui::NewFrame();
   ui::touch::drag_to_scroll();
 
