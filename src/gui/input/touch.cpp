@@ -66,10 +66,13 @@ void mouse_lifted() {
 }
 
 /// The window a drag from `window` scrolls: it, or the nearest window
-/// around it, with room to scroll down.
+/// around it, with room to scroll down -- as the mouse wheel finds it, so
+/// one the wheel leaves still, like the patch browser around its list, the
+/// finger does too.
 ImGuiWindow *scrollable(ImGuiWindow *window) {
   while (window != nullptr) {
-    if (window->ScrollMax.y > 0.0f) {
+    if (window->ScrollMax.y > 0.0f &&
+        (window->Flags & ImGuiWindowFlags_NoScrollWithMouse) == 0) {
       return window;
     }
     if ((window->Flags & ImGuiWindowFlags_ChildWindow) == 0) {
