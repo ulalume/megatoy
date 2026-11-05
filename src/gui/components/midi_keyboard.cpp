@@ -47,6 +47,18 @@ build_playback_sequence(const std::vector<Key> &scale_keys,
   return sequence;
 }
 
+/// Lets go of the keys the mouse and fingers hold, for a frame the keys are
+/// not drawn in and so cannot see them lift.
+void release_held_keys(MidiKeyboardContext &context) {
+  for (const auto &note : context.state.held_notes) {
+    if (context.key_off) {
+      context.key_off(note);
+    }
+  }
+  context.state.held_notes.clear();
+  context.state.fingers_on_keyboard.clear();
+}
+
 void stop_playback(MidiKeyboardContext &context) {
   auto &playback = context.state.playback;
   if (playback.note_active && context.key_off) {
@@ -258,6 +270,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       static_cast<int>(input.keyboard_typing_octave);
 
   if (!ui_prefs.show_midi_keyboard) {
+    release_held_keys(context);
     return;
   }
 
@@ -265,6 +278,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                            ImGuiCond_FirstUseEver);
   areas::keep_in_area(areas::Area::FooterRight, title);
   if (!ui::begin_window(title, &ui_prefs.show_midi_keyboard)) {
+    release_held_keys(context);
     ImGui::End();
     return;
   }
@@ -530,6 +544,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         held.push_back(note);
       }
     }
+  } else {
+    release_held_keys(context);
   }
   ImGui::EndChild();
 
