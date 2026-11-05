@@ -5,6 +5,7 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patches/patch_tweak.hpp"
+#include "ym2612/operator_edit.hpp"
 #include <algorithm>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -22,7 +23,9 @@ void light_tweak_fields(PatchEditorContext &context,
   const auto fields = patch_lab::tweak_fields(instrument, tweak);
   for (int slot = 0; slot < 4; ++slot) {
     auto &quick = context.envelope_state(slot).quick_edit;
-    const auto &moved = fields[static_cast<std::size_t>(slot)];
+    // The fields come in register order; the editor's slots are OP1..OP4.
+    const auto &moved =
+        fields[static_cast<std::size_t>(ym2612::operator_register_index(slot))];
     const auto raise = [lit](SliderState &field, bool on) {
       if (on) {
         field = UIState::EnvelopeState::stronger(field, lit);
