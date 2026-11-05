@@ -1,7 +1,8 @@
 #include "audio/webaudio_transport.hpp"
 #include <algorithm>
-#include <string>
+#include <emscripten.h>
 #include <iostream>
+#include <string>
 
 namespace {
 constexpr std::size_t kReservedPeriods = 4;
@@ -107,6 +108,15 @@ void WebAudioTransport::stop() {
     SDL_PauseAudioStreamDevice(audio_stream_);
     SDL_DestroyAudioStream(audio_stream_);
     audio_stream_ = nullptr;
+    // SDL keeps the browser's player for the next device, but a phone may
+    // never let a player it stopped run again: the next start makes a new one.
+    EM_ASM({
+      var sdl = Module['SDL3'];
+      if (sdl && sdl.audioContext) {
+        sdl.audioContext.close();
+        sdl.audioContext = undefined;
+      }
+    });
   }
 
   if (owns_audio_subsystem_) {

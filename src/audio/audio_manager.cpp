@@ -70,6 +70,16 @@ bool AudioManager::set_buffer_frames(int buffer_frames) {
   return false;
 }
 
+bool AudioManager::reopen_device() {
+  if (!transport_ || !engine_.is_running()) {
+    return false;
+  }
+  transport_->stop();
+  engine_.suspend();
+  engine_.resume();
+  return start_transport(buffer_frames_);
+}
+
 bool AudioManager::start_transport(int buffer_frames) {
   transport_->set_buffer_frames(buffer_frames);
 

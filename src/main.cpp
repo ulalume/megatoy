@@ -16,9 +16,12 @@
 #include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "gui/input/touch.hpp"
 #include "platform/web/web_folder_import.hpp"
 #include "platform/web/web_platform_services.hpp"
 #include "system/path_service.hpp"
+#include <emscripten.h>
+#include <emscripten/html5.h>
 #else
 #include "platform/native/desktop_platform_services.hpp"
 #include <SDL3/SDL.h>
@@ -60,6 +63,34 @@ void handle_file_drop(void *user_pointer, int count, const char **paths) {
 
 void draw_frame(RuntimeContext &runtime);
 
+#if defined(MEGATOY_PLATFORM_WEB)
+/// Set as the page shows again; the next frame looks at the sound.
+bool page_shown_again = false;
+
+/**
+ * A phone stops a page's sound while it is hidden and may not let the same
+ * player start again; a new one starts at the next touch. Fingers down as
+ * the page hid are never heard lifting.
+ */
+bool on_visibility_change(int, const EmscriptenVisibilityChangeEvent *event,
+                          void *) {
+  if (event->hidden) {
+    ui::touch::release_all();
+  } else {
+    page_shown_again = true;
+  }
+  return false;
+}
+
+bool sound_is_running() {
+  return EM_ASM_INT({
+    const sdl = Module['SDL3'];
+    const context = sdl && sdl.audioContext;
+    return context && context.state == 'running' ? 1 : 0;
+  });
+}
+#endif
+
 bool run_frame(RuntimeContext &runtime) {
   auto &services = runtime.app_context->services;
   auto &app_state = runtime.app_context->state;
@@ -78,6 +109,9 @@ bool run_frame(RuntimeContext &runtime) {
 
 #if defined(MEGATOY_PLATFORM_WEB)
   services.gui_manager.poll_events();
+  if (std::exchange(page_shown_again, false) && !sound_is_running()) {
+    services.audio_manager.reopen_device();
+  }
 #else
   constexpr std::uint64_t kSignalTailFrames = AppServices::SampleRate / 10;
   // A sounding voice moves along its envelope graph frame by frame, whether
@@ -236,6 +270,7 @@ int main(int argc, char *argv[]) {
       });
   platform::web::install_drop_import(
       megatoy::system::PathService::web_storage_root());
+  emscripten_set_visibilitychange_callback(nullptr, true, on_visibility_change);
 #endif
 
   MEGATOY_APP_STORAGE MidiInputManager midi(
