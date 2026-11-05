@@ -7,6 +7,7 @@
 namespace {
 
 using patch_lab::Tweak;
+using patch_lab::tweak_fields;
 using patch_lab::tweak_range;
 using patch_lab::tweak_text;
 using patch_lab::tweak_value;
@@ -51,25 +52,39 @@ void test_brightness_moves_the_modulators_together() {
   CHECK(with_tweak(base, Tweak::Brightness, 97) == base);
 }
 
-void test_brightness_without_modulators_moves_feedback() {
+void test_brightness_needs_a_modulator() {
   auto base = make_instrument(7);
   base.feedback = 2;
-  CHECK(tweak_range(base, Tweak::Brightness).max == 7);
-  CHECK(tweak_value(base, Tweak::Brightness) == 2);
+  CHECK(!tweak_value(base, Tweak::Brightness));
+  CHECK(with_tweak(base, Tweak::Brightness, 5) == base);
+  CHECK(tweak_text(base, Tweak::Brightness) == "-");
+  for (const auto &fields : tweak_fields(base, Tweak::Brightness)) {
+    CHECK(!fields.total_level);
+  }
+}
 
-  const auto brighter = with_tweak(base, Tweak::Brightness, 5);
-  CHECK(brighter.feedback == 5);
-  CHECK(brighter.operators[0].total_level == 20);
+void test_fields_are_the_ones_a_tweak_moves() {
+  auto base = make_instrument(4); // S1 and S3 modulate, S2 and S4 are carriers.
+  base.operators[3].enable = false;
+  base.operators[1].sustain_rate = 0;
 
-  // Feedback only reaches the output through S1.
-  auto silent = base;
-  silent.operators[0].total_level = 127;
-  CHECK(!tweak_value(silent, Tweak::Brightness));
-  auto disabled = base;
-  disabled.operators[0].enable = false;
-  CHECK(!tweak_value(disabled, Tweak::Brightness));
-  CHECK(with_tweak(disabled, Tweak::Brightness, 5) == disabled);
-  CHECK(tweak_text(disabled, Tweak::Brightness) == "-");
+  const auto volume = tweak_fields(base, Tweak::Volume);
+  CHECK(!volume[0].total_level && !volume[1].total_level);
+  CHECK(volume[2].total_level && !volume[3].total_level);
+  CHECK(!volume[2].attack_rate);
+
+  const auto brightness = tweak_fields(base, Tweak::Brightness);
+  CHECK(brightness[0].total_level && brightness[1].total_level);
+  CHECK(!brightness[2].total_level);
+
+  const auto decay = tweak_fields(base, Tweak::Decay);
+  CHECK(decay[0].decay_rate && decay[0].sustain_level);
+  CHECK(!decay[3].decay_rate);
+
+  // A held note stays held, so its sustain rate is not moved.
+  const auto release = tweak_fields(base, Tweak::Release);
+  CHECK(release[0].release_rate && release[0].sustain_rate);
+  CHECK(release[1].release_rate && !release[1].sustain_rate);
 }
 
 void test_volume_keeps_the_carriers_in_balance() {
@@ -191,6 +206,10 @@ void test_every_algorithm_reads_back_what_was_set() {
     }
     for (const auto tweak : {Tweak::Volume, Tweak::Brightness, Tweak::Attack,
                              Tweak::Decay, Tweak::Release}) {
+      if (tweak == Tweak::Brightness && algorithm == 7) {
+        CHECK(!tweak_value(base, tweak));
+        continue;
+      }
       CHECK(with_tweak(base, tweak, *tweak_value(base, tweak)) == base);
       const auto range = tweak_range(base, tweak);
       int last = *tweak_value(with_tweak(base, tweak, range.min), tweak);
@@ -207,7 +226,8 @@ void test_every_algorithm_reads_back_what_was_set() {
 
 int main() {
   test_brightness_moves_the_modulators_together();
-  test_brightness_without_modulators_moves_feedback();
+  test_brightness_needs_a_modulator();
+  test_fields_are_the_ones_a_tweak_moves();
   test_volume_keeps_the_carriers_in_balance();
   test_attack_follows_the_fastest_carrier_and_keeps_sounding();
   test_decay_moves_rate_and_level_as_a_pair();

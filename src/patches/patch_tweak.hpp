@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ym2612/types.hpp"
+#include <array>
 #include <optional>
 #include <string>
 
@@ -35,6 +36,21 @@ TweakRange tweak_range(const ym2612::ChannelInstrument &instrument,
 /// one base keeps a move reversible past the point where an operator stops.
 ym2612::ChannelInstrument with_tweak(const ym2612::ChannelInstrument &base,
                                      Tweak tweak, int value);
+
+/// The envelope fields of one operator that a tweak moves.
+struct TweakFields {
+  bool total_level = false;
+  bool attack_rate = false;
+  bool decay_rate = false;
+  bool sustain_level = false;
+  bool sustain_rate = false;
+  bool release_rate = false;
+};
+
+/// What moving `tweak` changes on each operator, in storage order; nothing
+/// when the tweak has no value.
+std::array<TweakFields, 4>
+tweak_fields(const ym2612::ChannelInstrument &instrument, Tweak tweak);
 
 /// The value as the registers or the ear know it.
 std::string tweak_text(const ym2612::ChannelInstrument &instrument,

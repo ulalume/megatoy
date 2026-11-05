@@ -17,15 +17,8 @@ constexpr int kMaxDecay = 31 + 15 * 2;
 constexpr int kMaxShift = 127;
 constexpr double kDecibelsPerTotalLevel = 0.75;
 
-// Operators are stored in register order, so S1 comes first.
-constexpr std::size_t kFeedbackOperator = 0;
-
 bool is_carrier(const ChannelInstrument &instrument, std::size_t index) {
   return index >= ym2612::algorithm_modulator_count[instrument.algorithm];
-}
-
-bool has_modulators(const ChannelInstrument &instrument) {
-  return !is_carrier(instrument, 0);
 }
 
 /// The enabled carrier `better` prefers over all others.
@@ -113,11 +106,6 @@ void shift_volume(ChannelInstrument &instrument, int shift) {
 }
 
 void shift_brightness(ChannelInstrument &instrument, int shift) {
-  // With every operator a carrier, feedback is what is left to add harmonics.
-  if (!has_modulators(instrument)) {
-    instrument.feedback = moved(instrument.feedback, shift, 0, 7);
-    return;
-  }
   for (std::size_t i = 0; i < 4; ++i) {
     auto &op = instrument.operators[i];
     if (op.enable && !is_carrier(instrument, i)) {
@@ -177,13 +165,6 @@ ChannelInstrument shifted(const ChannelInstrument &base, Tweak tweak,
 std::optional<int> tweak_value(const ChannelInstrument &instrument,
                                Tweak tweak) {
   if (tweak == Tweak::Brightness) {
-    if (!has_modulators(instrument)) {
-      const auto &op = instrument.operators[kFeedbackOperator];
-      if (!op.enable || op.total_level == 127) {
-        return std::nullopt;
-      }
-      return instrument.feedback;
-    }
     const auto *modulator = strongest_modulator(instrument);
     if (modulator == nullptr) {
       return std::nullopt;
@@ -212,8 +193,6 @@ std::optional<int> tweak_value(const ChannelInstrument &instrument,
 
 TweakRange tweak_range(const ChannelInstrument &instrument, Tweak tweak) {
   switch (tweak) {
-  case Tweak::Brightness:
-    return {0, has_modulators(instrument) ? 127 : 7};
   case Tweak::Attack:
     return {std::min(kMinAttack, tweak_value(instrument, tweak).value_or(31)),
             31};
@@ -246,6 +225,41 @@ ChannelInstrument with_tweak(const ChannelInstrument &base, Tweak tweak,
     }
   }
   return best;
+}
+
+std::array<TweakFields, 4> tweak_fields(const ChannelInstrument &instrument,
+                                        Tweak tweak) {
+  std::array<TweakFields, 4> fields{};
+  if (!tweak_value(instrument, tweak)) {
+    return fields;
+  }
+  for (std::size_t i = 0; i < 4; ++i) {
+    const auto &op = instrument.operators[i];
+    if (!op.enable) {
+      continue;
+    }
+    auto &field = fields[i];
+    switch (tweak) {
+    case Tweak::Volume:
+      field.total_level = is_carrier(instrument, i);
+      break;
+    case Tweak::Brightness:
+      field.total_level = !is_carrier(instrument, i);
+      break;
+    case Tweak::Attack:
+      field.attack_rate = true;
+      break;
+    case Tweak::Decay:
+      field.decay_rate = true;
+      field.sustain_level = true;
+      break;
+    case Tweak::Release:
+      field.release_rate = true;
+      field.sustain_rate = op.sustain_rate != 0;
+      break;
+    }
+  }
+  return fields;
 }
 
 std::string tweak_text(const ChannelInstrument &instrument, Tweak tweak) {
