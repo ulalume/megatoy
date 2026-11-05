@@ -34,7 +34,7 @@ void test_brightness_moves_the_modulators_together() {
   base.operators[0].total_level = 30;
   base.operators[1].total_level = 50;
   CHECK(tweak_value(base, Tweak::Brightness) == 97);
-  CHECK(tweak_text(base, Tweak::Brightness) == "TL 30");
+  CHECK(tweak_text(base, Tweak::Brightness) == "Modulator TL 30");
   CHECK(tweak_text(base, Tweak::Attack) == "AR 31");
   CHECK(patch_lab::tweak_change_text(base, base, Tweak::Attack) == "AR 31");
 
@@ -95,13 +95,13 @@ void test_volume_keeps_the_carriers_in_balance() {
   base.operators[2].total_level = 10;
   base.operators[3].total_level = 40;
   CHECK(tweak_value(base, Tweak::Volume) == 117);
-  CHECK(tweak_text(base, Tweak::Volume) == "TL 10");
+  CHECK(tweak_text(base, Tweak::Volume) == "Carrier TL 10");
 
   const auto loud = with_tweak(base, Tweak::Volume, 127);
   CHECK(loud.operators[2].total_level == 0);
   CHECK(loud.operators[3].total_level == 30);
   CHECK(loud.operators[0].total_level == 20);
-  CHECK(tweak_text(loud, Tweak::Volume) == "TL 0");
+  CHECK(tweak_text(loud, Tweak::Volume) == "Carrier TL 0");
   CHECK(patch_lab::tweak_change_text(base, loud, Tweak::Volume) == "+7.5 dB");
   CHECK(patch_lab::tweak_change_text(loud, base, Tweak::Volume) == "-7.5 dB");
   CHECK(patch_lab::tweak_change_text(base, base, Tweak::Volume) == "+0.0 dB");

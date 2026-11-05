@@ -319,11 +319,11 @@ std::string tweak_text(const ChannelInstrument &instrument, Tweak tweak) {
   char text[32];
   switch (tweak) {
   case Tweak::Volume:
-    std::snprintf(text, sizeof(text), "TL %d",
+    std::snprintf(text, sizeof(text), "Carrier TL %d",
                   loudest_carrier(instrument)->total_level);
     return text;
   case Tweak::Brightness:
-    std::snprintf(text, sizeof(text), "TL %d",
+    std::snprintf(text, sizeof(text), "Modulator TL %d",
                   strongest_modulator(instrument)->total_level);
     return text;
   case Tweak::Attack:
