@@ -283,7 +283,18 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     return;
   }
 
-  // Scale selector
+  // Key and scale read as one phrase, "C Major Scale", under one label.
+  ImGui::BeginDisabled(keyboard_settings.scale == Scale::CHROMATIC);
+  int current_key = static_cast<int>(keyboard_settings.key);
+  ImGui::SetNextItemWidth(ui::scale::px(40.0f));
+  if (ImGui::Combo("##Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
+    keyboard_settings.key = static_cast<Key>(current_key);
+    context.ui_prefs.midi_keyboard_key = current_key;
+    refresh_state(context.state, input, typing_layout, custom_layout);
+  }
+  ImGui::EndDisabled();
+
+  ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
   int current_scale = static_cast<int>(keyboard_settings.scale);
   ImGui::SetNextItemWidth(ui::scale::px(150.0f));
   if (ImGui::Combo("Scale", &current_scale, scale_names,
@@ -296,21 +307,6 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     }
     refresh_state(context.state, input, typing_layout, custom_layout);
   }
-
-  ImGui::SameLine(0, ui::scale::px(16.0f));
-
-  if (keyboard_settings.scale == Scale::CHROMATIC)
-    ImGui::BeginDisabled();
-  // Key selector
-  int current_key = static_cast<int>(keyboard_settings.key);
-  ImGui::SetNextItemWidth(ui::scale::px(40.0f));
-  if (ImGui::Combo("Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
-    keyboard_settings.key = static_cast<Key>(current_key);
-    context.ui_prefs.midi_keyboard_key = current_key;
-    refresh_state(context.state, input, typing_layout, custom_layout);
-  }
-  if (keyboard_settings.scale == Scale::CHROMATIC)
-    ImGui::EndDisabled();
 
   ImGui::SameLine(0, ui::scale::px(16.0f));
   const bool can_start_playback = !context.state.playback_sequence.empty() &&
