@@ -308,8 +308,15 @@ std::string tweak_text(const ChannelInstrument &instrument, Tweak tweak) {
   char text[32];
   switch (tweak) {
   case Tweak::Volume:
-    std::snprintf(text, sizeof(text), "%.1f dB",
-                  (*value - 127) * kDecibelsPerTotalLevel);
+    std::snprintf(text, sizeof(text), "TL %d",
+                  loudest_carrier(instrument)->total_level);
+    return text;
+  case Tweak::Brightness:
+    std::snprintf(text, sizeof(text), "TL %d",
+                  strongest_modulator(instrument)->total_level);
+    return text;
+  case Tweak::Attack:
+    std::snprintf(text, sizeof(text), "AR %d", *value);
     return text;
   case Tweak::Decay: {
     const auto *op = held_carrier(instrument);
@@ -323,9 +330,21 @@ std::string tweak_text(const ChannelInstrument &instrument, Tweak tweak) {
                   op->sustain_rate);
     return text;
   }
-  default:
-    return std::to_string(*value);
   }
+  return {};
+}
+
+std::string tweak_change_text(const ChannelInstrument &from,
+                              const ChannelInstrument &to, Tweak tweak) {
+  const auto before = tweak_value(from, tweak);
+  const auto after = tweak_value(to, tweak);
+  if (tweak != Tweak::Volume || !before || !after) {
+    return tweak_text(to, tweak);
+  }
+  char text[32];
+  std::snprintf(text, sizeof(text), "%+.1f dB",
+                (*after - *before) * kDecibelsPerTotalLevel);
+  return text;
 }
 
 } // namespace patch_lab

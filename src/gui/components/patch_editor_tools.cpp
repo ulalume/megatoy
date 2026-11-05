@@ -79,7 +79,10 @@ SliderState render_quick_edit_slider(PatchEditorContext &context,
   auto &base = context.document_ui(context.document).quick_edit_base;
   const auto value = patch_lab::tweak_value(instrument, tweak);
   const auto range = patch_lab::tweak_range(base.value_or(instrument), tweak);
-  const auto text = patch_lab::tweak_text(instrument, tweak);
+  // While dragged, how far the drag has gone; otherwise the register.
+  const auto text = base && ImGui::GetActiveID() == ImGui::GetID(label)
+                        ? patch_lab::tweak_change_text(*base, instrument, tweak)
+                        : patch_lab::tweak_text(instrument, tweak);
 
   // Rates run like the operator editor's sliders: toward the end that
   // sounds longer.

@@ -71,8 +71,13 @@ struct TweakShape {
 std::optional<TweakShape>
 tweak_shape(const ym2612::ChannelInstrument &instrument);
 
-/// The value as the registers or the ear know it.
+/// The value as the registers know it, from the operator it is read from.
 std::string tweak_text(const ym2612::ChannelInstrument &instrument,
                        Tweak tweak);
+
+/// How far a drag from `from` has taken the tweak to `to`: in dB for Volume,
+/// which every sounding carrier moves by alike; as tweak_text() otherwise.
+std::string tweak_change_text(const ym2612::ChannelInstrument &from,
+                              const ym2612::ChannelInstrument &to, Tweak tweak);
 
 } // namespace patch_lab
