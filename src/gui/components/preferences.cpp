@@ -58,7 +58,7 @@ void normalize_custom_layout(UIPreferences &prefs) {
 }
 
 /// The custom layout made again from the places of the keyboard in use, as
-/// Piano has it.
+/// Auto has it.
 void reset_to_keyboard(UIPreferences &prefs) {
   copy_layout_to_preferences(prefs.custom_typing_layout_keys,
                              keyboard_typing_layout());
@@ -693,9 +693,9 @@ void render_input_page(PreferencesContext &context) {
 
   section_title("Typing Keyboard");
 
-  static constexpr const char *kLayouts[] = {"Piano", "Custom"};
+  static constexpr const char *kLayouts[] = {"Auto", "Custom"};
   constexpr TypingKeyboardLayout kLayoutValues[] = {
-      TypingKeyboardLayout::Piano, TypingKeyboardLayout::Custom};
+      TypingKeyboardLayout::Auto, TypingKeyboardLayout::Custom};
   const auto stored = clamp_layout_pref(ui_prefs.midi_keyboard_layout);
   ui_prefs.midi_keyboard_layout = static_cast<int>(stored);
   int current_layout = stored == TypingKeyboardLayout::Custom ? 1 : 0;
