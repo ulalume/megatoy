@@ -25,10 +25,18 @@ inline int side_list(const char *id, std::span<const char *const> labels,
     // A row's highlight reaches half the spacing above it, the first one's
     // too.
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + list_row_spacing() * 0.5f);
+    // The label drawn in from the row's edge, as a frame's text is.
+    const float inset = ImGui::GetStyle().FramePadding.x;
     for (int i = 0; i < static_cast<int>(labels.size()); ++i) {
-      if (ImGui::Selectable(labels[i], i == chosen)) {
+      ImGui::PushID(i);
+      const ImVec2 row = ImGui::GetCursorScreenPos();
+      if (ImGui::Selectable("##page", i == chosen)) {
         chosen = i;
       }
+      ImGui::GetWindowDrawList()->AddText(ImVec2(row.x + inset, row.y),
+                                          ImGui::GetColorU32(ImGuiCol_Text),
+                                          labels[i]);
+      ImGui::PopID();
     }
     ImGui::PopStyleVar();
   }
