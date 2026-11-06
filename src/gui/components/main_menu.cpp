@@ -256,48 +256,45 @@ float render_audio_load(MainMenuContext &context) {
 }
 
 /**
- * The soft keyboard's Play button, centred in the bar between the menus and
- * the load graph. Where the full name does not fit, it gives way to the
- * scale's name alone, then to the icon.
+ * The soft keyboard's Play switch, drawn like the bar's menus and centred
+ * between them and the load graph, with the scale it plays beside it. It
+ * keeps one width and place whether it reads Play or Stop; the scale's name
+ * is left out where it does not fit.
  */
-void render_scale_play(MidiKeyboardContext &keyboard, float left, float right) {
+void render_scale_play(MidiKeyboardContext &keyboard, float left, float right,
+                       float row_y) {
   const ImGuiStyle &style = ImGui::GetStyle();
-  const bool playing = scale_playing(keyboard);
-  const std::string scale = scale_title(keyboard.input_state);
-  const std::string full = playing ? std::string(ICON_FA_STOP " Stop")
-                                   : ICON_FA_PLAY " Play " + scale + " Scale";
-  const std::string labels[] = {
-      full, playing ? full : ICON_FA_PLAY " " + scale,
-      playing ? ICON_FA_STOP : ICON_FA_PLAY};
-
+  const char *play = ICON_FA_PLAY " Play";
+  const char *stop = ICON_FA_STOP " Stop";
+  const float width =
+      std::max(ImGui::CalcTextSize(play).x, ImGui::CalcTextSize(stop).x);
   const float min_x = left + style.ItemSpacing.x;
   const float max_x = right - style.ItemSpacing.x;
-  const std::string *label = nullptr;
-  float width = 0.0f;
-  for (const auto &candidate : labels) {
-    width = ImGui::CalcTextSize(candidate.c_str()).x +
-            style.FramePadding.x * 2.0f;
-    if (width <= max_x - min_x) {
-      label = &candidate;
-      break;
-    }
-  }
-  if (label == nullptr) {
+  if (max_x - min_x < width) {
     return;
   }
 
-  const float centre = ImGui::GetWindowWidth() * 0.5f;
-  const float x = std::clamp(centre - width * 0.5f, min_x, max_x - width);
-  ImGui::SetCursorPos(
-      ImVec2(x, (ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) * 0.5f));
+  const bool playing = scale_playing(keyboard);
+  const std::string scale = scale_title(keyboard.input_state) + " Scale";
+  const float x = std::clamp(ImGui::GetWindowWidth() * 0.5f - width * 0.5f,
+                             min_x, max_x - width);
+  ImGui::SetCursorPos(ImVec2(x, row_y));
   ImGui::BeginDisabled(!playing && !can_play_scale(keyboard));
-  if (ImGui::Button((*label + "###scale_play").c_str())) {
+  if (ImGui::Selectable(playing ? stop : play, false, ImGuiSelectableFlags_None,
+                        ImVec2(width, 0.0f))) {
     toggle_scale_playback(keyboard);
   }
   ImGui::EndDisabled();
-  if (label != &labels[0] &&
-      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-    ImGui::SetTooltip("%s", playing ? "Stop" : ("Play " + scale + " Scale").c_str());
+  const bool hovered =
+      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
+
+  const float scale_width = ImGui::CalcTextSize(scale.c_str()).x;
+  if (x + width + style.ItemSpacing.x + scale_width <= max_x) {
+    ImGui::SameLine();
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%s",
+                       scale.c_str());
+  } else if (hovered) {
+    ImGui::SetTooltip("%s", scale.c_str());
   }
 }
 
@@ -597,9 +594,10 @@ void render_main_menu(MainMenuContext &context) {
     }
 
     const float menus_end = ImGui::GetCursorPosX();
+    const float row_y = ImGui::GetCursorPosY();
     const float load_start = render_audio_load(context);
     if (context.scale_keyboard != nullptr) {
-      render_scale_play(*context.scale_keyboard, menus_end, load_start);
+      render_scale_play(*context.scale_keyboard, menus_end, load_start, row_y);
     }
 
     ImGui::EndMainMenuBar();
