@@ -194,6 +194,7 @@ bool refresh_state(MidiKeyboardState &state, const InputState &input,
 
   state.playback_sequence =
       build_playback_sequence(state.scale_keys, input.keyboard_typing_octave);
+  state.typing_range_moved = true;
   state.initialized = true;
   return true;
 }
@@ -326,11 +327,43 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     refresh_state(context.state, input, typing_layout, custom_layout);
   }
 
-  ImGui::SameLine(0, ui::scale::px(32.0f));
+  ImGui::SameLine(0, ui::scale::px(16.0f));
 
+  std::vector<ym2612::Note> active_notes = context.active_notes
+                                               ? context.active_notes()
+                                               : std::vector<ym2612::Note>{};
+  std::string chord_name;
+  if (active_notes.size() >= 2) {
+    std::vector<int> midi_notes;
+    midi_notes.reserve(active_notes.size());
+    for (auto &note : active_notes) {
+      midi_notes.push_back(static_cast<int>(note.midi_note()));
+    }
+    chord_name = get_chord_name(midi_notes, false, true);
+  }
+  // A fixed width, so the slider after it stays put as chords come and go;
+  // a longer name ends in an ellipsis.
+  {
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    const ImVec2 size(ImGui::CalcTextSize("C#M7sus4/G#").x,
+                      ImGui::GetFrameHeight());
+    ImGui::Dummy(size);
+    const float text_y = at.y + ImGui::GetStyle().FramePadding.y;
+    ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), ImVec2(at.x, text_y),
+                              ImVec2(at.x + size.x, at.y + size.y),
+                              at.x + size.x, chord_name.c_str(), nullptr,
+                              nullptr);
+  }
+
+  // The slider takes the rest of the row, or a row of its own when too
+  // little is left.
+  ImGui::SameLine();
+  if (ImGui::GetContentRegionAvail().x < ui::scale::px(120.0f)) {
+    ImGui::NewLine();
+  }
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
-  ImGui::SetNextItemWidth(ui::scale::px(100.0f));
-  if (ImGui::SliderInt("Typing", &current_key_octave, 0, 7,
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+  if (ImGui::SliderInt("##Typing", &current_key_octave, 0, 7,
                        typing_label(context.state))) {
     input.keyboard_typing_octave = current_key_octave;
     context.ui_prefs.midi_keyboard_typing_octave = current_key_octave;
@@ -348,26 +381,11 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       }
       return label;
     };
-    const std::string tooltip = "Octave Down: " + key_label(octave_keys.first) +
-                                "\nOctave Up: " + key_label(octave_keys.second);
+    const std::string tooltip =
+        "Typing\nOctave Down: " + key_label(octave_keys.first) +
+        "\nOctave Up: " + key_label(octave_keys.second);
     ImGui::SetTooltip("%s", tooltip.c_str());
   }
-
-  ImGui::SameLine(0, ui::scale::px(16.0f));
-
-  std::vector<ym2612::Note> active_notes = context.active_notes
-                                               ? context.active_notes()
-                                               : std::vector<ym2612::Note>{};
-  std::string chord_name;
-  if (active_notes.size() >= 2) {
-    std::vector<int> midi_notes;
-    midi_notes.reserve(active_notes.size());
-    for (auto &note : active_notes) {
-      midi_notes.push_back(static_cast<int>(note.midi_note()));
-    }
-    chord_name = get_chord_name(midi_notes, false, true);
-  }
-  ImGui::Text("%s", chord_name.c_str());
 
   // Scrollable keyboard area
   const ImVec2 available_region = ImGui::GetContentRegionAvail();
@@ -402,6 +420,9 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     };
     std::vector<KeyRect> key_rects;
     key_rects.reserve(notes.size());
+    // Where the keys typing plays begin and end.
+    float typed_min = FLT_MAX;
+    float typed_max = -FLT_MAX;
 
     for (auto note : notes) {
       bool is_key_mapped = context.state.reverse_mappings.find(note) !=
@@ -440,6 +461,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                          key_border_col, 0, 0, 1.0f);
 
       if (is_key_mapped) {
+        typed_min = std::min(typed_min, key_min.x);
+        typed_max = std::max(typed_max, key_max.x);
         ImVec2 key_max_mapped(x + key_width, y + 2);
         draw_list->AddRectFilled(key_min, key_max_mapped,
                                  white_key_pressed_col);
@@ -471,11 +494,24 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       x += key_width;
     }
 
+    // Once the keys typing plays move, the keyboard scrolls to centre them
+    // unless all of them are in view already.
+    ImGuiWindow *keys_window = ImGui::GetCurrentWindow();
+    if (context.state.typing_range_moved && typed_min < typed_max) {
+      context.state.typing_range_moved = false;
+      const ImRect &shown = keys_window->InnerRect;
+      if (typed_min < shown.Min.x || typed_max > shown.Max.x) {
+        ImGui::SetScrollFromPosX(
+            (typed_min + typed_max) * 0.5f - keys_window->Pos.x, 0.5f);
+        keep_drawing();
+      }
+    }
+
     std::vector<ym2612::Note> wanted;
     if (pointer_held && under_pointer) {
       wanted.push_back(*under_pointer);
     }
-    const ImRect visible = ImGui::GetCurrentWindow()->InnerClipRect;
+    const ImRect visible = keys_window->InnerClipRect;
     auto &on_keyboard = context.state.fingers_on_keyboard;
     std::erase_if(on_keyboard, [](const auto &entry) {
       const auto fingers = touch::fingers();

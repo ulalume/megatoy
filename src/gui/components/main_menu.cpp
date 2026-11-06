@@ -311,13 +311,26 @@ void panel_menu_item(const char *icon, const char *title, bool &shown) {
   }
 }
 
-/// How much of the bar fits: the menus in one or each on its own, the load
-/// graph's width (0 leaves it out), and how much of the middle.
+/// How much of the bar fits: the load graph's width (0 leaves it out), and
+/// how much of the menus and the middle.
 struct BarFit {
-  bool folded_menus = false;
   float graph_width = 0.0f;
   BarCentreFit centre = BarCentreFit::Full;
 };
+
+/// A menu of the bar, named with its icon, or shown as the icon alone.
+struct BarMenu {
+  const char *full;
+  const char *icon;
+  const char *label(BarCentreFit fit) const {
+    return fit == BarCentreFit::Icon ? icon : full;
+  }
+};
+constexpr BarMenu kFileMenu{ICON_FA_FILE " File###File",
+                            ICON_FA_FILE "###File"};
+constexpr BarMenu kEditMenu{ICON_FA_PEN_TO_SQUARE " Edit###Edit",
+                            ICON_FA_PEN_TO_SQUARE "###Edit"};
+constexpr BarMenu kViewMenu{ICON_FA_EYE " View###View", ICON_FA_EYE "###View"};
 
 /// How far a menu in the bar takes the next one along.
 float bar_menu_advance(const char *label) {
@@ -327,15 +340,19 @@ float bar_menu_advance(const char *label) {
 
 /**
  * As the bar narrows, the load graph shrinks and then goes, then the middle
- * loses its note, and then the menus fold into one and the middle keeps
- * only its icon. Measured from after the app menu.
+ * loses its note, and then the menus and the middle keep only their icons.
+ * Measured from after the app menu.
  */
 BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const ImGuiStyle &style = ImGui::GetStyle();
   const float spacing = style.ItemSpacing.x;
   const float width = ImGui::GetWindowWidth();
-  const float menus_end = ImGui::GetCursorPosX() + bar_menu_advance("File") +
-                          bar_menu_advance("Edit") + bar_menu_advance("View");
+  const float menus_start = ImGui::GetCursorPosX();
+  const auto menus_end = [&](BarCentreFit fit) {
+    return menus_start + bar_menu_advance(kFileMenu.label(fit)) +
+           bar_menu_advance(kEditMenu.label(fit)) +
+           bar_menu_advance(kViewMenu.label(fit));
+  };
   // Where the load reading starts with no graph after it.
   const float load_start =
       width - ImGui::CalcTextSize(reading).x - style.FramePadding.x * 2.0f;
@@ -343,28 +360,28 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   // bar, but never over the menus.
   const auto room = [&](BarCentreFit fit) {
     if (!context.bar_centre_size) {
-      return load_start - menus_end;
+      return load_start - menus_end(fit);
     }
     const BarCentreSize size = context.bar_centre_size(fit);
     const float x =
-        std::max(width * 0.5f - size.centred * 0.5f, menus_end + spacing);
+        std::max(width * 0.5f - size.centred * 0.5f, menus_end(fit) + spacing);
     return load_start - spacing - (x + size.total);
   };
 
   const float graph_room = room(BarCentreFit::Full) - spacing;
   if (graph_room >= ui::scale::px(kLoadGraphWidth)) {
-    return {false, ui::scale::px(kLoadGraphWidth), BarCentreFit::Full};
+    return {ui::scale::px(kLoadGraphWidth), BarCentreFit::Full};
   }
   if (graph_room >= ui::scale::px(kLoadGraphMinWidth)) {
-    return {false, graph_room, BarCentreFit::Full};
+    return {graph_room, BarCentreFit::Full};
   }
   if (room(BarCentreFit::Full) >= 0.0f) {
-    return {false, 0.0f, BarCentreFit::Full};
+    return {0.0f, BarCentreFit::Full};
   }
   if (room(BarCentreFit::Short) >= 0.0f) {
-    return {false, 0.0f, BarCentreFit::Short};
+    return {0.0f, BarCentreFit::Short};
   }
-  return {true, 0.0f, BarCentreFit::Icon};
+  return {0.0f, BarCentreFit::Icon};
 }
 
 void file_menu_items(MainMenuContext &context,
@@ -588,35 +605,17 @@ void render_main_menu(MainMenuContext &context) {
         reading, sizeof(reading), load,
         audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
     const BarFit fit = fit_bar(context, reading);
-    if (fit.folded_menus) {
-      if (begin_bar_menu(ICON_FA_BARS "##menus")) {
-        if (ui::begin_menu("File")) {
-          file_menu_items(context, controls);
-          ui::end_menu();
-        }
-        if (ui::begin_menu("Edit")) {
-          edit_menu_items(context);
-          ui::end_menu();
-        }
-        if (ui::begin_menu("View")) {
-          view_menu_items(context);
-          ui::end_menu();
-        }
-        ui::end_menu();
-      }
-    } else {
-      if (begin_bar_menu("File")) {
-        file_menu_items(context, controls);
-        ui::end_menu();
-      }
-      if (begin_bar_menu("Edit")) {
-        edit_menu_items(context);
-        ui::end_menu();
-      }
-      if (begin_bar_menu("View")) {
-        view_menu_items(context);
-        ui::end_menu();
-      }
+    if (begin_bar_menu(kFileMenu.label(fit.centre))) {
+      file_menu_items(context, controls);
+      ui::end_menu();
+    }
+    if (begin_bar_menu(kEditMenu.label(fit.centre))) {
+      edit_menu_items(context);
+      ui::end_menu();
+    }
+    if (begin_bar_menu(kViewMenu.label(fit.centre))) {
+      view_menu_items(context);
+      ui::end_menu();
     }
 
     // The folder picker is modal, so it is opened after the menu closes.

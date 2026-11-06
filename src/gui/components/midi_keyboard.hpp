@@ -41,6 +41,9 @@ struct MidiKeyboardState {
   std::vector<Key> scale_keys;
   std::vector<ym2612::Note> display_notes;
   std::string typing_range_label;
+  /// Set when the keys typing plays change, so the keyboard scrolls to show
+  /// them.
+  bool typing_range_moved = false;
   std::vector<ym2612::Note> playback_sequence;
 };
 

@@ -14,13 +14,6 @@ namespace {
 constexpr float kEditorMinWidth = 300.0f;
 constexpr float kBrowserMinWidth = 230.0f;
 
-/// Too narrow for the patch browser beside the editor: the browser folds
-/// away and the waveform goes above the keyboard.
-bool window_is_narrow() {
-  return ImGui::GetMainViewport()->WorkSize.x <
-         ui::scale::px(kEditorMinWidth + kBrowserMinWidth);
-}
-
 /// The most of the window's height the footer takes when it grows.
 constexpr float kFooterMaxShare = 0.6f;
 /// The waveform's share of the footer side by side, as the default lays out.
@@ -31,8 +24,6 @@ constexpr float kWaveformShareAbove = 0.40f;
 /// time it was split that way so dragging it sticks.
 float waveform_share[2] = {kWaveformShareBeside, kWaveformShareAbove};
 
-bool browser_folded = false;
-
 /// The widths the browser and the editor were given last, by a drag of the
 /// divider or a layout, and the browser width this code set since.
 struct SidebarWidths {
@@ -42,6 +33,11 @@ struct SidebarWidths {
 } sidebar;
 
 } // namespace
+
+bool window_is_narrow() {
+  return ImGui::GetMainViewport()->WorkSize.x <
+         ui::scale::px(kEditorMinWidth + kBrowserMinWidth);
+}
 
 void build_default_layout(unsigned int dockspace_id) {
   ImGuiID dock_main_id = dockspace_id;
@@ -136,8 +132,7 @@ void fit_footer_to_width() {
 }
 
 void fit_sidebar_to_width() {
-  browser_folded = window_is_narrow();
-  if (browser_folded) {
+  if (window_is_narrow()) {
     return;
   }
   const ImGuiWindow *browser = ImGui::FindWindowByName(ui::PATCH_BROWSER_TITLE);
@@ -167,8 +162,6 @@ void fit_sidebar_to_width() {
   node->SizeRef.x = width;
   sidebar.set = width;
 }
-
-bool patch_browser_folded() { return browser_folded; }
 
 float patch_browser_min_width() { return ui::scale::px(kBrowserMinWidth); }
 

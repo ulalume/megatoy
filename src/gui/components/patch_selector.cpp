@@ -234,7 +234,7 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   if (!prefs.show_patch_selector) {
     return;
   }
-  if (layouts::patch_browser_folded()) {
+  if (layouts::window_is_narrow()) {
     render_folded_patch_selector(context);
     return;
   }

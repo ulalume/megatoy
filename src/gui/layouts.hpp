@@ -2,6 +2,13 @@
 
 namespace ui::layouts {
 
+/**
+ * Whether the window is too narrow for the patch browser beside the editor.
+ * The browser then folds away, the waveform goes above the keyboard, and the
+ * panels' tabs show only their icons.
+ */
+bool window_is_narrow();
+
 /// Docks the default arrangement into the empty dockspace `dockspace_id`.
 void build_default_layout(unsigned int dockspace_id);
 
@@ -19,10 +26,6 @@ void fit_footer_to_width();
  * submitted.
  */
 void fit_sidebar_to_width();
-
-/// Whether the window is too narrow for the patch browser beside the editor,
-/// as fit_sidebar_to_width() last judged.
-bool patch_browser_folded();
 
 /// The patch browser's least width beside the editor, and its width folded.
 float patch_browser_min_width();

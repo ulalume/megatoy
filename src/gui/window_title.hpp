@@ -21,10 +21,12 @@ constexpr char WAVEFORM_ICON[] = ICON_FA_CHART_LINE;
 constexpr char PREFERENCES_ICON[] = ICON_FA_GEAR;
 constexpr char PATCH_LAB_ICON[] = ICON_FA_FLASK;
 
-/// A panel's title with its icon in front. The window keeps `title` as its
-/// id, so saved layouts still place it.
-inline std::string panel_window_title(const char *icon, const char *title) {
-  return std::string(icon) + " " + title + "###" + title;
+/// A panel's title with its icon in front, or the icon alone. The window
+/// keeps `title` as its id, so saved layouts still place it.
+inline std::string panel_window_title(const char *icon, const char *title,
+                                      bool icon_only = false) {
+  return std::string(icon) + (icon_only ? "" : std::string(" ") + title) +
+         "###" + title;
 }
 
 /// What a window's name keeps after "###", or the whole name.
