@@ -23,17 +23,6 @@
 
 namespace ui {
 
-void text_centered(std::string text, float frame_width) {
-  ImGui::Dummy(ImVec2(frame_width, ImGui::GetTextLineHeight()));
-
-  ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
-  ImVec2 cursor_pos = ImGui::GetItemRectMin();
-  cursor_pos.x += (frame_width - text_size.x) * 0.5f;
-
-  ImGui::GetWindowDrawList()->AddText(
-      cursor_pos, ImGui::GetColorU32(ImGuiCol_Text), text.c_str());
-}
-
 // Helper function to update slider state
 inline void
 update_slider_state(UIState::EnvelopeState::SliderState &slider_state) {
@@ -230,8 +219,8 @@ struct OperatorWidget {
  * One operator parameter, with the selection, the relative spreading and the
  * undo history in a single place rather than repeated per slider.
  *
- * `vertical_size` picks a VSliderInt, and those hide their label, so they are
- * the ones that get a tooltip.
+ * `vertical_size` picks a vertical slider, named inside by the short name
+ * before "##", so those get a tooltip with the full one.
  */
 void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
                      const char *id, const ImVec2 *vertical_size,
@@ -261,7 +250,7 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
   int value = ym2612::read_operator_field(op, field);
   const bool changed =
       vertical_size
-          ? ImGui::VSliderInt(id, *vertical_size, &value, range.max, range.min)
+          ? named_vslider_int(id, *vertical_size, &value, range.max, range.min)
           : named_slider_int(id, &value, range.min, range.max, value_format);
   if (lit_elsewhere) {
     ImGui::PopStyleColor();
@@ -758,8 +747,8 @@ bool operator_drop_target(PatchEditorContext &context,
 }
 
 /**
- * TL's own column, the label above a slider as tall as the envelope graph and
- * the rate slider row together.
+ * TL's own column, a slider as tall as the envelope graph and the rate
+ * slider row together.
  *
  * TL runs 0..127 where the rate sliders run 0..31 and 0..15, so it takes both
  * rows' height for one step to stay wider than a pixel under the mouse. It
@@ -771,65 +760,47 @@ void render_total_level_slider(OperatorWidget &widget,
                                UIState::EnvelopeState &envelope_state) {
   const ImVec2 slider_size(vslider_width(), total_level_slider_height());
 
-  ImGui::BeginGroup();
-  text_centered("TL", slider_size.x);
-  operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
+  operator_slider(widget, ym2612::OperatorField::TotalLevel, "TL##Total Level",
                   &slider_size, nullptr, &envelope_state.total_level,
                   lit_from_outside(envelope_state, &Lit::total_level));
-  ImGui::EndGroup();
 }
 
 /**
- * The five rate sliders under the graph, labelled.
+ * The five rate sliders under the graph.
  *
  * Five columns and the gaps between them, which together with the TL column
- * beside them comes to hslider_width(). The graph above is wider than this in
- * the two-column layout, and the sliders deliberately do not follow it --
+ * beside them comes to hslider_width(). The graph above is wider than this,
+ * and the sliders deliberately do not follow it --
  * widening them would claim they share the graph's axis.
  */
 void render_envelope_sliders(OperatorWidget &widget,
                              UIState::EnvelopeState &envelope_state) {
   const ImVec2 slider_size = vslider_size();
-  const float label_width = slider_size.x;
-
-  ImGui::BeginGroup(); // ADSR slider block
 
   ImGui::BeginGroup();
-  text_centered("AR", label_width);
-  ImGui::SameLine(0.0f, vslider_gap());
-  text_centered("DR", label_width);
-  ImGui::SameLine(0.0f, vslider_gap());
-  text_centered("SL", label_width);
-  ImGui::SameLine(0.0f, vslider_gap());
-  text_centered("SR", label_width);
-  ImGui::SameLine(0.0f, vslider_gap());
-  text_centered("RR", label_width);
-  ImGui::EndGroup();
-
-  ImGui::BeginGroup();
-  operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
+  operator_slider(widget, ym2612::OperatorField::AttackRate, "AR##Attack Rate",
                   &slider_size, nullptr, &envelope_state.attack_rate,
                   lit_from_outside(envelope_state, &Lit::attack_rate));
   ImGui::SameLine(0.0f, vslider_gap());
-  operator_slider(widget, ym2612::OperatorField::DecayRate, "##Decay Rate",
+  operator_slider(widget, ym2612::OperatorField::DecayRate, "DR##Decay Rate",
                   &slider_size, nullptr, &envelope_state.decay_rate,
                   lit_from_outside(envelope_state, &Lit::decay_rate));
   ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::SustainLevel,
-                  "##Sustain Level", &slider_size, nullptr,
+                  "SL##Sustain Level", &slider_size, nullptr,
                   &envelope_state.sustain_level,
                   lit_from_outside(envelope_state, &Lit::sustain_level));
   ImGui::SameLine(0.0f, vslider_gap());
-  operator_slider(widget, ym2612::OperatorField::SustainRate, "##Sustain Rate",
-                  &slider_size, nullptr, &envelope_state.sustain_rate,
+  operator_slider(widget, ym2612::OperatorField::SustainRate,
+                  "SR##Sustain Rate", &slider_size, nullptr,
+                  &envelope_state.sustain_rate,
                   lit_from_outside(envelope_state, &Lit::sustain_rate));
   ImGui::SameLine(0.0f, vslider_gap());
-  operator_slider(widget, ym2612::OperatorField::ReleaseRate, "##Release Rate",
-                  &slider_size, nullptr, &envelope_state.release_rate,
+  operator_slider(widget, ym2612::OperatorField::ReleaseRate,
+                  "RR##Release Rate", &slider_size, nullptr,
+                  &envelope_state.release_rate,
                   lit_from_outside(envelope_state, &Lit::release_rate));
   ImGui::EndGroup();
-
-  ImGui::EndGroup(); // End ADSR slider block
 }
 
 void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,

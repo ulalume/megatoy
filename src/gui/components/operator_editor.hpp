@@ -13,7 +13,9 @@ namespace ui {
 /// far apart as horizontal ones do.
 inline float vslider_width() { return ImGui::GetFrameHeight(); }
 inline float vslider_gap() { return ImGui::GetStyle().ItemSpacing.y; }
-inline float vslider_height() { return ui::scale::px(102.0f); }
+inline float vslider_height() {
+  return ui::scale::px(102.0f) + ImGui::GetTextLineHeightWithSpacing();
+}
 /// The graph is taller than the sliders under it: a handle is dragged through
 /// attenuation, which wants the room more than a slider does.
 inline float envelope_graph_height() { return ui::scale::px(128.0f); }

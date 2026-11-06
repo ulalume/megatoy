@@ -70,4 +70,38 @@ inline bool named_slider_int(const char *label, int *value, int min, int max,
   return changed;
 }
 
+/**
+ * A vertical slider with its value inside at the top and its name inside at
+ * the bottom, both centred. `label` is read as for named_slider_int().
+ */
+inline bool named_vslider_int(const char *label, const ImVec2 &size, int *value,
+                              int min, int max) {
+  ImGui::PushID(label);
+  ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 0));
+  const bool changed = ImGui::VSliderInt("##slider", size, value, min, max);
+  ImGui::PopStyleColor();
+  ImGui::PopID();
+
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const ImVec2 min_corner = ImGui::GetItemRectMin();
+  const ImVec2 max_corner = ImGui::GetItemRectMax();
+  const float centre_x = (min_corner.x + max_corner.x) * 0.5f;
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+
+  char value_text[16];
+  ImFormatString(value_text, IM_ARRAYSIZE(value_text), "%d", *value);
+  draw_list->AddText(
+      ImVec2(IM_ROUND(centre_x - ImGui::CalcTextSize(value_text).x * 0.5f),
+             min_corner.y + style.FramePadding.y),
+      color, value_text);
+
+  const char *name_end = ImGui::FindRenderedTextEnd(label);
+  const ImVec2 name_size = ImGui::CalcTextSize(label, name_end);
+  draw_list->AddText(ImVec2(IM_ROUND(centre_x - name_size.x * 0.5f),
+                            max_corner.y - style.FramePadding.y - name_size.y),
+                     color, label, name_end);
+  return changed;
+}
+
 } // namespace ui
