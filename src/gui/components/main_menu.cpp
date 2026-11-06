@@ -19,6 +19,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
+#include <IconsFontAwesome7.h>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -206,8 +207,8 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
 #endif
 }
 
-/// The load graph, at the right-hand end of the bar.
-void render_audio_load(MainMenuContext &context) {
+/// The load graph, at the right-hand end of the bar. Returns where it starts.
+float render_audio_load(MainMenuContext &context) {
   const ImGuiStyle &style = ImGui::GetStyle();
   const ImVec2 size(ui::scale::px(kLoadGraphWidth),
                     ImGui::GetTextLineHeight() + ui::scale::px(4.0f));
@@ -250,6 +251,53 @@ void render_audio_load(MainMenuContext &context) {
   if (ui::begin_popup("##audio_load_menu")) {
     render_load_menu(context, window);
     ui::end_popup();
+  }
+  return x;
+}
+
+/**
+ * The soft keyboard's Play button, centred in the bar between the menus and
+ * the load graph. Where the full name does not fit, it gives way to the
+ * scale's name alone, then to the icon.
+ */
+void render_scale_play(MidiKeyboardContext &keyboard, float left, float right) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const bool playing = scale_playing(keyboard);
+  const std::string scale = scale_title(keyboard.input_state);
+  const std::string full = playing ? std::string(ICON_FA_STOP " Stop")
+                                   : ICON_FA_PLAY " Play " + scale + " Scale";
+  const std::string labels[] = {
+      full, playing ? full : ICON_FA_PLAY " " + scale,
+      playing ? ICON_FA_STOP : ICON_FA_PLAY};
+
+  const float min_x = left + style.ItemSpacing.x;
+  const float max_x = right - style.ItemSpacing.x;
+  const std::string *label = nullptr;
+  float width = 0.0f;
+  for (const auto &candidate : labels) {
+    width = ImGui::CalcTextSize(candidate.c_str()).x +
+            style.FramePadding.x * 2.0f;
+    if (width <= max_x - min_x) {
+      label = &candidate;
+      break;
+    }
+  }
+  if (label == nullptr) {
+    return;
+  }
+
+  const float centre = ImGui::GetWindowWidth() * 0.5f;
+  const float x = std::clamp(centre - width * 0.5f, min_x, max_x - width);
+  ImGui::SetCursorPos(
+      ImVec2(x, (ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) * 0.5f));
+  ImGui::BeginDisabled(!playing && !can_play_scale(keyboard));
+  if (ImGui::Button((*label + "###scale_play").c_str())) {
+    toggle_scale_playback(keyboard);
+  }
+  ImGui::EndDisabled();
+  if (label != &labels[0] &&
+      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+    ImGui::SetTooltip("%s", playing ? "Stop" : ("Play " + scale + " Scale").c_str());
   }
 }
 
@@ -548,7 +596,11 @@ void render_main_menu(MainMenuContext &context) {
       ui::end_menu();
     }
 
-    render_audio_load(context);
+    const float menus_end = ImGui::GetCursorPosX();
+    const float load_start = render_audio_load(context);
+    if (context.scale_keyboard != nullptr) {
+      render_scale_play(*context.scale_keyboard, menus_end, load_start);
+    }
 
     ImGui::EndMainMenuBar();
   }

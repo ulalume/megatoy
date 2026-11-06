@@ -308,26 +308,6 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     refresh_state(context.state, input, typing_layout, custom_layout);
   }
 
-  ImGui::SameLine(0, ui::scale::px(16.0f));
-  const bool can_start_playback = !context.state.playback_sequence.empty() &&
-                                  context.key_on && context.key_off;
-  const bool disable_controls =
-      !can_start_playback && !context.state.playback.playing;
-  if (disable_controls) {
-    ImGui::BeginDisabled();
-  }
-  if (!context.state.playback.playing) {
-    if (ImGui::Button(ICON_FA_PLAY " Play")) {
-      start_playback(context);
-    }
-  } else {
-    if (ImGui::Button(ICON_FA_STOP " Stop")) {
-      stop_playback(context);
-    }
-  }
-  if (disable_controls) {
-    ImGui::EndDisabled();
-  }
   ImGui::SameLine(0, ui::scale::px(32.0f));
 
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
@@ -548,4 +528,30 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::End();
 };
 
-}; // namespace ui
+std::string scale_title(const InputState &input) {
+  const auto &settings = input.midi_keyboard_settings;
+  const std::string scale = scale_names[static_cast<int>(settings.scale)];
+  if (settings.scale == Scale::CHROMATIC) {
+    return scale;
+  }
+  return std::string(key_names[static_cast<int>(settings.key)]) + " " + scale;
+}
+
+bool scale_playing(const MidiKeyboardContext &context) {
+  return context.state.playback.playing;
+}
+
+bool can_play_scale(const MidiKeyboardContext &context) {
+  return !context.state.playback_sequence.empty() && context.key_on &&
+         context.key_off;
+}
+
+void toggle_scale_playback(MidiKeyboardContext &context) {
+  if (context.state.playback.playing) {
+    stop_playback(context);
+  } else if (can_play_scale(context)) {
+    start_playback(context);
+  }
+}
+
+} // namespace ui

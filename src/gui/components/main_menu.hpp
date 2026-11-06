@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/load_meter.hpp"
+#include "gui/components/midi_keyboard.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/gui_manager.hpp"
 #include "gui/save_export_state.hpp"
@@ -42,6 +43,8 @@ struct MainMenuContext {
   std::function<void()> close_patch;
   /// Ask before a folder being added merges in the ones inside it.
   PreferenceManager::ConfirmReplace confirm_replace_folders;
+  /// The soft keyboard, whose scale the bar's Play button plays.
+  MidiKeyboardContext *scale_keyboard = nullptr;
 };
 
 void render_main_menu(MainMenuContext &context);
