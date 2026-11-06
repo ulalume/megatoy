@@ -3,6 +3,8 @@
 
 #include "core/types.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/menu_rows.hpp"
+#include "gui/frame_requests.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/keyboard_typing.hpp"
 #include "gui/input/touch.hpp"
@@ -71,13 +73,27 @@ void stop_playback(MidiKeyboardContext &context) {
   playback.sequence_snapshot.clear();
 }
 
+bool can_play_scale(const MidiKeyboardContext &context) {
+  return !context.state.playback_sequence.empty() && context.key_on &&
+         context.key_off;
+}
+
+/// The scale the keyboard is set to, as "C Major" or "Chromatic".
+std::string scale_title(const InputState &input) {
+  const auto &settings = input.midi_keyboard_settings;
+  const char *scale = scale_names[static_cast<int>(settings.scale)];
+  if (settings.scale == Scale::CHROMATIC) {
+    return scale;
+  }
+  return std::string(key_names[static_cast<int>(settings.key)]) + " " + scale;
+}
+
 void start_playback(MidiKeyboardContext &context) {
-  const auto &sequence = context.state.playback_sequence;
-  if (sequence.empty() || !context.key_on || !context.key_off) {
+  if (!can_play_scale(context)) {
     return;
   }
   stop_playback(context);
-  context.state.playback.sequence_snapshot = sequence;
+  context.state.playback.sequence_snapshot = context.state.playback_sequence;
   context.state.playback.playing = true;
   context.state.playback.timer = 0.0f;
   context.state.playback.next_index = 0;
@@ -93,6 +109,8 @@ void update_playback(MidiKeyboardContext &context, float delta_time) {
     stop_playback(context);
     return;
   }
+  // The next note is due on time, not at the next input.
+  keep_drawing();
 
   playback.timer -= delta_time;
   if (playback.timer > 0.0f) {
@@ -528,29 +546,45 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::End();
 };
 
-std::string scale_title(const InputState &input) {
-  const auto &settings = input.midi_keyboard_settings;
-  const std::string scale = scale_names[static_cast<int>(settings.scale)];
-  if (settings.scale == Scale::CHROMATIC) {
-    return scale;
+void render_scale_play(MidiKeyboardContext &context, float left, float right,
+                       float row_y) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  // One ID for both, so it stays the same item as it toggles.
+  const char *play = ICON_FA_PLAY " Play###scale_play";
+  const char *stop = ICON_FA_STOP " Stop###scale_play";
+  const float width = std::max(ImGui::CalcTextSize(play, nullptr, true).x,
+                               ImGui::CalcTextSize(stop, nullptr, true).x);
+  const float min_x = left + style.ItemSpacing.x;
+  const float max_x = right - style.ItemSpacing.x;
+  if (max_x - min_x < width) {
+    return;
   }
-  return std::string(key_names[static_cast<int>(settings.key)]) + " " + scale;
-}
 
-bool scale_playing(const MidiKeyboardContext &context) {
-  return context.state.playback.playing;
-}
+  const bool playing = context.state.playback.playing;
+  const float x = std::clamp(ImGui::GetWindowWidth() * 0.5f - width * 0.5f,
+                             min_x, max_x - width);
+  ImGui::SetCursorPos(ImVec2(x, row_y));
+  ImGui::BeginDisabled(!playing && !can_play_scale(context));
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, bar_item_spacing());
+  if (ImGui::Selectable(playing ? stop : play, false,
+                        ImGuiSelectableFlags_None, ImVec2(width, 0.0f))) {
+    if (playing) {
+      stop_playback(context);
+    } else {
+      start_playback(context);
+    }
+  }
+  ImGui::PopStyleVar();
+  ImGui::EndDisabled();
 
-bool can_play_scale(const MidiKeyboardContext &context) {
-  return !context.state.playback_sequence.empty() && context.key_on &&
-         context.key_off;
-}
-
-void toggle_scale_playback(MidiKeyboardContext &context) {
-  if (context.state.playback.playing) {
-    stop_playback(context);
-  } else if (can_play_scale(context)) {
-    start_playback(context);
+  const std::string name = scale_title(context.input_state) + " Scale";
+  if (x + width + style.ItemSpacing.x + ImGui::CalcTextSize(name.c_str()).x <=
+      max_x) {
+    ImGui::SameLine();
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%s",
+                       name.c_str());
+  } else if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+    ImGui::SetTooltip("%s", name.c_str());
   }
 }
 

@@ -19,7 +19,6 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
-#include <IconsFontAwesome7.h>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -255,52 +254,6 @@ float render_audio_load(MainMenuContext &context) {
   return x;
 }
 
-/**
- * The soft keyboard's Play switch, drawn like the bar's menus and centred
- * between them and the load graph, with the scale it plays beside it. It
- * keeps one width and place whether it reads Play or Stop; the scale's name
- * is left out where it does not fit.
- */
-void render_scale_play(MidiKeyboardContext &keyboard, float left, float right,
-                       float row_y) {
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const char *play = ICON_FA_PLAY " Play";
-  const char *stop = ICON_FA_STOP " Stop";
-  const float width =
-      std::max(ImGui::CalcTextSize(play).x, ImGui::CalcTextSize(stop).x);
-  const float min_x = left + style.ItemSpacing.x;
-  const float max_x = right - style.ItemSpacing.x;
-  if (max_x - min_x < width) {
-    return;
-  }
-
-  const bool playing = scale_playing(keyboard);
-  const std::string scale = scale_title(keyboard.input_state) + " Scale";
-  const float x = std::clamp(ImGui::GetWindowWidth() * 0.5f - width * 0.5f,
-                             min_x, max_x - width);
-  ImGui::SetCursorPos(ImVec2(x, row_y));
-  ImGui::BeginDisabled(!playing && !can_play_scale(keyboard));
-  // The spacing the bar's menus are given, so its highlight is as tall.
-  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, style.FramePadding.y * 2.0f);
-  if (ImGui::Selectable(playing ? stop : play, false, ImGuiSelectableFlags_None,
-                        ImVec2(width, 0.0f))) {
-    toggle_scale_playback(keyboard);
-  }
-  ImGui::PopStyleVar();
-  ImGui::EndDisabled();
-  const bool hovered =
-      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
-
-  const float scale_width = ImGui::CalcTextSize(scale.c_str()).x;
-  if (x + width + style.ItemSpacing.x + scale_width <= max_x) {
-    ImGui::SameLine();
-    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%s",
-                       scale.c_str());
-  } else if (hovered) {
-    ImGui::SetTooltip("%s", scale.c_str());
-  }
-}
-
 } // namespace
 
 namespace {
@@ -312,8 +265,7 @@ namespace {
  */
 /// A menu in the bar, highlighted from the bar's top to its bottom.
 bool begin_bar_menu(const char *label) {
-  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing,
-                       ImGui::GetStyle().FramePadding.y * 2.0f);
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::bar_item_spacing());
   const bool open = ImGui::BeginMenu(label);
   ImGui::PopStyleVar();
   if (open) {
@@ -599,8 +551,8 @@ void render_main_menu(MainMenuContext &context) {
     const float menus_end = ImGui::GetCursorPosX();
     const float row_y = ImGui::GetCursorPosY();
     const float load_start = render_audio_load(context);
-    if (context.scale_keyboard != nullptr) {
-      render_scale_play(*context.scale_keyboard, menus_end, load_start, row_y);
+    if (context.bar_centre) {
+      context.bar_centre(menus_end, load_start, row_y);
     }
 
     ImGui::EndMainMenuBar();

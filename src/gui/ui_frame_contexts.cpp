@@ -303,7 +303,9 @@ FrameContexts::FrameContexts(AppContext &ctx)
       midi_keyboard(make_midi_keyboard_context(ctx)),
       patch_lab(make_patch_lab_context(ctx)),
       waveform(make_waveform_context(ctx)) {
-  main_menu.scale_keyboard = &midi_keyboard;
+  main_menu.bar_centre = [this](float left, float right, float row_y) {
+    render_scale_play(midi_keyboard, left, right, row_y);
+  };
   patch_editor.begin_history = [&ctx, this](const std::string &label,
                                             const std::string &merge_key) {
     patch_actions::activate_document(ctx, patch_editor.document);

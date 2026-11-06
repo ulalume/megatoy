@@ -10,6 +10,12 @@ namespace ui {
 /// so the two stand as tall as each other.
 inline float list_row_spacing() { return scale::px(10.0f); }
 
+/// Space the menu bar's items are laid out with, which makes their highlight
+/// fill the bar.
+inline float bar_item_spacing() {
+  return ImGui::GetStyle().FramePadding.y * 2.0f;
+}
+
 /// BeginMenu, BeginPopup and BeginPopupContextItem with their items spaced
 /// like list rows. Each that returns true is closed by end_menu or end_popup.
 inline bool begin_menu(const char *label, bool enabled = true) {

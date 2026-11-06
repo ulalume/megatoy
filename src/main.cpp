@@ -6,10 +6,9 @@
 #include "audio/audio_command.hpp"
 #include "core/status.hpp"
 #include "drop_actions.hpp"
-#include "gui/components/envelope_image.hpp"
 #include "gui/envelope/envelope_curve.hpp"
+#include "gui/frame_requests.hpp"
 #include "gui/input/history_shortcuts.hpp"
-#include "gui/input/touch.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
@@ -17,6 +16,7 @@
 #include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "gui/input/touch.hpp"
 #include "platform/web/web_folder_import.hpp"
 #include "platform/web/web_platform_services.hpp"
 #include "system/path_service.hpp"
@@ -120,13 +120,13 @@ bool run_frame(RuntimeContext &runtime) {
   }
 
   constexpr std::uint64_t kSignalTailFrames = AppServices::SampleRate / 10;
-  // A sounding voice moves along its envelope graph frame by frame, whether
-  // or not the waveform is shown.
+  // The waveform moves while there is sound; anything else that moves on its
+  // own asked for the next frame while the last was drawn.
   const auto display_is_live = [&] {
     return (app_state.ui_state().prefs.show_waveform &&
             services.audio_manager.scope_buffer().signal_within(
                 kSignalTailFrames)) ||
-           ui::envelope_voices_moving() || ui::touch::in_motion();
+           ui::drawing_wanted();
   };
 
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -137,27 +137,25 @@ bool run_frame(RuntimeContext &runtime) {
     drop_sound_player();
     services.audio_manager.reopen_device();
   }
-  const auto now = platform::FrameScheduler::Clock::now();
-  if (received_event) {
-    runtime.frame_scheduler.note_interaction(now);
-  }
-  if (runtime.frame_scheduler.wait_before_frame(now, false, display_is_live())
+  const auto frame_started = platform::FrameScheduler::Clock::now();
+  if (runtime.frame_scheduler
+          .wait_before_frame(frame_started, false,
+                             received_event || display_is_live())
           .count() > 0) {
     return true;
   }
-  runtime.frame_scheduler.note_frame_started(now);
 #else
-  const auto before_wait = platform::FrameScheduler::Clock::now();
   const auto wait = runtime.frame_scheduler.wait_before_frame(
-      before_wait, services.gui_manager.is_minimized(), display_is_live());
+      platform::FrameScheduler::Clock::now(),
+      services.gui_manager.is_minimized(), display_is_live());
   const bool received_event =
       services.gui_manager.poll_events(static_cast<int>(wait.count()));
   const auto frame_started = platform::FrameScheduler::Clock::now();
+#endif
   if (received_event) {
     runtime.frame_scheduler.note_interaction(frame_started);
   }
   runtime.frame_scheduler.note_frame_started(frame_started);
-#endif
 
   draw_frame(runtime);
   return true;

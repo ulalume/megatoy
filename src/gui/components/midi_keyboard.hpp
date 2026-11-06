@@ -55,16 +55,13 @@ struct MidiKeyboardContext {
 
 void render_midi_keyboard(const char *title, MidiKeyboardContext &context);
 
-/// The scale the keyboard is set to, as "C Major" or "Chromatic".
-std::string scale_title(const InputState &input);
-
-/// Whether the keyboard's scale is playing now.
-bool scale_playing(const MidiKeyboardContext &context);
-
-/// Whether there is a scale to play.
-bool can_play_scale(const MidiKeyboardContext &context);
-
-/// Starts the keyboard's scale, or stops it while it plays.
-void toggle_scale_playback(MidiKeyboardContext &context);
+/**
+ * The switch that plays the keyboard's scale, drawn like the menu bar's menus
+ * on their row at `row_y` and centred between `left` and `right`, with the
+ * scale's name beside it. It keeps one width and place whether it reads Play
+ * or Stop; the name is left out where it does not fit.
+ */
+void render_scale_play(MidiKeyboardContext &context, float left, float right,
+                       float row_y);
 
 } // namespace ui

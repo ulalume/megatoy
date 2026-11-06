@@ -16,6 +16,13 @@ constexpr float kStackBelowWidth = 600.0f;
 constexpr float kSideBySideFromWidth = 640.0f;
 /// The most of the window's height the footer takes when it grows.
 constexpr float kFooterMaxShare = 0.6f;
+/// The waveform's share of the footer side by side, as the default lays out.
+constexpr float kWaveformShareBeside = 0.20f;
+constexpr float kWaveformShareAbove = 0.40f;
+
+/// The waveform's share of the footer in each direction, kept from the last
+/// time it was split that way so dragging it sticks.
+float waveform_share[2] = {kWaveformShareBeside, kWaveformShareAbove};
 
 } // namespace
 
@@ -26,7 +33,9 @@ void build_default_layout(unsigned int dockspace_id) {
       dock_main_id, ImGuiDir_Down, 0.23f, nullptr, &dock_main_id);
 
   ImGuiID doc_id_down_left = ImGui::DockBuilderSplitNode(
-      doc_id_down, ImGuiDir_Left, 0.20f, nullptr, &doc_id_down);
+      doc_id_down, ImGuiDir_Left, kWaveformShareBeside, nullptr, &doc_id_down);
+  waveform_share[ImGuiAxis_X] = kWaveformShareBeside;
+  waveform_share[ImGuiAxis_Y] = kWaveformShareAbove;
 
   ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
       dock_main_id, ImGuiDir_Left, 0.26f, nullptr, &dock_main_id);
@@ -90,9 +99,6 @@ void fit_footer_to_width() {
     return;
   }
 
-  // The waveform's share of each direction, kept from the last time the
-  // footer was split that way: as built at first, then as dragged.
-  static float waveform_share[2] = {0.20f, 0.40f};
   if (footer->Size[was] > 0.0f) {
     waveform_share[was] = waveform->DockNode->Size[was] / footer->Size[was];
   }
@@ -102,13 +108,10 @@ void fit_footer_to_width() {
   ImVec2 size = footer->Size;
   if (frame != nullptr && frame->IsSplitNode() &&
       frame->SplitAxis == ImGuiAxis_Y && frame->ChildNodes[1] == footer) {
-    const float keyboard_height =
-        axis == ImGuiAxis_Y ? footer->Size.y
-                            : footer->Size.y * (1.0f - waveform_share[was]);
-    size.y = axis == ImGuiAxis_Y
-                 ? keyboard_height / (1.0f - waveform_share[axis])
-                 : keyboard_height;
-    size.y = ImMin(size.y, frame->Size.y * kFooterMaxShare);
+    const float keyboard_share = 1.0f - waveform_share[ImGuiAxis_Y];
+    size.y = ImMin(axis == ImGuiAxis_Y ? size.y / keyboard_share
+                                       : size.y * keyboard_share,
+                   frame->Size.y * kFooterMaxShare);
     footer->SizeRef.y = size.y;
     frame->ChildNodes[0]->SizeRef.y = frame->Size.y - size.y;
   }

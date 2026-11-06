@@ -6,7 +6,9 @@
 
 #include "platform/web/local_storage.hpp"
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <string>
+#include <string_view>
 
 namespace ui {
 
@@ -69,10 +71,15 @@ void save_web_layout_ini() {
   if (data == nullptr || size == 0) {
     return;
   }
-  std::string current(data, size);
-  if (current != last_saved() &&
-      platform::web::write_local_storage(kLayoutKey, current)) {
-    last_saved() = std::move(current);
+  const std::string_view current(data, size);
+  if (current == last_saved()) {
+    return;
+  }
+  if (platform::web::write_local_storage(kLayoutKey, std::string(current))) {
+    last_saved() = current;
+  } else {
+    // Tried again after the next interval.
+    ImGui::MarkIniSettingsDirty();
   }
 }
 

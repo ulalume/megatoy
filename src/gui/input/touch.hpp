@@ -34,10 +34,6 @@ void release_all();
  */
 void claim(std::uint64_t id);
 
-/// A finger is on the screen, or a gesture is still running out without one
-/// (a flick coasting, a release waiting for the next frame).
-bool in_motion();
-
 /// Presses for a finger held still long enough. Called before
 /// ImGui::NewFrame().
 void before_new_frame();
@@ -48,7 +44,8 @@ void before_new_frame();
  * finger without pressing; a tap clicks; a slider, a scrollbar, a resize edge
  * or a dock's divider is dragged at once; anything else is dragged after a
  * long press, and a long press lifted in place opens the context menu. Called
- * after ImGui::NewFrame().
+ * after ImGui::NewFrame(). Keeps frames coming while a finger is down or a
+ * gesture runs out.
  */
 void drag_to_scroll();
 

@@ -4,6 +4,7 @@
 #include "common.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/envelope/envelope_handles.hpp"
+#include "gui/frame_requests.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "ym2612/note.hpp"
@@ -68,13 +69,6 @@ int &voice_build_budget() {
     budget = kVoiceBuildsPerFrame;
   }
   return budget;
-}
-
-/// The last ImGui frame that drew a sounding voice, or left one waiting for
-/// its curve.
-int &voices_drawn_frame() {
-  static int frame = -1;
-  return frame;
 }
 
 /**
@@ -435,10 +429,6 @@ void draw_warning(ImDrawList *draw_list, const std::string &warning,
 
 } // namespace
 
-bool envelope_voices_moving() {
-  return voices_drawn_frame() == ImGui::GetFrameCount();
-}
-
 EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   EnvelopeVoices out;
   const double rate =
@@ -610,7 +600,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
                         curve, build_budget);
     // From here the next frame draws something new: a curve built, or a
     // cursor further along.
-    voices_drawn_frame() = ImGui::GetFrameCount();
+    keep_drawing();
     if (voice_curve == nullptr) {
       continue; // its curve is being built next frame
     }
