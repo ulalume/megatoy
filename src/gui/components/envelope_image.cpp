@@ -481,7 +481,8 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
 ui::envelope::EnvelopeHandles
 render_envelope_image(const ym2612::OperatorSettings &op,
                       const UIState::EnvelopeState &slider_state, ImVec2 size,
-                      const EnvelopeVoices &voices, bool carrier) {
+                      const EnvelopeVoices &voices, bool carrier,
+                      bool selected) {
   // Before BeginChild, so the ID comes from the operator's stack rather than
   // from the child window.
   EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
@@ -673,18 +674,19 @@ render_envelope_image(const ym2612::OperatorSettings &op,
 
   // The handles are the editor's to place, so all that is settled here is
   // where they would go. They keep out of the way until the pointer is on the
-  // graph, and stay up for as long as one is held wherever the pointer wanders
-  // off to.
-  const bool wanted = state.handle_active || ImGui::IsWindowHovered();
+  // graph or its operator is selected, and stay up for as long as one is held
+  // wherever the pointer wanders off to.
+  const bool wanted =
+      selected || state.handle_active || ImGui::IsWindowHovered();
   if (!wanted) {
     return {};
   }
-  // The dots drawn twice the library's size; its grab box already covers
-  // that.
+  // The dots drawn a pixel wider all round than twice the library's size,
+  // and the grab box grown to cover them.
   const ui::envelope::HandleMetrics unscaled;
   const ui::envelope::HandleMetrics metrics{
-      ui::scale::px(unscaled.radius * 2.0f),
-      ui::scale::px(unscaled.grab),
+      ui::scale::px(unscaled.radius * 2.0f + 1.0f),
+      ui::scale::px(unscaled.grab + 1.0f),
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
   };

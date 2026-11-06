@@ -860,7 +860,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                               total_level_column_width(),
                           envelope_graph_height());
   const ui::envelope::EnvelopeHandles handles =
-      render_envelope_image(op, envelope_state, graph_size, voices, carrier);
+      render_envelope_image(op, envelope_state, graph_size, voices, carrier,
+                            state.selection.contains(slot));
   // Inside the graph's own window, which render_envelope_image leaves open:
   // an item anywhere else could not be hovered over the graph.
   envelope_state.handles = UIState::EnvelopeState::HandleLit{};

@@ -42,14 +42,14 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame);
  * another window could not be hovered over the graph -- so every call is
  * closed by end_envelope_image().
  *
- * Nothing is shown unless the pointer is over the graph or `state` says a
- * handle is being dragged, and the axis holds still while one is. A
- * `carrier`'s graph takes the carrier colours for its background and frame.
+ * No handle is placed unless the pointer is over the graph, its operator is
+ * `selected`, or `state` says a handle is being dragged, and the axis holds
+ * still while one is. A `carrier`'s graph takes the carrier colours for its
+ * background and frame.
  */
-ui::envelope::EnvelopeHandles
-render_envelope_image(const ym2612::OperatorSettings &op,
-                      const UIState::EnvelopeState &state, ImVec2 size,
-                      const EnvelopeVoices &voices, bool carrier);
+ui::envelope::EnvelopeHandles render_envelope_image(
+    const ym2612::OperatorSettings &op, const UIState::EnvelopeState &state,
+    ImVec2 size, const EnvelopeVoices &voices, bool carrier, bool selected);
 
 /// One handle, in the colour of the stretch it belongs to and brighter under
 /// the pointer, exactly as that stretch itself lights up.
