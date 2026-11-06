@@ -185,8 +185,8 @@ void test_activation_reaches_the_chip() {
 void test_find_by_selection_path() {
   TestEnvironment env;
   auto &session = env.session;
-  const auto warm = env.patches_folder / "warm.gin";
-  const auto cold = env.patches_folder / "cold.gin";
+  const auto warm = env.patches_folder / "warm.dmp";
+  const auto cold = env.patches_folder / "cold.dmp";
   CHECK(patches::write_patch(make_patch(1), warm));
   CHECK(patches::write_patch(make_patch(2), cold));
   session.repository().refresh();
@@ -237,22 +237,22 @@ void test_rename_and_move_follow_inactive_documents() {
   const auto shelf = env.patches_folder / "shelf";
   fs::create_directories(pads);
   fs::create_directories(shelf);
-  CHECK(patches::write_patch(make_patch(1), pads / "warm.gin"));
-  CHECK(patches::write_patch(make_patch(2), shelf / "filler.gin"));
-  CHECK(patches::write_patch(make_patch(3), env.patches_folder / "lead.gin"));
+  CHECK(patches::write_patch(make_patch(1), pads / "warm.dmp"));
+  CHECK(patches::write_patch(make_patch(2), shelf / "filler.dmp"));
+  CHECK(patches::write_patch(make_patch(3), env.patches_folder / "lead.dmp"));
   session.repository().refresh();
 
   // The active document is somewhere else entirely.
   CHECK(session.load_patch_from_entry(
-      env.entry_at(env.patches_folder / "lead.gin")));
+      env.entry_at(env.patches_folder / "lead.dmp")));
   const auto active_path = session.current_patch_path();
   CHECK(env.preferences.last_patch_path() == active_path);
 
-  const auto warm = session.open_entry(env.entry_at(pads / "warm.gin"));
+  const auto warm = session.open_entry(env.entry_at(pads / "warm.dmp"));
   CHECK(warm.has_value());
 
   CHECK(session.rename_patch(env.entry_at(pads), "warm pads"));
-  const auto renamed = env.patches_folder / "warm pads" / "warm.gin";
+  const auto renamed = env.patches_folder / "warm pads" / "warm.dmp";
   CHECK(session.find_document(*warm)->path() == env.relative(renamed));
   CHECK(session.find_document(*warm)->selection_path() ==
         env.relative(renamed));
@@ -262,7 +262,7 @@ void test_rename_and_move_follow_inactive_documents() {
 
   CHECK(session.move_patch(env.entry_at(env.patches_folder / "warm pads"),
                            env.entry_at(shelf)));
-  const auto moved = shelf / "warm pads" / "warm.gin";
+  const auto moved = shelf / "warm pads" / "warm.dmp";
   CHECK(fs::exists(moved));
   CHECK(session.find_document(*warm)->path() == env.relative(moved));
   CHECK(session.current_patch_path() == active_path);
@@ -270,7 +270,7 @@ void test_rename_and_move_follow_inactive_documents() {
 
   // Renaming the file itself renames the patch in that document only.
   CHECK(session.rename_patch(env.entry_at(moved), "warmer"));
-  const auto warmer = shelf / "warm pads" / "warmer.gin";
+  const auto warmer = shelf / "warm pads" / "warmer.dmp";
   CHECK(session.find_document(*warm)->path() == env.relative(warmer));
   CHECK(session.find_document(*warm)->patch().name == "warmer");
   CHECK(!session.find_document(*warm)->is_modified());
@@ -280,8 +280,8 @@ void test_rename_and_move_follow_inactive_documents() {
 void test_delete_clears_every_document_showing_it() {
   TestEnvironment env;
   auto &session = env.session;
-  const auto doomed = env.patches_folder / "doomed.gin";
-  const auto kept = env.patches_folder / "kept.gin";
+  const auto doomed = env.patches_folder / "doomed.dmp";
+  const auto kept = env.patches_folder / "kept.dmp";
   CHECK(patches::write_patch(make_patch(1), doomed));
   CHECK(patches::write_patch(make_patch(2), kept));
   session.repository().refresh();
@@ -312,7 +312,7 @@ void test_workspace_relabel_follows_inactive_documents() {
   CHECK(env.preferences.add_workspace_folder(other));
   session.sync_workspace();
 
-  const auto saved = other / "same.gin";
+  const auto saved = other / "same.dmp";
   CHECK(patches::write_patch(make_patch(4), saved));
   session.repository().refresh();
   const auto inactive = session.open_entry(env.entry_at(saved));
@@ -356,9 +356,9 @@ struct BrowserFixture {
   fs::path lead;
 
   BrowserFixture() {
-    warm = env.patches_folder / "warm.gin";
-    cold = env.patches_folder / "cold.gin";
-    lead = env.patches_folder / "lead.gin";
+    warm = env.patches_folder / "warm.dmp";
+    cold = env.patches_folder / "cold.dmp";
+    lead = env.patches_folder / "lead.dmp";
     CHECK(patches::write_patch(make_patch(1), warm));
     CHECK(patches::write_patch(make_patch(2), cold));
     CHECK(patches::write_patch(make_patch(3), lead));
@@ -490,7 +490,7 @@ void test_a_nested_folder_is_folded_into_the_outer_one() {
   auto &session = env.session;
   const auto bass = env.patches_folder / "bass";
   fs::create_directories(bass);
-  const auto lead = bass / "lead.gin";
+  const auto lead = bass / "lead.dmp";
   CHECK(patches::write_patch(make_patch(3), lead));
 
   // Only the inner folder at first, with a rating and an open document.
@@ -528,7 +528,7 @@ void test_nesting_saved_earlier_is_folded_when_a_session_starts() {
   TestEnvironment env;
   const auto bass = env.patches_folder / "bass";
   fs::create_directories(bass);
-  const auto lead = bass / "lead.gin";
+  const auto lead = bass / "lead.dmp";
   CHECK(patches::write_patch(make_patch(3), lead));
   env.preferences.workspace().set_paths({bass});
   env.session.sync_workspace();
@@ -576,19 +576,19 @@ void test_display_path_tells_same_named_folders_apart() {
   auto &session = env.session;
   const auto other = env.root / "elsewhere" / "patches";
   fs::create_directories(other);
-  const auto file = other / "lead.gin";
+  const auto file = other / "lead.dmp";
   CHECK(patches::write_patch(make_patch(3), file));
   env.preferences.workspace().set_paths({env.patches_folder, other});
   session.sync_workspace();
   const auto relative = env.relative(file);
-  CHECK(relative == "patches (2)/lead.gin");
+  CHECK(relative == "patches (2)/lead.dmp");
   CHECK(session.repository().display_path(relative) ==
-        "elsewhere/patches/lead.gin");
+        "elsewhere/patches/lead.dmp");
   const auto &root = session.repository().tree()[1];
   CHECK(root.name == "patches");
   CHECK(root.telling_parents == "elsewhere/");
-  CHECK(session.repository().display_path("/not/in/the/tree.gin") ==
-        "/not/in/the/tree.gin");
+  CHECK(session.repository().display_path("/not/in/the/tree.dmp") ==
+        "/not/in/the/tree.dmp");
 }
 
 void test_open_entry_activates_open_document() {
@@ -667,7 +667,7 @@ void test_pinning() {
       session.open_or_activate(env.entry_at(fixture.warm), false);
   CHECK(preview.has_value());
   const auto reused = session.open_or_activate(
-      env.entry_at(env.patches_folder / "cold.gin"), false);
+      env.entry_at(env.patches_folder / "cold.dmp"), false);
   CHECK(reused == cold);
   std::size_t previews = 0;
   for (const auto &document : session.documents()) {
@@ -704,7 +704,7 @@ void test_dropped_patch_follows_the_preview_rules() {
   BrowserFixture fixture;
   auto &env = fixture.env;
   auto &session = env.session;
-  const auto outside = env.root / "dropped.gin";
+  const auto outside = env.root / "dropped.dmp";
   CHECK(patches::write_patch(make_patch(5), outside));
 
   const auto first =
@@ -871,10 +871,10 @@ void test_new_patch_opens_pinned() {
   auto &session = env.session;
   const auto before = session.documents().size();
   const auto result =
-      session.create_patch_in(env.patches_folder, "fresh", ".gin");
+      session.create_patch_in(env.patches_folder, "fresh", ".dmp");
   CHECK(result.is_success());
   CHECK(session.current_patch_path() ==
-        env.relative(env.patches_folder / "fresh.gin"));
+        env.relative(env.patches_folder / "fresh.dmp"));
   CHECK(session.active_document().pinned());
   // The unedited preview the session started with was taken over.
   CHECK(session.documents().size() == before);
@@ -962,18 +962,18 @@ void test_nothing_to_restore() {
 void test_failed_loads_preserve_unsaved_contents_and_paths() {
   TestEnvironment env;
   auto &session = env.session;
-  session.set_current_patch(make_patch(2), env.patches_folder / "original.gin");
+  session.set_current_patch(make_patch(2), env.patches_folder / "original.dmp");
   session.current_patch().instrument.feedback = 5;
   const auto snapshot = session.capture_snapshot();
   const auto active = session.active_document_id();
   const auto remembered = env.preferences.last_patch_path();
   patches::PatchEntry missing;
-  missing.full_path = env.patches_folder / "missing.gin";
+  missing.full_path = env.patches_folder / "missing.dmp";
   missing.relative_path = env.relative(missing.full_path);
   CHECK(!session.open_entry(missing));
   CHECK(!session.open_or_activate(missing, false));
   CHECK(!session.load_patch_from_entry(missing));
-  CHECK(!session.open_path(env.patches_folder / "missing.gin", true));
+  CHECK(!session.open_path(env.patches_folder / "missing.dmp", true));
   CHECK(!session.restore_patch({}));
   CHECK(!session.restore_patch(missing.relative_path));
   CHECK(!session.find_entry(""));
@@ -993,17 +993,17 @@ void test_rejected_creation_preserves_the_active_document() {
   const auto active = session.active_document_id();
   CHECK(!session.can_create_patch_in(env.root / "outside"));
   const auto outside =
-      session.create_patch_in(env.root / "outside", "bass", ".gin");
+      session.create_patch_in(env.root / "outside", "bass", ".dmp");
   CHECK(outside.is_error());
   CHECK(!outside.error_message.empty());
   CHECK(session.create_folder_in(env.root / "outside", "bass").is_error());
   for (const std::string stem : {"", "../escape", " bad", "a:b"}) {
-    CHECK(session.create_patch_in(env.patches_folder, stem, ".gin").is_error());
+    CHECK(session.create_patch_in(env.patches_folder, stem, ".dmp").is_error());
     CHECK(session.create_folder_in(env.patches_folder, stem).is_error());
   }
-  const auto existing = env.patches_folder / "existing.gin";
+  const auto existing = env.patches_folder / "existing.dmp";
   CHECK(patches::write_patch(make_patch(3), existing));
-  CHECK(session.create_patch_in(env.patches_folder, "existing", ".gin")
+  CHECK(session.create_patch_in(env.patches_folder, "existing", ".dmp")
             .is_error());
   CHECK(formats::load_patch_from_file(existing)
             .patches.front()
@@ -1043,7 +1043,7 @@ void test_failed_in_place_save_preserves_edits_and_the_clean_snapshot() {
     stream << "not a directory";
     CHECK(stream.good());
   }
-  session.set_current_patch(make_patch(2), blocker / "bass.gin");
+  session.set_current_patch(make_patch(2), blocker / "bass.dmp");
   const auto clean = session.capture_snapshot();
   session.current_patch().instrument.feedback = 6;
   const auto edited = session.capture_snapshot();
@@ -1060,9 +1060,9 @@ void test_failed_in_place_save_preserves_edits_and_the_clean_snapshot() {
 void test_restore_skips_unreadable_records_and_keeps_only_one_preview() {
   TestEnvironment env;
   auto &session = env.session;
-  const auto first = env.root / "first.gin";
-  const auto second = env.root / "second.gin";
-  const auto invalid = env.root / "invalid.gin";
+  const auto first = env.root / "first.dmp";
+  const auto second = env.root / "second.dmp";
+  const auto invalid = env.root / "invalid.dmp";
   CHECK(patches::write_patch(make_patch(2), first));
   CHECK(patches::write_patch(make_patch(4), second));
   {
@@ -1071,11 +1071,11 @@ void test_restore_skips_unreadable_records_and_keeps_only_one_preview() {
     CHECK(stream.good());
   }
   env.preferences.set_open_patches(
-      {{"missing-relative.gin", true},
+      {{"missing-relative.dmp", true},
        {invalid.generic_string(), true},
        {first.generic_string(), false},
        {second.generic_string(), false},
-       {(env.root / "gone.gin").generic_string(), true}},
+       {(env.root / "gone.dmp").generic_string(), true}},
       4);
   const auto initial = session.active_document_id();
   CHECK(session.restore_open_documents());
@@ -1113,8 +1113,8 @@ void test_metadata_is_rejected_for_directories_and_unknown_entries() {
   directory.is_directory = true;
   directory.full_path = env.patches_folder;
   patches::PatchEntry missing;
-  missing.full_path = env.root / "missing.gin";
-  missing.relative_path = "unknown/missing.gin";
+  missing.full_path = env.root / "missing.dmp";
+  missing.relative_path = "unknown/missing.dmp";
   const auto snapshot = session.capture_snapshot();
   for (const auto &entry : {directory, missing}) {
     CHECK(!session.set_entry_rating(entry, 3));

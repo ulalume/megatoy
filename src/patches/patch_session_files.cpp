@@ -112,7 +112,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
 
   std::string extension(preferred_extension);
   if (extension.empty()) {
-    extension = ".gin";
+    extension = ".dmp";
   }
   if (extension.front() != '.') {
     extension = "." + extension;

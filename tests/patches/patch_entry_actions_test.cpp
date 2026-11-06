@@ -22,7 +22,7 @@ patches::EntryMenuCapabilities all_actions() {
 void test_current_and_other_patches() {
   session_tests::Environment env("entry_actions");
   auto &session = env.session;
-  const auto path = env.folder / "lead.gin";
+  const auto path = env.folder / "lead.dmp";
   CHECK(patches::write_patch({}, path));
   auto entry = env.entry(path);
   auto &document = env.open(path);
@@ -155,7 +155,7 @@ void test_read_only_and_outside() {
     CHECK(!actions.save_current && !actions.duplicate);
     CHECK(actions.download_patch && actions.save_to_storage);
   }
-  const auto outside = env.root / "outside.gin";
+  const auto outside = env.root / "outside.dmp";
   auto entry = env.entry(outside);
   auto &document = env.open(outside);
   CHECK(session.activate(document.id()));
@@ -163,7 +163,7 @@ void test_read_only_and_outside() {
       patches::entry_menu_actions(session, entry, all_actions(), false, false);
   CHECK(actions.save_current);
   CHECK(!actions.rename && !actions.delete_patch && !actions.rate);
-  const auto writable = env.folder / "lead.gin";
+  const auto writable = env.folder / "lead.dmp";
   entry = env.entry(writable);
   auto &inside = env.open(writable);
   CHECK(session.activate(inside.id()));
@@ -176,7 +176,7 @@ void test_read_only_and_outside() {
 void test_read_only_workspace() {
   session_tests::Environment env("entry_read_only_workspace", true);
   auto &session = env.session;
-  const auto path = env.folder / "lead.gin";
+  const auto path = env.folder / "lead.dmp";
   CHECK(patches::write_patch({}, path));
   const auto entry = env.entry(path);
   auto &document = env.open(path);

@@ -25,18 +25,14 @@ bool can_overwrite_in_place(const std::filesystem::path &path) {
   }
 
   const auto format = formats::adapter::format_for_extension(extension);
-  if (!format) {
+  if (!format || formats::adapter::is_multi_patch(*format)) {
     return false;
   }
-  if (formats::adapter::is_multi_patch(*format)) {
-    return false;
-  }
-  for (const auto &info : formats::adapter::known_formats()) {
-    if (info.format == *format) {
-      return info.can_write;
-    }
-  }
-  return false;
+  // Only a format offered to save in; .gin, for one, is read only.
+  const auto saves = formats::PatchRegistry::instance().save_formats();
+  return std::any_of(saves.begin(), saves.end(), [&](const auto &info) {
+    return info.extension == extension;
+  });
 }
 
 bool write_patch(const ym2612::Patch &patch,

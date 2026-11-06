@@ -134,21 +134,18 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
   auto patch_to_write = patch;
   patch_to_write.name = sanitized;
 
-  const auto ginpkg_path =
-      formats::ginpkg::build_package_path(patches_dir, sanitized);
-  const auto gin_path = patches_dir / (sanitized + ".gin");
-
   std::string pref_ext(preferred_extension);
   std::transform(
       pref_ext.begin(), pref_ext.end(), pref_ext.begin(),
       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  const bool prefer_ginpkg = pref_ext == ".ginpkg";
-  const bool prefer_gin = pref_ext == ".gin";
+  if (pref_ext.empty()) {
+    pref_ext = ".dmp";
+  }
+  if (pref_ext.front() != '.') {
+    pref_ext.insert(pref_ext.begin(), '.');
+  }
 
-  if (!pref_ext.empty() && !prefer_ginpkg && !prefer_gin) {
-    if (pref_ext.front() != '.') {
-      pref_ext.insert(pref_ext.begin(), '.');
-    }
+  if (pref_ext != ".ginpkg") {
     const auto target = patches_dir / (sanitized + pref_ext);
     if (!overwrite && vfs_.exists(target)) {
       return SavePatchResult::duplicate();
@@ -158,62 +155,16 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
                : SavePatchResult::error("Failed to save patch");
   }
 
-  const bool ginpkg_exists = vfs_.exists(ginpkg_path);
-  const bool gin_exists = vfs_.exists(gin_path);
-
-  auto save_ginpkg = [&]() -> SavePatchResult {
-    if (!overwrite && ginpkg_exists) {
-      return SavePatchResult::duplicate();
-    }
-    if (auto path = formats::PatchRegistry::instance().save_package(
-            ".ginpkg", patches_dir, sanitized, patch_to_write)) {
-      return SavePatchResult::success(*path);
-    }
-    return SavePatchResult::error("Failed to save patch");
-  };
-
-  auto save_gin = [&]() -> SavePatchResult {
-    if (gin_exists && !overwrite) {
-      return SavePatchResult::duplicate();
-    }
-    if (auto path = formats::PatchRegistry::instance().save_package(
-            ".gin", patches_dir, sanitized, patch_to_write)) {
-      return SavePatchResult::success(*path);
-    }
-    return SavePatchResult::error("Failed to save patch");
-  };
-
-  // Preserve the existing format when possible.
-  if (prefer_ginpkg) {
-    auto result = save_ginpkg();
-    if (result.status != SavePatchResult::Status::Error) {
-      return result;
-    }
-    return save_gin();
+  const auto ginpkg_path =
+      formats::ginpkg::build_package_path(patches_dir, sanitized);
+  if (!overwrite && vfs_.exists(ginpkg_path)) {
+    return SavePatchResult::duplicate();
   }
-
-  if (prefer_gin) {
-    auto result = save_gin();
-    if (result.status != SavePatchResult::Status::Error) {
-      return result;
-    }
-    return save_ginpkg();
+  if (auto path = formats::PatchRegistry::instance().save_package(
+          ".ginpkg", patches_dir, sanitized, patch_to_write)) {
+    return SavePatchResult::success(*path);
   }
-
-  if (gin_exists) {
-    return save_gin();
-  }
-  if (ginpkg_exists) {
-    return save_ginpkg();
-  }
-
-  // GIN is the normal one-patch save format. GINPKG remains available for
-  // explicit versioned packages and as a compatibility fallback.
-  auto gin_result = save_gin();
-  if (gin_result.status == SavePatchResult::Status::Success) {
-    return gin_result;
-  }
-  return save_ginpkg();
+  return SavePatchResult::error("Failed to save patch");
 }
 
 bool FilesystemPatchStorage::can_rename_patch(const PatchEntry &entry) const {

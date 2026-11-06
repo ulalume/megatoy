@@ -54,7 +54,7 @@ void test_writable_storage_deletes_patch(const fs::path &root) {
   ym2612::Patch patch;
   patch.name = "delete me";
   const auto saved = repository.save_patch(patch, patch.name,
-                                           /*overwrite=*/true, ".gin");
+                                           /*overwrite=*/true, ".dmp");
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
   CHECK(fs::exists(saved.path));
 
@@ -87,7 +87,7 @@ void test_read_only_storage_refuses_delete(const fs::path &root) {
 
   ym2612::Patch patch;
   patch.name = "preset";
-  const auto path = builtin / "preset.gin";
+  const auto path = builtin / "preset.dmp";
   CHECK(patches::write_patch(patch, path));
 
   megatoy::workspace::Workspace workspace;
@@ -109,7 +109,7 @@ void test_builtin_metadata_lives_outside_presets(const fs::path &root) {
 
   ym2612::Patch patch;
   patch.name = "preset";
-  const auto path = builtin / "preset.gin";
+  const auto path = builtin / "preset.dmp";
   CHECK(patches::write_patch(patch, path));
 
   megatoy::workspace::Workspace workspace;
@@ -158,17 +158,17 @@ void test_duplicate_save_requires_overwrite(const fs::path &root) {
   original.name = "collision";
   original.instrument.algorithm = 1;
   const auto saved = repository.save_patch(original, original.name,
-                                           /*overwrite=*/true, ".gin");
+                                           /*overwrite=*/true, ".dmp");
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
 
   ym2612::Patch replacement = original;
   replacement.instrument.algorithm = 6;
   const auto duplicate = repository.save_patch(replacement, replacement.name,
-                                               /*overwrite=*/false, ".gin");
+                                               /*overwrite=*/false, ".dmp");
   CHECK(duplicate.status == patches::SavePatchResult::Status::Duplicate);
 
   const auto overwritten = repository.save_patch(replacement, replacement.name,
-                                                 /*overwrite=*/true, ".gin");
+                                                 /*overwrite=*/true, ".dmp");
   CHECK(overwritten.status == patches::SavePatchResult::Status::Success);
   ym2612::Patch loaded;
   const auto *entry = find_entry(repository.tree(), overwritten.path);

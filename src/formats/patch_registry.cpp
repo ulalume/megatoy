@@ -152,13 +152,8 @@ std::vector<SaveFormatInfo> PatchRegistry::save_formats() const {
       formats.push_back(std::move(info));
     }
   }
-  static constexpr std::array<std::string_view, 7> kSaveOrder = {
-      ".gin", ".dmp", ".fui", ".eif", ".tfi", ".vgi", ".mml"};
-  for (auto &format : formats) {
-    if (format.extension == ".gin") {
-      format.label = "megatoy";
-    }
-  }
+  static constexpr std::array<std::string_view, 6> kSaveOrder = {
+      ".dmp", ".fui", ".eif", ".tfi", ".vgi", ".mml"};
   const auto rank = [](const std::string &extension) {
     const auto found = std::find(kSaveOrder.begin(), kSaveOrder.end(),
                                  extension);
@@ -185,6 +180,9 @@ void PatchRegistry::register_defaults() {
     if (format == ym2612_format::Format::Ginpkg) {
       continue;
     }
+    // .gin is read only: it is not offered to save in.
+    const bool writable =
+        info.can_write && format != ym2612_format::Format::Gin;
 
     PatchFormatHandler handler;
     handler.label = info.name;
@@ -195,7 +193,7 @@ void PatchRegistry::register_defaults() {
       };
     }
 
-    if (info.can_write && info.is_text) {
+    if (writable && info.is_text) {
       handler.write_text = [format](const ym2612::Patch &patch,
                                     const std::filesystem::path &target) {
         auto text = adapter::serialize_text(format, patch);
@@ -209,24 +207,10 @@ void PatchRegistry::register_defaults() {
         file << *text;
         return static_cast<bool>(file);
       };
-    } else if (info.can_write) {
+    } else if (writable) {
       handler.write_single = [format](const ym2612::Patch &patch,
                                       const std::filesystem::path &target) {
         return adapter::write_file(format, patch, target);
-      };
-    }
-
-    // .gin is megatoy's plain save format, so it also gets a packaged writer
-    // that names the file from the patch.
-    if (format == ym2612_format::Format::Gin) {
-      handler.write_packaged =
-          [format](
-              const std::filesystem::path &dir, const ym2612::Patch &patch,
-              const std::string &name) -> std::optional<std::filesystem::path> {
-        const auto path = dir / (name + ".gin");
-        return adapter::write_file(format, patch, path)
-                   ? std::optional<std::filesystem::path>(path)
-                   : std::nullopt;
       };
     }
 

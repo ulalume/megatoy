@@ -3,6 +3,7 @@
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
 #include "formats/ym2612_format_adapter.hpp"
+#include "patches/patch_write.hpp"
 #include "ym2612/patch.hpp"
 #include <algorithm>
 #include <filesystem>
@@ -70,8 +71,8 @@ void clean_dir(const std::filesystem::path &dir) {
 
 // Formats that carry the full megatoy patch, so equality must hold exactly.
 bool is_lossless(const std::string &extension) {
-  return extension == ".gin" || extension == ".ginpkg" || extension == ".dmp" ||
-         extension == ".fui" || extension == ".mml";
+  return extension == ".ginpkg" || extension == ".dmp" || extension == ".fui" ||
+         extension == ".mml";
 }
 
 } // namespace
@@ -143,10 +144,12 @@ int main() {
   }
 
   // Guard against the registry quietly losing a format.
-  for (const char *required :
-       {".dmp", ".fui", ".mml", ".gin", ".vgi", ".eif"}) {
+  for (const char *required : {".dmp", ".fui", ".mml", ".vgi", ".eif"}) {
     CHECK(std::find(covered.begin(), covered.end(), required) != covered.end());
   }
+  // .gin is read only.
+  CHECK(std::find(covered.begin(), covered.end(), ".gin") == covered.end());
+  CHECK(!patches::can_overwrite_in_place(tmp / "read_only.gin"));
 
   // A file explicitly named .dmp keeps the legacy best-effort behaviour even
   // when its tail is truncated. The format registry supplies that explicit

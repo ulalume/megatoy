@@ -11,22 +11,22 @@ void test_source_list() {
   auto &session = env.session;
   session.repository().set_show_builtin_presets(false);
   CHECK(ui::build_entry_list(session.repository()).empty());
-  CHECK(patches::write_patch({}, env.folder / "zebra.gin"));
-  CHECK(patches::write_patch({}, env.folder / "Alpha.gin"));
+  CHECK(patches::write_patch({}, env.folder / "zebra.dmp"));
+  CHECK(patches::write_patch({}, env.folder / "Alpha.dmp"));
   std::filesystem::create_directories(env.folder / "sub");
-  CHECK(patches::write_patch({}, env.folder / "sub" / "deep.gin"));
+  CHECK(patches::write_patch({}, env.folder / "sub" / "deep.dmp"));
   session.repository().refresh();
   const auto entries = ui::build_entry_list(session.repository());
   CHECK(entries.size() == 3);
-  CHECK(entries[0].label == "patches/Alpha.gin");
-  CHECK(entries[1].label == "patches/sub/deep.gin");
-  CHECK(entries[2].label == "patches/zebra.gin");
+  CHECK(entries[0].label == "patches/Alpha.dmp");
+  CHECK(entries[1].label == "patches/sub/deep.dmp");
+  CHECK(entries[2].label == "patches/zebra.dmp");
   CHECK(std::all_of(entries.begin(), entries.end(), [](const auto &item) {
     return item.entry != nullptr && !item.entry->is_directory;
   }));
 
-  auto &zebra = env.open(env.folder / "zebra.gin");
-  auto &alpha = env.open(env.folder / "Alpha.gin");
+  auto &zebra = env.open(env.folder / "zebra.dmp");
+  auto &alpha = env.open(env.folder / "Alpha.dmp");
   CHECK(session.activate(alpha.id()));
   const auto all = ui::patch_lab_sources(session, entries, "");
   CHECK(all.size() == 8);
@@ -92,7 +92,7 @@ void test_source_labels() {
   CHECK(sources[1].label == "Instrument name");
   CHECK(sources[1].document == &document);
   document.patch().name.clear();
-  document.set_path("folder/fallback.gin");
+  document.set_path("folder/fallback.dmp");
   sources = ui::patch_lab_sources(env.session, {}, "fallback");
   CHECK(sources.size() == 3);
   CHECK(sources[1].label == "fallback");

@@ -35,7 +35,7 @@ struct SaveFormatInfo {
 
   /**
    * How this format is named wherever the UI offers a choice of formats:
-   * extension first, e.g. ".gin (megatoy)".
+   * extension first, e.g. ".dmp (DefleMask Preset)".
    *
    * The only place that spelling is built. Every format picker calls this so
    * they cannot drift apart.
