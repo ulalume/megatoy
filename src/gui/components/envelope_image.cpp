@@ -560,18 +560,36 @@ render_envelope_image(const ym2612::OperatorSettings &op,
       to_point(ImVec2(canvas_min.x + 1.0f, canvas_min.y + label_height + 1.0f));
   plot.max = to_point(ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f));
 
-  // The note the axis is drawn at, at the far end of the same strip; the
-  // milliseconds stop short of it.
+  // A carrier says so at the far end of the strip, and the milliseconds stop
+  // short of it.
   const float label_baseline = canvas_min.y + 1.0f;
+  const ImGuiStyle &style = ImGui::GetStyle();
+  float labels_end = plot.max.x;
+  if (carrier) {
+    constexpr const char *kCarrier = "Carrier";
+    const float tag_width =
+        ImGui::CalcTextSize(kCarrier).x + style.FramePadding.x * 2.0f;
+    const ImVec2 tag_min(plot.max.x - tag_width, label_baseline);
+    draw_list->AddRectFilled(
+        tag_min, ImVec2(plot.max.x, plot.min.y),
+        styles::color_u32(styles::MegatoyCol::CarrierBadge),
+        ui::scale::px(3.0f), ImDrawFlags_RoundCornersBottomLeft);
+    draw_list->AddText(ImVec2(tag_min.x + style.FramePadding.x, label_baseline),
+                       ImGui::GetColorU32(ImGuiCol_Text), kCarrier);
+    labels_end = tag_min.x;
+  }
+  draw_time_grid(draw_list, plot, label_baseline,
+                 labels_end - ui::scale::px(6.0f));
+
+  // The note the axis is drawn at, in the plot's bottom right corner.
   const std::string note_name =
       ym2612::Note::from_midi_note(
           static_cast<uint8_t>(ui::envelope::reference_midi_note()))
           .name();
-  const float note_x = plot.max.x - ImGui::CalcTextSize(note_name.c_str()).x;
-  draw_list->AddText(ImVec2(note_x, label_baseline), axis_label_color(),
-                     note_name.c_str());
-
-  draw_time_grid(draw_list, plot, label_baseline, note_x - ui::scale::px(6.0f));
+  const ImVec2 note_size = ImGui::CalcTextSize(note_name.c_str());
+  draw_list->AddText(ImVec2(plot.max.x - note_size.x - ui::scale::px(2.0f),
+                            plot.max.y - note_size.y),
+                     axis_label_color(), note_name.c_str());
 
   const PhaseColors colors = {
       color_from_slider_state(state.attack_rate),

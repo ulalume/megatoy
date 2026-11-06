@@ -216,10 +216,14 @@ void render_directory_row(PatchSelectorContext &context,
   ImGui::SetNextItemOpen(row.is_open, ImGuiCond_Always);
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, row_margin() * 0.5f);
+  // Folders are muted beside the patches they hold.
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::TextMuted));
   const bool open = ImGui::TreeNodeEx(display_name.c_str(),
                                       ImGuiTreeNodeFlags_SpanFullWidth |
                                           ImGuiTreeNodeFlags_FramePadding |
                                           ImGuiTreeNodeFlags_NoTreePushOnOpen);
+  ImGui::PopStyleColor();
   ImGui::PopStyleVar(2);
   entry_context_menu(context, item,
                      row.depth == 0 &&

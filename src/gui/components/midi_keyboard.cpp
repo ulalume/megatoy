@@ -476,7 +476,9 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       if (is_key_mapped) {
         typed_min = std::min(typed_min, key_min.x);
         typed_max = std::max(typed_max, key_max.x);
-        ImVec2 key_max_mapped(x + key_width, y + 2);
+        // A bar along the top of each key typing plays, and its key's name
+        // a little below it.
+        ImVec2 key_max_mapped(x + key_width, y + ui::scale::px(4.0f));
         draw_list->AddRectFilled(key_min, key_max_mapped,
                                  white_key_pressed_col);
         ImU32 text_color = is_white ? white_key_text_col : black_key_text_col;
@@ -493,7 +495,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         }
         ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
         ImVec2 text_pos(key_min.x + (key_width - text_size.x) * 0.5f,
-                        key_max_mapped.y);
+                        key_max_mapped.y + ui::scale::px(3.0f));
         draw_list->AddText(text_pos, text_color, key_text.c_str());
       }
       if (note.key == keyboard_settings.key) {

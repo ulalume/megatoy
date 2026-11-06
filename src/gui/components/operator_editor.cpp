@@ -493,11 +493,14 @@ HandleTouch operator_handle(OperatorWidget &widget,
   return touch;
 }
 
-/// The handles on one graph. Returns whether one of them is being dragged,
-/// which is what holds the time axis still.
+/// The handles on one graph, each lit as the sliders for what it sets are,
+/// on this operator (`sliders`) or another selected one (`echoed`). Returns
+/// whether one of them is being dragged, which is what holds the time axis
+/// still.
 bool render_envelope_handles(OperatorWidget &widget,
                              const ui::envelope::EnvelopeHandles &handles,
                              UIState::EnvelopeState::HandleLit &handle_states,
+                             UIState::EnvelopeState::HandleLit sliders,
                              UIState::EnvelopeState::HandleLit echoed) {
   constexpr size_t count = std::size(kHandleSpecs);
   const ui::envelope::HandleIndex nearest = ui::envelope::nearest_handle(
@@ -516,15 +519,19 @@ bool render_envelope_handles(OperatorWidget &widget,
       continue;
     }
     active |= touched[i].lit == UIState::EnvelopeState::SliderState::Active;
-    // Lit too when another selected operator is changing what it stands for.
+    // Lit too when a slider for what it stands for is pointed at, here or
+    // on another selected operator.
     SliderState lit = touched[i].lit;
     const HandleAxes axes = axes_of(kHandleSpecs[i].handle);
     for (const auto &field : {axes.across, axes.down}) {
       if (!field) {
         continue;
       }
-      if (const auto *from = slider_state_for(echoed, *field)) {
-        lit = UIState::EnvelopeState::stronger(lit, *from);
+      for (auto *from : {slider_state_for(sliders, *field),
+                         slider_state_for(echoed, *field)}) {
+        if (from != nullptr) {
+          lit = UIState::EnvelopeState::stronger(lit, *from);
+        }
       }
     }
     draw_envelope_handle(handles, kHandleSpecs[i].handle, lit);
@@ -626,28 +633,6 @@ void drag_from_background(OperatorEditState &state,
     carry_operator(document, slot);
     ImGui::EndDragDropSource();
   }
-}
-
-/// The Carrier badge, a tab on the envelope graph's top right corner whose
-/// bottom edge is the graph's top at `bottom` and right edge at `right`.
-void draw_carrier_badge(float right, float bottom) {
-  constexpr const char *kBadge = "Carrier";
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 text_size = ImGui::CalcTextSize(kBadge);
-  // Shallower than a frame: less padding above the text, and a little less
-  // below.
-  const float pad_top = style.FramePadding.y - ui::scale::px(3.0f);
-  const float pad_bottom = style.FramePadding.y - ui::scale::px(2.0f);
-  const ImVec2 size(text_size.x + style.FramePadding.x * 2.0f,
-                    pad_top + text_size.y + pad_bottom);
-  const ImVec2 min(right - size.x, bottom - size.y);
-  const ImVec2 max(right, bottom);
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  draw_list->AddRectFilled(
-      min, max, styles::color_u32(styles::MegatoyCol::CarrierBadge),
-      size.y * 0.3f - ui::scale::px(1.0f), ImDrawFlags_RoundCornersTop);
-  draw_list->AddText(ImVec2(min.x + style.FramePadding.x, min.y + pad_top),
-                     ImGui::GetColorU32(ImGuiCol_Text), kBadge);
 }
 
 /// The operator's name, sitting in the frame's top border.
@@ -764,7 +749,6 @@ void render_envelope_sliders(OperatorWidget &widget,
 
 void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                               int slot, UIState::EnvelopeState &envelope_state,
-                              bool space_for_feedback,
                               const EnvelopeVoices &voices) {
   auto &state = context.operator_edit();
   auto &instrument = patch.instrument;
@@ -781,10 +765,18 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
   ImGui::PushItemWidth(hslider_width());
 
+  const float row_left = ImGui::GetCursorPosX();
+  operator_checkbox(widget, "Amplitude Modulation", "Amplitude Modulation",
+                    &ym2612::OperatorSettings::amplitude_modulation_enable);
   if (slot == 0) {
     // Feedback belongs to the channel, not to an operator -- there is one of
     // it, and OP1's panel is only where it is drawn. So it spreads nowhere,
-    // but it still leads: editing it makes OP1 the primary operator.
+    // but it still leads: editing it makes OP1 the primary operator. It
+    // takes the rest of the row, out to the graph's right edge.
+    ImGui::SameLine();
+    const float row_end = row_left + content_width - frame_padding();
+    ImGui::SetNextItemWidth(
+        std::max(row_end - ImGui::GetCursorPosX(), ImGui::GetFrameHeight()));
     int feedback = instrument.feedback;
     const bool feedback_changed = named_slider_int("Feedback", &feedback, 0, 7);
     if (ImGui::IsItemActivated()) {
@@ -794,12 +786,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     if (feedback_changed) {
       instrument.feedback = static_cast<uint8_t>(feedback);
     }
-  } else if (space_for_feedback) {
-    // Stand in for the Feedback slider OP1 has and the others do not, so all
-    // four line up.
-    ImVec2 feedback_gap = ImGui::GetCursorPos();
-    ImGui::SetCursorPosY(feedback_gap.y + ImGui::GetFrameHeightWithSpacing());
   }
+  ImGui::Spacing();
 
   // The graph is what the panel is read for, so it spans the panel in every
   // layout, with the sliders underneath. frame_padding() comes off the right
@@ -809,7 +797,6 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // Carriers reach the output; modulators only feed other operators. Which
   // is which moves with the algorithm, so the graph says it on every one.
   const bool carrier = is_carrier(slot, instrument.algorithm);
-  const ImVec2 graph_min = ImGui::GetCursorScreenPos();
   const ImVec2 graph_size(content_width - frame_padding(),
                           envelope_graph_height());
   const ui::envelope::EnvelopeHandles handles =
@@ -818,12 +805,14 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // Inside the graph's own window, which render_envelope_image leaves open:
   // an item anywhere else could not be hovered over the graph.
   envelope_state.handles = UIState::EnvelopeState::HandleLit{};
+  const UIState::EnvelopeState::HandleLit sliders{
+      envelope_state.total_level,  envelope_state.attack_rate,
+      envelope_state.decay_rate,   envelope_state.sustain_level,
+      envelope_state.sustain_rate, envelope_state.release_rate,
+  };
   envelope_state.handle_active = render_envelope_handles(
-      widget, handles, envelope_state.handles, envelope_state.echoed);
+      widget, handles, envelope_state.handles, sliders, envelope_state.echoed);
   end_envelope_image();
-  if (carrier) {
-    draw_carrier_badge(graph_min.x + graph_size.x, graph_min.y);
-  }
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
 
@@ -892,9 +881,6 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                       op, ym2612::OperatorField::Detune)],
                   nullptr);
 
-  operator_checkbox(widget, "Amplitude Modulation", "Amplitude Modulation",
-                    &ym2612::OperatorSettings::amplitude_modulation_enable);
-
   if (beside_rates) {
     ImGui::PopItemWidth();
     ImGui::EndGroup();
@@ -910,7 +896,6 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
 
 void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
-                            bool space_for_feedback,
                             const EnvelopeVoices &voices) {
   auto &state = context.operator_edit();
   OperatorWidget widget{context, patch.instrument, slot};
@@ -936,8 +921,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       ImVec2(frame_min.x + frame_padding(),
              block_min.y + header_height + frame_padding()));
   ImGui::BeginGroup();
-  render_operator_contents(context, patch, slot, envelope_state,
-                           space_for_feedback, voices);
+  render_operator_contents(context, patch, slot, envelope_state, voices);
   ImGui::EndGroup();
 
   const float content_height =

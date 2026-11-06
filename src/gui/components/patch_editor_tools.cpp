@@ -3,6 +3,7 @@
 #include "formats/ym2612_format_adapter.hpp"
 #include "gui/clipboard.hpp"
 #include "gui/components/named_slider.hpp"
+#include "gui/components/section_header.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patches/patch_tweak.hpp"
@@ -41,36 +42,6 @@ void light_tweak_fields(PatchEditorContext &context,
     raise(quick.sustain_rate, moved.sustain_rate);
     raise(quick.release_rate, moved.release_rate);
   }
-}
-
-/// A bar that opens and closes the section under it, as wide as the items
-/// around it. Returns whether the section is open.
-bool section_header(const char *label, bool &open) {
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 min = ImGui::GetCursorScreenPos();
-  const ImVec2 size(std::max(ImGui::GetContentRegionAvail().x, 1.0f),
-                    ImGui::GetFrameHeight());
-  if (ImGui::InvisibleButton(label, size)) {
-    open = !open;
-  }
-  const auto col =
-      ImGui::IsItemActive()    ? styles::MegatoyCol::SectionHeaderActive
-      : ImGui::IsItemHovered() ? styles::MegatoyCol::SectionHeaderHovered
-                               : styles::MegatoyCol::SectionHeader;
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  const ImVec2 max(min.x + size.x, min.y + size.y);
-  draw_list->AddRectFilled(min, max, styles::color_u32(col),
-                           style.FrameRounding);
-  const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
-  const float font_size = ImGui::GetFontSize();
-  ImGui::RenderArrow(
-      draw_list,
-      ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y), text,
-      open ? ImGuiDir_Down : ImGuiDir_Right, 1.0f);
-  draw_list->AddText(ImVec2(min.x + style.FramePadding.x * 2.0f + font_size,
-                            min.y + style.FramePadding.y),
-                     text, label);
-  return open;
 }
 
 /// Draws one slider; returns how it is pointed at.

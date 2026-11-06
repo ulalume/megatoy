@@ -169,9 +169,9 @@ void render_save_export_buttons(PatchEditorContext &context,
   const auto &repository = patch_session.repository();
   const auto relative_path =
       repository.to_relative_path(document.path()).generic_string();
-  ImGui::Text("%s",
-              display_preset_path(repository.display_path(relative_path))
-                  .c_str());
+  ImGui::TextColored(
+      styles::color(styles::MegatoyCol::TextMuted), "%s",
+      display_preset_path(repository.display_path(relative_path)).c_str());
   render_patch_metadata(context, document, ui);
 
   // Render popups in the same window/ID stack as the actions that open them.
@@ -217,10 +217,11 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Channel");
   ImGui::PushItemWidth(hslider_width());
 
-  if (const auto *preview =
-          get_algorithm_preview_texture(patch.instrument.algorithm)) {
-    preview_image(*preview);
-  }
+  // The slider hangs from the diagram's bottom edge, as wide as it.
+  algorithm_diagram(patch.instrument.algorithm,
+                    ImVec2(ImGui::CalcItemWidth(), ui::scale::px(48.0f)));
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
+                       ImGui::GetStyle().ItemSpacing.y);
 
   int algorithm = patch.instrument.algorithm;
   bool algorithm_changed = named_slider_int("Algorithm", &algorithm, 0, 7);
@@ -237,18 +238,11 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
                              const EnvelopeVoices &voices) {
 
   const auto avail_width = ImGui::GetContentRegionAvail().x;
-  bool space_for_feedbacks[4] = {false};
   const float column_min_width = ui::scale::px(250.0f);
   if (avail_width > column_min_width * 4) {
     ImGui::Columns(4, "operation_columns", false);
-    space_for_feedbacks[0] = true;
-    space_for_feedbacks[1] = true;
-    space_for_feedbacks[2] = true;
-    space_for_feedbacks[3] = true;
   } else if (avail_width > column_min_width * 2) {
     ImGui::Columns(2, "operation_columns", false);
-    space_for_feedbacks[0] = true;
-    space_for_feedbacks[1] = true;
   } else {
     ImGui::Columns(1, "operation_columns", false);
   }
@@ -260,7 +254,7 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
   echo_selection_highlights(context);
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_state(slot),
-                           space_for_feedbacks[slot], voices);
+                           voices);
 
     ImGui::Spacing();
     ImGui::NextColumn();

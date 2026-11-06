@@ -2,9 +2,11 @@
 
 #include "changelog.hpp"
 #include "common.hpp"
+#include "gui/components/section_header.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "modal.hpp"
 
+#include <deque>
 #include <imgui.h>
 #include <string>
 
@@ -16,6 +18,8 @@ bool g_open_requested = false;
 /// Set as the dialog opens: each version's section is put back to its
 /// default, the newest open and the rest closed.
 bool g_reset_sections = false;
+/// Whether each version's section is open, newest first.
+std::deque<bool> g_section_open;
 
 } // namespace
 
@@ -28,8 +32,6 @@ void render_changelog_dialog() {
     ImGui::OpenPopup(kTitle);
   }
 
-  // The only dialog long enough to need scrolling, so the only one with a
-  // fixed size rather than AlwaysAutoResize.
   // The one dialog that scrolls, so it needs a height of its own rather than
   // one taken from however much it happens to hold today.
   if (!begin_modal(kTitle, ModalDismiss::EscapeOrOutsideClick, 460.0f, 420.0f)
@@ -41,13 +43,19 @@ void render_changelog_dialog() {
                        ImGui::GetStyle().ItemSpacing.y +
                        ImGui::GetStyle().WindowPadding.y;
   if (ImGui::BeginChild("##entries", ImVec2(0.0f, -footer))) {
-    bool newest = true;
-    for (const auto &entry : megatoy::changelog()) {
-      if (g_reset_sections) {
-        ImGui::SetNextItemOpen(newest);
+    const auto &entries = megatoy::changelog();
+    if (g_reset_sections || g_section_open.size() != entries.size()) {
+      g_section_open.assign(entries.size(), false);
+      if (!g_section_open.empty()) {
+        g_section_open.front() = true;
       }
-      newest = false;
-      if (!ImGui::CollapsingHeader(std::string(entry.version).c_str())) {
+    }
+    g_reset_sections = false;
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+      const auto &entry = entries[i];
+      // Headed like the patch editor's sections.
+      if (!section_header(std::string(entry.version).c_str(),
+                          g_section_open[i])) {
         continue;
       }
       for (const auto &item : entry.items) {
@@ -68,7 +76,6 @@ void render_changelog_dialog() {
       }
       ImGui::Spacing();
     }
-    g_reset_sections = false;
   }
   ImGui::EndChild();
 
