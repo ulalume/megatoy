@@ -13,6 +13,9 @@ namespace {
 
 constexpr const char *kTitle = "Change Log";
 bool g_open_requested = false;
+/// Set as the dialog opens: each version's section is put back to its
+/// default, the newest open and the rest closed.
+bool g_reset_sections = false;
 
 } // namespace
 
@@ -21,6 +24,7 @@ void open_changelog_dialog() { g_open_requested = true; }
 void render_changelog_dialog() {
   if (g_open_requested) {
     g_open_requested = false;
+    g_reset_sections = true;
     ImGui::OpenPopup(kTitle);
   }
 
@@ -37,8 +41,15 @@ void render_changelog_dialog() {
                        ImGui::GetStyle().ItemSpacing.y +
                        ImGui::GetStyle().WindowPadding.y;
   if (ImGui::BeginChild("##entries", ImVec2(0.0f, -footer))) {
+    bool newest = true;
     for (const auto &entry : megatoy::changelog()) {
-      ImGui::SeparatorText(std::string(entry.version).c_str());
+      if (g_reset_sections) {
+        ImGui::SetNextItemOpen(newest);
+      }
+      newest = false;
+      if (!ImGui::CollapsingHeader(std::string(entry.version).c_str())) {
+        continue;
+      }
       for (const auto &item : entry.items) {
         ImGui::Bullet();
         dialog_text(item.text);
@@ -57,6 +68,7 @@ void render_changelog_dialog() {
       }
       ImGui::Spacing();
     }
+    g_reset_sections = false;
   }
   ImGui::EndChild();
 
