@@ -9,6 +9,7 @@
 #include "gui/components/envelope_image.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/history_shortcuts.hpp"
+#include "gui/input/touch.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
@@ -16,7 +17,6 @@
 #include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
-#include "gui/input/touch.hpp"
 #include "platform/web/web_folder_import.hpp"
 #include "platform/web/web_platform_services.hpp"
 #include "system/path_service.hpp"
@@ -119,24 +119,37 @@ bool run_frame(RuntimeContext &runtime) {
     }
   }
 
+  constexpr std::uint64_t kSignalTailFrames = AppServices::SampleRate / 10;
+  // A sounding voice moves along its envelope graph frame by frame, whether
+  // or not the waveform is shown.
+  const auto display_is_live = [&] {
+    return (app_state.ui_state().prefs.show_waveform &&
+            services.audio_manager.scope_buffer().signal_within(
+                kSignalTailFrames)) ||
+           ui::envelope_voices_moving() || ui::touch::in_motion();
+  };
+
 #if defined(MEGATOY_PLATFORM_WEB)
-  services.gui_manager.poll_events();
+  // The browser calls this at every display refresh. A frame not due yet is
+  // skipped, and the canvas keeps showing the last one.
+  const bool received_event = services.gui_manager.poll_events();
   if (std::exchange(page_shown_again, false) && !sound_is_running()) {
     drop_sound_player();
     services.audio_manager.reopen_device();
   }
+  const auto now = platform::FrameScheduler::Clock::now();
+  if (received_event) {
+    runtime.frame_scheduler.note_interaction(now);
+  }
+  if (runtime.frame_scheduler.wait_before_frame(now, false, display_is_live())
+          .count() > 0) {
+    return true;
+  }
+  runtime.frame_scheduler.note_frame_started(now);
 #else
-  constexpr std::uint64_t kSignalTailFrames = AppServices::SampleRate / 10;
-  // A sounding voice moves along its envelope graph frame by frame, whether
-  // or not the waveform is shown.
-  const bool display_is_live =
-      (app_state.ui_state().prefs.show_waveform &&
-       services.audio_manager.scope_buffer().signal_within(
-           kSignalTailFrames)) ||
-      ui::envelope_voices_moving();
   const auto before_wait = platform::FrameScheduler::Clock::now();
   const auto wait = runtime.frame_scheduler.wait_before_frame(
-      before_wait, services.gui_manager.is_minimized(), display_is_live);
+      before_wait, services.gui_manager.is_minimized(), display_is_live());
   const bool received_event =
       services.gui_manager.poll_events(static_cast<int>(wait.count()));
   const auto frame_started = platform::FrameScheduler::Clock::now();

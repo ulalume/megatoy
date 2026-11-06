@@ -329,6 +329,11 @@ void claim(std::uint64_t id) {
   }
 }
 
+bool in_motion() {
+  return !all_fingers().empty() || gesture().mode != Gesture::Mode::Waiting ||
+         pending_release().active || !lift_pending().empty();
+}
+
 void before_new_frame() {
   // The browser says so before SDL's own lifts are read, so only what those
   // left behind is let go -- not a finger that has come down since.

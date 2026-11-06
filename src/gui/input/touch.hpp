@@ -34,6 +34,10 @@ void release_all();
  */
 void claim(std::uint64_t id);
 
+/// A finger is on the screen, or a gesture is still running out without one
+/// (a flick coasting, a release waiting for the next frame).
+bool in_motion();
+
 /// Presses for a finger held still long enough. Called before
 /// ImGui::NewFrame().
 void before_new_frame();

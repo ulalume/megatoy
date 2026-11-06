@@ -288,6 +288,8 @@ void GuiManager::setup_default_layout(unsigned int dockspace_id) {
   ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
   ui::layouts::build_default_layout(dockspace_id);
   ImGui::DockBuilderFinish(dockspace_id);
+  // Saved like a change made by hand, so a reset outlasts a reload.
+  ImGui::MarkIniSettingsDirty();
 }
 
 void GuiManager::end_frame() {
@@ -498,9 +500,11 @@ void GuiManager::apply_imgui_ini_binding() {
   }
 
   ImGuiIO &io = ImGui::GetIO();
-  if (imgui_ini_file_path_.empty() && megatoy::platform::is_web()) {
-    static const char kWebIniName[] = "megatoy_imgui_ini";
-    io.IniFilename = kWebIniName;
+  if (megatoy::platform::is_web()) {
+    // Kept in the page's storage instead: ImGui only says when it changed,
+    // and save_web_layout_ini() writes it.
+    io.IniFilename = nullptr;
+    io.IniSavingRate = 1.0f;
   } else {
     io.IniFilename =
         imgui_ini_file_path_.empty() ? nullptr : imgui_ini_file_path_.c_str();

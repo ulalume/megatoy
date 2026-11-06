@@ -33,14 +33,9 @@ void remove_previous_layouts() {
   }
 }
 
-struct SaveState {
-  std::string text;
-  double time = 0.0;
-};
-
-SaveState &last_save() {
-  static SaveState state;
-  return state;
+std::string &last_saved() {
+  static std::string text;
+  return text;
 }
 
 } // namespace
@@ -52,9 +47,7 @@ bool load_web_layout_ini() {
   remove_previous_layouts();
 
   auto stored = platform::web::read_local_storage(kLayoutKey);
-  auto &saved = last_save();
-  saved.text = stored.value_or(std::string());
-  saved.time = 0.0;
+  last_saved() = stored.value_or(std::string());
   if (!stored.has_value() || stored->empty()) {
     return false;
   }
@@ -66,22 +59,21 @@ void save_web_layout_ini() {
   if (ImGui::GetCurrentContext() == nullptr) {
     return;
   }
+  ImGuiIO &io = ImGui::GetIO();
+  if (!io.WantSaveIniSettings) {
+    return;
+  }
+  io.WantSaveIniSettings = false;
   size_t size = 0;
   const char *data = ImGui::SaveIniSettingsToMemory(&size);
   if (data == nullptr || size == 0) {
     return;
   }
-  auto &saved = last_save();
-  const std::string current(data, size);
-  const double now = ImGui::GetTime();
-  const bool throttle_ok = saved.time == 0.0 || (now - saved.time) > 1.0;
-  if (current != saved.text && throttle_ok) {
-    if (platform::web::write_local_storage(kLayoutKey, current)) {
-      saved.text = current;
-    }
-    saved.time = now;
+  std::string current(data, size);
+  if (current != last_saved() &&
+      platform::web::write_local_storage(kLayoutKey, current)) {
+    last_saved() = std::move(current);
   }
-  // Do not touch io.WantSaveIniSettings; we are saving on content diff instead.
 }
 
 } // namespace ui
