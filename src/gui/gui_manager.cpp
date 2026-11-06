@@ -254,6 +254,12 @@ void GuiManager::begin_frame() {
   ImGui_ImplSDL3_NewFrame();
   ui::touch::before_new_frame();
   ImGui::NewFrame();
+  // A finger lands without hovering first, so a tap meant to select a tab
+  // would find its close button already there: under a finger only the
+  // selected tab shows one.
+  ImGui::GetStyle().TabCloseButtonMinWidthUnselected =
+      ImGui::GetIO().MouseSource == ImGuiMouseSource_TouchScreen ? FLT_MAX
+                                                                 : 0.0f;
   ui::touch::drag_to_scroll();
   ui::layouts::fit_footer_to_width();
   ui::layouts::fit_sidebar_to_width();
