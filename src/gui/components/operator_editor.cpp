@@ -652,16 +652,16 @@ void draw_carrier_badge(float right, float bottom) {
   const ImVec2 text_size = ImGui::CalcTextSize(kBadge);
   // Shallower than a frame: less padding above the text, and a little less
   // below.
-  const float pad_top = style.FramePadding.y - ui::scale::px(2.0f);
-  const float pad_bottom = style.FramePadding.y - ui::scale::px(1.0f);
+  const float pad_top = style.FramePadding.y - ui::scale::px(3.0f);
+  const float pad_bottom = style.FramePadding.y - ui::scale::px(2.0f);
   const ImVec2 size(text_size.x + style.FramePadding.x * 2.0f,
                     pad_top + text_size.y + pad_bottom);
   const ImVec2 min(right - size.x, bottom - size.y);
   const ImVec2 max(right, bottom);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  draw_list->AddRectFilled(min, max,
-                           styles::color_u32(styles::MegatoyCol::CarrierBadge),
-                           size.y * 0.3f, ImDrawFlags_RoundCornersTop);
+  draw_list->AddRectFilled(
+      min, max, styles::color_u32(styles::MegatoyCol::CarrierBadge),
+      size.y * 0.3f - ui::scale::px(1.0f), ImDrawFlags_RoundCornersTop);
   draw_list->AddText(ImVec2(min.x + style.FramePadding.x, min.y + pad_top),
                      ImGui::GetColorU32(ImGuiCol_Text), kBadge);
 }
