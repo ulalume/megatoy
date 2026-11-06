@@ -24,6 +24,19 @@ constexpr float kWaveformShareAbove = 0.40f;
 /// time it was split that way so dragging it sticks.
 float waveform_share[2] = {kWaveformShareBeside, kWaveformShareAbove};
 
+constexpr float kEditorMinWidth = 300.0f;
+constexpr float kBrowserMinWidth = 230.0f;
+
+bool browser_folded = false;
+
+/// The widths the browser and the editor were given last, by a drag of the
+/// divider or a layout, and the browser width this code set since.
+struct SidebarWidths {
+  float browser = 0.0f;
+  float editor = 0.0f;
+  float set = -1.0f;
+} sidebar;
+
 } // namespace
 
 void build_default_layout(unsigned int dockspace_id) {
@@ -123,5 +136,43 @@ void fit_footer_to_width() {
   waveform->DockNode->SizeRef[was] = other->SizeRef[was] = size[was];
   ImGui::MarkIniSettingsDirty();
 }
+
+void fit_sidebar_to_width() {
+  browser_folded = ImGui::GetMainViewport()->WorkSize.x <
+                   ui::scale::px(kEditorMinWidth + kBrowserMinWidth);
+  if (browser_folded) {
+    return;
+  }
+  const ImGuiWindow *browser = ImGui::FindWindowByName(ui::PATCH_BROWSER_TITLE);
+  if (browser == nullptr || !browser->WasActive ||
+      browser->DockNode == nullptr) {
+    return;
+  }
+  ImGuiDockNode *node = browser->DockNode;
+  ImGuiDockNode *top = node->ParentNode;
+  if (top == nullptr || !top->IsSplitNode() || top->SplitAxis != ImGuiAxis_X ||
+      top->ChildNodes[0] != node || top->Size.x <= 0.0f) {
+    return;
+  }
+
+  // A width this code did not set came from the divider or a layout, and
+  // is what the two go back to as the window widens. Neither is taken
+  // below its least width.
+  const float browser_min = ui::scale::px(kBrowserMinWidth);
+  if (node->SizeRef.x != sidebar.set) {
+    sidebar.browser = ImClamp(
+        node->SizeRef.x, browser_min,
+        ImMax(browser_min, top->Size.x - ui::scale::px(kEditorMinWidth)));
+    sidebar.editor = top->Size.x - sidebar.browser;
+  }
+  const float width = ImMin(
+      sidebar.browser, ImMax(top->Size.x - sidebar.editor, browser_min));
+  node->SizeRef.x = width;
+  sidebar.set = width;
+}
+
+bool patch_browser_folded() { return browser_folded; }
+
+float patch_browser_min_width() { return ui::scale::px(kBrowserMinWidth); }
 
 } // namespace ui::layouts

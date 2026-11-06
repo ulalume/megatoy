@@ -2,8 +2,10 @@
 #include "gui/app_window.hpp"
 
 #include "gui/areas.hpp"
+#include "gui/layouts.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
+#include "gui/window_title.hpp"
 #include "patch_selector_shared.hpp"
 #include "patch_tree_view.hpp"
 
@@ -90,30 +92,8 @@ void render_tree(PatchSelectorContext &context) {
   ImGui::EndChild();
 }
 
-} // namespace
-
-void render_patch_selector(const char *title, PatchSelectorContext &context) {
-  auto &prefs = context.prefs;
-  if (!prefs.show_patch_selector) {
-    return;
-  }
-
-  ImGui::SetNextWindowPos(ui::scale::px(ImVec2(50, 400)),
-                          ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(350, 500)),
-                           ImGuiCond_FirstUseEver);
-
-  // Match the waveform panel: no tab bar while this window is docked alone.
-  areas::keep_in_area(areas::Area::Sidebar, title,
-                      ImGuiDockNodeFlags_AutoHideTabBar);
-  // Only the tree scrolls; it runs to the bottom edge.
-  if (!ui::begin_window(title, &prefs.show_patch_selector,
-                        ImGuiWindowFlags_NoScrollbar |
-                            ImGuiWindowFlags_NoScrollWithMouse)) {
-    ImGui::End();
-    return;
-  }
-
+/// Everything inside the patch browser, whether a window or folded away.
+void render_patch_selector_contents(PatchSelectorContext &context) {
   if (context.workspace_is_empty && context.add_folder) {
     render_empty_workspace_prompt(context);
     render_add_folder_button(context);
@@ -160,7 +140,99 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
       context.save_current_patch();
     }
   }
+}
 
+/**
+ * The patch browser folded into a button at the left of the editors' tabs.
+ * It opens the browser as a menu does, over the editor at its least width,
+ * and leaves it open while patches are chosen so each shows behind it; a
+ * click outside closes it.
+ */
+void render_folded_patch_selector(PatchSelectorContext &context) {
+  static const ImGuiID popup_id = ImHashStr("##folded_patch_browser");
+  // Whether the browser was open when the button was pressed: that press
+  // closed it, as a press outside it does, and the release leaves it so.
+  static bool open_at_press = false;
+
+  ImGuiDockNode *editors =
+      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID);
+  if (editors == nullptr || !ImGui::DockNodeBeginAmendTabBar(editors)) {
+    return;
+  }
+  static const std::string label =
+      std::string(PATCH_BROWSER_ICON) + "##folded_patch_browser";
+  // Drawn as a tab button, but a button added to a dock's tab bar does not
+  // take clicks itself, so the press and release are read here.
+  ImGui::TabItemButton(label.c_str(), ImGuiTabItemFlags_Leading |
+                                          ImGuiTabItemFlags_NoTooltip);
+  const bool hovered = ImGui::IsItemHovered();
+  // Also through the open browser, so a press here while it is open is
+  // known for the one that closes it.
+  const bool under_pointer =
+      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+  const ImVec2 below(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y);
+  ImGui::DockNodeEndAmendTabBar();
+  if (hovered) {
+    ImGui::SetTooltip("%s", PATCH_BROWSER_TITLE);
+  }
+  if (under_pointer) {
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+      open_at_press = ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None);
+    }
+    // On release, so the press is not taken for one outside the browser.
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !open_at_press) {
+      ImGui::OpenPopupEx(popup_id);
+    }
+  }
+
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  const float bottom = viewport->WorkPos.y + viewport->WorkSize.y;
+  ImGui::SetNextWindowPos(below);
+  ImGui::SetNextWindowSize(ImVec2(layouts::patch_browser_min_width(),
+                                  ImMax(0.0f, bottom - below.y)));
+  if (!ImGui::BeginPopupEx(popup_id,
+                           ImGuiWindowFlags_NoTitleBar |
+                               ImGuiWindowFlags_NoMove |
+                               ImGuiWindowFlags_NoResize |
+                               ImGuiWindowFlags_NoSavedSettings |
+                               ImGuiWindowFlags_NoScrollbar |
+                               ImGuiWindowFlags_NoScrollWithMouse)) {
+    return;
+  }
+  ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+  render_patch_selector_contents(context);
+  ImGui::PopItemFlag();
+  ImGui::EndPopup();
+}
+
+} // namespace
+
+void render_patch_selector(const char *title, PatchSelectorContext &context) {
+  auto &prefs = context.prefs;
+  if (!prefs.show_patch_selector) {
+    return;
+  }
+  if (layouts::patch_browser_folded()) {
+    render_folded_patch_selector(context);
+    return;
+  }
+
+  ImGui::SetNextWindowPos(ui::scale::px(ImVec2(50, 400)),
+                          ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ui::scale::px(ImVec2(350, 500)),
+                           ImGuiCond_FirstUseEver);
+
+  // Match the waveform panel: no tab bar while this window is docked alone.
+  areas::keep_in_area(areas::Area::Sidebar, title,
+                      ImGuiDockNodeFlags_AutoHideTabBar);
+  // Only the tree scrolls; it runs to the bottom edge.
+  if (!ui::begin_window(title, &prefs.show_patch_selector,
+                        ImGuiWindowFlags_NoScrollbar |
+                            ImGuiWindowFlags_NoScrollWithMouse)) {
+    ImGui::End();
+    return;
+  }
+  render_patch_selector_contents(context);
   ImGui::End();
 }
 

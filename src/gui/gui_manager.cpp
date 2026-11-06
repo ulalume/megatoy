@@ -256,6 +256,7 @@ void GuiManager::begin_frame() {
   ImGui::NewFrame();
   ui::touch::drag_to_scroll();
   ui::layouts::fit_footer_to_width();
+  ui::layouts::fit_sidebar_to_width();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
