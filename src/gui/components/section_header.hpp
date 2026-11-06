@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
 
 #include <algorithm>
@@ -9,15 +10,19 @@
 namespace ui {
 
 /// A bar that opens and closes the section under it, as wide as the items
-/// around it. Returns whether the section is open.
+/// around it. Returns whether the section is open. Opened, it scrolls into
+/// view once section_end() follows its contents.
 inline bool section_header(const char *label, bool &open) {
   const ImGuiStyle &style = ImGui::GetStyle();
   const ImVec2 min = ImGui::GetCursorScreenPos();
   const ImVec2 size(std::max(ImGui::GetContentRegionAvail().x, 1.0f),
                     ImGui::GetFrameHeight());
+  bool opened = false;
   if (ImGui::InvisibleButton(label, size)) {
     open = !open;
+    opened = open;
   }
+  scroll_reveal::section_header_drawn(ImGui::GetItemID(), min.y, opened);
   const auto col =
       ImGui::IsItemActive()    ? styles::MegatoyCol::SectionHeaderActive
       : ImGui::IsItemHovered() ? styles::MegatoyCol::SectionHeaderHovered
@@ -36,6 +41,11 @@ inline bool section_header(const char *label, bool &open) {
                             min.y + style.FramePadding.y),
                      text, label);
   return open;
+}
+
+/// After the contents of the open section headed `label`.
+inline void section_end(const char *label) {
+  scroll_reveal::section_end(ImGui::GetID(label));
 }
 
 } // namespace ui

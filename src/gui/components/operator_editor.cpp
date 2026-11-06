@@ -6,6 +6,7 @@
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/envelope/envelope_handles.hpp"
+#include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_editor.hpp"
@@ -642,25 +643,6 @@ bool was_dragged() {
          threshold * threshold;
 }
 
-/// Aims the editor's scroll so the operator spanning `top`..`bottom` (screen
-/// space) is in view, its top first when it is taller than the view.
-void reveal_operator(OperatorEditState &state, float top, float bottom) {
-  const ImRect view = ImGui::GetCurrentWindow()->InnerClipRect;
-  const float margin = ImGui::GetStyle().ItemSpacing.y;
-  float delta = 0.0f;
-  if (top - margin < view.Min.y) {
-    delta = top - margin - view.Min.y;
-  } else if (bottom + margin > view.Max.y) {
-    delta = std::min(bottom + margin - view.Max.y, top - margin - view.Min.y);
-  }
-  if (delta == 0.0f) {
-    return;
-  }
-  state.reveal_scroll_target =
-      std::clamp(ImGui::GetScrollY() + delta, 0.0f, ImGui::GetScrollMaxY());
-  state.reveal_scroll_last = ImGui::GetScrollY();
-}
-
 /// The operator's name, sitting in the frame's top border.
 OperatorHeader render_operator_header(OperatorWidget &widget,
                                       const ImVec2 &header_min) {
@@ -986,7 +968,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
     state.reveal_press_slot = -1;
     if (!was_dragged()) {
-      reveal_operator(state, block_min.y, frame_max.y);
+      scroll_reveal::request(block_min.y, frame_max.y);
     }
   }
   drag_from_background(

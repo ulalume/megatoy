@@ -202,6 +202,7 @@ void render_quick_edit_section(PatchEditorContext &context,
     ImGui::Dummy(sketch_size);
   }
   draw_quick_edit_sketch(instrument, lit, sketch_min, sketch_size);
+  section_end("Quick Edit");
 }
 
 void render_mml_section(PatchEditorContext &context,
@@ -235,6 +236,7 @@ void render_mml_section(PatchEditorContext &context,
     ImGui::TextUnformatted(mml.c_str());
   }
   ImGui::EndChild();
+  section_end("MML");
 }
 
 } // namespace

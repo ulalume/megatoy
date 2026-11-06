@@ -54,8 +54,8 @@ void render_changelog_dialog() {
     for (std::size_t i = 0; i < entries.size(); ++i) {
       const auto &entry = entries[i];
       // Headed like the patch editor's sections.
-      if (!section_header(std::string(entry.version).c_str(),
-                          g_section_open[i])) {
+      const std::string version(entry.version);
+      if (!section_header(version.c_str(), g_section_open[i])) {
         continue;
       }
       for (const auto &item : entry.items) {
@@ -74,8 +74,10 @@ void render_changelog_dialog() {
         }
         ImGui::Unindent();
       }
+      section_end(version.c_str());
       ImGui::Spacing();
     }
+    scroll_reveal::step();
   }
   ImGui::EndChild();
 
