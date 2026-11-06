@@ -161,9 +161,13 @@ void algorithm_diagram(int algorithm, ImVec2 size) {
 
   const float out_x = origin_x + cell_w * layout.columns + out_width * 0.5f;
   if (shared_row_output) {
-    // Carriers side by side drop to a line under them that runs out.
+    // Carriers side by side drop to a line under them that runs out, midway
+    // between their boxes and the foot of the diagram.
+    const float boxes_bottom =
+        origin_y + (static_cast<float>(carrier_row) + 0.5f) * cell_h +
+        box_h * 0.5f;
     const float merge_y =
-        origin_y + (static_cast<float>(carrier_row) + 0.75f) * cell_h;
+        std::round((boxes_bottom + origin_y + cell_h * drawn_rows) * 0.5f);
     float first_x = max.x;
     for (std::size_t i = 0; i < 4; ++i) {
       if (!layout.carrier[i]) {
