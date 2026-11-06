@@ -104,10 +104,10 @@ void entry_context_menu(PatchSelectorContext &context,
                   actions.download_patch ||
                   (actions.save_to_storage || actions.save_as) ||
                   actions.duplicate)) {
-    if (actions.create_patch && ImGui::MenuItem("New patch...")) {
+    if (actions.create_patch && ImGui::MenuItem("New Patch...")) {
       context.create_patch_in(entry.full_path);
     }
-    if (actions.create_folder && ImGui::MenuItem("New folder...")) {
+    if (actions.create_folder && ImGui::MenuItem("New Folder...")) {
       // Open now, so the new folder is in view once it exists.
       open_tree_directory(entry.relative_path);
       context.create_folder_in(entry.full_path);
@@ -128,7 +128,7 @@ void entry_context_menu(PatchSelectorContext &context,
     }
     if (actions.save_to_storage || actions.save_as) {
       if (actions.save_to_storage) {
-        if (ImGui::MenuItem("Save to browser storage...")) {
+        if (ImGui::MenuItem("Save to Browser Storage...")) {
           context.save_current_patch_to_storage();
         }
       } else if (ImGui::MenuItem("Save As...")) {

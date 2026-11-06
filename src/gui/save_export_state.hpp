@@ -32,7 +32,7 @@ struct SaveExportState {
   /// Unset until one is drawn, and then the menu opens at the pointer.
   std::optional<ImVec2> save_as_menu_anchor;
 
-  /// The browser's Save to browser storage dialog.
+  /// The browser's Save to Browser Storage dialog.
   PatchSaveDialogState save_as_dialog;
 #endif
 };

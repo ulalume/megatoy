@@ -161,7 +161,7 @@ void draw_load_graph(const Panel &panel, const LoadWindow &window) {
 /// disabled and says so.
 /// The graph's readings in words, for its tooltip and the top of its menu.
 void render_load_status(const LoadWindow &window) {
-  ImGui::TextUnformatted("Sound processing load");
+  ImGui::TextUnformatted("Sound Processing Load");
   ImGui::Text("  Now %.0f%%   Peak %.0f%%   Average %.0f%%",
               static_cast<double>(window.latest) * 100.0,
               static_cast<double>(window.peak) * 100.0,
@@ -172,12 +172,12 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
   auto &ui_prefs = context.ui_prefs;
 
   render_load_status(window);
-  ImGui::SeparatorText("Improve performance");
+  ImGui::SeparatorText("Improve Performance");
 
   const bool core_at_best =
       ui_prefs.ym2612_core == static_cast<int>(ym2612::CoreType::Ymfm);
-  if (ImGui::MenuItem(core_at_best ? "Switch core to ymfm (already set)"
-                                   : "Switch core to ymfm...",
+  if (ImGui::MenuItem(core_at_best ? "Switch Core to ymfm (Already Set)"
+                                   : "Switch Core to ymfm...",
                       nullptr, false, !core_at_best)) {
     context.open_sound_preferences = true;
   }
@@ -188,8 +188,8 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
                                 ? ui_prefs.audio_buffer_frames
                                 : context.default_audio_buffer_frames;
   const bool buffer_at_best = buffer_frames >= largest_buffer;
-  if (ImGui::MenuItem(buffer_at_best ? "Increase buffer size (already set)"
-                                     : "Increase buffer size...",
+  if (ImGui::MenuItem(buffer_at_best ? "Increase Buffer Size (Already Set)"
+                                     : "Increase Buffer Size...",
                       nullptr, false, !buffer_at_best)) {
     context.open_sound_preferences = true;
   }
@@ -199,8 +199,8 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
   // the time the waveform takes comes out of the same deadline. Where audio
   // has a thread of its own it cannot, and the item is not offered.
   const bool waveform_at_best = !ui_prefs.show_waveform;
-  if (ImGui::MenuItem(waveform_at_best ? "Hide waveform (already set)"
-                                       : "Hide waveform",
+  if (ImGui::MenuItem(waveform_at_best ? "Hide Waveform (Already Set)"
+                                       : "Hide Waveform",
                       nullptr, false, !waveform_at_best)) {
     ui_prefs.show_waveform = false;
   }
@@ -411,7 +411,7 @@ void render_main_menu(MainMenuContext &context) {
       if (const auto extension = download_format_menu(session)) {
         download_current_patch(session, *extension);
       }
-      if (ImGui::MenuItem("Save to browser storage...")) {
+      if (ImGui::MenuItem("Save to Browser Storage...")) {
         request_save_to_storage(context.save_state);
       }
 #else

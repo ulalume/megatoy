@@ -318,7 +318,7 @@ void render_header() {
   ImGui::SameLine(label_width);
   ImGui::TextUnformatted(megatoy::kVersionTag);
   ImGui::SameLine();
-  if (ImGui::TextLink("Change log")) {
+  if (ImGui::TextLink("Change Log")) {
     about_modal_state().reset();
     ImGui::CloseCurrentPopup();
     open_changelog_dialog();
@@ -421,12 +421,12 @@ void render_about_dialog() {
 
   ImGui::Separator();
 #if defined(MEGATOY_PLATFORM_WEB)
-  if (ImGui::Button("Open releases page")) {
+  if (ImGui::Button("Open Releases Page")) {
     open_url_in_browser(update::build_release_page_url());
   }
 #else
   ImGui::BeginDisabled(state.status == UpdateStatus::Checking);
-  if (ImGui::Button("Check for updates")) {
+  if (ImGui::Button("Check for Updates")) {
     start_update_check(state);
   }
   ImGui::EndDisabled();

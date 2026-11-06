@@ -353,7 +353,7 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   octave_key_button("octave_up", prefs.custom_typing_octave_up_key, state,
                     CustomLayoutEditorState::OctaveCaptureTarget::Up);
 
-  if (ImGui::Button("Reset to this keyboard")) {
+  if (ImGui::Button("Reset to This Keyboard")) {
     reset_to_keyboard(prefs);
   }
 
@@ -682,7 +682,7 @@ void render_input_page(PreferencesContext &context) {
   if (context.connected_midi_devices.empty()) {
     ImGui::TextUnformatted("No MIDI devices detected.");
   } else {
-    ImGui::Text("Connected devices (%zu)",
+    ImGui::Text("Connected Devices (%zu)",
                 context.connected_midi_devices.size());
     ImGui::Indent();
     for (const auto &name : context.connected_midi_devices) {
