@@ -13,11 +13,12 @@ namespace ui {
 /// far apart as horizontal ones do.
 inline float vslider_width() { return ImGui::GetFrameHeight(); }
 inline float vslider_gap() { return ImGui::GetStyle().ItemSpacing.y; }
+/// As tall as the column beside the sliders: six rows of controls, the
+/// spacing between them and one extra break.
 inline float vslider_height() {
-  return ui::scale::px(102.0f) + ImGui::GetTextLineHeightWithSpacing();
+  return (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y) * 6.0f;
 }
-/// The graph is taller than the sliders under it: a handle is dragged through
-/// attenuation, which wants the room more than a slider does.
+/// Room for a handle dragged through attenuation.
 inline float envelope_graph_height() { return ui::scale::px(128.0f); }
 inline ImVec2 vslider_size() {
   return ImVec2(vslider_width(), vslider_height());

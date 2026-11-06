@@ -42,15 +42,6 @@ float frame_padding() { return ui::scale::px(8.0f); }
 // Clearance either side of the header where the top border breaks for it.
 float header_gap() { return ui::scale::px(4.0f); }
 
-/// The envelope graph and the rate slider row beneath it, as one height.
-float total_level_slider_height() {
-  return envelope_graph_height() + vslider_height() +
-         ImGui::GetStyle().ItemSpacing.y;
-}
-
-/// What the TL column costs the graph beside it: one slider and the gap.
-float total_level_column_width() { return vslider_width() + vslider_gap(); }
-
 ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
   return context.prefs.multi_operator_edit_absolute
              ? ym2612::MultiEditMode::Absolute
@@ -733,37 +724,19 @@ bool operator_drop_target(PatchEditorContext &context,
 }
 
 /**
- * TL's own column, a slider as tall as the envelope graph and the rate
- * slider row together.
- *
- * TL runs 0..127 where the rate sliders run 0..31 and 0..15, so it takes both
- * rows' height for one step to stay wider than a pixel under the mouse. It
- * sits beside the graph rather than under it because the graph's vertical
- * axis is attenuation and TL is the operator's output level: the two read as
- * one axis.
- */
-void render_total_level_slider(OperatorWidget &widget,
-                               UIState::EnvelopeState &envelope_state) {
-  const ImVec2 slider_size(vslider_width(), total_level_slider_height());
-
-  operator_slider(widget, ym2612::OperatorField::TotalLevel, "TL##Total Level",
-                  &slider_size, nullptr, &envelope_state.total_level,
-                  lit_from_outside(envelope_state, &Lit::total_level));
-}
-
-/**
- * The five rate sliders under the graph.
- *
- * Five columns and the gaps between them, which together with the TL column
- * beside them comes to hslider_width(). The graph above is wider than this,
- * and the sliders deliberately do not follow it --
- * widening them would claim they share the graph's axis.
+ * TL and the five rate sliders under the graph, hslider_width() across. The
+ * graph above is wider than this, and the sliders deliberately do not follow
+ * it -- widening them would claim they share the graph's axis.
  */
 void render_envelope_sliders(OperatorWidget &widget,
                              UIState::EnvelopeState &envelope_state) {
   const ImVec2 slider_size = vslider_size();
 
   ImGui::BeginGroup();
+  operator_slider(widget, ym2612::OperatorField::TotalLevel, "TL##Total Level",
+                  &slider_size, nullptr, &envelope_state.total_level,
+                  lit_from_outside(envelope_state, &Lit::total_level));
+  ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::AttackRate, "AR##Attack Rate",
                   &slider_size, nullptr, &envelope_state.attack_rate,
                   lit_from_outside(envelope_state, &Lit::attack_rate));
@@ -828,27 +801,16 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::SetCursorPosY(feedback_gap.y + ImGui::GetFrameHeightWithSpacing());
   }
 
-  operator_checkbox(widget, "Amplitude Modulation", "Amplitude Modulation",
-                    &ym2612::OperatorSettings::amplitude_modulation_enable);
-  ImGui::Spacing();
-
-  // TL runs down the left of the panel in every layout; the graph and the rate
-  // sliders start to the right of it.
+  // The graph is what the panel is read for, so it spans the panel in every
+  // layout, with the sliders underneath. frame_padding() comes off the right
+  // so it clears the border by as much as the contents do on the left. Only
+  // the pixels change: the time axis is unaffected.
   const float block_left = ImGui::GetCursorPosX();
-  render_total_level_slider(widget, envelope_state);
-  ImGui::SameLine(0.0f, vslider_gap());
-
-  // The graph is what the panel is read for, so it spans what the TL column
-  // leaves in every layout, with the rate sliders underneath. frame_padding()
-  // comes off the right so it clears the border by as much as the contents do
-  // on the left. Only the pixels change: the time axis is unaffected.
-  ImGui::BeginGroup();
   // Carriers reach the output; modulators only feed other operators. Which
   // is which moves with the algorithm, so the graph says it on every one.
   const bool carrier = is_carrier(slot, instrument.algorithm);
   const ImVec2 graph_min = ImGui::GetCursorScreenPos();
-  const ImVec2 graph_size(content_width - frame_padding() -
-                              total_level_column_width(),
+  const ImVec2 graph_size(content_width - frame_padding(),
                           envelope_graph_height());
   const ui::envelope::EnvelopeHandles handles =
       render_envelope_image(op, envelope_state, graph_size, voices, carrier,
@@ -864,14 +826,11 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
-  ImGui::EndGroup();
 
-  // SSG-EG and the sliders under it stand in the room right of RR, out to
-  // the graph's right edge, when that is wide enough for the narrowest of
-  // them; otherwise they go under the rate sliders.
-  const float side_left = block_left + total_level_column_width() +
-                          vslider_width() * 5.0f + vslider_gap() * 4.0f +
-                          style.ItemSpacing.x;
+  // SSG-EG and the controls under it stand in the room right of RR, out to
+  // the graph's right edge, as tall as the sliders, when that is wide enough
+  // for the narrowest of them; otherwise they go under the sliders.
+  const float side_left = block_left + hslider_width() + style.ItemSpacing.x;
   const float side_room =
       block_left + content_width - frame_padding() - side_left;
   const bool beside_rates =
@@ -916,11 +875,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndDisabled();
   }
 
-  // Under the rate sliders there is room for a break here; beside them
-  // there is not.
-  if (!beside_rates) {
-    ImGui::Spacing();
-  }
+  ImGui::Spacing();
 
   operator_slider(widget, ym2612::OperatorField::KeyScale, "Key Scale", nullptr,
                   nullptr, nullptr);
@@ -936,6 +891,9 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                   detune_labels[ym2612::read_operator_field(
                       op, ym2612::OperatorField::Detune)],
                   nullptr);
+
+  operator_checkbox(widget, "Amplitude Modulation", "Amplitude Modulation",
+                    &ym2612::OperatorSettings::amplitude_modulation_enable);
 
   if (beside_rates) {
     ImGui::PopItemWidth();
