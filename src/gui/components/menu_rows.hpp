@@ -12,9 +12,9 @@ namespace ui {
 inline float list_row_spacing() { return scale::px(10.0f); }
 
 /// Space the menu bar's items are laid out with, which makes their highlight
-/// stop 4 px short of the bar's top and bottom.
+/// stop 6 px short of the bar's top and bottom.
 inline float bar_item_spacing() {
-  return std::max(ImGui::GetStyle().FramePadding.y * 2.0f - scale::px(8.0f),
+  return std::max(ImGui::GetStyle().FramePadding.y * 2.0f - scale::px(12.0f),
                   0.0f);
 }
 
