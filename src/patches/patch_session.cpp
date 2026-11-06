@@ -325,10 +325,14 @@ void PatchSession::accept_disk_version(DocumentId id,
   }
 }
 
+ym2612::Patch PatchSession::played_patch() const {
+  return ym2612::played(current_patch(), playback_);
+}
+
 void PatchSession::apply_patch_to_audio() {
   // Patch edits take the same route as notes so that a slider drag cannot
   // rewrite registers underneath the renderer.
-  const auto &patch = current_patch();
+  const auto patch = played_patch();
   if (audio_.submit(audio::AudioCommand::apply_patch(
           patch.global, patch.channel, patch.instrument))) {
     last_applied_ = patch;
@@ -337,7 +341,7 @@ void PatchSession::apply_patch_to_audio() {
 }
 
 bool PatchSession::apply_patch_to_audio_if_changed() {
-  const auto &patch = current_patch();
+  const auto patch = played_patch();
   const bool audio_settings_changed =
       !has_applied_patch_ || patch.global != last_applied_.global ||
       patch.channel != last_applied_.channel ||

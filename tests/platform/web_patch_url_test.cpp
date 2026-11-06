@@ -1,5 +1,6 @@
 #include "../test_check.hpp"
 #include "platform/web/web_patch_url.hpp"
+#include "ym2612/playback.hpp"
 
 #include <iostream>
 #include <string>
@@ -39,7 +40,9 @@ void test_roundtrip() {
         "?v=1&p=QVVJMYGsgMCF0Y2hgbyApH_OoifKbq37S_wJs1_7mV1ju4030kkcm-aIs"
         "pF32g");
   for (const auto &patch : {ym2612::Patch{}, sample_patch()}) {
+    // How the patch is played rides along in the link but is not read back.
     auto expected = patch;
+    ym2612::clear_playback_fields(expected);
     if (expected.name.empty()) {
       expected.name = "patch";
     }

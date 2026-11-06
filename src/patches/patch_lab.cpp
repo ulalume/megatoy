@@ -40,11 +40,8 @@ struct CategoryDefinition {
   Range carrier_detune;
   Range ams;
   Range pms;
-  bool enable_lfo;
-  Range lfo_frequency;
 };
 
-constexpr Range kLfoFrequency{0, 7};
 constexpr Range kFeedback{0, 7};
 constexpr Range kAlgorithm{0, 7};
 constexpr Range kTotalLevel{0, 127};
@@ -82,9 +79,7 @@ const std::array<CategoryDefinition, 4> kCategories = {{
      .mod_detune = Range{0, 2},
      .carrier_detune = Range{0, 1},
      .ams = Range{0, 1},
-     .pms = Range{0, 1},
-     .enable_lfo = false,
-     .lfo_frequency = Range{0, 0}},
+     .pms = Range{0, 1}},
     {.id = "pad",
      .display_name = "Lush Pad",
      .algorithms = {{3, 4, 5, 5}},
@@ -106,9 +101,7 @@ const std::array<CategoryDefinition, 4> kCategories = {{
      .mod_detune = Range{0, 2},
      .carrier_detune = Range{0, 2},
      .ams = Range{0, 2},
-     .pms = Range{1, 5},
-     .enable_lfo = true,
-     .lfo_frequency = Range{1, 5}},
+     .pms = Range{1, 5}},
     {.id = "bell",
      .display_name = "Chime & Bell",
      .algorithms = {{5, 6, 7, 7}},
@@ -130,9 +123,7 @@ const std::array<CategoryDefinition, 4> kCategories = {{
      .mod_detune = Range{2, 6},
      .carrier_detune = Range{2, 6},
      .ams = Range{0, 1},
-     .pms = Range{0, 2},
-     .enable_lfo = false,
-     .lfo_frequency = Range{0, 0}},
+     .pms = Range{0, 2}},
     {.id = "lead",
      .display_name = "Expressive Lead",
      .algorithms = {{0, 2, 3, 4}},
@@ -154,9 +145,7 @@ const std::array<CategoryDefinition, 4> kCategories = {{
      .mod_detune = Range{0, 3},
      .carrier_detune = Range{0, 3},
      .ams = Range{0, 3},
-     .pms = Range{0, 6},
-     .enable_lfo = true,
-     .lfo_frequency = Range{0, 6}},
+     .pms = Range{0, 6}},
 }};
 
 std::vector<CategoryChoice> category_choices() {
@@ -209,11 +198,9 @@ void blend_operator(const ym2612::OperatorSettings &src,
     dst.ssg_enable = other.ssg_enable;
     dst.ssg_type_envelope_control = other.ssg_type_envelope_control;
     dst.amplitude_modulation_enable = other.amplitude_modulation_enable;
-    dst.enable = other.enable;
   } else {
     dst.ssg_enable = src.ssg_enable;
     dst.amplitude_modulation_enable = src.amplitude_modulation_enable;
-    dst.enable = src.enable;
   }
 }
 
@@ -306,22 +293,10 @@ ym2612::Patch make_template_patch(const CategoryDefinition &definition,
                                   std::mt19937 &rng) {
   ym2612::Patch patch;
   patch.name.clear();
-  patch.global = {
-      .dac_enable = false,
-      .lfo_enable = definition.enable_lfo,
-      .lfo_frequency = static_cast<uint8_t>(
-          definition.enable_lfo ? definition.lfo_frequency.random(rng)
-                                : kLfoFrequency.min),
-  };
-
-  patch.channel = {
-      .left_speaker = true,
-      .right_speaker = true,
-      .amplitude_modulation_sensitivity =
-          static_cast<uint8_t>(definition.ams.random(rng)),
-      .frequency_modulation_sensitivity =
-          static_cast<uint8_t>(definition.pms.random(rng)),
-  };
+  patch.channel.amplitude_modulation_sensitivity =
+      static_cast<uint8_t>(definition.ams.random(rng));
+  patch.channel.frequency_modulation_sensitivity =
+      static_cast<uint8_t>(definition.pms.random(rng));
 
   std::uniform_int_distribution<size_t> algorithm_index_dist(
       0, definition.algorithms.size() - 1);
@@ -370,7 +345,6 @@ ym2612::Patch make_template_patch(const CategoryDefinition &definition,
     op.ssg_type_envelope_control = 0;
     op.ssg_enable = false;
     op.amplitude_modulation_enable = random_bool(rng, 0.25);
-    op.enable = true;
   }
 
   normalize_patch_volume(patch, 40);
@@ -379,22 +353,10 @@ ym2612::Patch make_template_patch(const CategoryDefinition &definition,
 
 ym2612::Patch make_wild_patch(std::mt19937 &rng) {
   ym2612::Patch patch;
-  bool lfo_enable = random_bool(rng, 0.4);
-  patch.global = {
-      .dac_enable = random_bool(rng),
-      .lfo_enable = lfo_enable,
-      .lfo_frequency = static_cast<uint8_t>(
-          lfo_enable ? kLfoFrequency.random(rng) : kLfoFrequency.min),
-  };
-
-  patch.channel = {
-      .left_speaker = true,
-      .right_speaker = true,
-      .amplitude_modulation_sensitivity =
-          static_cast<uint8_t>(kAms.random(rng)),
-      .frequency_modulation_sensitivity =
-          static_cast<uint8_t>(kPms.random(rng)),
-  };
+  patch.channel.amplitude_modulation_sensitivity =
+      static_cast<uint8_t>(kAms.random(rng));
+  patch.channel.frequency_modulation_sensitivity =
+      static_cast<uint8_t>(kPms.random(rng));
 
   patch.instrument.feedback = static_cast<uint8_t>(kFeedback.random(rng));
   patch.instrument.algorithm = static_cast<uint8_t>(kAlgorithm.random(rng));
@@ -423,7 +385,6 @@ ym2612::Patch make_wild_patch(std::mt19937 &rng) {
     op.ssg_type_envelope_control =
         op.ssg_enable ? static_cast<uint8_t>(kSsgType.random(rng)) : 0;
     op.amplitude_modulation_enable = random_bool(rng, 0.3);
-    op.enable = true;
   }
 
   normalize_patch_volume(patch, 36);
@@ -453,17 +414,6 @@ OperationResult merge(const ym2612::Patch &a, const ym2612::Patch &b,
   ym2612::Patch patch = a;
   patch.name.clear();
 
-  patch.global.dac_enable =
-      random_bool(rng) ? a.global.dac_enable : b.global.dac_enable;
-  patch.global.lfo_enable =
-      random_bool(rng) ? a.global.lfo_enable : b.global.lfo_enable;
-  patch.global.lfo_frequency =
-      random_bool(rng) ? a.global.lfo_frequency : b.global.lfo_frequency;
-
-  patch.channel.left_speaker =
-      random_bool(rng) ? a.channel.left_speaker : b.channel.left_speaker;
-  patch.channel.right_speaker =
-      random_bool(rng) ? a.channel.right_speaker : b.channel.right_speaker;
   patch.channel.amplitude_modulation_sensitivity =
       random_bool(rng) ? a.channel.amplitude_modulation_sensitivity
                        : b.channel.amplitude_modulation_sensitivity;
@@ -554,17 +504,6 @@ OperationResult morph(const ym2612::Patch &a, const ym2612::Patch &b,
   ym2612::Patch patch = a;
   patch.name.clear();
 
-  patch.global.dac_enable =
-      mix < 0.5f ? a.global.dac_enable : b.global.dac_enable;
-  patch.global.lfo_enable =
-      mix < 0.5f ? a.global.lfo_enable : b.global.lfo_enable;
-  patch.global.lfo_frequency = static_cast<uint8_t>(
-      lerp_value(a.global.lfo_frequency, b.global.lfo_frequency, mix));
-
-  patch.channel.left_speaker =
-      mix < 0.5f ? a.channel.left_speaker : b.channel.left_speaker;
-  patch.channel.right_speaker =
-      mix < 0.5f ? a.channel.right_speaker : b.channel.right_speaker;
   patch.channel.amplitude_modulation_sensitivity = static_cast<uint8_t>(
       lerp_value(a.channel.amplitude_modulation_sensitivity,
                  b.channel.amplitude_modulation_sensitivity, mix));
@@ -601,16 +540,6 @@ MutateResult mutate_in_place(ym2612::Patch &patch,
 
   const ym2612::ChannelInstrument original = patch.instrument;
   std::bernoulli_distribution mutate(options.probability);
-
-  if (mutate(rng)) {
-    patch.global.lfo_enable = !patch.global.lfo_enable;
-  }
-
-  if (patch.global.lfo_enable && mutate(rng)) {
-    int value = patch.global.lfo_frequency;
-    value = apply_variation(value, kLfoFrequency, 1, rng);
-    patch.global.lfo_frequency = static_cast<uint8_t>(value);
-  }
 
   if (mutate(rng)) {
     int value = patch.channel.amplitude_modulation_sensitivity;

@@ -54,7 +54,7 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
   if (const auto folder = writable_source_folder()) {
     const auto absolute = repository_->to_absolute_path(current_patch_path());
     if (patches::can_overwrite_in_place(absolute)) {
-      auto patch_to_write = current_patch();
+      auto patch_to_write = played_patch();
       patch_to_write.name = absolute.stem().string();
       if (patches::write_patch(patch_to_write, absolute)) {
         current_patch().name = patch_to_write.name;
@@ -119,7 +119,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
   }
 
   if (megatoy::platform::is_web()) {
-    auto patch_to_write = current_patch();
+    auto patch_to_write = played_patch();
     patch_to_write.name = sanitized_name;
     auto result =
         folder.empty()
@@ -172,7 +172,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
   }
 
   selected = append_extension_if_missing(std::move(selected), extension);
-  auto patch_to_write = current_patch();
+  auto patch_to_write = played_patch();
   patch_to_write.name = selected.stem().string();
   if (!patches::write_patch(patch_to_write, selected)) {
     return SaveResult::error("Failed to write " + selected.string());

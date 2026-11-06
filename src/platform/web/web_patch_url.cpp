@@ -2,6 +2,7 @@
 
 #include "core/utf8_utils.hpp"
 #include "platform/platform_config.hpp"
+#include "ym2612/playback.hpp"
 #include "ym2612/types.hpp"
 #include <algorithm>
 #include <optional>
@@ -386,6 +387,9 @@ unpack_patch_binary(const std::vector<uint8_t> &data,
     }
   }
 
+  // Their bits stay in the layout, but how a patch is played is not taken
+  // from a link (ym2612/playback.hpp).
+  ym2612::clear_playback_fields(patch);
   return patch;
 }
 

@@ -92,6 +92,18 @@ int main() {
   CHECK(ginpkg_loaded.patches.size() == 1);
   CHECK(ginpkg_loaded.patches[0] == patch);
 
+  // How a patch is played is neither saved with it nor read back.
+  auto played = patch;
+  played.global = {true, true, 5};
+  played.channel.left_speaker = false;
+  played.instrument.operators[2].enable = false;
+  const auto played_path =
+      formats::ginpkg::save_patch(tmp, played, "played").value();
+  const auto played_loaded = formats::load_patch_from_file(played_path);
+  CHECK(played_loaded.status == formats::PatchLoadStatus::Success);
+  CHECK(played_loaded.patches.size() == 1);
+  CHECK(played_loaded.patches[0] == patch);
+
   // Every writable format the registry offers has to survive a save/load
   // cycle. Driving this from save_formats() means a format added upstream
   // is covered here the moment it appears.

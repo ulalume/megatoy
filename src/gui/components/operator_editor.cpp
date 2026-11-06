@@ -543,15 +543,12 @@ bool render_envelope_handles(OperatorWidget &widget,
 
 /**
  * A per-operator flag. Booleans have no delta, so spreading one is absolute
- * in both modes. `spread` is off for the enable flag: it is a mute, and
- * dragging the others along would undo the audition it was set up for.
+ * in both modes.
  */
 void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
-                       bool ym2612::OperatorSettings::*flag, bool spread) {
+                       bool ym2612::OperatorSettings::*flag) {
   auto &state = widget.editor.operator_edit();
-  auto &op = ym2612::operator_at(widget.instrument, widget.slot);
-
-  bool value = op.*flag;
+  bool value = ym2612::operator_at(widget.instrument, widget.slot).*flag;
   const bool changed = ImGui::Checkbox(id, &value);
   if (ImGui::IsItemActivated()) {
     note_operator_edit(state.selection, widget.slot);
@@ -559,13 +556,24 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
   if (changed) {
     track_instant_patch_history(
         widget.editor, history_label(state.selection, widget.slot, name), [&] {
-          if (spread) {
-            ym2612::apply_operator_flag_edit(
-                widget.instrument, state.selection.selected, flag, value);
-          } else {
-            op.*flag = value;
-          }
+          ym2612::apply_operator_flag_edit(
+              widget.instrument, state.selection.selected, flag, value);
         });
+  }
+}
+
+/**
+ * Whether the operator sounds. A mute for auditioning, which is how the
+ * patch is played rather than the patch: it spreads to no other operator,
+ * adds no history and marks nothing modified (ym2612/playback.hpp).
+ */
+void operator_enable_checkbox(OperatorWidget &widget) {
+  auto &state = widget.editor.operator_edit();
+  ImGui::Checkbox("##Operator Enable",
+                  &widget.editor.session.playback()
+                       .operator_enable[static_cast<std::size_t>(widget.slot)]);
+  if (ImGui::IsItemActivated()) {
+    note_operator_edit(state.selection, widget.slot);
   }
 }
 
@@ -673,8 +681,7 @@ OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
   const int slot = widget.slot;
   ImGui::SetCursorScreenPos(header_min);
   ImGui::BeginGroup();
-  operator_checkbox(widget, "##Operator Enable", "Enable",
-                    &ym2612::OperatorSettings::enable, false);
+  operator_enable_checkbox(widget);
   ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
   ImGui::TextUnformatted(operator_slot_label(slot).c_str());
   const bool name_clicked =
@@ -811,7 +818,9 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   const ImGuiStyle &style = ImGui::GetStyle();
   const float content_width = ImGui::GetContentRegionAvail().x;
 
-  if (!op.enable) {
+  const bool sounds = context.session.playback()
+                          .operator_enable[static_cast<std::size_t>(slot)];
+  if (!sounds) {
     ImGui::BeginDisabled();
   }
   ImGui::PushItemWidth(hslider_width());
@@ -837,8 +846,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   operator_checkbox(widget, "Amplitude Modulation", "Amplitude Modulation",
-                    &ym2612::OperatorSettings::amplitude_modulation_enable,
-                    true);
+                    &ym2612::OperatorSettings::amplitude_modulation_enable);
   ImGui::Spacing();
 
   // TL runs down the left of the panel in every layout; the graph and the rate
@@ -910,7 +918,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                              ImGui::CalcTextSize("SSG-EG").x <=
                          block_left + content_width - frame_padding();
   operator_checkbox(widget, ssg_named ? "SSG-EG" : "##SSG-EG", "SSG-EG",
-                    &ym2612::OperatorSettings::ssg_enable, true);
+                    &ym2612::OperatorSettings::ssg_enable);
   if (!ssg_named && ImGui::IsItemHovered()) {
     ImGui::SetTooltip("SSG-EG");
   }
@@ -952,7 +960,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
   ImGui::PopItemWidth();
 
-  if (!op.enable) {
+  if (!sounds) {
     ImGui::EndDisabled();
   }
 }

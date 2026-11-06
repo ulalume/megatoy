@@ -183,26 +183,23 @@ void render_save_export_buttons(PatchEditorContext &context,
 
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Low Frequency Oscillator");
-  bool lfo_enable = patch.global.lfo_enable;
-  if (ImGui::Checkbox("LFO", &lfo_enable)) {
-    track_instant_patch_history(context, "LFO",
-                                [&] { patch.global.lfo_enable = lfo_enable; });
-  }
+  // The switch and the rate are how the patch is played, not the patch: no
+  // history, nothing modified (ym2612/playback.hpp).
+  auto &playback = context.session.playback();
+  const bool lfo_enable = playback.lfo_enable;
+  ImGui::Checkbox("LFO", &playback.lfo_enable);
 
   // One width for the three, wide enough for the longest name.
   ImGui::PushItemWidth(std::max(
       hslider_width(),
       named_slider_fit_width("Frequency Modulation Sensitivity", "0")));
 
-  int lfo_freq = patch.global.lfo_frequency;
+  int lfo_freq = playback.lfo_frequency;
 
   if (!lfo_enable)
     ImGui::BeginDisabled(true);
-  bool lfo_freq_changed = named_slider_int("LFO Frequency", &lfo_freq, 0, 7);
-
-  track_patch_history(context, "LFO Frequency", "global.lfo_frequency");
-  if (lfo_freq_changed) {
-    patch.global.lfo_frequency = static_cast<uint8_t>(lfo_freq);
+  if (named_slider_int("LFO Frequency", &lfo_freq, 0, 7)) {
+    playback.lfo_frequency = static_cast<uint8_t>(lfo_freq);
   }
 
   ImGui::Spacing();
@@ -233,21 +230,11 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
 
 void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Channel");
-  bool left_speaker = patch.channel.left_speaker;
-  if (ImGui::Checkbox("Left Speaker", &left_speaker)) {
-    track_instant_patch_history(context, "Left Speaker", [&] {
-      patch.channel.left_speaker = left_speaker;
-    });
-  }
-
+  // How the patch is played, as LFO is.
+  auto &playback = context.session.playback();
+  ImGui::Checkbox("Left Speaker", &playback.left_speaker);
   ImGui::SameLine();
-
-  bool right_speaker = patch.channel.right_speaker;
-  if (ImGui::Checkbox("Right Speaker", &right_speaker)) {
-    track_instant_patch_history(context, "Right Speaker", [&] {
-      patch.channel.right_speaker = right_speaker;
-    });
-  }
+  ImGui::Checkbox("Right Speaker", &playback.right_speaker);
 
   ImGui::PushItemWidth(hslider_width());
 
