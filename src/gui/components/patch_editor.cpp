@@ -222,14 +222,21 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Channel");
   ImGui::PushItemWidth(hslider_width());
 
-  // The slider hangs from the diagram's bottom edge, as wide as it.
+  // The slider stands beside the diagram, as tall as it, at the spacing
+  // between any two items.
+  const float diagram_height = ui::scale::px(48.0f);
   algorithm_diagram(patch.instrument.algorithm,
-                    ImVec2(ImGui::CalcItemWidth(), ui::scale::px(48.0f)));
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
-                       ImGui::GetStyle().ItemSpacing.y);
+                    ImVec2(ImGui::CalcItemWidth(), diagram_height));
+  ImGui::SameLine();
+  ImGui::PushStyleVarY(
+      ImGuiStyleVar_FramePadding,
+      std::max((diagram_height - ImGui::GetFontSize()) * 0.5f, 0.0f));
 
   int algorithm = patch.instrument.algorithm;
+  ImGui::SetNextItemWidth(
+      std::min(ImGui::CalcItemWidth(), ImGui::GetContentRegionAvail().x));
   bool algorithm_changed = named_slider_int("Algorithm", &algorithm, 0, 7);
+  ImGui::PopStyleVar();
   track_patch_history(context, "Algorithm", "instrument.algorithm");
   if (algorithm_changed) {
     patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
