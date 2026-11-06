@@ -1,12 +1,23 @@
 #include "gui/layouts.hpp"
 
 #include "gui/areas.hpp"
+#include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
 
 namespace ui::layouts {
+
+namespace {
+
+// Apart, so a width between the two does not flip the footer back and forth.
+constexpr float kStackBelowWidth = 600.0f;
+constexpr float kSideBySideFromWidth = 640.0f;
+/// The most of the window's height the footer takes when it grows.
+constexpr float kFooterMaxShare = 0.6f;
+
+} // namespace
 
 void build_default_layout(unsigned int dockspace_id) {
   ImGuiID dock_main_id = dockspace_id;
@@ -53,6 +64,61 @@ void build_default_layout(unsigned int dockspace_id) {
   ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
 
   ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, doc_id_down_left);
+}
+
+void fit_footer_to_width() {
+  const ImGuiWindow *waveform = ImGui::FindWindowByName(ui::WAVEFORM_TITLE);
+  if (waveform == nullptr || !waveform->WasActive ||
+      waveform->DockNode == nullptr) {
+    return;
+  }
+  ImGuiDockNode *footer = waveform->DockNode->ParentNode;
+  if (footer == nullptr || !footer->IsSplitNode() ||
+      footer->ChildNodes[0] != waveform->DockNode) {
+    return;
+  }
+
+  const float width = ImGui::GetMainViewport()->WorkSize.x;
+  const ImGuiAxis was = footer->SplitAxis;
+  ImGuiAxis axis = was;
+  if (width < ui::scale::px(kStackBelowWidth)) {
+    axis = ImGuiAxis_Y;
+  } else if (width >= ui::scale::px(kSideBySideFromWidth)) {
+    axis = ImGuiAxis_X;
+  }
+  if (axis == was) {
+    return;
+  }
+
+  // The waveform's share of each direction, kept from the last time the
+  // footer was split that way: as built at first, then as dragged.
+  static float waveform_share[2] = {0.20f, 0.40f};
+  if (footer->Size[was] > 0.0f) {
+    waveform_share[was] = waveform->DockNode->Size[was] / footer->Size[was];
+  }
+  // The keyboard's area keeps its height: the footer grows by the
+  // waveform's when stacking it on top, and gives that back after.
+  ImGuiDockNode *frame = footer->ParentNode;
+  ImVec2 size = footer->Size;
+  if (frame != nullptr && frame->IsSplitNode() &&
+      frame->SplitAxis == ImGuiAxis_Y && frame->ChildNodes[1] == footer) {
+    const float keyboard_height =
+        axis == ImGuiAxis_Y ? footer->Size.y
+                            : footer->Size.y * (1.0f - waveform_share[was]);
+    size.y = axis == ImGuiAxis_Y
+                 ? keyboard_height / (1.0f - waveform_share[axis])
+                 : keyboard_height;
+    size.y = ImMin(size.y, frame->Size.y * kFooterMaxShare);
+    footer->SizeRef.y = size.y;
+    frame->ChildNodes[0]->SizeRef.y = frame->Size.y - size.y;
+  }
+
+  ImGuiDockNode *other = footer->ChildNodes[1];
+  footer->SplitAxis = axis;
+  waveform->DockNode->SizeRef[axis] = size[axis] * waveform_share[axis];
+  other->SizeRef[axis] = size[axis] - waveform->DockNode->SizeRef[axis];
+  waveform->DockNode->SizeRef[was] = other->SizeRef[was] = size[was];
+  ImGui::MarkIniSettingsDirty();
 }
 
 } // namespace ui::layouts

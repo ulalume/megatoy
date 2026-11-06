@@ -116,10 +116,24 @@ void render_status_toasts() {
                           ImGuiChildFlags_Borders |
                               ImGuiChildFlags_AutoResizeY |
                               ImGuiChildFlags_AlwaysUseWindowPadding)) {
+      // A close mark in the corner, saying what a click on the toast does.
+      const ImGuiStyle &style = ImGui::GetStyle();
+      const float close_width = ImGui::CalcTextSize(ICON_FA_XMARK).x;
+      const ImVec2 close_pos(ImGui::GetWindowPos().x + toast_width -
+                                 style.WindowPadding.x - close_width,
+                             ImGui::GetWindowPos().y + style.WindowPadding.y);
+      const bool hovered =
+          ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+      ImGui::GetWindowDrawList()->AddText(
+          close_pos,
+          hovered ? ImGui::GetColorU32(ImGuiCol_Text)
+                  : styles::color_u32(styles::MegatoyCol::TextMuted),
+          ICON_FA_XMARK);
+
       ImGui::TextColored(accent, "%s", severity_icon(entry.severity));
       ImGui::SameLine();
-      ImGui::PushTextWrapPos(toast_width -
-                             ImGui::GetStyle().WindowPadding.x * 2.0f);
+      ImGui::PushTextWrapPos(toast_width - style.WindowPadding.x * 2.0f -
+                             close_width - style.ItemSpacing.x);
       ImGui::TextUnformatted(entry.message.c_str());
       ImGui::PopTextWrapPos();
 
