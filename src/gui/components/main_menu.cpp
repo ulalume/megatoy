@@ -37,7 +37,7 @@ namespace {
 // Full scale on the graph is the render deadline: 1.0 means a block took as
 // long to produce as it takes to play.
 constexpr float kLoadWarningLevel = 0.7f;
-/// The graph's width beside the reading it holds.
+/// The graph's least width, which a short reading leaves room around.
 constexpr float kLoadGraphWidth = 64.0f;
 // How far back the graph reaches: long enough that a glitch is still on
 // screen once the ear has noticed it and the eye has arrived.
@@ -399,10 +399,11 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
     return right_start - spacing - (x + size.total);
   };
 
-  // The graph holds the reading, so it is never narrower than that.
+  // The graph holds the reading, so it is never narrower than that, and is
+  // no wider unless the reading is short.
   const float reading_width = ImGui::CalcTextSize(reading).x;
   const float least = reading_width + style.FramePadding.x * 2.0f;
-  const float full = least + ui::scale::px(kLoadGraphWidth);
+  const float full = std::max(least, ui::scale::px(kLoadGraphWidth));
   const float graph_room = full + room(BarCentreFit::Full, full);
   if (graph_room >= full) {
     return {full, BarCentreFit::Full};
