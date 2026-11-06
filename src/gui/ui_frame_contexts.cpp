@@ -303,8 +303,12 @@ FrameContexts::FrameContexts(AppContext &ctx)
       midi_keyboard(make_midi_keyboard_context(ctx)),
       patch_lab(make_patch_lab_context(ctx)),
       waveform(make_waveform_context(ctx)) {
-  main_menu.bar_centre = [this](float left, float right, float row_y) {
-    render_scale_play(midi_keyboard, left, right, row_y);
+  main_menu.bar_centre_size = [this](BarCentreFit fit) {
+    return scale_play_size(midi_keyboard, fit);
+  };
+  main_menu.bar_centre = [this](BarCentreFit fit, float left, float right,
+                                float row_y) {
+    render_scale_play(midi_keyboard, fit, left, right, row_y);
   };
   patch_editor.begin_history = [&ctx, this](const std::string &label,
                                             const std::string &merge_key) {

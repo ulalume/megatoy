@@ -19,6 +19,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
+#include <IconsFontAwesome7.h>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -36,6 +37,8 @@ namespace {
 // long to produce as it takes to play.
 constexpr float kLoadWarningLevel = 0.7f;
 constexpr float kLoadGraphWidth = 64.0f;
+/// Narrower than this, the graph is left out of a tight bar.
+constexpr float kLoadGraphMinWidth = 24.0f;
 // How far back the graph reaches: long enough that a glitch is still on
 // screen once the ear has noticed it and the eye has arrived.
 constexpr float kLoadWindowMs = 10000.0f;
@@ -206,38 +209,41 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
 #endif
 }
 
-/// The load graph, at the right-hand end of the bar. Returns where it starts.
-float render_audio_load(MainMenuContext &context) {
+/**
+ * The load reading and its graph, at the right-hand end of the bar, the graph
+ * `graph_width` wide or left out at 0. Returns where they start.
+ */
+float render_audio_load(MainMenuContext &context, const LoadWindow &window,
+                        const char *reading, float graph_width) {
   const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 size(ui::scale::px(kLoadGraphWidth),
+  const ImVec2 size(graph_width,
                     ImGui::GetTextLineHeight() + ui::scale::px(4.0f));
-
-  const auto history = context.audio_load.history();
-  const LoadWindow window = load_window(history, size.x);
-  char reading[32];
-  format_load_reading(
-      reading, sizeof(reading), window,
-      audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
   const float reading_width = ImGui::CalcTextSize(reading).x;
   const float row = ImGui::GetTextLineHeight();
+  const float graph_space = graph_width > 0.0f ? size.x + style.ItemSpacing.x
+                                               : 0.0f;
 
   // Never left of the menus: an overlap would take their clicks.
   const float x = std::max(ImGui::GetCursorPosX(),
-                           ImGui::GetWindowWidth() - size.x - reading_width -
-                               style.ItemSpacing.x -
-                               style.FramePadding.x * 2.0f);
+                           ImGui::GetWindowWidth() - graph_space -
+                               reading_width - style.FramePadding.x * 2.0f);
   // Text in the bar is drawn the frame padding below the cursor.
   ImGui::SetCursorPos(ImVec2(
       x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
   ImGui::TextUnformatted(reading);
+  // The reading answers like the graph, which may be left out.
+  bool clicked = ImGui::IsItemClicked();
+  bool hovered = ImGui::IsItemHovered();
 
-  ImGui::SetCursorPos(ImVec2(x + reading_width + style.ItemSpacing.x,
-                             (ImGui::GetWindowHeight() - size.y) * 0.5f));
-  const Panel panel = begin_panel(size, "##audio_load");
-  const bool clicked = ImGui::IsItemClicked();
-  const bool hovered = ImGui::IsItemHovered();
-  draw_load_graph(panel, window);
-  end_panel(panel);
+  if (graph_width > 0.0f) {
+    ImGui::SetCursorPos(ImVec2(x + reading_width + style.ItemSpacing.x,
+                               (ImGui::GetWindowHeight() - size.y) * 0.5f));
+    const Panel panel = begin_panel(size, "##audio_load");
+    clicked = clicked || ImGui::IsItemClicked();
+    hovered = hovered || ImGui::IsItemHovered();
+    draw_load_graph(panel, window);
+    end_panel(panel);
+  }
 
   if (hovered && ImGui::BeginTooltip()) {
     render_load_status(window);
@@ -305,6 +311,243 @@ void panel_menu_item(const char *icon, const char *title, bool &shown) {
   }
 }
 
+/// How much of the bar fits: the menus in one or each on its own, the load
+/// graph's width (0 leaves it out), and how much of the middle.
+struct BarFit {
+  bool folded_menus = false;
+  float graph_width = 0.0f;
+  BarCentreFit centre = BarCentreFit::Full;
+};
+
+/// How far a menu in the bar takes the next one along.
+float bar_menu_advance(const char *label) {
+  return ImGui::CalcTextSize(label, nullptr, true).x +
+         ImGui::GetStyle().ItemSpacing.x * 2.0f;
+}
+
+/**
+ * As the bar narrows, the load graph shrinks and then goes, then the middle
+ * loses its note, and then the menus fold into one and the middle keeps
+ * only its icon. Measured from after the app menu.
+ */
+BarFit fit_bar(const MainMenuContext &context, const char *reading) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float spacing = style.ItemSpacing.x;
+  const float width = ImGui::GetWindowWidth();
+  const float menus_end = ImGui::GetCursorPosX() + bar_menu_advance("File") +
+                          bar_menu_advance("Edit") + bar_menu_advance("View");
+  // Where the load reading starts with no graph after it.
+  const float load_start =
+      width - ImGui::CalcTextSize(reading).x - style.FramePadding.x * 2.0f;
+  // The room the middle leaves before the reading: it sits centred in the
+  // bar, but never over the menus.
+  const auto room = [&](BarCentreFit fit) {
+    if (!context.bar_centre_size) {
+      return load_start - menus_end;
+    }
+    const BarCentreSize size = context.bar_centre_size(fit);
+    const float x =
+        std::max(width * 0.5f - size.centred * 0.5f, menus_end + spacing);
+    return load_start - spacing - (x + size.total);
+  };
+
+  const float graph_room = room(BarCentreFit::Full) - spacing;
+  if (graph_room >= ui::scale::px(kLoadGraphWidth)) {
+    return {false, ui::scale::px(kLoadGraphWidth), BarCentreFit::Full};
+  }
+  if (graph_room >= ui::scale::px(kLoadGraphMinWidth)) {
+    return {false, graph_room, BarCentreFit::Full};
+  }
+  if (room(BarCentreFit::Full) >= 0.0f) {
+    return {false, 0.0f, BarCentreFit::Full};
+  }
+  if (room(BarCentreFit::Short) >= 0.0f) {
+    return {false, 0.0f, BarCentreFit::Short};
+  }
+  return {true, 0.0f, BarCentreFit::Icon};
+}
+
+void file_menu_items(MainMenuContext &context,
+                     const patches::SaveControls &controls) {
+  const ImGuiIO &io = ImGui::GetIO();
+  auto &session = context.patch_session;
+  const bool is_user_patch = controls.saves_in_place;
+  const bool save_disabled = !controls.save_enabled;
+  const bool mac_behavior = io.ConfigMacOSXBehaviors;
+  // The browser keeps Ctrl+N for a new window of its own.
+  const char *new_shortcut = megatoy::platform::is_web()
+                                 ? nullptr
+                                 : (mac_behavior ? "Cmd+N" : "Ctrl+N");
+  if (ImGui::MenuItem("New Patch", new_shortcut) && context.new_patch) {
+    context.new_patch();
+  }
+  ImGui::Separator();
+
+  const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
+#if defined(MEGATOY_PLATFORM_WEB)
+  // The two ways out of the editor, as the patch tree names them. The
+  // shortcuts offer the same two at the pointer, so neither row shows one.
+  if (is_user_patch) {
+    ImGui::BeginDisabled(save_disabled);
+    if (ImGui::MenuItem(controls.save_label, save_shortcut)) {
+      trigger_save(session, context.save_state);
+    }
+    ImGui::EndDisabled();
+  }
+  if (const auto extension = download_format_menu(session)) {
+    download_current_patch(session, *extension);
+  }
+  if (ImGui::MenuItem("Save to Browser Storage...")) {
+    request_save_to_storage(context.save_state);
+  }
+#else
+  const char *save_label = controls.save_label;
+  if (save_disabled)
+    ImGui::BeginDisabled(true);
+  if (ImGui::MenuItem(save_label, save_shortcut)) {
+    if (is_user_patch) {
+      trigger_save(session, context.save_state);
+    } else {
+      request_save_as(context.save_state);
+    }
+  }
+  if (save_disabled)
+    ImGui::EndDisabled();
+
+  const char *save_as_shortcut =
+      mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
+  if (controls.show_save_as &&
+      ImGui::MenuItem("Save As...", save_as_shortcut)) {
+    request_save_as(context.save_state);
+  }
+#endif
+
+  ImGui::Separator();
+  // The browser keeps Ctrl+W for closing its own tab.
+  const char *close_shortcut = megatoy::platform::is_web()
+                                   ? nullptr
+                                   : (mac_behavior ? "Cmd+W" : "Ctrl+W");
+  if (ImGui::MenuItem("Close Patch", close_shortcut) &&
+      context.close_patch) {
+    context.close_patch();
+  }
+
+  {
+    ImGui::Separator();
+    // In the browser a folder is copied in rather than referenced, so it
+    // is labelled for what it does.
+    const char *label = PreferenceManager::folder_add_is_import()
+                            ? "Import Folder into Workspace..."
+                            : "Add Folder to Workspace...";
+    if (ImGui::MenuItem(label)) {
+      context.open_add_folder_dialog = true;
+    }
+
+    const auto &folders = context.preferences.workspace().folders();
+    const bool has_removable_folder = std::any_of(
+        folders.begin(), folders.end(), [&](const auto &folder) {
+          return !context.preferences.workspace_folder_is_protected(
+              folder.path);
+        });
+    const char *remove_label =
+        megatoy::platform::is_web() ? "Delete Folder" : "Remove Folder";
+    if (ui::begin_menu(remove_label, has_removable_folder)) {
+      std::optional<std::filesystem::path> to_remove;
+      for (const auto &folder : folders) {
+        if (context.preferences.workspace_folder_is_protected(
+                folder.path)) {
+          continue;
+        }
+        if (ImGui::MenuItem(folder.path.string().c_str())) {
+          to_remove = folder.path;
+        }
+      }
+      ui::end_menu();
+      if (to_remove && context.remove_workspace_folder) {
+        context.remove_workspace_folder(*to_remove);
+      }
+    }
+  }
+}
+
+void edit_menu_items(MainMenuContext &context) {
+  auto &session = context.patch_session;
+  auto &history = context.history();
+  const ImGuiIO &io = ImGui::GetIO();
+  const bool mac_behavior = io.ConfigMacOSXBehaviors;
+  const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
+  const char *redo_shortcut = mac_behavior ? "Cmd+Shift+Z" : "Ctrl+Shift+Z";
+
+  std::string undo_label = "Undo";
+  if (history.can_undo()) {
+    std::string_view change = history.undo_label();
+    if (!change.empty()) {
+      undo_label.append(" ");
+      undo_label.append(change);
+    }
+  }
+
+  if (ImGui::MenuItem(undo_label.c_str(), undo_shortcut, false,
+                      history.can_undo())) {
+    if (context.undo) {
+      context.undo();
+    }
+  }
+
+  std::string redo_label = "Redo";
+  if (history.can_redo()) {
+    std::string_view change = history.redo_label();
+    if (!change.empty()) {
+      redo_label.append(" ");
+      redo_label.append(change);
+    }
+  }
+
+  if (ImGui::MenuItem(redo_label.c_str(), redo_shortcut, false,
+                      history.can_redo())) {
+    if (context.redo) {
+      context.redo();
+    }
+  }
+
+  ImGui::Separator();
+
+  // The items name their target the way the undo entries above do, which
+  // saves the menu a section heading.
+  OperatorCommandContext operator_commands{
+      session.current_patch().instrument, context.operator_edit(),
+      context.operator_clipboard, context.begin_patch_history,
+      context.commit_patch_history};
+  render_operator_command_items(operator_commands);
+}
+
+void view_menu_items(MainMenuContext &context) {
+  auto &ui_prefs = context.ui_prefs;
+
+  if (context.gui.supports_fullscreen()) {
+    bool fullscreen = context.gui.is_fullscreen();
+    if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
+      context.gui.set_fullscreen(!fullscreen);
+    }
+    ImGui::Separator();
+  }
+
+  panel_menu_item(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE,
+                  ui_prefs.show_patch_selector);
+  panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
+  panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
+                  ui_prefs.show_midi_keyboard);
+  panel_menu_item(WAVEFORM_ICON, WAVEFORM_TITLE, ui_prefs.show_waveform);
+  panel_menu_item(PREFERENCES_ICON, PREFERENCES_TITLE,
+                  ui_prefs.show_preferences);
+
+  ImGui::Separator();
+
+  if (ImGui::MenuItem("Reset to Default Layout")) {
+    context.gui.reset_layout();
+  }
+}
+
 } // namespace
 
 void render_main_menu(MainMenuContext &context) {
@@ -338,104 +581,42 @@ void render_main_menu(MainMenuContext &context) {
         patches::save_controls(session, session.active_document());
     const bool is_user_patch = controls.saves_in_place;
     const bool save_disabled = !controls.save_enabled;
-    if (begin_bar_menu("File")) {
-      const bool mac_behavior = io.ConfigMacOSXBehaviors;
-      // The browser keeps Ctrl+N for a new window of its own.
-      const char *new_shortcut = megatoy::platform::is_web()
-                                     ? nullptr
-                                     : (mac_behavior ? "Cmd+N" : "Ctrl+N");
-      if (ImGui::MenuItem("New Patch", new_shortcut) && context.new_patch) {
-        context.new_patch();
-      }
-      ImGui::Separator();
-
-      const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
-#if defined(MEGATOY_PLATFORM_WEB)
-      // The two ways out of the editor, as the patch tree names them. The
-      // shortcuts offer the same two at the pointer, so neither row shows one.
-      if (is_user_patch) {
-        ImGui::BeginDisabled(save_disabled);
-        if (ImGui::MenuItem(controls.save_label, save_shortcut)) {
-          trigger_save(session, context.save_state);
-        }
-        ImGui::EndDisabled();
-      }
-      if (const auto extension = download_format_menu(session)) {
-        download_current_patch(session, *extension);
-      }
-      if (ImGui::MenuItem("Save to Browser Storage...")) {
-        request_save_to_storage(context.save_state);
-      }
-#else
-      const char *save_label = controls.save_label;
-      if (save_disabled)
-        ImGui::BeginDisabled(true);
-      if (ImGui::MenuItem(save_label, save_shortcut)) {
-        if (is_user_patch) {
-          trigger_save(session, context.save_state);
-        } else {
-          request_save_as(context.save_state);
-        }
-      }
-      if (save_disabled)
-        ImGui::EndDisabled();
-
-      const char *save_as_shortcut =
-          mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
-      if (controls.show_save_as &&
-          ImGui::MenuItem("Save As...", save_as_shortcut)) {
-        request_save_as(context.save_state);
-      }
-#endif
-
-      ImGui::Separator();
-      // The browser keeps Ctrl+W for closing its own tab.
-      const char *close_shortcut = megatoy::platform::is_web()
-                                       ? nullptr
-                                       : (mac_behavior ? "Cmd+W" : "Ctrl+W");
-      if (ImGui::MenuItem("Close Patch", close_shortcut) &&
-          context.close_patch) {
-        context.close_patch();
-      }
-
-      {
-        ImGui::Separator();
-        // In the browser a folder is copied in rather than referenced, so it
-        // is labelled for what it does.
-        const char *label = PreferenceManager::folder_add_is_import()
-                                ? "Import Folder into Workspace..."
-                                : "Add Folder to Workspace...";
-        if (ImGui::MenuItem(label)) {
-          context.open_add_folder_dialog = true;
-        }
-
-        const auto &folders = context.preferences.workspace().folders();
-        const bool has_removable_folder = std::any_of(
-            folders.begin(), folders.end(), [&](const auto &folder) {
-              return !context.preferences.workspace_folder_is_protected(
-                  folder.path);
-            });
-        const char *remove_label =
-            megatoy::platform::is_web() ? "Delete Folder" : "Remove Folder";
-        if (ui::begin_menu(remove_label, has_removable_folder)) {
-          std::optional<std::filesystem::path> to_remove;
-          for (const auto &folder : folders) {
-            if (context.preferences.workspace_folder_is_protected(
-                    folder.path)) {
-              continue;
-            }
-            if (ImGui::MenuItem(folder.path.string().c_str())) {
-              to_remove = folder.path;
-            }
-          }
+    const LoadWindow load = load_window(context.audio_load.history(),
+                                        ui::scale::px(kLoadGraphWidth));
+    char reading[32];
+    format_load_reading(
+        reading, sizeof(reading), load,
+        audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
+    const BarFit fit = fit_bar(context, reading);
+    if (fit.folded_menus) {
+      if (begin_bar_menu(ICON_FA_BARS "##menus")) {
+        if (ui::begin_menu("File")) {
+          file_menu_items(context, controls);
           ui::end_menu();
-          if (to_remove && context.remove_workspace_folder) {
-            context.remove_workspace_folder(*to_remove);
-          }
         }
+        if (ui::begin_menu("Edit")) {
+          edit_menu_items(context);
+          ui::end_menu();
+        }
+        if (ui::begin_menu("View")) {
+          view_menu_items(context);
+          ui::end_menu();
+        }
+        ui::end_menu();
       }
-
-      ui::end_menu();
+    } else {
+      if (begin_bar_menu("File")) {
+        file_menu_items(context, controls);
+        ui::end_menu();
+      }
+      if (begin_bar_menu("Edit")) {
+        edit_menu_items(context);
+        ui::end_menu();
+      }
+      if (begin_bar_menu("View")) {
+        view_menu_items(context);
+        ui::end_menu();
+      }
     }
 
     // The folder picker is modal, so it is opened after the menu closes.
@@ -468,91 +649,12 @@ void render_main_menu(MainMenuContext &context) {
       request_save_as(context.save_state);
     }
 
-    if (begin_bar_menu("Edit")) {
-      auto &history = context.history();
-      const ImGuiIO &io = ImGui::GetIO();
-      const bool mac_behavior = io.ConfigMacOSXBehaviors;
-      const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
-      const char *redo_shortcut = mac_behavior ? "Cmd+Shift+Z" : "Ctrl+Shift+Z";
-
-      std::string undo_label = "Undo";
-      if (history.can_undo()) {
-        std::string_view change = history.undo_label();
-        if (!change.empty()) {
-          undo_label.append(" ");
-          undo_label.append(change);
-        }
-      }
-
-      if (ImGui::MenuItem(undo_label.c_str(), undo_shortcut, false,
-                          history.can_undo())) {
-        if (context.undo) {
-          context.undo();
-        }
-      }
-
-      std::string redo_label = "Redo";
-      if (history.can_redo()) {
-        std::string_view change = history.redo_label();
-        if (!change.empty()) {
-          redo_label.append(" ");
-          redo_label.append(change);
-        }
-      }
-
-      if (ImGui::MenuItem(redo_label.c_str(), redo_shortcut, false,
-                          history.can_redo())) {
-        if (context.redo) {
-          context.redo();
-        }
-      }
-
-      ImGui::Separator();
-
-      // The items name their target the way the undo entries above do, which
-      // saves the menu a section heading.
-      OperatorCommandContext operator_commands{
-          session.current_patch().instrument, context.operator_edit(),
-          context.operator_clipboard, context.begin_patch_history,
-          context.commit_patch_history};
-      render_operator_command_items(operator_commands);
-
-      ui::end_menu();
-    }
-
-    if (begin_bar_menu("View")) {
-      auto &ui_prefs = context.ui_prefs;
-
-      if (context.gui.supports_fullscreen()) {
-        bool fullscreen = context.gui.is_fullscreen();
-        if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
-          context.gui.set_fullscreen(!fullscreen);
-        }
-        ImGui::Separator();
-      }
-
-      panel_menu_item(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE,
-                      ui_prefs.show_patch_selector);
-      panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
-      panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
-                      ui_prefs.show_midi_keyboard);
-      panel_menu_item(WAVEFORM_ICON, WAVEFORM_TITLE, ui_prefs.show_waveform);
-      panel_menu_item(PREFERENCES_ICON, PREFERENCES_TITLE,
-                      ui_prefs.show_preferences);
-
-      ImGui::Separator();
-
-      if (ImGui::MenuItem("Reset to Default Layout")) {
-        context.gui.reset_layout();
-      }
-      ui::end_menu();
-    }
-
     const float menus_end = ImGui::GetCursorPosX();
     const float row_y = ImGui::GetCursorPosY();
-    const float load_start = render_audio_load(context);
+    const float load_start =
+        render_audio_load(context, load, reading, fit.graph_width);
     if (context.bar_centre) {
-      context.bar_centre(menus_end, load_start, row_y);
+      context.bar_centre(fit.centre, menus_end, load_start, row_y);
     }
 
     ImGui::EndMainMenuBar();

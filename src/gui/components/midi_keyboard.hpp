@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gui/components/bar_centre_fit.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "input_state.hpp"
 #include "preferences/preference_manager.hpp"
@@ -55,13 +56,18 @@ struct MidiKeyboardContext {
 
 void render_midi_keyboard(const char *title, MidiKeyboardContext &context);
 
+/// The size the scale's Play switch takes in the menu bar at `fit`; the
+/// switch is what is centred, the note follows it.
+BarCentreSize scale_play_size(const MidiKeyboardContext &context,
+                              BarCentreFit fit);
+
 /**
  * The switch that plays the keyboard's scale, drawn like the menu bar's menus
  * on their row at `row_y` and centred between `left` and `right`, with the
- * scale's name beside it. It keeps one width and place whether it reads Play
- * or Stop; the name is left out where it does not fit.
+ * scale's name beside it at the full fit and its icon alone at the least. It
+ * keeps one width and place whether it reads Play or Stop.
  */
-void render_scale_play(MidiKeyboardContext &context, float left, float right,
-                       float row_y);
+void render_scale_play(MidiKeyboardContext &context, BarCentreFit fit,
+                       float left, float right, float row_y);
 
 } // namespace ui

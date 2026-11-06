@@ -546,14 +546,44 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::End();
 };
 
-void render_scale_play(MidiKeyboardContext &context, float left, float right,
-                       float row_y) {
+namespace {
+
+/// The switch's two faces at `fit`, under one ID so it stays the same item
+/// as it toggles.
+std::pair<const char *, const char *> scale_play_labels(BarCentreFit fit) {
+  if (fit == BarCentreFit::Icon) {
+    return {ICON_FA_PLAY "###scale_play", ICON_FA_STOP "###scale_play"};
+  }
+  return {ICON_FA_PLAY " Play###scale_play", ICON_FA_STOP " Stop###scale_play"};
+}
+
+float scale_play_switch_width(BarCentreFit fit) {
+  const auto [play, stop] = scale_play_labels(fit);
+  return std::max(ImGui::CalcTextSize(play, nullptr, true).x,
+                  ImGui::CalcTextSize(stop, nullptr, true).x);
+}
+
+std::string scale_play_note(const MidiKeyboardContext &context) {
+  return scale_title(context.input_state) + " Scale";
+}
+
+} // namespace
+
+BarCentreSize scale_play_size(const MidiKeyboardContext &context,
+                              BarCentreFit fit) {
+  const float width = scale_play_switch_width(fit);
+  if (fit != BarCentreFit::Full) {
+    return {width, width};
+  }
+  return {width, width + ImGui::GetStyle().ItemSpacing.x +
+                     ImGui::CalcTextSize(scale_play_note(context).c_str()).x};
+}
+
+void render_scale_play(MidiKeyboardContext &context, BarCentreFit fit,
+                       float left, float right, float row_y) {
   const ImGuiStyle &style = ImGui::GetStyle();
-  // One ID for both, so it stays the same item as it toggles.
-  const char *play = ICON_FA_PLAY " Play###scale_play";
-  const char *stop = ICON_FA_STOP " Stop###scale_play";
-  const float width = std::max(ImGui::CalcTextSize(play, nullptr, true).x,
-                               ImGui::CalcTextSize(stop, nullptr, true).x);
+  const auto [play, stop] = scale_play_labels(fit);
+  const float width = scale_play_switch_width(fit);
   const float min_x = left + style.ItemSpacing.x;
   const float max_x = right - style.ItemSpacing.x;
   if (max_x - min_x < width) {
@@ -577,14 +607,15 @@ void render_scale_play(MidiKeyboardContext &context, float left, float right,
   ImGui::PopStyleVar();
   ImGui::EndDisabled();
 
-  const std::string name = scale_title(context.input_state) + " Scale";
-  if (x + width + style.ItemSpacing.x + ImGui::CalcTextSize(name.c_str()).x <=
-      max_x) {
+  const std::string note = scale_play_note(context);
+  if (fit == BarCentreFit::Full &&
+      x + width + style.ItemSpacing.x + ImGui::CalcTextSize(note.c_str()).x <=
+          max_x) {
     ImGui::SameLine();
     ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%s",
-                       name.c_str());
+                       note.c_str());
   } else if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-    ImGui::SetTooltip("%s", name.c_str());
+    ImGui::SetTooltip("%s", note.c_str());
   }
 }
 
