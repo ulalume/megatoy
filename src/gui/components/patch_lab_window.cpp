@@ -433,7 +433,7 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   static constexpr const char *kPages[] = {
       ICON_FA_DICE " Random", ICON_FA_VIRUS " Mutate", ICON_FA_SHUFFLE " Mix"};
   const int page =
-      side_list("##patch_lab_pages", kPages, ui::scale::px(130.0f));
+      side_list("##patch_lab_pages", kPages);
 
   const float available = ImGui::GetContentRegionAvail().x;
   const float controls_width =

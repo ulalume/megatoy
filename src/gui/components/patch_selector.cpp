@@ -148,6 +148,19 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
   }
 }
 
+/// Draws a one-glyph `icon` centred in the rectangle by the glyph's outline.
+void draw_centred_glyph(const char *icon, ImVec2 min, ImVec2 max) {
+  unsigned int codepoint = 0;
+  ImTextCharFromUtf8(&codepoint, icon, nullptr);
+  const ImFontGlyph *glyph =
+      ImGui::GetFontBaked()->FindGlyph(static_cast<ImWchar>(codepoint));
+  const ImVec2 centre((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f);
+  const ImVec2 pos(IM_ROUND(centre.x - (glyph->X0 + glyph->X1) * 0.5f),
+                   IM_ROUND(centre.y - (glyph->Y0 + glyph->Y1) * 0.5f));
+  ImGui::GetWindowDrawList()->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text),
+                                      icon);
+}
+
 /**
  * The patch browser folded into a button at the left of the editors' tabs.
  * It opens the browser as a menu does, over the editor at its least width,
@@ -165,12 +178,15 @@ void render_folded_patch_selector(PatchSelectorContext &context) {
   if (editors == nullptr || !ImGui::DockNodeBeginAmendTabBar(editors)) {
     return;
   }
-  static const std::string label =
-      std::string(PATCH_BROWSER_ICON) + "##folded_patch_browser";
   // Drawn as a tab button, but a button added to a dock's tab bar does not
-  // take clicks itself, so the press and release are read here.
-  ImGui::TabItemButton(label.c_str(), ImGuiTabItemFlags_Leading |
-                                          ImGuiTabItemFlags_NoTooltip);
+  // take clicks itself, so the press and release are read here. The icon is
+  // drawn over it centred by its own outline: the glyph sits low in its line.
+  ImGui::SetNextItemWidth(ImGui::CalcTextSize(PATCH_BROWSER_ICON).x +
+                          ImGui::GetStyle().FramePadding.x * 2.0f);
+  ImGui::TabItemButton("##folded_patch_browser",
+                       ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
+  draw_centred_glyph(PATCH_BROWSER_ICON, ImGui::GetItemRectMin(),
+                     ImGui::GetItemRectMax());
   const bool hovered = ImGui::IsItemHovered();
   // Also through the open browser, so a press here while it is open is
   // known for the one that closes it.

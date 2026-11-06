@@ -11,9 +11,16 @@ namespace ui::layouts {
 
 namespace {
 
-// Apart, so a width between the two does not flip the footer back and forth.
-constexpr float kStackBelowWidth = 600.0f;
-constexpr float kSideBySideFromWidth = 640.0f;
+constexpr float kEditorMinWidth = 300.0f;
+constexpr float kBrowserMinWidth = 230.0f;
+
+/// Too narrow for the patch browser beside the editor: the browser folds
+/// away and the waveform goes above the keyboard.
+bool window_is_narrow() {
+  return ImGui::GetMainViewport()->WorkSize.x <
+         ui::scale::px(kEditorMinWidth + kBrowserMinWidth);
+}
+
 /// The most of the window's height the footer takes when it grows.
 constexpr float kFooterMaxShare = 0.6f;
 /// The waveform's share of the footer side by side, as the default lays out.
@@ -23,9 +30,6 @@ constexpr float kWaveformShareAbove = 0.40f;
 /// The waveform's share of the footer in each direction, kept from the last
 /// time it was split that way so dragging it sticks.
 float waveform_share[2] = {kWaveformShareBeside, kWaveformShareAbove};
-
-constexpr float kEditorMinWidth = 300.0f;
-constexpr float kBrowserMinWidth = 230.0f;
 
 bool browser_folded = false;
 
@@ -100,14 +104,8 @@ void fit_footer_to_width() {
     return;
   }
 
-  const float width = ImGui::GetMainViewport()->WorkSize.x;
   const ImGuiAxis was = footer->SplitAxis;
-  ImGuiAxis axis = was;
-  if (width < ui::scale::px(kStackBelowWidth)) {
-    axis = ImGuiAxis_Y;
-  } else if (width >= ui::scale::px(kSideBySideFromWidth)) {
-    axis = ImGuiAxis_X;
-  }
+  const ImGuiAxis axis = window_is_narrow() ? ImGuiAxis_Y : ImGuiAxis_X;
   if (axis == was) {
     return;
   }
@@ -138,8 +136,7 @@ void fit_footer_to_width() {
 }
 
 void fit_sidebar_to_width() {
-  browser_folded = ImGui::GetMainViewport()->WorkSize.x <
-                   ui::scale::px(kEditorMinWidth + kBrowserMinWidth);
+  browser_folded = window_is_narrow();
   if (browser_folded) {
     return;
   }

@@ -9,12 +9,14 @@ namespace ui {
 
 /**
  * The pages of a panel, listed down its left with rows spaced like the patch
- * tree's, and a line between them and the page. The chosen page is kept in
- * the window's state; `select` chooses one from outside. Leaves the cursor
- * beside the list and returns the page to show.
+ * tree's, and a line between them and the page. Every panel's list is as
+ * wide. The chosen page is kept in the window's state; `select` chooses one
+ * from outside. Leaves the cursor beside the list and returns the page to
+ * show.
  */
 inline int side_list(const char *id, std::span<const char *const> labels,
-                     float width, int select = -1) {
+                     int select = -1) {
+  const float width = scale::px(90.0f);
   ImGuiStorage *storage = ImGui::GetStateStorage();
   ImGui::PushID(id);
   const ImGuiID key = ImGui::GetID("page");

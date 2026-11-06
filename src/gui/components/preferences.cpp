@@ -746,7 +746,7 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
                                              "Input"};
     constexpr int kSoundPage = 2;
     const int page =
-        side_list("##preference_pages", kPages, ui::scale::px(140.0f),
+        side_list("##preference_pages", kPages,
                   open_sound_tab ? kSoundPage : -1);
     // Each page scrolls on its own, beside the list, and keeps its own place.
     // Input in particular is taller than the window once a few devices show

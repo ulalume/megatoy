@@ -285,7 +285,7 @@ bool begin_app_menu() {
   if (icon == ImTextureID{}) {
     return begin_bar_menu("megatoy");
   }
-  const float size = ImGui::GetTextLineHeight() + ui::scale::px(6.0f);
+  const float size = ImGui::GetTextLineHeight() + ui::scale::px(10.0f);
   const float space = ImGui::CalcTextSize(" ").x;
   const std::string label =
       std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
@@ -557,7 +557,7 @@ void render_main_menu(MainMenuContext &context) {
   // until the bar ends so the items centre in it and the menus open below it.
   const ImVec2 padding = ImGui::GetStyle().FramePadding;
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                      ImVec2(padding.x, padding.y + ui::scale::px(4.0f)));
+                      ImVec2(padding.x, padding.y + ui::scale::px(8.0f)));
   if (ImGui::BeginMainMenuBar()) {
     if (begin_app_menu()) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
