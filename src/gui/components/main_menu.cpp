@@ -606,40 +606,6 @@ void view_menu_items(MainMenuContext &context) {
  * the patch, so they mark nothing modified and are not saved with it
  * (ym2612/playback.hpp).
  */
-/**
- * A switch drawn as a menu item, its name at the left and a check at the
- * right while it is on, but only as wide and tall as a slider so it lines
- * up with one.
- */
-void switch_row(const char *label, float width, bool &on) {
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 min = ImGui::GetCursorScreenPos();
-  const ImVec2 size(width, ImGui::GetFrameHeight());
-  if (ImGui::InvisibleButton(label, size)) {
-    on = !on;
-  }
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  const ImVec2 max(min.x + size.x, min.y + size.y);
-  if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
-    draw_list->AddRectFilled(min, max,
-                             ImGui::GetColorU32(ImGui::IsItemActive()
-                                                    ? ImGuiCol_HeaderActive
-                                                    : ImGuiCol_HeaderHovered),
-                             style.FrameRounding);
-  }
-  const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
-  draw_list->AddText(
-      ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y), text,
-      label, ImGui::FindRenderedTextEnd(label));
-  if (on) {
-    const float mark = ImGui::GetFontSize();
-    ImGui::RenderCheckMark(draw_list,
-                           ImVec2(max.x - style.FramePadding.x - mark,
-                                  min.y + (size.y - mark) * 0.5f),
-                           text, mark);
-  }
-}
-
 /// The LFO's switch and its rate, one width.
 void lfo_menu_items(ym2612::PlaybackSettings &playback) {
   // The chip's eight rates.
@@ -648,7 +614,7 @@ void lfo_menu_items(ym2612::PlaybackSettings &playback) {
                                        "48.1 Hz", "72.2 Hz"};
   const float width =
       named_slider_fit_width("Frequency", "48.1 Hz") + ui::scale::px(48.0f);
-  switch_row("LFO Enabled", width, playback.lfo_enable);
+  ImGui::Checkbox("LFO Enabled", &playback.lfo_enable);
   ImGui::BeginDisabled(!playback.lfo_enable);
   int rate = std::clamp<int>(playback.lfo_frequency, 0, 7);
   ImGui::SetNextItemWidth(width);
