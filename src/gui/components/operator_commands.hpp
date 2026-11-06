@@ -23,6 +23,13 @@ struct OperatorEditState {
   /// The operator whose frame background was pressed, which a drag from
   /// there picks up; -1 when none.
   int background_press_slot = -1;
+  /// The operator whose name or background was pressed; released without a
+  /// drag, the editor scrolls it fully into view. -1 when none.
+  int reveal_press_slot = -1;
+  /// Where the editor is scrolling to, and where it scrolled last frame, so a
+  /// scroll by the user can take over. Negative when still.
+  float reveal_scroll_target = -1.0f;
+  float reveal_scroll_last = -1.0f;
 };
 
 struct OperatorCommandContext {

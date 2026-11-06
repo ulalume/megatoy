@@ -635,6 +635,32 @@ void drag_from_background(OperatorEditState &state,
   }
 }
 
+/// Whether the left button moved far enough while down to count as a drag.
+bool was_dragged() {
+  const float threshold = ImGui::GetIO().MouseDragThreshold;
+  return ImGui::GetIO().MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] >=
+         threshold * threshold;
+}
+
+/// Aims the editor's scroll so the operator spanning `top`..`bottom` (screen
+/// space) is in view, its top first when it is taller than the view.
+void reveal_operator(OperatorEditState &state, float top, float bottom) {
+  const ImRect view = ImGui::GetCurrentWindow()->InnerClipRect;
+  const float margin = ImGui::GetStyle().ItemSpacing.y;
+  float delta = 0.0f;
+  if (top - margin < view.Min.y) {
+    delta = top - margin - view.Min.y;
+  } else if (bottom + margin > view.Max.y) {
+    delta = std::min(bottom + margin - view.Max.y, top - margin - view.Min.y);
+  }
+  if (delta == 0.0f) {
+    return;
+  }
+  state.reveal_scroll_target =
+      std::clamp(ImGui::GetScrollY() + delta, 0.0f, ImGui::GetScrollMaxY());
+  state.reveal_scroll_last = ImGui::GetScrollY();
+}
+
 /// The operator's name, sitting in the frame's top border.
 OperatorHeader render_operator_header(OperatorWidget &widget,
                                       const ImVec2 &header_min) {
@@ -954,6 +980,14 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left))) {
     note_operator_click(state.selection, slot);
     state.click_claimed = true;
+    state.reveal_press_slot = slot;
+  }
+  if (state.reveal_press_slot == slot &&
+      ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+    state.reveal_press_slot = -1;
+    if (!was_dragged()) {
+      reveal_operator(state, block_min.y, frame_max.y);
+    }
   }
   drag_from_background(
       state, context.document, slot,

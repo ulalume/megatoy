@@ -7,6 +7,7 @@
 #include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
+#include "gui/frame_requests.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
@@ -19,6 +20,7 @@
 #include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <imgui.h>
@@ -246,6 +248,35 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::Spacing();
 }
 
+/// Time constant, in seconds, of the scroll's approach to a revealed operator.
+constexpr float kRevealTimeConstantSec = 0.08f;
+
+/// One frame of the scroll toward the operator a click revealed. A scroll by
+/// the user, by wheel or scrollbar, stops it where it is.
+void scroll_toward_revealed_operator(OperatorEditState &state) {
+  if (state.reveal_scroll_target < 0.0f) {
+    return;
+  }
+  const float current = ImGui::GetScrollY();
+  if (std::fabs(current - state.reveal_scroll_last) > 1.0f ||
+      ImGui::GetIO().MouseWheel != 0.0f) {
+    state.reveal_scroll_target = -1.0f;
+    return;
+  }
+  const float target = state.reveal_scroll_target;
+  const float alpha =
+      1.0f - std::exp(-ImGui::GetIO().DeltaTime / kRevealTimeConstantSec);
+  float next = current + (target - current) * alpha;
+  if (std::fabs(target - next) < 0.5f) {
+    next = target;
+    state.reveal_scroll_target = -1.0f;
+  } else {
+    keep_drawing();
+  }
+  ImGui::SetScrollY(next);
+  state.reveal_scroll_last = next;
+}
+
 void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
                              const EnvelopeVoices &voices) {
 
@@ -274,6 +305,7 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
   context.operator_edit().frame_height =
       context.operator_edit().pending_frame_height;
   ImGui::Columns(1);
+  scroll_toward_revealed_operator(context.operator_edit());
 }
 
 OperatorCommandContext make_operator_commands(PatchEditorContext &context,
