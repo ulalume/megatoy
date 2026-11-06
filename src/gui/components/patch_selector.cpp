@@ -78,11 +78,17 @@ void render_tree(PatchSelectorContext &context) {
       ImGuiChildFlags_AlwaysUseWindowPadding);
   ImGui::PopStyleVar();
   if (visible) {
+    // Folder and file rows alike run to the area's edge: a file row's
+    // highlight would otherwise stop half a spacing past a folder row's.
+    ImGuiWindow *tree = ImGui::GetCurrentWindow();
+    tree->WorkRect.Max.x = tree->InnerRect.Max.x;
+    ImGui::PushClipRect(tree->InnerRect.Min, tree->InnerRect.Max, false);
     const std::string query_lower =
         patches::search_key(context.prefs.metadata_search_query);
     const bool rendered =
         render_patch_tree(context.repository.tree(), context, query_lower,
                           context.prefs.metadata_star_filter);
+    ImGui::PopClipRect();
     if (!rendered &&
         (!query_lower.empty() || context.prefs.metadata_star_filter > 0)) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
