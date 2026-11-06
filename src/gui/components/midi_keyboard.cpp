@@ -327,7 +327,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     refresh_state(context.state, input, typing_layout, custom_layout);
   }
 
-  ImGui::SameLine(0, ui::scale::px(16.0f));
+  ImGui::SameLine();
 
   std::vector<ym2612::Note> active_notes = context.active_notes
                                                ? context.active_notes()
@@ -341,13 +341,13 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     }
     chord_name = get_chord_name(midi_notes, false, true);
   }
-  // A box as tall as the controls beside it and of a fixed width, so the
-  // slider after it stays put as chords come and go; a longer name ends in
-  // an ellipsis. Bordered like the envelope graph.
+  // A box as tall as the controls beside it and as wide as the longest name
+  // the chord detector gives, so the slider after it stays put as chords come
+  // and go; a name sits in its middle. Bordered like the envelope graph.
   {
     const ImGuiStyle &style = ImGui::GetStyle();
     const ImVec2 at = ImGui::GetCursorScreenPos();
-    const ImVec2 size(ImGui::CalcTextSize("C#M7sus4/G#").x +
+    const ImVec2 size(ImGui::CalcTextSize("C#madd11(omit5)/G#").x +
                           style.FramePadding.x * 2.0f,
                       ImGui::GetFrameHeight());
     ImGui::Dummy(size);
@@ -357,11 +357,14 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                        styles::color_u32(styles::MegatoyCol::EnvelopeGrid),
                        style.FrameRounding);
     const float text_right = end.x - style.FramePadding.x;
-    ImGui::RenderTextEllipsis(
-        draw_list,
-        ImVec2(at.x + style.FramePadding.x, at.y + style.FramePadding.y),
-        ImVec2(text_right, end.y), text_right, chord_name.c_str(), nullptr,
-        nullptr);
+    const float text_left = std::max(
+        at.x + style.FramePadding.x,
+        IM_ROUND((at.x + end.x - ImGui::CalcTextSize(chord_name.c_str()).x) *
+                 0.5f));
+    ImGui::RenderTextEllipsis(draw_list,
+                              ImVec2(text_left, at.y + style.FramePadding.y),
+                              ImVec2(text_right, end.y), text_right,
+                              chord_name.c_str(), nullptr, nullptr);
   }
 
   // The slider takes the rest of the row, or a row of its own when too
