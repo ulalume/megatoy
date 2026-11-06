@@ -280,10 +280,13 @@ void render_scale_play(MidiKeyboardContext &keyboard, float left, float right,
                              min_x, max_x - width);
   ImGui::SetCursorPos(ImVec2(x, row_y));
   ImGui::BeginDisabled(!playing && !can_play_scale(keyboard));
+  // The spacing the bar's menus are given, so its highlight is as tall.
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, style.FramePadding.y * 2.0f);
   if (ImGui::Selectable(playing ? stop : play, false, ImGuiSelectableFlags_None,
                         ImVec2(width, 0.0f))) {
     toggle_scale_playback(keyboard);
   }
+  ImGui::PopStyleVar();
   ImGui::EndDisabled();
   const bool hovered =
       ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
