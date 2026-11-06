@@ -302,7 +302,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     return;
   }
 
-  // Key and scale read as one phrase, "C Major Scale", under one label.
+  // Key and scale read as one phrase, "C Major Scale".
   ImGui::BeginDisabled(keyboard_settings.scale == Scale::CHROMATIC);
   int current_key = static_cast<int>(keyboard_settings.key);
   ImGui::SetNextItemWidth(ui::scale::px(40.0f));
@@ -316,7 +316,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
   int current_scale = static_cast<int>(keyboard_settings.scale);
   ImGui::SetNextItemWidth(ui::scale::px(150.0f));
-  if (ImGui::Combo("Scale", &current_scale, scale_names,
+  if (ImGui::Combo("##Scale", &current_scale, scale_names,
                    IM_ARRAYSIZE(scale_names))) {
     keyboard_settings.scale = static_cast<Scale>(current_scale);
     context.ui_prefs.midi_keyboard_scale = current_scale;
@@ -341,18 +341,27 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     }
     chord_name = get_chord_name(midi_notes, false, true);
   }
-  // A fixed width, so the slider after it stays put as chords come and go;
-  // a longer name ends in an ellipsis.
+  // A box as tall as the controls beside it and of a fixed width, so the
+  // slider after it stays put as chords come and go; a longer name ends in
+  // an ellipsis. Bordered like the envelope graph.
   {
+    const ImGuiStyle &style = ImGui::GetStyle();
     const ImVec2 at = ImGui::GetCursorScreenPos();
-    const ImVec2 size(ImGui::CalcTextSize("C#M7sus4/G#").x,
+    const ImVec2 size(ImGui::CalcTextSize("C#M7sus4/G#").x +
+                          style.FramePadding.x * 2.0f,
                       ImGui::GetFrameHeight());
     ImGui::Dummy(size);
-    const float text_y = at.y + ImGui::GetStyle().FramePadding.y;
-    ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), ImVec2(at.x, text_y),
-                              ImVec2(at.x + size.x, at.y + size.y),
-                              at.x + size.x, chord_name.c_str(), nullptr,
-                              nullptr);
+    const ImVec2 end(at.x + size.x, at.y + size.y);
+    ImDrawList *draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRect(at, end,
+                       styles::color_u32(styles::MegatoyCol::EnvelopeGrid),
+                       style.FrameRounding);
+    const float text_right = end.x - style.FramePadding.x;
+    ImGui::RenderTextEllipsis(
+        draw_list,
+        ImVec2(at.x + style.FramePadding.x, at.y + style.FramePadding.y),
+        ImVec2(text_right, end.y), text_right, chord_name.c_str(), nullptr,
+        nullptr);
   }
 
   // The slider takes the rest of the row, or a row of its own when too

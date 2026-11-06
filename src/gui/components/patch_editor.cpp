@@ -4,6 +4,7 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
@@ -188,13 +189,16 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
                                 [&] { patch.global.lfo_enable = lfo_enable; });
   }
 
-  ImGui::PushItemWidth(hslider_width());
+  // One width for the three, wide enough for the longest name.
+  ImGui::PushItemWidth(std::max(
+      hslider_width(),
+      named_slider_fit_width("Frequency Modulation Sensitivity", "0")));
 
   int lfo_freq = patch.global.lfo_frequency;
 
   if (!lfo_enable)
     ImGui::BeginDisabled(true);
-  bool lfo_freq_changed = ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7);
+  bool lfo_freq_changed = named_slider_int("LFO Frequency", &lfo_freq, 0, 7);
 
   track_patch_history(context, "LFO Frequency", "global.lfo_frequency");
   if (lfo_freq_changed) {
@@ -205,7 +209,7 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
 
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed =
-      ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3);
+      named_slider_int("Amplitude Modulation Sensitivity", &ams, 0, 3);
   track_patch_history(context, "Amplitude Modulation Sensitivity",
                       "channel.am_sensitivity");
   if (ams_changed) {
@@ -214,7 +218,7 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
 
   int fms = patch.channel.frequency_modulation_sensitivity;
   bool fms_changed =
-      ImGui::SliderInt("Frequency Modulation Sensitivity", &fms, 0, 7);
+      named_slider_int("Frequency Modulation Sensitivity", &fms, 0, 7);
   track_patch_history(context, "Frequency Modulation Sensitivity",
                       "channel.fm_sensitivity");
   if (fms_changed) {
@@ -253,7 +257,7 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   }
 
   int algorithm = patch.instrument.algorithm;
-  bool algorithm_changed = ImGui::SliderInt("Algorithm", &algorithm, 0, 7);
+  bool algorithm_changed = named_slider_int("Algorithm", &algorithm, 0, 7);
   track_patch_history(context, "Algorithm", "instrument.algorithm");
   if (algorithm_changed) {
     patch.instrument.algorithm = static_cast<uint8_t>(algorithm);

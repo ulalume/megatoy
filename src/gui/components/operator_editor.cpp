@@ -2,6 +2,7 @@
 #include "core/status.hpp"
 #include "envelope_image.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/envelope/envelope_handles.hpp"
@@ -261,7 +262,7 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
   const bool changed =
       vertical_size
           ? ImGui::VSliderInt(id, *vertical_size, &value, range.max, range.min)
-          : ImGui::SliderInt(id, &value, range.min, range.max, value_format);
+          : named_slider_int(id, &value, range.min, range.max, value_format);
   if (lit_elsewhere) {
     ImGui::PopStyleColor();
   }
@@ -840,16 +841,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   auto &op = ym2612::operator_at(instrument, slot);
   OperatorWidget widget{context, instrument, slot};
 
-  // Two columns only when the right-hand one fits whole. Its widest row is a
-  // full-width slider plus its label, and the gap between the columns is the
-  // SameLine/Spacing/SameLine below.
   const ImGuiStyle &style = ImGui::GetStyle();
   const float content_width = ImGui::GetContentRegionAvail().x;
-  const float side_column_width = hslider_width() + style.ItemInnerSpacing.x +
-                                  ImGui::CalcTextSize("SSG EG Type").x;
-  const float two_column_width =
-      hslider_width() + style.ItemSpacing.x * 2.0f + side_column_width;
-  const bool column_layout = content_width > two_column_width;
 
   if (!op.enable) {
     ImGui::BeginDisabled();
@@ -861,7 +854,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     // it, and OP1's panel is only where it is drawn. So it spreads nowhere,
     // but it still leads: editing it makes OP1 the primary operator.
     int feedback = instrument.feedback;
-    const bool feedback_changed = ImGui::SliderInt("Feedback", &feedback, 0, 7);
+    const bool feedback_changed = named_slider_int("Feedback", &feedback, 0, 7);
     if (ImGui::IsItemActivated()) {
       note_operator_edit(state.selection, 0);
     }
@@ -907,15 +900,20 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   render_envelope_sliders(widget, envelope_state);
   ImGui::EndGroup();
 
-  if (column_layout) {
-    // Placed against the slider block, not the group just closed -- that
-    // group is as wide as the graph, so SameLine() off it would land past
-    // the panel's right edge. Level with the vertical sliders rather than
-    // with the graph, so the SSG controls sit straight above Key Scale.
-    ImGui::SetCursorPos(
-        ImVec2(block_left + hslider_width() + ImGui::GetStyle().ItemSpacing.x * 2,
-               sliders_top));
+  // SSG-EG and the sliders under it stand in the room right of RR, out to
+  // the graph's right edge, when that is wide enough for the narrowest of
+  // them; otherwise they go under the rate sliders.
+  const float side_left = block_left + total_level_column_width() +
+                          vslider_width() * 5.0f + vslider_gap() * 4.0f +
+                          style.ItemSpacing.x;
+  const float side_room =
+      block_left + content_width - frame_padding() - side_left;
+  const bool beside_rates =
+      side_room >= named_slider_fit_width("SSG EG Type", "0");
+  if (beside_rates) {
+    ImGui::SetCursorPos(ImVec2(side_left, sliders_top));
     ImGui::BeginGroup();
+    ImGui::PushItemWidth(side_room);
   } else {
     ImGui::Spacing();
   }
@@ -930,8 +928,17 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
   ImGui::SameLine();
 
-  operator_checkbox(widget, "SSG-EG", "SSG-EG",
+  // Named while the name fits before the panel's edge; the slider below
+  // names it anyway.
+  const bool ssg_named = ImGui::GetCursorPosX() + ImGui::GetFrameHeight() +
+                             style.ItemInnerSpacing.x +
+                             ImGui::CalcTextSize("SSG-EG").x <=
+                         block_left + content_width - frame_padding();
+  operator_checkbox(widget, ssg_named ? "SSG-EG" : "##SSG-EG", "SSG-EG",
                     &ym2612::OperatorSettings::ssg_enable, true);
+  if (!ssg_named && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("SSG-EG");
+  }
 
   const bool ssg_enable = op.ssg_enable;
   if (!ssg_enable) {
@@ -943,9 +950,9 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndDisabled();
   }
 
-  // Only the single-column layout needs a break here: in the two-column one
-  // the SSG controls already stand clear of the sliders beside them.
-  if (!column_layout) {
+  // Under the rate sliders there is room for a break here; beside them
+  // there is not.
+  if (!beside_rates) {
     ImGui::Spacing();
   }
 
@@ -964,7 +971,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                       op, ym2612::OperatorField::Detune)],
                   nullptr);
 
-  if (column_layout) {
+  if (beside_rates) {
+    ImGui::PopItemWidth();
     ImGui::EndGroup();
   }
   ImGui::PopItemWidth();

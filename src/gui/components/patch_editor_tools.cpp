@@ -2,6 +2,7 @@
 
 #include "formats/ym2612_format_adapter.hpp"
 #include "gui/clipboard.hpp"
+#include "gui/components/named_slider.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patches/patch_tweak.hpp"
@@ -80,7 +81,7 @@ SliderState render_quick_edit_slider(PatchEditorContext &context,
   const auto value = patch_lab::tweak_value(instrument, tweak);
   const auto range = patch_lab::tweak_range(base.value_or(instrument), tweak);
   // While dragged, how far the drag has gone; otherwise the register.
-  const auto text = base && ImGui::GetActiveID() == ImGui::GetID(label)
+  const auto text = base && ImGui::GetActiveID() == named_slider_id(label)
                         ? patch_lab::tweak_change_text(*base, instrument, tweak)
                         : patch_lab::tweak_text(instrument, tweak);
 
@@ -94,7 +95,7 @@ SliderState render_quick_edit_slider(PatchEditorContext &context,
   // No typing: a slider that moves several registers has no one number to
   // type.
   const bool changed =
-      ImGui::SliderInt(label, &shown, longer_first ? range.max : range.min,
+      named_slider_int(label, &shown, longer_first ? range.max : range.min,
                        longer_first ? range.min : range.max, text.c_str(),
                        ImGuiSliderFlags_NoInput);
   ImGui::EndDisabled();
@@ -193,18 +194,16 @@ void render_quick_edit_section(PatchEditorContext &context,
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   // Beside the sliders while they keep a useful width, above them otherwise.
   const bool beside = available > ui::scale::px(420.0f);
-  const float label_width = ImGui::CalcTextSize("Brightness").x +
-                            ImGui::GetStyle().ItemInnerSpacing.x;
   ImVec2 sketch_size(std::min(available * 0.4f, ui::scale::px(240.0f)), 0.0f);
   ImVec2 sketch_min;
   if (beside) {
-    ImGui::PushItemWidth(available - label_width - sketch_size.x - spacing);
+    ImGui::PushItemWidth(available - sketch_size.x - spacing);
   } else {
     // Drawn once the sliders have said which of them is pointed at.
     sketch_size = ImVec2(available, ImGui::GetFrameHeight() * 3.0f);
     sketch_min = ImGui::GetCursorScreenPos();
     ImGui::Dummy(sketch_size);
-    ImGui::PushItemWidth(available - label_width);
+    ImGui::PushItemWidth(available);
   }
   auto &instrument = patch.instrument;
   static constexpr std::pair<const char *, patch_lab::Tweak> kSliders[] = {
