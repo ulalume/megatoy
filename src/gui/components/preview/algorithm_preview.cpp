@@ -23,7 +23,8 @@ struct Link {
 };
 
 /// Where OP1 to OP4 stand on a grid, what feeds what, and which reach the
-/// output: megamml's layouts.
+/// output: megamml's layouts, with 5 and 6 laid on their side so the three
+/// carriers stand in a row under OP1.
 struct Layout {
   std::array<Cell, 4> cells;
   std::array<bool, 4> carrier;
@@ -64,18 +65,18 @@ constexpr std::array<Layout, 8> kLayouts = {{
      2,
      2,
      2},
-    {{{{0, 0}, {1, 0}, {1, 1}, {1, 2}}},
+    {{{{1, 0}, {0, 1}, {1, 1}, {2, 1}}},
      {false, true, true, true},
      {{{0, 1}, {0, 2}, {0, 3}}},
      3,
-     2,
-     3},
-    {{{{0, 0}, {1, 0}, {1, 1}, {1, 2}}},
+     3,
+     2},
+    {{{{0, 0}, {0, 1}, {1, 1}, {2, 1}}},
      {false, true, true, true},
      {{{0, 1}, {0, 0}, {0, 0}}},
      1,
-     2,
-     3},
+     3,
+     2},
     {{{{0, 0}, {1, 0}, {2, 0}, {3, 0}}},
      {true, true, true, true},
      {{{0, 0}, {0, 0}, {0, 0}}},
@@ -98,11 +99,24 @@ void algorithm_diagram(int algorithm, ImVec2 size) {
 
   const float pad = ui::scale::px(4.0f);
   const float out_width = ui::scale::px(10.0f);
-  // A single row of carriers takes a second row for the output they share.
-  const bool shared_row_output =
-      layout.rows == 1 &&
-      std::count(layout.carrier.begin(), layout.carrier.end(), true) > 1;
-  const int drawn_rows = layout.rows + (shared_row_output ? 1 : 0);
+  // Carriers that stand in one row share an output line under it, which
+  // takes half a row more.
+  int carrier_row = -1;
+  int carrier_count = 0;
+  bool one_carrier_row = true;
+  for (std::size_t i = 0; i < 4; ++i) {
+    if (!layout.carrier[i]) {
+      continue;
+    }
+    ++carrier_count;
+    if (carrier_row >= 0 && carrier_row != layout.cells[i].row) {
+      one_carrier_row = false;
+    }
+    carrier_row = layout.cells[i].row;
+  }
+  const bool shared_row_output = one_carrier_row && carrier_count > 1;
+  const float drawn_rows =
+      static_cast<float>(layout.rows) + (shared_row_output ? 0.5f : 0.0f);
   // Each layout fills the box, its boxes no taller than a line of text with
   // room around it and no wider than they need to be.
   const float cell_w = (size.x - pad * 2.0f - out_width) / layout.columns;
@@ -129,17 +143,27 @@ void algorithm_diagram(int algorithm, ImVec2 size) {
   const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
   const float thickness = ui::scale::px(1.0f);
 
+  // A modulator feeds an operator below it from its bottom edge, and any
+  // other from its right edge.
   for (int i = 0; i < layout.link_count; ++i) {
-    const ImVec2 from = centres[static_cast<std::size_t>(layout.links[i].from)];
-    const ImVec2 to = centres[static_cast<std::size_t>(layout.links[i].to)];
-    draw_list->AddLine(ImVec2(from.x + box_w * 0.5f, from.y),
-                       ImVec2(to.x - box_w * 0.5f, to.y), line, thickness);
+    const auto from_index = static_cast<std::size_t>(layout.links[i].from);
+    const auto to_index = static_cast<std::size_t>(layout.links[i].to);
+    const ImVec2 from = centres[from_index];
+    const ImVec2 to = centres[to_index];
+    if (layout.cells[to_index].row > layout.cells[from_index].row) {
+      draw_list->AddLine(ImVec2(from.x, from.y + box_h * 0.5f),
+                         ImVec2(to.x, to.y - box_h * 0.5f), line, thickness);
+    } else {
+      draw_list->AddLine(ImVec2(from.x + box_w * 0.5f, from.y),
+                         ImVec2(to.x - box_w * 0.5f, to.y), line, thickness);
+    }
   }
 
   const float out_x = origin_x + cell_w * layout.columns + out_width * 0.5f;
   if (shared_row_output) {
     // Carriers side by side drop to a line under them that runs out.
-    const float merge_y = origin_y + cell_h * 1.25f;
+    const float merge_y =
+        origin_y + (static_cast<float>(carrier_row) + 0.75f) * cell_h;
     float first_x = max.x;
     for (std::size_t i = 0; i < 4; ++i) {
       if (!layout.carrier[i]) {
@@ -169,9 +193,14 @@ void algorithm_diagram(int algorithm, ImVec2 size) {
                          centres[i].y - box_h * 0.5f);
     const ImVec2 box_max(centres[i].x + box_w * 0.5f,
                          centres[i].y + box_h * 0.5f);
-    draw_list->AddRectFilled(box_min, box_max, box_fill, ui::scale::px(2.0f));
-    draw_list->AddRect(box_min, box_max, layout.carrier[i] ? carrier : line,
-                       ui::scale::px(2.0f), 0, thickness);
+    // A carrier is filled in its colour, a modulator outlined.
+    if (layout.carrier[i]) {
+      draw_list->AddRectFilled(box_min, box_max, carrier, ui::scale::px(2.0f));
+    } else {
+      draw_list->AddRectFilled(box_min, box_max, box_fill, ui::scale::px(2.0f));
+      draw_list->AddRect(box_min, box_max, line, ui::scale::px(2.0f), 0,
+                         thickness);
+    }
     const char label[] = {static_cast<char>('1' + i), '\0'};
     const ImVec2 label_size =
         font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, label);

@@ -2,6 +2,7 @@
 
 #include "gui/ui_scale.hpp"
 
+#include <algorithm>
 #include <imgui.h>
 
 namespace ui {
@@ -11,9 +12,10 @@ namespace ui {
 inline float list_row_spacing() { return scale::px(10.0f); }
 
 /// Space the menu bar's items are laid out with, which makes their highlight
-/// fill the bar.
+/// stop 2 px short of the bar's top and bottom.
 inline float bar_item_spacing() {
-  return ImGui::GetStyle().FramePadding.y * 2.0f;
+  return std::max(ImGui::GetStyle().FramePadding.y * 2.0f - scale::px(4.0f),
+                  0.0f);
 }
 
 /// BeginMenu, BeginPopup and BeginPopupContextItem with their items spaced

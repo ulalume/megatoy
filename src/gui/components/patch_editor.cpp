@@ -181,15 +181,20 @@ void render_save_export_buttons(PatchEditorContext &context,
   }
 }
 
+/// The LFO section's sliders: one width for the two, wide enough for the
+/// longer name.
+float lfo_slider_width() {
+  return std::max(
+      hslider_width(),
+      named_slider_fit_width("Frequency Modulation Sensitivity", "0"));
+}
+
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   // The LFO's switch and rate are how the patch is played, set from the
   // menu bar; what the patch holds is how far it follows the LFO.
   ImGui::SeparatorText("Low Frequency Oscillator");
 
-  // One width for the two, wide enough for the longer name.
-  ImGui::PushItemWidth(std::max(
-      hslider_width(),
-      named_slider_fit_width("Frequency Modulation Sensitivity", "0")));
+  ImGui::PushItemWidth(lfo_slider_width());
 
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed =
@@ -574,8 +579,12 @@ void render_document_window(PatchEditorContext &context,
     render_save_export_buttons(context, document, ui, state, is_active);
     ImGui::Spacing();
 
+    // Side by side while each of the two even columns holds the LFO's
+    // sliders.
     const auto available_width = ImGui::GetContentRegionAvail().x;
-    ImGui::Columns(available_width > ui::scale::px(800.0f) ? 2 : 1,
+    const float column_width =
+        lfo_slider_width() + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    ImGui::Columns(available_width >= column_width * 2.0f ? 2 : 1,
                    "##lfo_channel_columns", false);
     render_lfo_section(context, patch);
     ImGui::NextColumn();

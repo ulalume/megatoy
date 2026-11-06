@@ -227,7 +227,8 @@ float render_audio_load(MainMenuContext &context, const LoadWindow &window,
   bool clicked = false;
   bool hovered = false;
   if (graph_width > 0.0f) {
-    const ImVec2 size(graph_width, row + ui::scale::px(4.0f));
+    // As tall as the menus' highlight.
+    const ImVec2 size(graph_width, row + ui::bar_item_spacing());
     ImGui::SetCursorPos(ImVec2(x, (ImGui::GetWindowHeight() - size.y) * 0.5f));
     const Panel panel = begin_panel(size, "##audio_load");
     clicked = ImGui::IsItemClicked();
@@ -334,33 +335,44 @@ constexpr BarMenu kEditMenu{ICON_FA_PEN_TO_SQUARE " Edit###Edit",
                             ICON_FA_PEN_TO_SQUARE "###Edit"};
 constexpr BarMenu kViewMenu{ICON_FA_EYE " View###View", ICON_FA_EYE "###View"};
 
-/// The LFO menu's label, which says whether the LFO is on. Its icon alone
-/// is muted while it is off.
-const char *lfo_menu_label(BarCentreFit fit, bool on) {
-  if (fit == BarCentreFit::Icon) {
-    return ICON_FA_WAVE_SQUARE "###LFO";
-  }
-  return on ? ICON_FA_WAVE_SQUARE " LFO On###LFO"
-            : ICON_FA_WAVE_SQUARE " LFO Off###LFO";
-}
-
 /// How far a menu in the bar takes the next one along.
 float bar_menu_advance(const char *label) {
   return ImGui::CalcTextSize(label, nullptr, true).x +
          ImGui::GetStyle().ItemSpacing.x * 2.0f;
 }
 
-/// How far the LFO menu reaches left of the middle: its wider label.
+/**
+ * The LFO menu's label, which says whether the LFO is on. Padded to the
+ * width of the wider one, so the menu keeps its size as it switches. Its
+ * icon alone is muted while it is off.
+ */
+std::string lfo_menu_label(BarCentreFit fit, bool on) {
+  if (fit == BarCentreFit::Icon) {
+    return ICON_FA_WAVE_SQUARE "###LFO";
+  }
+  constexpr const char *kOn = ICON_FA_WAVE_SQUARE " LFO On";
+  constexpr const char *kOff = ICON_FA_WAVE_SQUARE " LFO Off";
+  const float widest =
+      std::max(ImGui::CalcTextSize(kOn).x, ImGui::CalcTextSize(kOff).x);
+  std::string label = on ? kOn : kOff;
+  const float space = ImGui::CalcTextSize(" ").x;
+  for (float width = ImGui::CalcTextSize(label.c_str()).x;
+       width + space * 0.5f < widest; width += space) {
+    label += ' ';
+  }
+  return label + "###LFO";
+}
+
+/// How far the LFO menu reaches left of the middle, on or off.
 float lfo_menu_advance(BarCentreFit fit) {
-  return std::max(bar_menu_advance(lfo_menu_label(fit, true)),
-                  bar_menu_advance(lfo_menu_label(fit, false)));
+  return std::max(bar_menu_advance(lfo_menu_label(fit, true).c_str()),
+                  bar_menu_advance(lfo_menu_label(fit, false).c_str()));
 }
 
 /**
  * As the bar narrows, the load graph shrinks to the reading it holds and
  * then goes, then the middle loses its note, and then the menus and the
- * middle keep only their icons. The LFO menu stands just left of the
- * middle. Measured from after the app menu.
+ * middle keep only their icons. Measured from after the app menu.
  */
 BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const ImGuiStyle &style = ImGui::GetStyle();
@@ -374,16 +386,17 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   };
   // The room the middle leaves before a load area `load_width` wide: it sits
   // centred in the bar, but never over the menus.
+  // The LFO menu stands just left of the load area.
   const auto room = [&](BarCentreFit fit, float load_width) {
-    const float load_start = width - load_width - style.FramePadding.x * 2.0f;
-    const float lfo = lfo_menu_advance(fit);
+    const float right_start = width - load_width - style.FramePadding.x * 2.0f -
+                              lfo_menu_advance(fit);
     if (!context.bar_centre_size) {
-      return load_start - menus_end(fit) - lfo;
+      return right_start - menus_end(fit);
     }
     const BarCentreSize size = context.bar_centre_size(fit);
-    const float x = std::max(width * 0.5f - size.centred * 0.5f,
-                             menus_end(fit) + spacing + lfo);
-    return load_start - spacing - (x + size.total);
+    const float x =
+        std::max(width * 0.5f - size.centred * 0.5f, menus_end(fit) + spacing);
+    return right_start - spacing - (x + size.total);
   };
 
   // The graph holds the reading, so it is never narrower than that.
@@ -597,7 +610,11 @@ void lfo_menu_items(ym2612::PlaybackSettings &playback) {
   static const char *const kRates[] = {"3.98 Hz", "5.56 Hz", "6.02 Hz",
                                        "6.37 Hz", "6.88 Hz", "9.63 Hz",
                                        "48.1 Hz", "72.2 Hz"};
-  ImGui::Checkbox("LFO", &playback.lfo_enable);
+  // A menu row like the View menu's switches, which leaves the menu open so
+  // the rate can be set next.
+  ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+  ImGui::MenuItem("Enabled", nullptr, &playback.lfo_enable);
+  ImGui::PopItemFlag();
   ImGui::BeginDisabled(!playback.lfo_enable);
   int rate = std::clamp<int>(playback.lfo_frequency, 0, 7);
   ImGui::SetNextItemWidth(named_slider_fit_width("Frequency", "48.1 Hz") +
@@ -693,29 +710,26 @@ void render_main_menu(MainMenuContext &context) {
 
     const float menus_end = ImGui::GetCursorPosX();
     const float row_y = ImGui::GetCursorPosY();
-    // The LFO menu ends where the middle starts, which is centred in the bar
-    // but kept clear of the menus and of the LFO menu itself.
+    const float load_start =
+        render_audio_load(context, load, reading, fit.graph_width);
+
+    // The LFO menu, just left of the load area. Muted while off. The colour
+    // is let go only after the menu closes, so the window the menu opens
+    // keeps the stack it started with; its items take the ordinary colour
+    // back.
     auto &playback = context.patch_session.playback();
-    const char *lfo_label = lfo_menu_label(fit.centre, playback.lfo_enable);
-    const float lfo_advance = bar_menu_advance(lfo_label);
-    float centre_x = menus_end + lfo_advance;
-    if (context.bar_centre_size) {
-      const BarCentreSize size = context.bar_centre_size(fit.centre);
-      centre_x = std::max(ImGui::GetWindowWidth() * 0.5f - size.centred * 0.5f,
-                          menus_end + ImGui::GetStyle().ItemSpacing.x +
-                              lfo_menu_advance(fit.centre));
-    }
-    ImGui::SetCursorPos(ImVec2(centre_x - lfo_advance, row_y));
-    // Muted while off. The colour is let go only after the menu closes, so
-    // the window the menu opens keeps the stack it started with; its items
-    // take the ordinary colour back.
+    const std::string lfo_label =
+        lfo_menu_label(fit.centre, playback.lfo_enable);
+    const float lfo_x =
+        std::max(menus_end, load_start - lfo_menu_advance(fit.centre));
+    ImGui::SetCursorPos(ImVec2(lfo_x, row_y));
     const bool lfo_muted = !playback.lfo_enable;
     const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
     if (lfo_muted) {
       ImGui::PushStyleColor(ImGuiCol_Text,
                             styles::color(styles::MegatoyCol::TextMuted));
     }
-    if (begin_bar_menu(lfo_label)) {
+    if (begin_bar_menu(lfo_label.c_str())) {
       ImGui::PushStyleColor(ImGuiCol_Text, text);
       lfo_menu_items(playback);
       ImGui::PopStyleColor();
@@ -725,11 +739,8 @@ void render_main_menu(MainMenuContext &context) {
       ImGui::PopStyleColor();
     }
 
-    const float load_start =
-        render_audio_load(context, load, reading, fit.graph_width);
     if (context.bar_centre) {
-      context.bar_centre(fit.centre, centre_x - ImGui::GetStyle().ItemSpacing.x,
-                         load_start, row_y);
+      context.bar_centre(fit.centre, menus_end, lfo_x, row_y);
     }
 
     ImGui::EndMainMenuBar();
