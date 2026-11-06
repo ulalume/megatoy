@@ -5,6 +5,7 @@
 #include "input_state.hpp"
 #include "preferences/preference_manager.hpp"
 #include "ym2612/note.hpp"
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <imgui.h>
@@ -54,7 +55,8 @@ struct MidiKeyboardContext {
   std::function<bool(ym2612::Note, uint8_t)> key_on;
   std::function<bool(ym2612::Note)> key_off;
   std::function<bool(const ym2612::Note &)> key_is_pressed;
-  std::function<std::vector<ym2612::Note>()> active_notes;
+  /// Which operators sound, OP1 to OP4: the session's playback settings.
+  std::array<bool, 4> &operator_enable;
 };
 
 void render_midi_keyboard(const char *title, MidiKeyboardContext &context);

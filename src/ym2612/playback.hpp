@@ -9,25 +9,22 @@ namespace ym2612 {
 
 /**
  * How a patch is played rather than the patch itself: the LFO's switch and
- * rate, the speakers and which operators sound. One set serves whichever
- * patch is current; none of it is saved with a patch, which keeps these
- * fields at their defaults, and it is laid over the patch on its way to the
- * chip. The DAC is not among them: it stays off, since it would take
- * channel 6 from FM.
+ * rate and which operators sound. One set serves whichever patch is current;
+ * none of it is saved with a patch, which keeps these fields at their
+ * defaults, and it is laid over the patch on its way to the chip. Both
+ * speakers stay on, and the DAC off, since it would take channel 6 from FM.
  */
 struct PlaybackSettings {
   bool lfo_enable = false;
   uint8_t lfo_frequency = 0;
-  bool left_speaker = true;
-  bool right_speaker = true;
   /// By display slot, OP1..OP4 as the editor shows them.
   std::array<bool, 4> operator_enable{true, true, true, true};
 
   bool operator==(const PlaybackSettings &) const = default;
 };
 
-/// Puts the fields PlaybackSettings stands in for at their defaults, as
-/// every patch holds them, and the DAC off.
+/// Puts the LFO, speaker, operator enable and DAC fields at their defaults,
+/// as every patch holds them.
 inline void clear_playback_fields(Patch &patch) {
   const Patch defaults;
   patch.global = defaults.global;
@@ -44,8 +41,8 @@ inline Patch played(const Patch &patch, const PlaybackSettings &settings) {
   out.global.dac_enable = false;
   out.global.lfo_enable = settings.lfo_enable;
   out.global.lfo_frequency = settings.lfo_frequency;
-  out.channel.left_speaker = settings.left_speaker;
-  out.channel.right_speaker = settings.right_speaker;
+  out.channel.left_speaker = true;
+  out.channel.right_speaker = true;
   for (int slot = 0; slot < 4; ++slot) {
     operator_at(out.instrument, slot).enable = settings.operator_enable[slot];
   }

@@ -562,21 +562,6 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
   }
 }
 
-/**
- * Whether the operator sounds. A mute for auditioning, which is how the
- * patch is played rather than the patch: it spreads to no other operator,
- * adds no history and marks nothing modified (ym2612/playback.hpp).
- */
-void operator_enable_checkbox(OperatorWidget &widget) {
-  auto &state = widget.editor.operator_edit();
-  ImGui::Checkbox("##Operator Enable",
-                  &widget.editor.session.playback()
-                       .operator_enable[static_cast<std::size_t>(widget.slot)]);
-  if (ImGui::IsItemActivated()) {
-    note_operator_edit(state.selection, widget.slot);
-  }
-}
-
 constexpr const char *kOperatorPayload = "MEGATOY_OPERATOR";
 
 /// An operator being dragged, and the document it belongs to: it is only
@@ -674,15 +659,13 @@ void draw_carrier_badge(float right, float bottom) {
                      ImGui::GetColorU32(ImGuiCol_Text), kBadge);
 }
 
-/// The operator's enable checkbox and name, sitting in the frame's top
-/// border.
-OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
+/// The operator's name, sitting in the frame's top border.
+OperatorHeader render_operator_header(OperatorWidget &widget,
                                       const ImVec2 &header_min) {
   const int slot = widget.slot;
   ImGui::SetCursorScreenPos(header_min);
   ImGui::BeginGroup();
-  operator_enable_checkbox(widget);
-  ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+  ImGui::AlignTextToFramePadding();
   ImGui::TextUnformatted(operator_slot_label(slot).c_str());
   const bool name_clicked =
       operator_name_drag_source(widget.editor.document, slot);
@@ -986,8 +969,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
   draw_operator_fill(state, slot, block_min, frame_min, frame_width);
-  const OperatorHeader header =
-      render_operator_header(widget, patch.instrument.algorithm, block_min);
+  const OperatorHeader header = render_operator_header(widget, block_min);
   const float top_resume_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
   const float left_resume_y = block_min.y + header_height + header_gap();

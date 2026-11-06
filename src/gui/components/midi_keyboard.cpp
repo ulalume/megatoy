@@ -13,7 +13,6 @@
 #include "util.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
-#include <chord_detector.h>
 #include <cmath>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -204,6 +203,44 @@ const char *typing_label(const MidiKeyboardState &state) {
                                           : state.typing_range_label.c_str();
 }
 
+/**
+ * The operators' switches, OP1 to OP4, as megamml's keyboard has them: lit
+ * while the operator sounds, an outline while it is muted. How the patch is
+ * played, not the patch (ym2612/playback.hpp).
+ */
+void render_operator_switches(std::array<bool, 4> &enabled) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "OP");
+  const float size = ImGui::GetFrameHeight();
+  for (std::size_t i = 0; i < enabled.size(); ++i) {
+    ImGui::SameLine(0.0f,
+                    i == 0 ? style.ItemInnerSpacing.x : ui::scale::px(1.0f));
+    const bool on = enabled[i];
+    if (!on) {
+      ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+      ImGui::PushStyleColor(ImGuiCol_Text,
+                            styles::color(styles::MegatoyCol::TextMuted));
+      ImGui::PushStyleColor(ImGuiCol_Border,
+                            styles::color(styles::MegatoyCol::EnvelopeGrid));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, ui::scale::px(1.0f));
+    }
+    const char label[] = {static_cast<char>('1' + i), '\0'};
+    ImGui::PushID(static_cast<int>(i));
+    if (ImGui::Button(label, ImVec2(size, size))) {
+      enabled[i] = !on;
+    }
+    ImGui::PopID();
+    if (!on) {
+      ImGui::PopStyleVar();
+      ImGui::PopStyleColor(3);
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("OP%d", static_cast<int>(i) + 1);
+    }
+  }
+}
+
 std::pair<ImGuiKey, ImGuiKey>
 octave_keys_for_layout(TypingKeyboardLayout layout,
                        const PreferenceManager::UIPreferences &prefs) {
@@ -329,43 +366,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
 
   ImGui::SameLine();
 
-  std::vector<ym2612::Note> active_notes = context.active_notes
-                                               ? context.active_notes()
-                                               : std::vector<ym2612::Note>{};
-  std::string chord_name;
-  if (active_notes.size() >= 2) {
-    std::vector<int> midi_notes;
-    midi_notes.reserve(active_notes.size());
-    for (auto &note : active_notes) {
-      midi_notes.push_back(static_cast<int>(note.midi_note()));
-    }
-    chord_name = get_chord_name(midi_notes, false, true);
-  }
-  // A box as tall as the controls beside it and as wide as the longest name
-  // the chord detector gives, so the slider after it stays put as chords come
-  // and go; a name sits in its middle. Bordered like the envelope graph.
-  {
-    const ImGuiStyle &style = ImGui::GetStyle();
-    const ImVec2 at = ImGui::GetCursorScreenPos();
-    const ImVec2 size(ImGui::CalcTextSize("C#madd11(omit5)/G#").x +
-                          style.FramePadding.x * 2.0f,
-                      ImGui::GetFrameHeight());
-    ImGui::Dummy(size);
-    const ImVec2 end(at.x + size.x, at.y + size.y);
-    ImDrawList *draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRect(at, end,
-                       styles::color_u32(styles::MegatoyCol::EnvelopeGrid),
-                       style.FrameRounding);
-    const float text_right = end.x - style.FramePadding.x;
-    const float text_left = std::max(
-        at.x + style.FramePadding.x,
-        IM_ROUND((at.x + end.x - ImGui::CalcTextSize(chord_name.c_str()).x) *
-                 0.5f));
-    ImGui::RenderTextEllipsis(draw_list,
-                              ImVec2(text_left, at.y + style.FramePadding.y),
-                              ImVec2(text_right, end.y), text_right,
-                              chord_name.c_str(), nullptr, nullptr);
-  }
+  render_operator_switches(context.operator_enable);
 
   // The slider takes the rest of the row, or a row of its own when too
   // little is left.

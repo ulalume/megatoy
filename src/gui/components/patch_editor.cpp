@@ -182,27 +182,14 @@ void render_save_export_buttons(PatchEditorContext &context,
 }
 
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
+  // The LFO's switch and rate are how the patch is played, set from the
+  // menu bar; what the patch holds is how far it follows the LFO.
   ImGui::SeparatorText("Low Frequency Oscillator");
-  // The switch and the rate are how the patch is played, not the patch: no
-  // history, nothing modified (ym2612/playback.hpp).
-  auto &playback = context.session.playback();
-  const bool lfo_enable = playback.lfo_enable;
-  ImGui::Checkbox("LFO", &playback.lfo_enable);
 
-  // One width for the three, wide enough for the longest name.
+  // One width for the two, wide enough for the longer name.
   ImGui::PushItemWidth(std::max(
       hslider_width(),
       named_slider_fit_width("Frequency Modulation Sensitivity", "0")));
-
-  int lfo_freq = playback.lfo_frequency;
-
-  if (!lfo_enable)
-    ImGui::BeginDisabled(true);
-  if (named_slider_int("LFO Frequency", &lfo_freq, 0, 7)) {
-    playback.lfo_frequency = static_cast<uint8_t>(lfo_freq);
-  }
-
-  ImGui::Spacing();
 
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed =
@@ -221,8 +208,6 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   if (fms_changed) {
     patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(fms);
   }
-  if (!lfo_enable)
-    ImGui::EndDisabled();
 
   ImGui::PopItemWidth();
   ImGui::Spacing();
@@ -230,12 +215,6 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
 
 void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Channel");
-  // How the patch is played, as LFO is.
-  auto &playback = context.session.playback();
-  ImGui::Checkbox("Left Speaker", &playback.left_speaker);
-  ImGui::SameLine();
-  ImGui::Checkbox("Right Speaker", &playback.right_speaker);
-
   ImGui::PushItemWidth(hslider_width());
 
   if (const auto *preview =

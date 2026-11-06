@@ -1,5 +1,6 @@
 #include "main_menu.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/components/named_slider.hpp"
 
 #include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
@@ -36,9 +37,8 @@ namespace {
 // Full scale on the graph is the render deadline: 1.0 means a block took as
 // long to produce as it takes to play.
 constexpr float kLoadWarningLevel = 0.7f;
+/// The graph's width beside the reading it holds.
 constexpr float kLoadGraphWidth = 64.0f;
-/// Narrower than this, the graph is left out of a tight bar.
-constexpr float kLoadGraphMinWidth = 24.0f;
 // How far back the graph reaches: long enough that a glitch is still on
 // screen once the ear has noticed it and the eye has arrived.
 constexpr float kLoadWindowMs = 10000.0f;
@@ -210,39 +210,41 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
 }
 
 /**
- * The load reading and its graph, at the right-hand end of the bar, the graph
- * `graph_width` wide or left out at 0. Returns where they start.
+ * The load reading at the right-hand end of the bar, inside its graph when
+ * `graph_width` is more than 0 and alone otherwise. Returns where it starts.
  */
 float render_audio_load(MainMenuContext &context, const LoadWindow &window,
                         const char *reading, float graph_width) {
   const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 size(graph_width,
-                    ImGui::GetTextLineHeight() + ui::scale::px(4.0f));
-  const float reading_width = ImGui::CalcTextSize(reading).x;
   const float row = ImGui::GetTextLineHeight();
-  const float graph_space = graph_width > 0.0f ? size.x + style.ItemSpacing.x
-                                               : 0.0f;
+  const float width =
+      graph_width > 0.0f ? graph_width : ImGui::CalcTextSize(reading).x;
 
   // Never left of the menus: an overlap would take their clicks.
-  const float x = std::max(ImGui::GetCursorPosX(),
-                           ImGui::GetWindowWidth() - graph_space -
-                               reading_width - style.FramePadding.x * 2.0f);
-  // Text in the bar is drawn the frame padding below the cursor.
-  ImGui::SetCursorPos(ImVec2(
-      x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
-  ImGui::TextUnformatted(reading);
-  // The reading answers like the graph, which may be left out.
-  bool clicked = ImGui::IsItemClicked();
-  bool hovered = ImGui::IsItemHovered();
-
+  const float x =
+      std::max(ImGui::GetCursorPosX(),
+               ImGui::GetWindowWidth() - width - style.FramePadding.x * 2.0f);
+  bool clicked = false;
+  bool hovered = false;
   if (graph_width > 0.0f) {
-    ImGui::SetCursorPos(ImVec2(x + reading_width + style.ItemSpacing.x,
-                               (ImGui::GetWindowHeight() - size.y) * 0.5f));
+    const ImVec2 size(graph_width, row + ui::scale::px(4.0f));
+    ImGui::SetCursorPos(ImVec2(x, (ImGui::GetWindowHeight() - size.y) * 0.5f));
     const Panel panel = begin_panel(size, "##audio_load");
-    clicked = clicked || ImGui::IsItemClicked();
-    hovered = hovered || ImGui::IsItemHovered();
+    clicked = ImGui::IsItemClicked();
+    hovered = ImGui::IsItemHovered();
     draw_load_graph(panel, window);
+    panel.draw_list->AddText(
+        ImVec2(panel.min.x + style.FramePadding.x,
+               panel.min.y + (size.y - row) * 0.5f),
+        ImGui::GetColorU32(ImGuiCol_Text), reading);
     end_panel(panel);
+  } else {
+    // Text in the bar is drawn the frame padding below the cursor.
+    ImGui::SetCursorPos(ImVec2(
+        x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
+    ImGui::TextUnformatted(reading);
+    clicked = ImGui::IsItemClicked();
+    hovered = ImGui::IsItemHovered();
   }
 
   if (hovered && ImGui::BeginTooltip()) {
@@ -331,6 +333,8 @@ constexpr BarMenu kFileMenu{ICON_FA_FILE " File###File",
 constexpr BarMenu kEditMenu{ICON_FA_PEN_TO_SQUARE " Edit###Edit",
                             ICON_FA_PEN_TO_SQUARE "###Edit"};
 constexpr BarMenu kViewMenu{ICON_FA_EYE " View###View", ICON_FA_EYE "###View"};
+constexpr BarMenu kLfoMenu{ICON_FA_WAVE_SQUARE " LFO###LFO",
+                           ICON_FA_WAVE_SQUARE "###LFO"};
 
 /// How far a menu in the bar takes the next one along.
 float bar_menu_advance(const char *label) {
@@ -339,8 +343,9 @@ float bar_menu_advance(const char *label) {
 }
 
 /**
- * As the bar narrows, the load graph shrinks and then goes, then the middle
- * loses its note, and then the menus and the middle keep only their icons.
+ * As the bar narrows, the load graph shrinks to the reading it holds and
+ * then goes, then the middle loses its note, and then the menus and the
+ * middle keep only their icons.
  * Measured from after the app menu.
  */
 BarFit fit_bar(const MainMenuContext &context, const char *reading) {
@@ -351,14 +356,13 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const auto menus_end = [&](BarCentreFit fit) {
     return menus_start + bar_menu_advance(kFileMenu.label(fit)) +
            bar_menu_advance(kEditMenu.label(fit)) +
-           bar_menu_advance(kViewMenu.label(fit));
+           bar_menu_advance(kViewMenu.label(fit)) +
+           bar_menu_advance(kLfoMenu.label(fit));
   };
-  // Where the load reading starts with no graph after it.
-  const float load_start =
-      width - ImGui::CalcTextSize(reading).x - style.FramePadding.x * 2.0f;
-  // The room the middle leaves before the reading: it sits centred in the
-  // bar, but never over the menus.
-  const auto room = [&](BarCentreFit fit) {
+  // The room the middle leaves before a load area `load_width` wide: it sits
+  // centred in the bar, but never over the menus.
+  const auto room = [&](BarCentreFit fit, float load_width) {
+    const float load_start = width - load_width - style.FramePadding.x * 2.0f;
     if (!context.bar_centre_size) {
       return load_start - menus_end(fit);
     }
@@ -368,17 +372,21 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
     return load_start - spacing - (x + size.total);
   };
 
-  const float graph_room = room(BarCentreFit::Full) - spacing;
-  if (graph_room >= ui::scale::px(kLoadGraphWidth)) {
-    return {ui::scale::px(kLoadGraphWidth), BarCentreFit::Full};
+  // The graph holds the reading, so it is never narrower than that.
+  const float reading_width = ImGui::CalcTextSize(reading).x;
+  const float least = reading_width + style.FramePadding.x * 2.0f;
+  const float full = least + ui::scale::px(kLoadGraphWidth);
+  const float graph_room = full + room(BarCentreFit::Full, full);
+  if (graph_room >= full) {
+    return {full, BarCentreFit::Full};
   }
-  if (graph_room >= ui::scale::px(kLoadGraphMinWidth)) {
+  if (graph_room >= least) {
     return {graph_room, BarCentreFit::Full};
   }
-  if (room(BarCentreFit::Full) >= 0.0f) {
+  if (room(BarCentreFit::Full, reading_width) >= 0.0f) {
     return {0.0f, BarCentreFit::Full};
   }
-  if (room(BarCentreFit::Short) >= 0.0f) {
+  if (room(BarCentreFit::Short, reading_width) >= 0.0f) {
     return {0.0f, BarCentreFit::Short};
   }
   return {0.0f, BarCentreFit::Icon};
@@ -565,6 +573,27 @@ void view_menu_items(MainMenuContext &context) {
   }
 }
 
+/**
+ * The LFO's switch and rate. They are how the patch is played rather than
+ * the patch, so they mark nothing modified and are not saved with it
+ * (ym2612/playback.hpp).
+ */
+void lfo_menu_items(ym2612::PlaybackSettings &playback) {
+  // The chip's eight rates.
+  static const char *const kRates[] = {"3.98 Hz", "5.56 Hz", "6.02 Hz",
+                                       "6.37 Hz", "6.88 Hz", "9.63 Hz",
+                                       "48.1 Hz", "72.2 Hz"};
+  ImGui::Checkbox("LFO", &playback.lfo_enable);
+  ImGui::BeginDisabled(!playback.lfo_enable);
+  int rate = std::clamp<int>(playback.lfo_frequency, 0, 7);
+  ImGui::SetNextItemWidth(named_slider_fit_width("Frequency", "48.1 Hz") +
+                          ui::scale::px(48.0f));
+  if (named_slider_int("Frequency", &rate, 0, 7, kRates[rate])) {
+    playback.lfo_frequency = static_cast<uint8_t>(rate);
+  }
+  ImGui::EndDisabled();
+}
+
 } // namespace
 
 void render_main_menu(MainMenuContext &context) {
@@ -615,6 +644,10 @@ void render_main_menu(MainMenuContext &context) {
     }
     if (begin_bar_menu(kViewMenu.label(fit.centre))) {
       view_menu_items(context);
+      ui::end_menu();
+    }
+    if (begin_bar_menu(kLfoMenu.label(fit.centre))) {
+      lfo_menu_items(context.patch_session.playback());
       ui::end_menu();
     }
 
