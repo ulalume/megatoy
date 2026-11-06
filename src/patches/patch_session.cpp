@@ -329,6 +329,10 @@ ym2612::Patch PatchSession::played_patch() const {
   return ym2612::played(current_patch(), playback_);
 }
 
+ym2612::Patch PatchSession::written_patch() const {
+  return ym2612::written(current_patch(), playback_);
+}
+
 void PatchSession::apply_patch_to_audio() {
   // Patch edits take the same route as notes so that a slider drag cannot
   // rewrite registers underneath the renderer.

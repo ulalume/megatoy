@@ -5,6 +5,7 @@
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/patch_write.hpp"
 #include "ym2612/patch.hpp"
+#include "ym2612/playback.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -104,6 +105,29 @@ int main() {
   CHECK(played_loaded.status == formats::PatchLoadStatus::Success);
   CHECK(played_loaded.patches.size() == 1);
   CHECK(played_loaded.patches[0] == patch);
+
+  // MML names the LFO menu's rate, on or off, for a patch the LFO reaches,
+  // and leaves the LFO out of one it does not.
+  {
+    ym2612::PlaybackSettings settings;
+    settings.lfo_enable = false;
+    settings.lfo_frequency = 5;
+    auto reached = patch;
+    reached.channel.amplitude_modulation_sensitivity = 1;
+    reached.channel.frequency_modulation_sensitivity = 2;
+    const auto mml = formats::adapter::serialize_text(
+        ym2612_format::Format::Mml, ym2612::written(reached, settings));
+    CHECK(mml.has_value());
+    CHECK(mml->find("'lforate 6' 'lfo 1 2'") != std::string::npos);
+
+    auto unreached = patch;
+    unreached.channel.amplitude_modulation_sensitivity = 0;
+    unreached.channel.frequency_modulation_sensitivity = 0;
+    const auto quiet = formats::adapter::serialize_text(
+        ym2612_format::Format::Mml, ym2612::written(unreached, settings));
+    CHECK(quiet.has_value());
+    CHECK(quiet->find("lfo") == std::string::npos);
+  }
 
   // Every writable format the registry offers has to survive a save/load
   // cycle. Driving this from save_formats() means a format added upstream

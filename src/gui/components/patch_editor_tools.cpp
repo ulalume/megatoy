@@ -210,16 +210,15 @@ void render_mml_section(PatchEditorContext &context,
   if (!section_header("MML", context.prefs.show_mml)) {
     return;
   }
-  // As it is played, so the comments show the LFO and the speakers. Made
-  // again only when that changes, not every frame.
-  const ym2612::Patch played =
-      ym2612::played(patch, context.session.playback());
+  // As it is saved, so the comment names the LFO's rate. Made again only
+  // when that changes, not every frame.
+  const ym2612::Patch saved =
+      ym2612::written(patch, context.session.playback());
   auto &ui = context.document_ui(context.document);
-  if (!ui.mml_patch || *ui.mml_patch != played) {
-    ui.mml =
-        formats::adapter::serialize_text(ym2612_format::Format::Mml, played)
-            .value_or(std::string{});
-    ui.mml_patch = played;
+  if (!ui.mml_patch || *ui.mml_patch != saved) {
+    ui.mml = formats::adapter::serialize_text(ym2612_format::Format::Mml, saved)
+                 .value_or(std::string{});
+    ui.mml_patch = saved;
   }
   const std::string &mml = ui.mml;
   if (ImGui::Button("Copy to Clipboard")) {

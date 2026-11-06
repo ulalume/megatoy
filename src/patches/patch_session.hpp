@@ -232,6 +232,8 @@ public:
   /// it is saved as: the settings reach only formats that keep them, such
   /// as MML's comments.
   ym2612::Patch played_patch() const;
+  /// The current patch as saved: see ym2612::written().
+  ym2612::Patch written_patch() const;
   void apply_patch_to_audio();
   bool apply_patch_to_audio_if_changed();
 

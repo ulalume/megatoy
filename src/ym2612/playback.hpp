@@ -49,4 +49,13 @@ inline Patch played(const Patch &patch, const PlaybackSettings &settings) {
   return out;
 }
 
+/// `patch` as written to a file: as `settings` play it, except that the LFO's
+/// rate is named whether the LFO is on or not. Only the MML comment keeps
+/// it, and only for a patch the LFO reaches.
+inline Patch written(const Patch &patch, const PlaybackSettings &settings) {
+  Patch out = played(patch, settings);
+  out.global.lfo_enable = true;
+  return out;
+}
+
 } // namespace ym2612
