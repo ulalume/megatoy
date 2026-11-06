@@ -131,35 +131,28 @@ void draw_operator_fill(const OperatorEditState &state, int slot,
 }
 
 /**
- * The frame, cut open at the corners the header and the Carrier badge sit
- * across: the top border runs from past the label to short of the badge, the
- * left border starts below the checkbox and the right one below the badge.
+ * The frame, cut open at the corner the header sits across: the top border
+ * runs from past the label, and the left border starts below the checkbox.
  *
  * The half-pixel inset is what AddRect does internally; without it the line
  * falls between two pixels and blurs.
  */
 void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
-                         float top_resume_x, float top_end_x,
-                         float left_resume_y, float right_resume_y,
-                         ImU32 color) {
+                         float top_resume_x, float left_resume_y, ImU32 color) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float left = min.x + 0.5f;
   const float top = min.y + 0.5f;
   const float right = max.x - 0.5f;
   const float bottom = max.y - 0.5f;
 
-  const float top_end = std::min(top_end_x, right);
-  if (top_resume_x < top_end) {
-    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(top_end, top), color);
+  if (top_resume_x < right) {
+    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(right, top), color);
   }
   if (left_resume_y < bottom) {
     draw_list->AddLine(ImVec2(left, left_resume_y), ImVec2(left, bottom),
                        color);
   }
-  if (right_resume_y < bottom) {
-    draw_list->AddLine(ImVec2(right, std::max(top, right_resume_y)),
-                       ImVec2(right, bottom), color);
-  }
+  draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
   draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
 }
 
@@ -590,8 +583,14 @@ struct OperatorHeader {
   float end_x;
   /// The name takes clicks for dragging, so it reports them to select with.
   bool name_clicked;
-  bool is_carrier;
 };
+
+/// Whether the operator in display `slot` reaches the output under
+/// `algorithm`, rather than only feeding other operators.
+bool is_carrier(int slot, uint8_t algorithm) {
+  return ym2612::operator_register_index(slot) >=
+         ym2612::algorithm_modulator_count[algorithm];
+}
 
 /// Inside an open drag source: what is carried and the tooltip that follows
 /// the pointer.
@@ -645,24 +644,23 @@ void drag_from_background(OperatorEditState &state,
   }
 }
 
-/// The Carrier badge, as tall as the checkbox across the other end of the
-/// top border, its right edge at `right`. Returns its left edge.
-float draw_carrier_badge(float right, float top) {
+/// The Carrier badge, a tab on the envelope graph's top right corner whose
+/// bottom edge is the graph's top at `bottom` and right edge at `right`.
+void draw_carrier_badge(float right, float bottom) {
   constexpr const char *kBadge = "Carrier";
   const ImGuiStyle &style = ImGui::GetStyle();
   const ImVec2 text_size = ImGui::CalcTextSize(kBadge);
   const ImVec2 size(text_size.x + style.FramePadding.x * 2.0f,
                     ImGui::GetFrameHeight());
-  const ImVec2 min(right - size.x, top);
-  const ImVec2 max(right, top + size.y);
+  const ImVec2 min(right - size.x, bottom - size.y);
+  const ImVec2 max(right, bottom);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   draw_list->AddRectFilled(min, max,
                            styles::color_u32(styles::MegatoyCol::CarrierBadge),
-                           size.y * 0.5f);
+                           size.y * 0.3f, ImDrawFlags_RoundCornersTop);
   draw_list->AddText(
       ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y),
       ImGui::GetColorU32(ImGuiCol_Text), kBadge);
-  return min.x;
 }
 
 /// The operator's enable checkbox and name, sitting in the frame's top
@@ -670,11 +668,6 @@ float draw_carrier_badge(float right, float top) {
 OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
                                       const ImVec2 &header_min) {
   const int slot = widget.slot;
-  // Carriers reach the output; modulators only feed other operators. Which
-  // is which moves with the algorithm, so it is worth saying on every one.
-  const bool is_modulator = ym2612::operator_register_index(slot) <
-                            ym2612::algorithm_modulator_count[algorithm];
-
   ImGui::SetCursorScreenPos(header_min);
   ImGui::BeginGroup();
   operator_checkbox(widget, "##Operator Enable", "Enable",
@@ -684,7 +677,7 @@ OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
   const bool name_clicked =
       operator_name_drag_source(widget.editor.document, slot);
   ImGui::EndGroup();
-  return {ImGui::GetItemRectMax().x, name_clicked, !is_modulator};
+  return {ImGui::GetItemRectMax().x, name_clicked};
 }
 
 /// The whole frame takes an operator dropped from another one: swapped, or
@@ -856,17 +849,24 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   // comes off the right so it clears the border by as much as the contents do
   // on the left. Only the pixels change: the time axis is unaffected.
   ImGui::BeginGroup();
-  const ui::envelope::EnvelopeHandles handles = render_envelope_image(
-      op, envelope_state,
-      ImVec2(content_width - frame_padding() - total_level_column_width(),
-             envelope_graph_height()),
-      voices);
+  // Carriers reach the output; modulators only feed other operators. Which
+  // is which moves with the algorithm, so the graph says it on every one.
+  const bool carrier = is_carrier(slot, instrument.algorithm);
+  const ImVec2 graph_min = ImGui::GetCursorScreenPos();
+  const ImVec2 graph_size(content_width - frame_padding() -
+                              total_level_column_width(),
+                          envelope_graph_height());
+  const ui::envelope::EnvelopeHandles handles =
+      render_envelope_image(op, envelope_state, graph_size, voices, carrier);
   // Inside the graph's own window, which render_envelope_image leaves open:
   // an item anywhere else could not be hovered over the graph.
   envelope_state.handles = UIState::EnvelopeState::HandleLit{};
   envelope_state.handle_active = render_envelope_handles(
       widget, handles, envelope_state.handles, envelope_state.echoed);
   end_envelope_image();
+  if (carrier) {
+    draw_carrier_badge(graph_min.x + graph_size.x, graph_min.y);
+  }
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
   ImGui::EndGroup();
@@ -979,12 +979,6 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   const float top_resume_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
   const float left_resume_y = block_min.y + header_height + header_gap();
-  const float frame_right = frame_min.x + frame_width;
-  const float top_end_x =
-      header.is_carrier
-          ? draw_carrier_badge(frame_right, block_min.y) - header_gap()
-          : frame_right;
-  const float right_resume_y = header.is_carrier ? left_resume_y : frame_min.y;
 
   ImGui::SetCursorScreenPos(
       ImVec2(frame_min.x + frame_padding(),
@@ -1052,8 +1046,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   draw_operator_frame(
-      frame_min, frame_max, top_resume_x, top_end_x, left_resume_y,
-      right_resume_y,
+      frame_min, frame_max, top_resume_x, left_resume_y,
       receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
                 : operator_frame_color(state.selection.contains(slot),
                                        state.selection.primary == slot,

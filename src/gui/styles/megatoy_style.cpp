@@ -47,6 +47,8 @@ void derive_widget_colors() {
   set(MegatoyCol::EnvelopeLabel, faded(imgui[ImGuiCol_Text], 0.6f));
   set(MegatoyCol::EnvelopeVoice, imgui[ImGuiCol_Text]);
   set(MegatoyCol::EnvelopeVoiceCursor, imgui[ImGuiCol_FrameBgActive]);
+  set(MegatoyCol::EnvelopeBgCarrier, clear);
+  set(MegatoyCol::EnvelopeFrameCarrier, imgui[ImGuiCol_FrameBgActive]);
   set(MegatoyCol::WaveformBg, imgui[ImGuiCol_FrameBg]);
   set(MegatoyCol::WaveformBorder, imgui[ImGuiCol_Border]);
   set(MegatoyCol::WaveformGrid, faded(imgui[ImGuiCol_Border], 0.6f));

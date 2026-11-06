@@ -481,7 +481,7 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
 ui::envelope::EnvelopeHandles
 render_envelope_image(const ym2612::OperatorSettings &op,
                       const UIState::EnvelopeState &slider_state, ImVec2 size,
-                      const EnvelopeVoices &voices) {
+                      const EnvelopeVoices &voices, bool carrier) {
   // Before BeginChild, so the ID comes from the operator's stack rather than
   // from the child window.
   EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
@@ -543,10 +543,14 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   const ImVec2 canvas_min = ImGui::GetCursorScreenPos();
   const ImVec2 canvas_max(canvas_min.x + size.x, canvas_min.y + size.y);
 
-  draw_list->AddRectFilled(canvas_min, canvas_max,
-                           styles::color_u32(styles::MegatoyCol::EnvelopeBg));
-  draw_list->AddRect(canvas_min, canvas_max,
-                     styles::color_u32(styles::MegatoyCol::EnvelopeGrid));
+  draw_list->AddRectFilled(
+      canvas_min, canvas_max,
+      styles::color_u32(carrier ? styles::MegatoyCol::EnvelopeBgCarrier
+                                : styles::MegatoyCol::EnvelopeBg));
+  draw_list->AddRect(
+      canvas_min, canvas_max,
+      styles::color_u32(carrier ? styles::MegatoyCol::EnvelopeFrameCarrier
+                                : styles::MegatoyCol::EnvelopeGrid));
 
   // The time labels get a strip of their own along the top: a curve at full
   // volume runs along the very top of the plot.

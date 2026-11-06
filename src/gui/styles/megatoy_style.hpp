@@ -34,7 +34,7 @@ enum class MegatoyCol : int {
   /// dragged slider sets, the area under the release with and without RR's
   /// slider lit, the handles at rest and under the pointer or dragged, the
   /// grid and frame, the captions, the curves of sounding voices and their
-  /// cursors.
+  /// cursors, and a carrier's background and frame.
   EnvelopeBg,
   EnvelopeCurve,
   EnvelopeCurveActive,
@@ -46,6 +46,8 @@ enum class MegatoyCol : int {
   EnvelopeLabel,
   EnvelopeVoice,
   EnvelopeVoiceCursor,
+  EnvelopeBgCarrier,
+  EnvelopeFrameCarrier,
   /// The Waveform window: the two areas' background and border, the
   /// oscilloscope's grid, its left and right channels and both once the
   /// output clips, and the spectrum's bars, grid and labels.
