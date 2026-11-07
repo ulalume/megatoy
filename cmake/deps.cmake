@@ -172,16 +172,16 @@ set(YM2612_EG_BUILD_GOLDEN_GEN OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ym2612_eg)
 
 # ym2612-patches - the built-in CC0 preset library. Data only (LICENSE,
-# .gitignore, *.dmp files); it ships no CMakeLists.txt, so
-# FetchContent_MakeAvailable just populates ym2612_patches_SOURCE_DIR instead
-# of add_subdirectory()-ing it. The repo publishes no tags, so the pin below
-# is a commit SHA -- bumping that SHA is the entire follow-upstream
-# procedure. For offline/local development, override with
-# FETCHCONTENT_SOURCE_DIR_YM2612_PATCHES (dev-only, never committed; same
-# policy as the other dependency overrides).
+# .gitignore, *.dmp files, their metadata in .ym2612/patches.json); it ships
+# no CMakeLists.txt, so FetchContent_MakeAvailable just populates
+# ym2612_patches_SOURCE_DIR instead of add_subdirectory()-ing it. The repo
+# publishes no tags, so the pin below is a commit SHA -- bumping that SHA is
+# the entire follow-upstream procedure. For offline/local development,
+# override with FETCHCONTENT_SOURCE_DIR_YM2612_PATCHES (dev-only, never
+# committed; same policy as the other dependency overrides).
 FetchContent_Declare(
   ym2612_patches
   GIT_REPOSITORY https://github.com/ulalume/ym2612-patches.git
-  GIT_TAG        f1ae9aa09f36d55f2f23c17d54acddfd451a1268
+  GIT_TAG        7279d8ef4980c13fe1c184ddf7149ae1cd42ca8a
 )
 FetchContent_MakeAvailable(ym2612_patches)
