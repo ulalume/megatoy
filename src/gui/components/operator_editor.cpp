@@ -877,9 +877,10 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   operator_slider(widget, ym2612::OperatorField::KeyScale, "Key Scale", nullptr,
                   nullptr, nullptr);
 
-  static const char *multiple_labels[] = {"0.5", "1",  "2",  "3", "4",  "5",
-                                          "6",   "7",  "8",  "9", "10", "11",
-                                          "12",  "13", "14", "15"};
+  static const char *multiple_labels[] = {
+      "\u00d7\u00bd", "\u00d71",  "\u00d72",  "\u00d73", "\u00d74",  "\u00d75",
+      "\u00d76",      "\u00d77",  "\u00d78",  "\u00d79", "\u00d710", "\u00d711",
+      "\u00d712",     "\u00d713", "\u00d714", "\u00d715"};
   operator_slider(widget, ym2612::OperatorField::Multiple, "Multiple", nullptr,
                   multiple_labels[op.multiple], nullptr);
 
