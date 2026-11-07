@@ -46,6 +46,8 @@ struct ImportRequest {
   std::atomic<bool> cancel_requested{false};
   std::vector<std::filesystem::path> staged_files;
   std::vector<std::filesystem::path> validated_files;
+  /// The instruments' metadata, kept with them unvalidated.
+  std::vector<std::filesystem::path> metadata_files;
   std::vector<
       std::pair<std::filesystem::path,
                 std::shared_ptr<const import_pipeline::WarmedContainer>>>
@@ -225,7 +227,8 @@ void finish_validation() {
   }
 
   std::string error;
-  if (!request.stager->commit(request.validated_files, error)) {
+  if (!request.stager->commit(request.validated_files, request.metadata_files,
+                              error)) {
     abort_active(false, std::move(error));
     return;
   }
@@ -255,6 +258,15 @@ void validate_next_file() {
   }
 
   const auto relative = request.staged_files[request.validation_index++];
+  if (import_pipeline::is_patch_metadata(relative)) {
+    request.metadata_files.push_back(relative);
+    request.current_files.store(request.validation_index,
+                                std::memory_order_relaxed);
+    if (request.validation_index >= request.staged_files.size()) {
+      finish_validation();
+    }
+    return;
+  }
   const auto result =
       import_pipeline::validate_file(request.staging_path / relative);
   if (result.valid) {
@@ -573,6 +585,17 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
     return extensionSet.has(name.substring(dot).toLowerCase());
   }
 
+  // The instruments' metadata, in a .ym2612 folder (or the older .megatoy),
+  // comes along with them.
+  function metadata(relative) {
+    if (!relative.toLowerCase().endsWith(".json")) return false;
+    var parts = relative.split("/");
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (parts[i] === ".ym2612" || parts[i] === ".megatoy") return true;
+    }
+    return false;
+  }
+
   function selectionStarted(selection, total) {
     if (selection) {
       Module["_megatoy_folder_import_selection_started"](selection, total);
@@ -690,9 +713,9 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
         file = source[i].file;
         relative = source[i].relative;
       }
-      if (!supported(file)) { filtered++; continue; }
       relative = safeRelative(relative);
       if (!relative) continue;
+      if (!supported(file) && !metadata(relative)) { filtered++; continue; }
       kept.push({file: file, relative: relative});
       totalBytes += file.size || 0;
     }

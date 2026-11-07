@@ -314,13 +314,40 @@ int main() {
   {
     pipeline::ImportStager stager(stage, destination);
     std::string error;
-    CHECK(stager.commit({"nested/valid.mml"}, error));
+    CHECK(stager.commit({"nested/valid.mml"}, {}, error));
     CHECK(error.empty());
     CHECK(stager.committed());
   }
   CHECK(!fs::exists(stage));
   CHECK(fs::exists(destination / "nested" / "valid.mml"));
   CHECK(!fs::exists(destination / "nested" / "rejected.txt"));
+
+  // The instruments' metadata comes along unvalidated; nothing else does.
+  CHECK(pipeline::is_patch_metadata(".ym2612/lead.dmp.json"));
+  CHECK(pipeline::is_patch_metadata("bass/.ym2612/patches.json"));
+  CHECK(pipeline::is_patch_metadata(".megatoy/patches.json"));
+  CHECK(!pipeline::is_patch_metadata("bass/notes.json"));
+  CHECK(!pipeline::is_patch_metadata(".ym2612/readme.txt"));
+  const auto metadata_stage = root / ".import-tmp-metadata";
+  const auto metadata_destination = root / "With Metadata";
+  write_text(metadata_stage / "lead.mml", "@ lead\n");
+  write_text(metadata_stage / ".ym2612" / "lead.mml.json", "{}\n");
+  write_text(metadata_stage / "notes.json", "{}\n");
+  {
+    pipeline::ImportStager stager(metadata_stage, metadata_destination);
+    std::string error;
+    CHECK(stager.commit({"lead.mml"}, {".ym2612/lead.mml.json"}, error));
+  }
+  CHECK(fs::exists(metadata_destination / ".ym2612" / "lead.mml.json"));
+  CHECK(!fs::exists(metadata_destination / "notes.json"));
+  {
+    // Metadata alone is no instrument to import.
+    const auto empty_stage = root / ".import-tmp-metadata-only";
+    write_text(empty_stage / ".ym2612" / "lead.mml.json", "{}\n");
+    pipeline::ImportStager stager(empty_stage, root / "Metadata Only");
+    std::string error;
+    CHECK(!stager.commit({}, {".ym2612/lead.mml.json"}, error));
+  }
 
   const auto abort_stage = root / ".import-tmp-abort";
   const auto untouched = root / "Existing Workspace";
@@ -341,7 +368,7 @@ int main() {
   {
     pipeline::ImportStager stager(rollback_stage, rollback_destination);
     std::string error;
-    CHECK(stager.commit({"valid.mml"}, error));
+    CHECK(stager.commit({"valid.mml"}, {}, error));
     CHECK(stager.rollback_commit(error));
   }
   CHECK(!fs::exists(rollback_stage));
