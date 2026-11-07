@@ -598,39 +598,40 @@ void render_sound_page(PreferencesContext &context) {
                static_cast<int>(std::size(chip_types)));
 
   section_title("Audio");
-  // The frames the device ends up with. The web backend is asked for half of
-  // it, because it doubles whatever it is given, so the default is not the
-  // same number on every platform.
+  // The frames the device ends up with, where the app chooses them: the web's
+  // audio worklet renders in the browser's own fixed blocks.
   const int platform_default = context.default_audio_buffer_frames;
-  std::vector<std::string> buffer_labels;
-  std::vector<const char *> buffer_label_pointers;
-  buffer_labels.reserve(std::size(kAudioBufferChoices));
-  for (const int frames : kAudioBufferChoices) {
-    buffer_labels.push_back(std::to_string(frames) + " frames" +
-                            (frames == platform_default ? " (default)" : ""));
-  }
-  for (const auto &label : buffer_labels) {
-    buffer_label_pointers.push_back(label.c_str());
-  }
-
-  const int selected_frames = ui_prefs.audio_buffer_frames > 0
-                                  ? ui_prefs.audio_buffer_frames
-                                  : platform_default;
-  int buffer_index = 0;
-  for (int i = 0; i < static_cast<int>(std::size(kAudioBufferChoices)); ++i) {
-    if (kAudioBufferChoices[i] == selected_frames) {
-      buffer_index = i;
-      break;
+  if (platform_default > 0) {
+    std::vector<std::string> buffer_labels;
+    std::vector<const char *> buffer_label_pointers;
+    buffer_labels.reserve(std::size(kAudioBufferChoices));
+    for (const int frames : kAudioBufferChoices) {
+      buffer_labels.push_back(std::to_string(frames) + " frames" +
+                              (frames == platform_default ? " (default)" : ""));
     }
-  }
-  if (ImGui::Combo("Buffer size", &buffer_index, buffer_label_pointers.data(),
-                   static_cast<int>(buffer_label_pointers.size()))) {
-    ui_prefs.audio_buffer_frames = kAudioBufferChoices[buffer_index];
-  }
-  ImGui::TextWrapped("Lower values reduce latency but increase the risk of "
-                     "audio dropouts.");
+    for (const auto &label : buffer_labels) {
+      buffer_label_pointers.push_back(label.c_str());
+    }
 
-  ImGui::Spacing();
+    const int selected_frames = ui_prefs.audio_buffer_frames > 0
+                                    ? ui_prefs.audio_buffer_frames
+                                    : platform_default;
+    int buffer_index = 0;
+    for (int i = 0; i < static_cast<int>(std::size(kAudioBufferChoices)); ++i) {
+      if (kAudioBufferChoices[i] == selected_frames) {
+        buffer_index = i;
+        break;
+      }
+    }
+    if (ImGui::Combo("Buffer size", &buffer_index, buffer_label_pointers.data(),
+                     static_cast<int>(buffer_label_pointers.size()))) {
+      ui_prefs.audio_buffer_frames = kAudioBufferChoices[buffer_index];
+    }
+    ImGui::TextWrapped("Lower values reduce latency but increase the risk of "
+                       "audio dropouts.");
+
+    ImGui::Spacing();
+  }
 
   static constexpr const char *load_readings[] = {"Peak", "Peak and average"};
   ui_prefs.audio_load_reading = static_cast<int>(

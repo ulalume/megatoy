@@ -82,24 +82,8 @@ bool on_visibility_change(int, const EmscriptenVisibilityChangeEvent *event,
   return false;
 }
 
-/// SDL keeps the browser's player for the next device; without it, the
-/// device opened next makes a new one.
-void drop_sound_player() {
-  EM_ASM({
-    var sdl = Module['SDL3'];
-    if (sdl && sdl.audioContext) {
-      sdl.audioContext.close();
-      sdl.audioContext = undefined;
-    }
-  });
-}
-
 bool sound_is_running() {
-  return EM_ASM_INT({
-    const sdl = Module['SDL3'];
-    const context = sdl && sdl.audioContext;
-    return context && context.state == 'running' ? 1 : 0;
-  });
+  return EM_ASM_INT({ return Module['megatoyAudio'].playing() ? 1 : 0; });
 }
 #endif
 
@@ -134,7 +118,6 @@ bool run_frame(RuntimeContext &runtime) {
   // skipped, and the canvas keeps showing the last one.
   const bool received_event = services.gui_manager.poll_events();
   if (std::exchange(page_shown_again, false) && !sound_is_running()) {
-    drop_sound_player();
     services.audio_manager.reopen_device();
   }
   const auto frame_started = platform::FrameScheduler::Clock::now();

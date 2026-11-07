@@ -1,5 +1,10 @@
 #include "audio/audio_manager.hpp"
+
+#if !defined(MEGATOY_PLATFORM_WEB)
+
+#include "audio/performance.hpp"
 #include "audio/sdl_audio_transport.hpp"
+#include <algorithm>
 #include <iostream>
 #include <memory>
 
@@ -111,6 +116,64 @@ void AudioManager::shutdown() {
   engine_.shutdown();
 }
 
-void AudioManager::apply_patch_to_all_channels(const ym2612::Patch &patch) {
-  engine_.apply_patch_to_all_channels(patch);
+int AudioManager::buffer_frames() const { return buffer_frames_; }
+
+int AudioManager::default_buffer_frames() const {
+  return transport_ ? transport_->default_buffer_frames() : 0;
 }
+
+const audio::ScopeBuffer &AudioManager::scope_buffer() const {
+  return engine_.scope_buffer();
+}
+
+const audio::LoadMeter &AudioManager::load_meter() const {
+  return engine_.load_meter();
+}
+
+bool AudioManager::submit(const audio::AudioCommand &command) {
+  return engine_.submit(command);
+}
+
+bool AudioManager::submit_from_midi(const audio::AudioCommand &command) {
+  return engine_.submit_from_midi(command);
+}
+
+void AudioManager::set_note_options(bool use_velocity,
+                                    int velocity_sensitivity_depth,
+                                    bool steal_oldest) {
+  engine_.set_note_options(
+      use_velocity,
+      static_cast<uint8_t>(std::clamp(velocity_sensitivity_depth, 0, 100)),
+      steal_oldest);
+}
+
+void AudioManager::set_performance_options(bool pitch_bend, bool mod_wheel) {
+  engine_.set_performance_options(pitch_bend, mod_wheel);
+  // Through the normal command path, so the audio thread rewrites the
+  // affected channels.
+  if (!pitch_bend) {
+    engine_.submit(
+        audio::AudioCommand::pitch_bend(audio::performance::kPitchBendCenter));
+  }
+  if (!mod_wheel) {
+    engine_.submit(audio::AudioCommand::mod_wheel(0));
+  }
+}
+
+std::vector<ym2612::Note> AudioManager::sounding_notes() const {
+  return engine_.notes().published_notes();
+}
+
+bool AudioManager::note_sounding(const ym2612::Note &note) const {
+  return engine_.notes().published_contains(note);
+}
+
+VoiceActivityFrame AudioManager::voice_activity() const {
+  return engine_.voice_activity();
+}
+
+bool AudioManager::is_running() const { return engine_.is_running(); }
+
+uint32_t AudioManager::sample_rate() const { return engine_.sample_rate(); }
+
+#endif

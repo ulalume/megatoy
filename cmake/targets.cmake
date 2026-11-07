@@ -71,7 +71,6 @@ set(MEGATOY_LOGIC_SOURCES
   src/audio/scope_trigger.cpp
   src/audio/spectrum_analyzer.cpp
   src/audio/audio_manager.cpp
-  src/audio/sdl_audio_transport.cpp
   src/core/random_utils.cpp
   src/core/status.cpp
   src/core/utf8_utils.cpp
@@ -182,7 +181,7 @@ set(MEGATOY_CORE_SOURCES
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   list(APPEND MEGATOY_LOGIC_SOURCES
-    src/audio/webaudio_transport.cpp
+    src/platform/web/web_audio_worklet.cpp
     src/platform/web/web_platform_services.cpp
     src/platform/web/web_download.cpp
     src/platform/web/local_storage.cpp
@@ -206,6 +205,7 @@ else()
     src/gui/components/folder_scan_dialog.cpp
   )
   list(APPEND MEGATOY_LOGIC_SOURCES
+    src/audio/sdl_audio_transport.cpp
     src/midi/rtmidi_backend.cpp
     src/patches/background_folder_scan.cpp
     src/platform/native/desktop_platform_services.cpp
@@ -397,7 +397,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     # IDBFS backs /megatoy with IndexedDB so the patch library survives a
     # reload; dist/web_pre.js mounts it before main() runs.
     "-lidbfs.js"
-    "--pre-js" "${CMAKE_SOURCE_DIR}/dist/web_pre.js"
+    "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/dist/web_pre.js"
+    # The page's side of the audio worklet; see web_audio_worklet.cpp.
+    "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/dist/web_audio_pre.js"
     # main() holds AppServices by value, and Emscripten's default stack is a
     # mere 64 KB. Give it room so a new member does not overflow the stack at
     # startup, which surfaces only as "memory access out of bounds".
@@ -439,6 +441,35 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     )
   endif()
 
+  # The engine as the audio worklet runs it, on the browser's audio thread
+  # rather than the page's: a module of its own with no Emscripten
+  # JavaScript, which dist/web_audio_worklet.js instantiates.
+  add_executable(megatoy_audio
+    src/platform/web/audio_worklet/worklet_engine.cpp
+    src/audio/audio_engine.cpp
+    src/audio/scope_buffer.cpp
+    src/channel_allocator.cpp
+    src/ym2612/channel.cpp
+    src/ym2612/device.cpp
+    src/ym2612/operator.cpp
+    src/ym2612/nuked_chip.cpp
+    src/ym2612/ymfm_chip.cpp
+  )
+  set_target_properties(megatoy_audio PROPERTIES SUFFIX ".wasm")
+  target_include_directories(megatoy_audio PRIVATE ${CMAKE_SOURCE_DIR}/src)
+  target_link_libraries(megatoy_audio PRIVATE
+    ymfm_core nuked_opn2_core megatoy_resampler nlohmann_json::nlohmann_json)
+  target_link_options(megatoy_audio PRIVATE
+    "-sSTANDALONE_WASM"
+    "--no-entry"
+    "-fwasm-exceptions"
+    "-sWASM_LEGACY_EXCEPTIONS=0"
+    "-sINITIAL_MEMORY=16777216"
+    "-sALLOW_MEMORY_GROWTH=0"
+    "-sSTACK_SIZE=262144"
+  )
+  add_dependencies(megatoy megatoy_audio)
+
   set(MEGATOY_WEB_DIST_DIR "${CMAKE_BINARY_DIR}/web_dist")
   if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
     set(MEGATOY_WEB_PRESETS_COMMAND
@@ -469,6 +500,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE_DIR:megatoy>/megatoy.data"
             "${MEGATOY_WEB_DIST_DIR}/megatoy.data"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:megatoy_audio>"
+            "${MEGATOY_WEB_DIST_DIR}/megatoy-audio.wasm"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/dist/web_audio_worklet.js"
+            "${MEGATOY_WEB_DIST_DIR}/megatoy-audio-worklet.js"
     ${MEGATOY_WEB_PRESETS_COMMAND}
     COMMENT "Preparing web distribution files"
   )
