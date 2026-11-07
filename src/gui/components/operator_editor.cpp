@@ -123,27 +123,28 @@ void draw_operator_fill(const OperatorEditState &state, int slot,
 }
 
 /**
- * The frame, cut open at the corner the header sits across: the top border
- * runs from past the label, and the left border starts below the checkbox.
+ * The frame, its top border broken where the header sits across it, from
+ * `gap_from_x` to `gap_to_x`, as a section's line is by its title.
  *
  * The half-pixel inset is what AddRect does internally; without it the line
  * falls between two pixels and blurs.
  */
-void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
-                         float top_resume_x, float left_resume_y, ImU32 color) {
+void draw_operator_frame(const ImVec2 &min, const ImVec2 &max, float gap_from_x,
+                         float gap_to_x, ImU32 color) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float left = min.x + 0.5f;
   const float top = min.y + 0.5f;
   const float right = max.x - 0.5f;
   const float bottom = max.y - 0.5f;
 
-  if (top_resume_x < right) {
-    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(right, top), color);
+  if (gap_from_x > left) {
+    draw_list->AddLine(ImVec2(left, top),
+                       ImVec2(std::min(gap_from_x, right), top), color);
   }
-  if (left_resume_y < bottom) {
-    draw_list->AddLine(ImVec2(left, left_resume_y), ImVec2(left, bottom),
-                       color);
+  if (gap_to_x < right) {
+    draw_list->AddLine(ImVec2(gap_to_x, top), ImVec2(right, top), color);
   }
+  draw_list->AddLine(ImVec2(left, top), ImVec2(left, bottom), color);
   draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
   draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
 }
@@ -916,15 +917,17 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // and the right border falls outside.
   const float frame_width = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
 
-  // The header straddles the top border, aligned with the sliders in the
-  // sections above rather than indented into the frame.
+  // The header straddles the top border, set in from its left end as the
+  // sections' titles above are.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
   draw_operator_fill(state, slot, block_min, frame_min, frame_width);
-  const OperatorHeader header = render_operator_header(widget, block_min);
-  const float top_resume_x =
+  const float header_x = block_min.x + ImGui::GetStyle().SeparatorTextPadding.x;
+  const OperatorHeader header =
+      render_operator_header(widget, ImVec2(header_x, block_min.y));
+  const float gap_from_x = header_x - header_gap();
+  const float gap_to_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
-  const float left_resume_y = block_min.y + header_height + header_gap();
 
   ImGui::SetCursorScreenPos(
       ImVec2(frame_min.x + frame_padding(),
@@ -999,7 +1002,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   draw_operator_frame(
-      frame_min, frame_max, top_resume_x, left_resume_y,
+      frame_min, frame_max, gap_from_x, gap_to_x,
       receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
                 : operator_frame_color(state.selection.contains(slot),
                                        state.selection.primary == slot,
