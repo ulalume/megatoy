@@ -73,7 +73,7 @@ void test_writable_storage_deletes_patch(const fs::path &root) {
   CHECK(!fs::exists(saved.path));
   CHECK(find_entry(repository.tree(), saved.path) == nullptr);
 
-  patches::FolderMetadataStore metadata_store(writable / ".megatoy" /
+  patches::FolderMetadataStore metadata_store(writable / ".ym2612" /
                                               "patches.json");
   CHECK(metadata_store.load());
   CHECK(
@@ -124,18 +124,18 @@ void test_builtin_metadata_lives_outside_presets(const fs::path &root) {
 
     patches::PatchMetadata metadata;
     metadata.star_rating = 4;
-    metadata.category = "bass";
+    metadata.icon = "bass";
     CHECK(repository.update_patch_metadata(entry.relative_path, metadata));
   }
   CHECK(fs::exists(stored));
-  CHECK(!fs::exists(builtin / ".megatoy"));
+  CHECK(!fs::exists(builtin / ".ym2612"));
 
   patches::PatchRepository reopened(file_system, workspace, builtin, stored);
   const auto *found = find_entry(reopened.tree(), path);
   CHECK(found != nullptr);
   CHECK(found->metadata.has_value());
   CHECK(found->metadata->star_rating == 4);
-  CHECK(found->metadata->category == "bass");
+  CHECK(found->metadata->icon == "bass");
 
   // Gone presets leave nothing behind, but missing ones lose nothing.
   patches::PatchRepository elsewhere(file_system, workspace,

@@ -15,7 +15,7 @@ namespace megatoy::system {
  */
 struct DirectoryPaths {
   std::filesystem::path builtin_presets_root;
-  /// Ratings and categories for the built-in presets, which cannot hold a
+  /// Ratings and icons for the built-in presets, which cannot hold a
   /// sidecar of their own.
   std::filesystem::path builtin_presets_metadata;
   std::filesystem::path preferences_file;

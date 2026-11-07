@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <map>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -12,18 +13,22 @@ struct PatchMetadata {
   std::string path;     ///< Path relative to the folder that owns the sidecar.
   std::string hash;     ///< Hash of the patch content.
   int star_rating = 0;  ///< 0-5.
-  std::string category; ///< Free-form (bass, strings, ...).
+  std::string icon;     ///< Icon id, such as "organ".
 
   std::vector<std::string> tags;
   std::string notes;
 
   std::string created_at;
   std::string updated_at;
+
+  /// Fields this struct does not model, written back unchanged.
+  nlohmann::json extra = nlohmann::json::object();
 };
 
 /**
- * Star ratings and categories for one folder, stored in a JSON sidecar at
- * <folder>/.megatoy/patches.json.
+ * Star ratings and icons for one folder, stored in a JSON sidecar at
+ * <folder>/.ym2612/patches.json, a file other tools share. Fields and
+ * top-level keys this class does not model are kept as they are.
  *
  * Keeping this next to the patches, rather than in one global database keyed
  * by absolute path, means a folder can be moved, copied, synced or shared and
@@ -34,7 +39,13 @@ struct PatchMetadata {
  */
 class FolderMetadataStore {
 public:
-  explicit FolderMetadataStore(std::filesystem::path sidecar_path);
+  /**
+   * `legacy_sidecar_path`, when given, is read too: its fields fill those an
+   * entry lacks, except `category`, which is dropped. The next save removes
+   * it, and its directory if that is left empty.
+   */
+  explicit FolderMetadataStore(std::filesystem::path sidecar_path,
+                               std::filesystem::path legacy_sidecar_path = {});
 
   /// Load the sidecar. A missing file is not an error -- it just means no
   /// metadata has been recorded yet. Returns false only on a corrupt file.
@@ -70,9 +81,13 @@ public:
   bool empty() const { return entries_.empty(); }
 
 private:
-  bool save() const;
+  bool save();
+  void remove_legacy_sidecar();
 
   std::filesystem::path sidecar_path_;
+  std::filesystem::path legacy_sidecar_path_;
+  bool legacy_loaded_ = false;
+  nlohmann::json extra_ = nlohmann::json::object();
   std::map<std::string, PatchMetadata> entries_;
 };
 

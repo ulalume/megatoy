@@ -35,7 +35,8 @@ public:
                          std::filesystem::path root,
                          std::string relative_root_label, bool writable,
                          std::filesystem::path metadata_file,
-                         PersistentParseCache *persistent_cache = nullptr);
+                         PersistentParseCache *persistent_cache = nullptr,
+                         std::filesystem::path legacy_metadata_file = {});
 
   void append_entries(std::vector<PatchEntry> &tree) const;
   bool load_patch(const PatchEntry &entry, ym2612::Patch &out_patch) const;

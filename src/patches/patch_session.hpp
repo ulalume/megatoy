@@ -151,12 +151,12 @@ public:
   void accept_disk_version(DocumentId id, const ym2612::Patch &patch,
                            bool replace);
   /**
-   * Rate an entry's patch, 0 for none, or file it under a category, in its
+   * Rate an entry's patch, 0 for none, or give it an icon, in its
    * folder's metadata. False when the entry cannot carry metadata or the
    * write failed.
    */
   bool set_entry_rating(const PatchEntry &entry, int stars);
-  bool set_entry_category(const PatchEntry &entry, const std::string &category);
+  bool set_entry_icon(const PatchEntry &entry, const std::string &icon);
   /// Pin every preview document that has been edited.
   void pin_modified_documents();
   /**
@@ -350,7 +350,7 @@ private:
   void remember_disk_time(const PatchDocument &document);
   /**
    * Fold every workspace folder that lies inside another into the outer one:
-   * its ratings and categories move to the outer folder's sidecar, it leaves
+   * its ratings and icons move to the outer folder's sidecar, it leaves
    * the list with the outer one taking its place, and the documents, the
    * remembered ones and the last patch are re-pointed at the outer folder's
    * paths. My Patches is never let go of.

@@ -47,7 +47,7 @@ bool entry_matches_query(const PatchEntry &entry,
     return true;
   }
   return entry.metadata &&
-         contains_case_insensitive(entry.metadata->category, query_lower);
+         contains_case_insensitive(entry.metadata->icon, query_lower);
 }
 
 } // namespace patches

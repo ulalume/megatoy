@@ -61,7 +61,7 @@ void test_repository_rename(const fs::path &root) {
   exact_metadata.star_rating = 5;
   CHECK(repository.update_patch_metadata(old_relative, exact_metadata));
   patches::PatchMetadata child_metadata;
-  child_metadata.category = "latest";
+  child_metadata.icon = "latest";
   CHECK(repository.update_patch_metadata(old_relative + "/latest",
                                          child_metadata));
 
@@ -84,7 +84,7 @@ void test_repository_rename(const fs::path &root) {
   CHECK(repository.load_patch(renamed_entry->children.front(), loaded));
   CHECK(loaded.instrument.algorithm == 4);
 
-  patches::FolderMetadataStore metadata_store(writable / ".megatoy" /
+  patches::FolderMetadataStore metadata_store(writable / ".ym2612" /
                                               "patches.json");
   CHECK(metadata_store.load());
   CHECK(!metadata_store.get("old-name.ginpkg").has_value());
@@ -94,7 +94,7 @@ void test_repository_rename(const fs::path &root) {
   CHECK(renamed_exact->star_rating == 5);
   const auto renamed_child = metadata_store.get("renamed.ginpkg/latest");
   CHECK(renamed_child.has_value());
-  CHECK(renamed_child->category == "latest");
+  CHECK(renamed_child->icon == "latest");
 
   const auto refreshed_entry = *renamed_entry;
   CHECK(!repository.rename_patch(refreshed_entry, "collision"));
@@ -155,7 +155,7 @@ void test_directory_rename(const fs::path &root) {
   CHECK(repository.load_patch(*moved, loaded));
   CHECK(loaded.instrument.algorithm == 6);
 
-  patches::FolderMetadataStore metadata_store(writable / ".megatoy" /
+  patches::FolderMetadataStore metadata_store(writable / ".ym2612" /
                                               "patches.json");
   CHECK(metadata_store.load());
   CHECK(!metadata_store.get("bass/deep.dmp").has_value());
@@ -227,7 +227,7 @@ void test_workspace_root_rename(const fs::path &root) {
 
   // The sidecar travels inside the folder and its keys are relative to it, so
   // they are still correct without being rewritten.
-  patches::FolderMetadataStore metadata_store(renamed / ".megatoy" /
+  patches::FolderMetadataStore metadata_store(renamed / ".ym2612" /
                                               "patches.json");
   CHECK(metadata_store.load());
   const auto kept = metadata_store.get("lead.dmp");

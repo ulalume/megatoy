@@ -58,7 +58,9 @@ void PatchSession::absorb_nested_folders() {
     std::filesystem::path inner;
     std::filesystem::path outer;
     std::filesystem::path inner_sidecar;
+    std::filesystem::path inner_legacy_sidecar;
     std::filesystem::path outer_sidecar;
+    std::filesystem::path outer_legacy_sidecar;
   };
   std::vector<Nesting> nestings;
   for (const auto &folder : workspace.folders()) {
@@ -66,7 +68,8 @@ void PatchSession::absorb_nested_folders() {
     if (outer != nullptr &&
         !preferences_.workspace_folder_is_protected(folder.path)) {
       nestings.push_back({folder.path, outer->path, folder.metadata_path(),
-                          outer->metadata_path()});
+                          folder.legacy_metadata_path(), outer->metadata_path(),
+                          outer->legacy_metadata_path()});
     }
   }
   if (nestings.empty()) {
@@ -106,8 +109,10 @@ void PatchSession::absorb_nested_folders() {
   bool absorbed_any = false;
   for (const auto &nesting : nestings) {
     // Ratings that cannot be carried over keep their folder in the list.
-    FolderMetadataStore inner_store(nesting.inner_sidecar);
-    FolderMetadataStore outer_store(nesting.outer_sidecar);
+    FolderMetadataStore inner_store(nesting.inner_sidecar,
+                                    nesting.inner_legacy_sidecar);
+    FolderMetadataStore outer_store(nesting.outer_sidecar,
+                                    nesting.outer_legacy_sidecar);
     bool carried = inner_store.load() && outer_store.load();
     if (carried) {
       const auto prefix =

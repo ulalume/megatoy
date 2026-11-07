@@ -56,7 +56,7 @@ void test_file_move(const fs::path &root) {
       repository.to_relative_path(folder / "lead.dmp").generic_string();
   patches::PatchMetadata metadata;
   metadata.star_rating = 4;
-  metadata.category = "Lead";
+  metadata.icon = "Lead";
   CHECK(repository.update_patch_metadata(relative, metadata));
 
   const auto file = entry_at(repository, folder / "lead.dmp");
@@ -76,12 +76,12 @@ void test_file_move(const fs::path &root) {
   CHECK(moved->metadata.has_value());
   CHECK(moved->metadata->star_rating == 4);
 
-  patches::FolderMetadataStore store(folder / ".megatoy" / "patches.json");
+  patches::FolderMetadataStore store(folder / ".ym2612" / "patches.json");
   CHECK(store.load());
   CHECK(!store.get("lead.dmp").has_value());
   const auto followed = store.get("pads/lead.dmp");
   CHECK(followed.has_value());
-  CHECK(followed->category == "Lead");
+  CHECK(followed->icon == "Lead");
 
   // And back up into the workspace folder itself.
   const auto back = *moved;
@@ -109,7 +109,7 @@ void test_directory_move(const fs::path &root) {
           .generic_string();
   patches::PatchMetadata metadata;
   metadata.star_rating = 5;
-  metadata.category = "Bass";
+  metadata.icon = "Bass";
   CHECK(repository.update_patch_metadata(nested, metadata));
 
   const auto bass = entry_at(repository, folder / "bass");
@@ -132,9 +132,9 @@ void test_directory_move(const fs::path &root) {
   CHECK(moved != nullptr);
   CHECK(moved->metadata.has_value());
   CHECK(moved->metadata->star_rating == 5);
-  CHECK(moved->metadata->category == "Bass");
+  CHECK(moved->metadata->icon == "Bass");
 
-  patches::FolderMetadataStore store(folder / ".megatoy" / "patches.json");
+  patches::FolderMetadataStore store(folder / ".ym2612" / "patches.json");
   CHECK(store.load());
   CHECK(!store.get("bass/inner/sub.dmp").has_value());
   CHECK(store.get("low/bass/inner/sub.dmp").has_value());
@@ -220,7 +220,7 @@ void test_containers(const fs::path &root) {
   // The package file itself moves, and its versions' metadata with it.
   CHECK(repository.move_patch(package, keep));
   CHECK(fs::exists(folder / "keep" / saved.path.filename()));
-  patches::FolderMetadataStore store(folder / ".megatoy" / "patches.json");
+  patches::FolderMetadataStore store(folder / ".ym2612" / "patches.json");
   CHECK(store.load());
   const auto followed =
       store.get("keep/" + saved.path.filename().generic_string() + "/latest");

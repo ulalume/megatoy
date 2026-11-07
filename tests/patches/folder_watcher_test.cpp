@@ -46,8 +46,8 @@ void test_a_change_below_a_watched_folder_is_reported() {
 
   // Hidden entries, such as Finder's and megatoy's own, are not changes.
   write_file(root / ".DS_Store");
-  fs::create_directories(root / ".megatoy");
-  write_file(root / ".megatoy" / "patches.json");
+  fs::create_directories(root / ".ym2612");
+  write_file(root / ".ym2612" / "patches.json");
   CHECK(!reports_within(watcher, 1500ms));
 
   fs::remove_all(root);

@@ -21,6 +21,8 @@ struct Folder {
 
   /// Where this folder's sidecar metadata lives.
   std::filesystem::path metadata_path() const;
+  /// A second sidecar location, read as well and removed on the next save.
+  std::filesystem::path legacy_metadata_path() const;
 };
 
 /**

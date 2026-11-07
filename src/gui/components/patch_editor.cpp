@@ -53,7 +53,7 @@ ImVec2 menu_anchor_below_last_item() {
 #endif
 
 /**
- * The rating and category of the patch's file, at the right of the row,
+ * The rating and icon of the patch's file, at the right of the row,
  * or below it when the row has no room. Only for a patch the browser lists
  * in a folder that keeps metadata.
  */
@@ -69,8 +69,8 @@ void render_patch_metadata(PatchEditorContext &context,
     return;
   }
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
-  const float category_width = ui::scale::px(110.0f);
-  const float needed = category_width + spacing + star_rating_width();
+  const float icon_width = ui::scale::px(110.0f);
+  const float needed = icon_width + spacing + star_rating_width();
   ImGui::SameLine();
   if (ImGui::GetContentRegionAvail().x >= needed) {
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
@@ -79,21 +79,20 @@ void render_patch_metadata(PatchEditorContext &context,
     ImGui::NewLine();
   }
 
-  const std::string saved_category =
-      entry->metadata ? entry->metadata->category : std::string();
+  const std::string saved_icon =
+      entry->metadata ? entry->metadata->icon : std::string();
   char buffer[64];
   std::snprintf(buffer, sizeof(buffer), "%s",
-                ui.pending_category.value_or(saved_category).c_str());
-  ImGui::SetNextItemWidth(category_width);
-  if (ImGui::InputTextWithHint("##category", "Category", buffer,
-                               sizeof(buffer))) {
-    ui.pending_category = std::string(buffer);
+                ui.pending_icon.value_or(saved_icon).c_str());
+  ImGui::SetNextItemWidth(icon_width);
+  if (ImGui::InputTextWithHint("##icon", "Icon", buffer, sizeof(buffer))) {
+    ui.pending_icon = std::string(buffer);
   }
-  if (ImGui::IsItemDeactivated() && ui.pending_category) {
-    const std::string category = std::move(*ui.pending_category);
-    ui.pending_category.reset();
+  if (ImGui::IsItemDeactivated() && ui.pending_icon) {
+    const std::string icon = std::move(*ui.pending_icon);
+    ui.pending_icon.reset();
     // The tree is rebuilt by the write, so `entry` is not used after it.
-    session.set_entry_category(*entry, category);
+    session.set_entry_icon(*entry, icon);
     return;
   }
 

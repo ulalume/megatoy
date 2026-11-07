@@ -19,7 +19,8 @@ namespace patches {
 FilesystemPatchStorage::FilesystemPatchStorage(
     platform::StdFileSystem &vfs, std::filesystem::path root,
     std::string relative_root_label, bool writable,
-    std::filesystem::path metadata_file, PersistentParseCache *persistent_cache)
+    std::filesystem::path metadata_file, PersistentParseCache *persistent_cache,
+    std::filesystem::path legacy_metadata_file)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)), writable_(writable),
       label_(root_label_), persistent_cache_(persistent_cache) {
@@ -28,7 +29,8 @@ FilesystemPatchStorage::FilesystemPatchStorage(
     root_label_ = label_;
   }
   if (!metadata_file.empty()) {
-    metadata_ = std::make_unique<FolderMetadataStore>(std::move(metadata_file));
+    metadata_ = std::make_unique<FolderMetadataStore>(
+        std::move(metadata_file), std::move(legacy_metadata_file));
     metadata_->load();
   }
 }
@@ -323,7 +325,7 @@ bool FilesystemPatchStorage::update_patch_metadata(
   const auto key = metadata_key(relative_path);
   PatchMetadata stored = metadata;
   stored.path = key;
-  // Keep the recorded hash: this path only edits ratings and categories, and
+  // Keep the recorded hash: this path only edits ratings and icons, and
   // the caller has no patch to hash.
   if (auto existing = metadata_->get(key)) {
     stored.hash = existing->hash;

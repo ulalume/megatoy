@@ -79,7 +79,9 @@ void PatchRepository::rebuild_storages() {
     auto storage = std::make_unique<FilesystemPatchStorage>(
         vfs_, folder.path, unique_label(folder.name), folder.writable,
         folder.writable ? folder.metadata_path() : std::filesystem::path{},
-        persistent_cache_);
+        persistent_cache_,
+        folder.writable ? folder.legacy_metadata_path()
+                        : std::filesystem::path{});
     storage->set_listed_as(folder.name, workspace_.telling_parents(folder));
     storages_.push_back(std::move(storage));
     if (folder.available) {
@@ -369,7 +371,7 @@ bool PatchRepository::update_patch_metadata(const std::string &relative_path,
   for (const auto &storage : storages_) {
     if (storage->update_patch_metadata(relative_path, metadata)) {
 #if defined(MEGATOY_PLATFORM_WEB)
-      // Stars and categories write a sidecar like any other file, so they
+      // Stars and icons write a sidecar like any other file, so they
       // need the same flush any other write does.
       platform::web::request_storage_persist();
 #endif

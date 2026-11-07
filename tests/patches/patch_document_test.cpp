@@ -468,21 +468,21 @@ void test_keeping_edits_over_an_outside_write() {
   CHECK(session.take_disk_versions().empty());
 }
 
-void test_rating_and_category_are_kept_with_the_entry() {
+void test_rating_and_icon_are_kept_with_the_entry() {
   BrowserFixture fixture;
   auto &env = fixture.env;
   auto &session = env.session;
   CHECK(session.set_entry_rating(env.entry_at(fixture.warm), 4));
-  CHECK(session.set_entry_category(env.entry_at(fixture.warm), "pad"));
+  CHECK(session.set_entry_icon(env.entry_at(fixture.warm), "pad"));
 
   const auto entry = env.entry_at(fixture.warm);
   CHECK(entry.metadata.has_value());
   CHECK(entry.metadata->star_rating == 4);
-  CHECK(entry.metadata->category == "pad");
+  CHECK(entry.metadata->icon == "pad");
 
   CHECK(session.set_entry_rating(env.entry_at(fixture.warm), 0));
   CHECK(env.entry_at(fixture.warm).metadata->star_rating == 0);
-  CHECK(env.entry_at(fixture.warm).metadata->category == "pad");
+  CHECK(env.entry_at(fixture.warm).metadata->icon == "pad");
 }
 
 void test_a_nested_folder_is_folded_into_the_outer_one() {
@@ -1118,7 +1118,7 @@ void test_metadata_is_rejected_for_directories_and_unknown_entries() {
   const auto snapshot = session.capture_snapshot();
   for (const auto &entry : {directory, missing}) {
     CHECK(!session.set_entry_rating(entry, 3));
-    CHECK(!session.set_entry_category(entry, "Bass"));
+    CHECK(!session.set_entry_icon(entry, "Bass"));
   }
   CHECK(session.capture_snapshot() == snapshot);
 }
@@ -1160,7 +1160,7 @@ int main() {
   test_outside_write_is_reported_once();
   test_own_save_is_not_reported();
   test_keeping_edits_over_an_outside_write();
-  test_rating_and_category_are_kept_with_the_entry();
+  test_rating_and_icon_are_kept_with_the_entry();
   test_a_nested_folder_is_folded_into_the_outer_one();
   test_nesting_saved_earlier_is_folded_when_a_session_starts();
   test_adding_a_chosen_folder_asks_before_merging();

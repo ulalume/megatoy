@@ -14,7 +14,7 @@ using patches::TreeRow;
 
 patches::PatchEntry make_file(const std::string &name,
                               const std::string &relative_path, int stars,
-                              const std::string &category = "") {
+                              const std::string &icon = "") {
   patches::PatchEntry entry;
   entry.name = name;
   entry.relative_path = relative_path;
@@ -24,7 +24,7 @@ patches::PatchEntry make_file(const std::string &name,
   patches::PatchMetadata metadata;
   metadata.path = relative_path;
   metadata.star_rating = stars;
-  metadata.category = category;
+  metadata.icon = icon;
   entry.metadata = metadata;
   return entry;
 }
@@ -161,10 +161,9 @@ void test_query_keeps_the_ancestors_of_a_match() {
   CHECK(paths_of(nested) ==
         std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
 
-  // Categories are searched alongside names.
-  const auto by_category =
-      flatten_visible_rows(tree, "percussion", 0, open_nested);
-  CHECK(paths_of(by_category) ==
+  // Icons are searched alongside names.
+  const auto by_icon = flatten_visible_rows(tree, "percussion", 0, open_nested);
+  CHECK(paths_of(by_icon) ==
         std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
 }
 

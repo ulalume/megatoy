@@ -1,6 +1,7 @@
 #include "patches/folder_metadata.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <ctime>
 #include <fstream>
@@ -8,6 +9,7 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 
 #if defined(_WIN32)
@@ -52,24 +54,37 @@ std::string iso8601_utc_now() {
   return oss.str();
 }
 
+constexpr std::array<std::string_view, 7> kKnownFields = {
+    "hash", "star_rating", "icon", "tags", "notes", "created_at", "updated_at"};
+
 PatchMetadata metadata_from_json(const std::string &path,
                                  const nlohmann::json &j) {
   PatchMetadata metadata;
   metadata.path = path;
+  if (!j.is_object()) {
+    return metadata;
+  }
   metadata.hash = j.value("hash", std::string{});
   metadata.star_rating = std::clamp(j.value("star_rating", 0), 0, 5);
-  metadata.category = j.value("category", std::string{});
+  metadata.icon = j.value("icon", std::string{});
   metadata.notes = j.value("notes", std::string{});
   metadata.created_at = j.value("created_at", std::string{});
   metadata.updated_at = j.value("updated_at", std::string{});
   if (j.contains("tags") && j["tags"].is_array()) {
     metadata.tags = j["tags"].get<std::vector<std::string>>();
   }
+  for (const auto &[key, value] : j.items()) {
+    if (std::find(kKnownFields.begin(), kKnownFields.end(), key) ==
+        kKnownFields.end()) {
+      metadata.extra[key] = value;
+    }
+  }
   return metadata;
 }
 
 nlohmann::json metadata_to_json(const PatchMetadata &metadata) {
-  nlohmann::json j;
+  nlohmann::json j =
+      metadata.extra.is_object() ? metadata.extra : nlohmann::json::object();
   // Only non-default fields are written, so a sidecar stays readable and
   // diffs stay small.
   if (!metadata.hash.empty()) {
@@ -78,8 +93,8 @@ nlohmann::json metadata_to_json(const PatchMetadata &metadata) {
   if (metadata.star_rating != 0) {
     j["star_rating"] = metadata.star_rating;
   }
-  if (!metadata.category.empty()) {
-    j["category"] = metadata.category;
+  if (!metadata.icon.empty()) {
+    j["icon"] = metadata.icon;
   }
   if (!metadata.tags.empty()) {
     j["tags"] = metadata.tags;
@@ -96,43 +111,120 @@ nlohmann::json metadata_to_json(const PatchMetadata &metadata) {
   return j;
 }
 
-} // namespace
-
-FolderMetadataStore::FolderMetadataStore(std::filesystem::path sidecar_path)
-    : sidecar_path_(std::move(sidecar_path)) {}
-
-bool FolderMetadataStore::load() {
-  entries_.clear();
-
+/// Parse a sidecar file. A missing file yields an empty object.
+std::optional<nlohmann::json> read_sidecar(const std::filesystem::path &path) {
   std::error_code ec;
-  if (!std::filesystem::exists(sidecar_path_, ec) || ec) {
-    return true;
+  if (path.empty() || !std::filesystem::exists(path, ec) || ec) {
+    return nlohmann::json::object();
   }
-
-  std::ifstream file(sidecar_path_);
+  std::ifstream file(path);
   if (!file) {
-    return false;
+    return std::nullopt;
   }
-
   try {
     nlohmann::json j;
     file >> j;
-    if (!j.contains("patches") || !j["patches"].is_object()) {
-      return true;
+    if (!j.is_object()) {
+      return nlohmann::json::object();
     }
-    for (const auto &[path, value] : j["patches"].items()) {
+    return j;
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to read patch metadata at " << path << ": " << e.what()
+              << "\n";
+    return std::nullopt;
+  }
+}
+
+nlohmann::json patches_of(const nlohmann::json &root) {
+  const auto it = root.find("patches");
+  if (it == root.end() || !it->is_object()) {
+    return nlohmann::json::object();
+  }
+  return *it;
+}
+
+} // namespace
+
+FolderMetadataStore::FolderMetadataStore(
+    std::filesystem::path sidecar_path,
+    std::filesystem::path legacy_sidecar_path)
+    : sidecar_path_(std::move(sidecar_path)),
+      legacy_sidecar_path_(std::move(legacy_sidecar_path)) {}
+
+bool FolderMetadataStore::load() {
+  entries_.clear();
+  extra_ = nlohmann::json::object();
+  legacy_loaded_ = false;
+
+  const auto root = read_sidecar(sidecar_path_);
+  if (!root) {
+    return false;
+  }
+  auto patches = patches_of(*root);
+
+  std::error_code ec;
+  const bool has_legacy = !legacy_sidecar_path_.empty() &&
+                          legacy_sidecar_path_ != sidecar_path_ &&
+                          std::filesystem::exists(legacy_sidecar_path_, ec);
+  if (has_legacy) {
+    const auto legacy = read_sidecar(legacy_sidecar_path_);
+    if (!legacy) {
+      return false;
+    }
+    const auto legacy_patches = patches_of(*legacy);
+    for (const auto &[path, old_entry] : legacy_patches.items()) {
+      if (!old_entry.is_object()) {
+        continue;
+      }
+      auto &entry = patches[path];
+      if (!entry.is_object()) {
+        entry = nlohmann::json::object();
+      }
+      for (const auto &[key, value] : old_entry.items()) {
+        if (key != "category" && !entry.contains(key)) {
+          entry[key] = value;
+        }
+      }
+    }
+    legacy_loaded_ = true;
+  }
+
+  try {
+    for (const auto &[path, value] : patches.items()) {
       entries_.emplace(path, metadata_from_json(path, value));
     }
   } catch (const std::exception &e) {
     std::cerr << "Failed to read patch metadata at " << sidecar_path_ << ": "
               << e.what() << "\n";
     entries_.clear();
+    legacy_loaded_ = false;
     return false;
+  }
+
+  for (const auto &[key, value] : root->items()) {
+    if (key != "patches" && key != "version") {
+      extra_[key] = value;
+    }
   }
   return true;
 }
 
-bool FolderMetadataStore::save() const {
+void FolderMetadataStore::remove_legacy_sidecar() {
+  std::error_code ec;
+  std::filesystem::remove(legacy_sidecar_path_, ec);
+  if (ec) {
+    std::cerr << "Failed to remove " << legacy_sidecar_path_ << ": "
+              << ec.message() << "\n";
+    return;
+  }
+  legacy_loaded_ = false;
+  const auto directory = legacy_sidecar_path_.parent_path();
+  if (std::filesystem::is_empty(directory, ec) && !ec) {
+    std::filesystem::remove(directory, ec);
+  }
+}
+
+bool FolderMetadataStore::save() {
   std::error_code ec;
   std::filesystem::create_directories(sidecar_path_.parent_path(), ec);
   if (ec) {
@@ -146,7 +238,7 @@ bool FolderMetadataStore::save() const {
     patches[path] = metadata_to_json(metadata);
   }
 
-  nlohmann::json root;
+  nlohmann::json root = extra_;
   root["version"] = kSchemaVersion;
   root["patches"] = std::move(patches);
 
@@ -171,6 +263,9 @@ bool FolderMetadataStore::save() const {
     std::cerr << "Failed to replace " << sidecar_path_ << ": " << ec.message()
               << "\n";
     return false;
+  }
+  if (legacy_loaded_) {
+    remove_legacy_sidecar();
   }
   return true;
 }

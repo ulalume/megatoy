@@ -164,7 +164,7 @@ void test_path_comparison_policy(const fs::path &root) {
 }
 
 void test_metadata_sidecar(const fs::path &root) {
-  const auto sidecar = root / "alpha" / ".megatoy" / "patches.json";
+  const auto sidecar = root / "alpha" / ".ym2612" / "patches.json";
 
   {
     patches::FolderMetadataStore store(sidecar);
@@ -174,7 +174,7 @@ void test_metadata_sidecar(const fs::path &root) {
     patches::PatchMetadata metadata;
     metadata.path = "leads/bright.dmp";
     metadata.star_rating = 5;
-    metadata.category = "lead";
+    metadata.icon = "lead";
     CHECK(store.put(metadata));
   }
 
@@ -186,7 +186,7 @@ void test_metadata_sidecar(const fs::path &root) {
     const auto stored = store.get("leads/bright.dmp");
     CHECK(stored.has_value());
     CHECK(stored->star_rating == 5);
-    CHECK(stored->category == "lead");
+    CHECK(stored->icon == "lead");
     CHECK(!stored->created_at.empty());
 
     // Entries for files that no longer exist are dropped.
