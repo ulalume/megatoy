@@ -164,7 +164,7 @@ void test_buffer_size_change_reopens_the_device() {
   CHECK(session.note_on(c4, 127, prefs));
   const float sounding = test_transport->render_ac_peak(4410);
   CHECK(sounding > 0.0f);
-  CHECK(audio.notes().published_contains(c4));
+  CHECK(audio.note_sounding(c4));
   CHECK(audio.load_meter().history().count > 0);
 
   // Nothing reopens while the frames the preference resolves to stay put.
@@ -178,8 +178,8 @@ void test_buffer_size_change_reopens_the_device() {
   CHECK(audio.is_running());
 
   // The note the reopen interrupted is released, not left sounding.
-  CHECK(!audio.notes().published_contains(c4));
-  CHECK(audio.notes().published_notes().empty());
+  CHECK(!audio.note_sounding(c4));
+  CHECK(audio.sounding_notes().empty());
   CHECK(audio.load_meter().history().count == 0);
 
   // The patch came across, so the same note plays at the same level.
@@ -209,14 +209,14 @@ void test_note_allocation() {
   ym2612::Note e4 = ym2612::Note::from_midi_note(64);
 
   CHECK(env.session.note_on(c4, 90, prefs));
-  CHECK(env.audio.notes().published_contains(c4));
+  CHECK(env.audio.note_sounding(c4));
   CHECK(env.session.note_on(e4, 70, prefs));
-  CHECK(env.audio.notes().published_contains(e4));
+  CHECK(env.audio.note_sounding(e4));
 
   CHECK(env.audio.submit(audio::AudioCommand::note_off(c4)));
-  CHECK(!env.audio.notes().published_contains(c4));
+  CHECK(!env.audio.note_sounding(c4));
   env.audio.submit(audio::AudioCommand::all_notes_off());
-  CHECK(env.audio.notes().published_notes().empty());
+  CHECK(env.audio.sounding_notes().empty());
 }
 
 } // namespace

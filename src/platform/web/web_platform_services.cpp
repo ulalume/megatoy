@@ -1,6 +1,5 @@
 #include "platform/web/web_platform_services.hpp"
 
-#include "audio/webaudio_transport.hpp"
 #include "platform/web/web_midi_backend.hpp"
 #include "update/release_provider.hpp"
 #include <future>
@@ -32,8 +31,9 @@ platform::StdFileSystem &WebPlatformServices::file_system() {
   return file_system_;
 }
 
+// The engine renders in an audio worklet instead; see web_audio_worklet.cpp.
 std::unique_ptr<AudioTransport> WebPlatformServices::create_audio_transport() {
-  return std::make_unique<WebAudioTransport>();
+  return nullptr;
 }
 
 std::unique_ptr<MidiBackend> WebPlatformServices::create_midi_backend() {

@@ -240,7 +240,7 @@ MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
             audio::AudioCommand::note_off(note));
       },
       [&ctx](const ym2612::Note &note) {
-        return ctx.services.audio_manager.notes().published_contains(note);
+        return ctx.services.audio_manager.note_sounding(note);
       },
       ctx.services.patch_session.playback().operator_enable,
   };
@@ -288,7 +288,7 @@ WaveformContext make_waveform_context(AppContext &ctx) {
       ctx.services.audio_manager.scope_buffer(),
       ctx.services.spectrum_analyzer,
       ctx.services.audio_manager.sample_rate(),
-      [&ctx]() { return ctx.services.audio_manager.notes().published_notes(); },
+      [&ctx]() { return ctx.services.audio_manager.sounding_notes(); },
   };
 }
 

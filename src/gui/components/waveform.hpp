@@ -13,7 +13,7 @@ namespace ui {
 
 struct WaveformContext {
   PreferenceManager::UIPreferences &ui_prefs;
-  audio::ScopeBuffer &scope;
+  const audio::ScopeBuffer &scope;
   audio::SpectrumAnalyzer &spectrum;
   std::uint32_t sample_rate;
   /// The notes sounding, for the chord they make.
