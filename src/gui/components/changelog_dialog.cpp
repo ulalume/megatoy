@@ -1,4 +1,5 @@
 #include "changelog_dialog.hpp"
+#include "gui/components/button.hpp"
 
 #include "changelog.hpp"
 #include "common.hpp"
@@ -83,7 +84,7 @@ void render_changelog_dialog() {
 
   ImGui::Separator();
   align_buttons_right({dialog_button_width()});
-  if (ImGui::Button("Close", ImVec2(dialog_button_width(), 0.0f))) {
+  if (ui::button("Close", ImVec2(dialog_button_width(), 0.0f))) {
     ImGui::CloseCurrentPopup();
   }
 

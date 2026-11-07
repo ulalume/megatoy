@@ -1,9 +1,11 @@
 #include "patch_lab_window.hpp"
 #include "gui/app_window.hpp"
+#include "gui/components/button.hpp"
 
 #include "common.hpp"
 #include "gui/areas.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -111,9 +113,10 @@ bool render_source_list(const patches::PatchSession &session,
   }
 
   bool changed = false;
-  const float max_height = ImGui::GetTextLineHeightWithSpacing() * 16.0f;
   ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
-                                      ImVec2(FLT_MAX, max_height));
+                                      ImVec2(FLT_MAX, list_popup_height(16)));
+  // Spaced like list rows, a combo's list as any other.
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
   if (ImGui::BeginChild("##sources", ImVec2(0.0f, 0.0f),
                         ImGuiChildFlags_AutoResizeY)) {
     const auto sources = patch_lab_sources(session, entries, filter_text);
@@ -151,6 +154,7 @@ bool render_source_list(const patches::PatchSession &session,
     }
   }
   ImGui::EndChild();
+  ImGui::PopStyleVar();
   return changed;
 }
 
@@ -320,7 +324,7 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::TextWrapped("Makes a new patch from scratch.");
   ImGui::Spacing();
 
-  if (ImGui::Button("Generate")) {
+  if (ui::button("Generate")) {
     state.random_template_iterations =
         std::clamp(state.random_template_iterations, 0, 8);
     patch_lab::RandomOptions options;
@@ -346,7 +350,7 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::Checkbox("Allow algorithm change",
                   &state.mutate_allow_algorithm_change);
 
-  if (ImGui::Button("Generate")) {
+  if (ui::button("Generate")) {
     patch_lab::MutateOptions options;
     options.amount = state.mutate_amount;
     options.probability = state.mutate_probability;
@@ -410,7 +414,7 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
   }
 
   ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
-  if (ImGui::Button("Generate")) {
+  if (ui::button("Generate")) {
     ym2612::Patch patch_a;
     ym2612::Patch patch_b;
     if (auto error = load_sources(context, state, patch_a, patch_b)) {

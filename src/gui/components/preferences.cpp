@@ -2,6 +2,8 @@
 #include "audio/load_meter.hpp"
 #include "gui/app_window.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/button.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
@@ -286,9 +288,8 @@ void octave_key_button(const char *id, int &stored_key,
     ImGui::PushStyleColor(ImGuiCol_Button,
                           ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
   }
-  const bool clicked =
-      ImGui::Button((caption + "##" + id).c_str(),
-                    ImVec2(ImGui::GetFrameHeight() * 1.6f, 0.0f));
+  const bool clicked = ui::button((caption + "##" + id).c_str(),
+                                  ImVec2(ImGui::GetFrameHeight() * 1.6f, 0.0f));
   if (waiting) {
     ImGui::PopStyleColor();
   }
@@ -328,12 +329,12 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   ImGui::BeginGroup();
   const ImVec2 square(ImGui::GetFrameHeight(), ImGui::GetFrameHeight());
   ImGui::BeginDisabled(slots.size() >= ui::typing_layout_max_custom_slots);
-  if (ImGui::Button("+", square)) {
+  if (ui::button("+", square)) {
     slots.push_back(static_cast<int>(ImGuiKey_None));
   }
   ImGui::EndDisabled();
   ImGui::BeginDisabled(slots.size() <= ui::typing_layout_min_custom_slots);
-  if (ImGui::Button("-", square)) {
+  if (ui::button("-", square)) {
     slots.pop_back();
     clamp_capture_state(state, prefs);
   }
@@ -353,7 +354,7 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   octave_key_button("octave_up", prefs.custom_typing_octave_up_key, state,
                     CustomLayoutEditorState::OctaveCaptureTarget::Up);
 
-  if (ImGui::Button("Reset to This Keyboard")) {
+  if (ui::button("Reset to This Keyboard")) {
     reset_to_keyboard(prefs);
   }
 
@@ -399,8 +400,8 @@ void render_ui_scale_combo(PreferencesContext &context) {
     }
   }
 
-  if (ImGui::Combo("Interface scale", &index, label_pointers.data(),
-                   static_cast<int>(label_pointers.size()))) {
+  if (ui::combo("Interface scale", &index, label_pointers.data(),
+                static_cast<int>(label_pointers.size()))) {
     ui_prefs.ui_scale =
         index == 0 ? ui::scale::kAuto : ui::scale::kChoices[index - 1];
     if (context.apply_ui_scale) {
@@ -434,7 +435,7 @@ void render_general_page(PreferencesContext &context) {
 
   const char *theme_preview =
       themes.empty() ? "" : themes[current_theme_index].display_name;
-  if (ImGui::BeginCombo("Theme", theme_preview)) {
+  if (ui::begin_combo("Theme", theme_preview)) {
     for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
       const bool is_selected = (i == current_theme_index);
       if (ImGui::Selectable(themes[i].display_name, is_selected)) {
@@ -449,7 +450,7 @@ void render_general_page(PreferencesContext &context) {
         ImGui::SetItemDefaultFocus();
       }
     }
-    ImGui::EndCombo();
+    ui::end_combo();
   }
 
   render_ui_scale_combo(context);
@@ -459,8 +460,8 @@ void render_general_page(PreferencesContext &context) {
       "Relative (keep the distance between operators)",
       "Absolute (set every selected operator to the same value)"};
   int multi_edit_mode = ui_prefs.multi_operator_edit_absolute ? 1 : 0;
-  if (ImGui::Combo("Multi-operator edit", &multi_edit_mode, multi_edit_modes,
-                   static_cast<int>(std::size(multi_edit_modes)))) {
+  if (ui::combo("Multi-operator edit", &multi_edit_mode, multi_edit_modes,
+                static_cast<int>(std::size(multi_edit_modes)))) {
     ui_prefs.multi_operator_edit_absolute = multi_edit_mode == 1;
   }
   ImGui::TextWrapped("Applies while several operators are selected.");
@@ -503,7 +504,7 @@ void render_patches_page(PreferencesContext &context) {
       ImGui::SameLine();
       const char *remove_label =
           megatoy::platform::is_web() ? "Delete" : "Remove";
-      if (ImGui::Button(remove_label)) {
+      if (ui::button(remove_label)) {
         folder_to_remove = folder.path;
       }
     }
@@ -534,7 +535,7 @@ void render_patches_page(PreferencesContext &context) {
   }
 
   ImGui::Spacing();
-  if (ImGui::Button("Add Folder...")) {
+  if (ui::button("Add Folder...")) {
     context.open_add_folder_dialog = true;
   }
 
@@ -588,14 +589,14 @@ void render_sound_page(PreferencesContext &context) {
   static constexpr const char *cores[] = {"Nuked-OPN2 (accurate)",
                                          "ymfm (fast)"};
   ui_prefs.ym2612_core = std::clamp(ui_prefs.ym2612_core, 0, 1);
-  ImGui::Combo("Core", &ui_prefs.ym2612_core, cores,
-               static_cast<int>(std::size(cores)));
+  ui::combo("Core", &ui_prefs.ym2612_core, cores,
+            static_cast<int>(std::size(cores)));
 
   static constexpr const char *chip_types[] = {
       "YM2612 (Model 1, DAC distortion)", "YM3438 (Model 2, clean)"};
   ui_prefs.ym2612_chip_type = std::clamp(ui_prefs.ym2612_chip_type, 0, 1);
-  ImGui::Combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
-               static_cast<int>(std::size(chip_types)));
+  ui::combo("Chip", &ui_prefs.ym2612_chip_type, chip_types,
+            static_cast<int>(std::size(chip_types)));
 
   section_title("Audio");
   // The frames the device ends up with, where the app chooses them: the web's
@@ -623,8 +624,8 @@ void render_sound_page(PreferencesContext &context) {
         break;
       }
     }
-    if (ImGui::Combo("Buffer size", &buffer_index, buffer_label_pointers.data(),
-                     static_cast<int>(buffer_label_pointers.size()))) {
+    if (ui::combo("Buffer size", &buffer_index, buffer_label_pointers.data(),
+                  static_cast<int>(buffer_label_pointers.size()))) {
       ui_prefs.audio_buffer_frames = kAudioBufferChoices[buffer_index];
     }
     ImGui::TextWrapped("Lower values reduce latency but increase the risk of "
@@ -636,8 +637,8 @@ void render_sound_page(PreferencesContext &context) {
   static constexpr const char *load_readings[] = {"Peak", "Peak and average"};
   ui_prefs.audio_load_reading = static_cast<int>(
       audio::load_reading_from_int(ui_prefs.audio_load_reading));
-  ImGui::Combo("Load meter", &ui_prefs.audio_load_reading, load_readings,
-               static_cast<int>(std::size(load_readings)));
+  ui::combo("Load meter", &ui_prefs.audio_load_reading, load_readings,
+            static_cast<int>(std::size(load_readings)));
 
   section_title("Channels");
   // Not a MIDI setting: the channel allocator runs the same whichever
@@ -670,7 +671,7 @@ void render_input_page(PreferencesContext &context) {
     if (context.web_midi_button_disabled) {
       ImGui::BeginDisabled();
     }
-    if (ImGui::Button("Enable WebMIDI")) {
+    if (ui::button("Enable WebMIDI")) {
       if (context.request_web_midi) {
         context.request_web_midi();
       }
@@ -700,8 +701,8 @@ void render_input_page(PreferencesContext &context) {
   const auto stored = clamp_layout_pref(ui_prefs.midi_keyboard_layout);
   ui_prefs.midi_keyboard_layout = static_cast<int>(stored);
   int current_layout = stored == TypingKeyboardLayout::Custom ? 1 : 0;
-  if (ImGui::Combo("Layout", &current_layout, kLayouts,
-                   static_cast<int>(std::size(kLayouts)))) {
+  if (ui::combo("Layout", &current_layout, kLayouts,
+                static_cast<int>(std::size(kLayouts)))) {
     const auto chosen = kLayoutValues[current_layout];
     // A custom layout never touched starts from this keyboard rather than
     // from the US one it is stored as.

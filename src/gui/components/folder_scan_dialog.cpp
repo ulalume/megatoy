@@ -1,4 +1,5 @@
 #include "folder_scan_dialog.hpp"
+#include "gui/components/button.hpp"
 
 #if !defined(MEGATOY_PLATFORM_WEB)
 
@@ -71,7 +72,7 @@ void render_folder_scan_dialog() {
                        ImVec2(-FLT_MIN, 0));
     ImGui::Spacing();
     align_buttons_right({dialog_button_width()});
-    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
+    if (ui::button("Cancel", ImVec2(dialog_button_width(), 0))) {
       scan::request_cancel();
     }
     end_modal();

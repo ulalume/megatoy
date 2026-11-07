@@ -1,5 +1,6 @@
 #include "patch_selector.hpp"
 #include "gui/app_window.hpp"
+#include "gui/components/button.hpp"
 
 #include "gui/areas.hpp"
 #include "gui/components/folded_tab_button.hpp"
@@ -40,7 +41,7 @@ const char *add_folder_label() {
 void render_add_folder_button(PatchSelectorContext &context) {
   const std::string label = std::string(ICON_FA_FOLDER_PLUS " ") +
                             add_folder_label();
-  if (ImGui::Button(label.c_str())) {
+  if (ui::button(label.c_str())) {
     context.add_folder();
   }
   ImGui::Separator();
@@ -54,7 +55,7 @@ float render_add_folder_icon(PatchSelectorContext &context) {
   const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
   ImGui::SetCursorScreenPos(ImVec2(right - size, row.y));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-  if (ImGui::Button(ICON_FA_FOLDER_PLUS "##add_folder", ImVec2(size, size))) {
+  if (ui::button(ICON_FA_FOLDER_PLUS "##add_folder", ImVec2(size, size))) {
     context.add_folder();
   }
   ImGui::PopStyleColor();

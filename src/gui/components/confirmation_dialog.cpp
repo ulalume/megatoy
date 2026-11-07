@@ -1,5 +1,7 @@
 #include "confirmation_dialog.hpp"
 #include "common.hpp"
+#include "gui/components/button.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "modal.hpp"
@@ -59,7 +61,7 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
       }
     }
     ImGui::SetNextItemWidth(combo_width);
-    if (ImGui::BeginCombo("##NewPatchFormat", preview.c_str())) {
+    if (ui::begin_combo("##NewPatchFormat", preview.c_str())) {
       for (const auto &format : prompt.formats) {
         const bool selected = format.extension == prompt.extension;
         if (ImGui::Selectable(format.display_name().c_str(), selected)) {
@@ -69,7 +71,7 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
           ImGui::SetItemDefaultFocus();
         }
       }
-      ImGui::EndCombo();
+      ui::end_combo();
     }
 
     const std::string validation_error = patches::new_patch_name_error(
@@ -86,13 +88,13 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
     const float create_width =
         std::max(dialog_button_width(), button_width("Create"));
     align_buttons_right({dialog_button_width(), create_width});
-    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
+    if (ui::button("Cancel", ImVec2(dialog_button_width(), 0))) {
       cancelled = true;
       ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!validation_error.empty());
-    if (ImGui::Button("Create", ImVec2(create_width, 0))) {
+    if (ui::button("Create", ImVec2(create_width, 0))) {
       confirmed = true;
       ImGui::CloseCurrentPopup();
     }
@@ -152,7 +154,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     const float cancel_width = button_width("Cancel");
     const float save_width =
         std::max(dialog_button_width(), button_width("Save"));
-    if (ImGui::Button("Discard Changes", ImVec2(discard_width, 0))) {
+    if (ui::button("Discard Changes", ImVec2(discard_width, 0))) {
       finish();
       if (closing) {
         if (context.discard_and_close) {
@@ -168,7 +170,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     } else {
       align_buttons_right({cancel_width});
     }
-    if (ImGui::Button("Cancel", ImVec2(cancel_width, 0))) {
+    if (ui::button("Cancel", ImVec2(cancel_width, 0))) {
       finish();
       if (closing && context.keep_open) {
         context.keep_open(document);
@@ -176,7 +178,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     }
     if (offers_save) {
       ImGui::SameLine();
-      if (ImGui::Button("Save", ImVec2(save_width, 0))) {
+      if (ui::button("Save", ImVec2(save_width, 0))) {
         finish();
         if (closing) {
           if (context.save_and_close) {
@@ -220,12 +222,12 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     const float confirm_width = std::max(
         dialog_button_width(), button_width(danger.confirm_label.c_str()));
     align_buttons_right({dialog_button_width(), confirm_width});
-    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
+    if (ui::button("Cancel", ImVec2(dialog_button_width(), 0))) {
       cancel_danger = true;
       ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
-    if (ImGui::Button(danger.confirm_label.c_str(), ImVec2(confirm_width, 0))) {
+    if (ui::button(danger.confirm_label.c_str(), ImVec2(confirm_width, 0))) {
       confirm_danger = true;
       ImGui::CloseCurrentPopup();
     }
@@ -279,14 +281,14 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     const float prompt_confirm_width = std::max(
         dialog_button_width(), button_width(prompt.confirm_label.c_str()));
     align_buttons_right({dialog_button_width(), prompt_confirm_width});
-    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
+    if (ui::button("Cancel", ImVec2(dialog_button_width(), 0))) {
       cancel_prompt = true;
       ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!validation_error.empty());
-    if (ImGui::Button(prompt.confirm_label.c_str(),
-                      ImVec2(prompt_confirm_width, 0))) {
+    if (ui::button(prompt.confirm_label.c_str(),
+                   ImVec2(prompt_confirm_width, 0))) {
       confirm_prompt = true;
       ImGui::CloseCurrentPopup();
     }

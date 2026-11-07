@@ -1,4 +1,5 @@
 #include "about_dialog.hpp"
+#include "gui/components/button.hpp"
 
 #include "changelog_dialog.hpp"
 #include "common.hpp"
@@ -422,12 +423,12 @@ void render_about_dialog() {
 
   ImGui::Separator();
 #if defined(MEGATOY_PLATFORM_WEB)
-  if (ImGui::Button("Open Releases Page")) {
+  if (ui::button("Open Releases Page")) {
     open_url_in_browser(update::build_release_page_url());
   }
 #else
   ImGui::BeginDisabled(state.status == UpdateStatus::Checking);
-  if (ImGui::Button("Check for Updates")) {
+  if (ui::button("Check for Updates")) {
     start_update_check(state);
   }
   ImGui::EndDisabled();
@@ -435,7 +436,7 @@ void render_about_dialog() {
 #endif
   ImGui::SameLine();
   align_buttons_right({dialog_button_width()});
-  if (ImGui::Button("Close", ImVec2(dialog_button_width(), 0.0f))) {
+  if (ui::button("Close", ImVec2(dialog_button_width(), 0.0f))) {
     state.reset();
     ImGui::CloseCurrentPopup();
   }

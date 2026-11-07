@@ -2,6 +2,7 @@
 #include "components/common.hpp"
 #include "components/modal.hpp"
 #include "core/status.hpp"
+#include "gui/components/button.hpp"
 #include "gui/components/menu_rows.hpp"
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
@@ -269,7 +270,7 @@ void render_save_export_popups(patches::PatchSession &session,
 
     align_buttons_right({dialog_button_width(), dialog_button_width()});
     const bool cancel_button =
-        ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0));
+        ui::button("Cancel", ImVec2(dialog_button_width(), 0));
     if (cancel_button) {
       clear_pending_save_as(state);
       ImGui::CloseCurrentPopup();
@@ -277,7 +278,7 @@ void render_save_export_popups(patches::PatchSession &session,
 
     ImGui::SameLine();
     const bool overwrite_button =
-        ImGui::Button("Overwrite", ImVec2(dialog_button_width(), 0));
+        ui::button("Overwrite", ImVec2(dialog_button_width(), 0));
     if (overwrite_button) {
       ImGui::CloseCurrentPopup();
     }

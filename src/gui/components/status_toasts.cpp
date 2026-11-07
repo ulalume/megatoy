@@ -1,4 +1,5 @@
 #include "status_toasts.hpp"
+#include "gui/components/button.hpp"
 
 #include "core/status.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -139,7 +140,7 @@ void render_status_toasts() {
 
       if (entry.action.valid()) {
         ImGui::Spacing();
-        if (ImGui::Button(entry.action.label.c_str())) {
+        if (ui::button(entry.action.label.c_str())) {
           action_to_perform = entry.action.perform;
           megatoy::status::dismiss(entry.id);
         }

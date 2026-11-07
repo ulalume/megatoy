@@ -1,5 +1,6 @@
 #include "midi_keyboard.hpp"
 #include "gui/app_window.hpp"
+#include "gui/components/button.hpp"
 
 #include "core/types.hpp"
 #include "gui/areas.hpp"
@@ -227,7 +228,7 @@ void render_operator_switches(std::array<bool, 4> &enabled) {
     }
     const char label[] = {static_cast<char>('1' + i), '\0'};
     ImGui::PushID(static_cast<int>(i));
-    if (ImGui::Button(label, ImVec2(size, size))) {
+    if (ui::button(label, ImVec2(size, size))) {
       enabled[i] = !on;
     }
     ImGui::PopID();
@@ -343,7 +344,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::BeginDisabled(keyboard_settings.scale == Scale::CHROMATIC);
   int current_key = static_cast<int>(keyboard_settings.key);
   ImGui::SetNextItemWidth(ui::scale::px(40.0f));
-  if (ImGui::Combo("##Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
+  if (ui::combo("##Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
     keyboard_settings.key = static_cast<Key>(current_key);
     context.ui_prefs.midi_keyboard_key = current_key;
     refresh_state(context.state, input, typing_layout, custom_layout);
@@ -353,8 +354,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
   int current_scale = static_cast<int>(keyboard_settings.scale);
   ImGui::SetNextItemWidth(ui::scale::px(150.0f));
-  if (ImGui::Combo("##Scale", &current_scale, scale_names,
-                   IM_ARRAYSIZE(scale_names))) {
+  if (ui::combo("##Scale", &current_scale, scale_names,
+                IM_ARRAYSIZE(scale_names))) {
     keyboard_settings.scale = static_cast<Scale>(current_scale);
     context.ui_prefs.midi_keyboard_scale = current_scale;
     if (keyboard_settings.scale == Scale::CHROMATIC) {
