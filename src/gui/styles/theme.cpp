@@ -41,7 +41,7 @@ void apply_style(ThemeId id, float scale) {
   style.SeparatorTextBorderSize = 1;
   style.DragDropTargetBorderSize = 1;
   style.FramePadding = ImVec2(4, 6);
-  style.DockingSeparatorSize = 4;
+  style.DockingSeparatorSize = 8;
   style.TabBarBorderSize = 2;
 
   apply_theme(id);
