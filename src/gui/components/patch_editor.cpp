@@ -174,8 +174,9 @@ void render_save_buttons(PatchEditorContext &context,
 }
 
 /**
- * The header: the patch's icon, the save buttons over where it is kept, and
- * the rating at the top right, or below when the row has no room.
+ * The header: the patch's icon; the save buttons, with the rating at the
+ * row's right, over where the patch is kept, cut short where the window is
+ * narrow. The rating goes below only when the buttons leave it no room.
  */
 void render_document_header(PatchEditorContext &context,
                             patches::PatchDocument &document,
@@ -195,27 +196,38 @@ void render_document_header(PatchEditorContext &context,
   render_header_icon(entry, editable, height, edit);
 
   ImGui::SameLine();
-  ImGui::BeginGroup();
+  const float left = ImGui::GetCursorPosX();
+  const float right = left + ImGui::GetContentRegionAvail().x;
   const auto controls = patches::save_controls(patch_session, document);
   render_save_buttons(context, document, controls, state);
+  const float buttons_end =
+      ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + ImGui::GetScrollX();
+  const bool rating_beside =
+      editable &&
+      right - buttons_end - style.ItemSpacing.x >= star_rating_width();
+  if (rating_beside) {
+    ImGui::SetCursorPos(ImVec2(right - star_rating_width(), top));
+    render_header_rating(*entry, ui, edit);
+  }
+
   const auto &repository = patch_session.repository();
   const auto relative_path =
       repository.to_relative_path(document.path()).generic_string();
-  ImGui::TextColored(
-      styles::color(styles::MegatoyCol::TextMuted), "%s",
-      display_preset_path(repository.display_path(relative_path)).c_str());
-  ImGui::EndGroup();
+  const std::string path =
+      display_preset_path(repository.display_path(relative_path));
+  ImGui::SetCursorPos(
+      ImVec2(left, top + ImGui::GetFrameHeight() + style.ItemSpacing.y));
+  const ImVec2 path_min = ImGui::GetCursorScreenPos();
+  const ImVec2 path_max(path_min.x + std::max(right - left, 0.0f),
+                        path_min.y + ImGui::GetTextLineHeight());
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::TextMuted));
+  ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), path_min, path_max,
+                            path_max.x, path.c_str(), nullptr, nullptr);
+  ImGui::PopStyleColor();
+  ImGui::Dummy(ImVec2(path_max.x - path_min.x, ImGui::GetTextLineHeight()));
 
-  if (editable) {
-    ImGui::SameLine();
-    if (ImGui::GetContentRegionAvail().x >= star_rating_width()) {
-      ImGui::SetCursorPos(ImVec2(ImGui::GetCursorPosX() +
-                                     ImGui::GetContentRegionAvail().x -
-                                     star_rating_width(),
-                                 top));
-    } else {
-      ImGui::NewLine();
-    }
+  if (editable && !rating_beside) {
     render_header_rating(*entry, ui, edit);
   }
 
