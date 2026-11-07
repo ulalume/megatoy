@@ -33,7 +33,7 @@ constexpr float kIconGap = 4.0f;
 /**
  * The visible rows, rebuilt only when the tree, the filters or the expansion
  * state change. Expansion lives here too, because ImGui's own tree state is
- * unreachable for rows the clipper never draws.
+ * unreachable for rows out of view, which are never drawn.
  */
 struct PatchTreeCache {
   const std::vector<patches::PatchEntry> *tree = nullptr;
@@ -248,13 +248,10 @@ void render_directory_row(PatchSelectorContext &context,
   // The row list owns the open state, so the node is driven rather than left
   // to ImGui's storage; a toggle is picked up from the returned value.
   ImGui::SetNextItemOpen(row.is_open, ImGuiCond_Always);
-  // Headings stand as far apart as any two items.
-  const float heading_gap = ImGui::GetStyle().ItemSpacing.y;
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, row_margin() * 0.5f);
   // Folders are muted beside the patches they hold; a top folder's heading
-  // is a bar, as an editor section's is, drawn behind the node and short of
-  // the row's top and bottom, so two headings stand apart as sections do.
+  // is a bar, as an editor section's is, drawn behind the node.
   const bool heading = is_heading(row);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   if (heading) {
@@ -277,12 +274,10 @@ void render_directory_row(PatchSelectorContext &context,
     const auto col = ImGui::IsItemActive()    ? MegatoyCol::SectionHeaderActive
                      : ImGui::IsItemHovered() ? MegatoyCol::SectionHeaderHovered
                                               : MegatoyCol::SectionHeader;
-    const float inset = heading_gap * 0.5f;
     draw_list->ChannelsSetCurrent(0);
-    draw_list->AddRectFilled(
-        ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMin().y + inset),
-        ImVec2(ImGui::GetItemRectMax().x, ImGui::GetItemRectMax().y - inset),
-        styles::color_u32(col), ImGui::GetStyle().FrameRounding);
+    draw_list->AddRectFilled(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                             styles::color_u32(col),
+                             ImGui::GetStyle().FrameRounding);
     draw_list->ChannelsMerge();
   }
   ImGui::PopStyleVar(2);
@@ -357,11 +352,9 @@ PatchTreeCache &tree_cache() {
   return cache;
 }
 
-/// A folder an entry is held over, and where the row under the mouse is.
+/// The folder an entry is held over.
 struct DropHover {
   std::size_t folder = 0;
-  std::size_t row = 0;
-  float row_top = 0.0f;
 };
 
 /**
@@ -396,7 +389,7 @@ bool row_drop_target(PatchSelectorContext &context,
           kPatchEntryPayload, ImGuiDragDropFlags_AcceptBeforeDelivery |
                                   ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
     if (payload->IsPreview()) {
-      hover = {folder_index, index, rect.Min.y};
+      hover = {folder_index};
       held = true;
     }
     if (payload->IsDelivery()) {
@@ -423,14 +416,35 @@ void draw_drop_frame(const ImVec2 &min, const ImVec2 &max) {
 
 } // namespace
 
-/// Scrolls row `index`, in a list starting at `list_top`, into view: only as
-/// far as it takes for a row partly in view, otherwise to the middle.
-void scroll_to_row(std::size_t index, float list_top) {
-  if (const auto scroll = patches::scroll_for_row(index, list_top, row_height(),
+/// Scrolls the row at `row_top` into view: only as far as it takes for a row
+/// partly in view, otherwise to the middle.
+void scroll_to_row(float row_top) {
+  if (const auto scroll = patches::scroll_for_row(0, row_top, row_height(),
                                                   ImGui::GetWindowHeight(),
                                                   ImGui::GetScrollY())) {
     ImGui::SetScrollY(*scroll);
   }
+}
+
+/**
+ * Where each row starts below the list's top, and last where the list ends.
+ * A top folder's heading after other rows stands a gap below them, as an
+ * editor section does below the one before.
+ */
+std::vector<float> row_tops(const std::vector<patches::TreeRow> &rows) {
+  const float gap = ImGui::GetStyle().ItemSpacing.y;
+  std::vector<float> tops;
+  tops.reserve(rows.size() + 1);
+  float y = 0.0f;
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    if (i > 0 && is_heading(rows[i])) {
+      y += gap;
+    }
+    tops.push_back(y);
+    y += row_height();
+  }
+  tops.push_back(y);
+  return tops;
 }
 
 void open_tree_directory(const std::string &relative_path) {
@@ -455,68 +469,64 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
     return false;
   }
 
+  const std::vector<float> tops = row_tops(rows);
   if (reveal) {
     const auto row = std::find_if(rows.begin(), rows.end(), [&](const auto &r) {
       return r.entry->relative_path == selection;
     });
     if (row != rows.end()) {
-      scroll_to_row(static_cast<std::size_t>(row - rows.begin()),
-                    ImGui::GetCursorPosY());
+      scroll_to_row(ImGui::GetCursorPosY() +
+                    tops[static_cast<std::size_t>(row - rows.begin())]);
     }
   }
 
-  // Every row is the same height, which is what lets the clipper skip the
-  // rows outside the view.
-  const float left = ImGui::GetCursorScreenPos().x;
+  // Only the rows in view are drawn, found from where each one starts.
+  const ImVec2 origin = ImGui::GetCursorScreenPos();
+  const float left = origin.x;
   const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
+  const ImRect clip = ImGui::GetCurrentWindow()->ClipRect;
+  const float height = row_height();
   const bool can_drop = static_cast<bool>(context.move_patch);
   std::optional<DropHover> hover;
-  float row_height = 0.0f;
-  ImGuiListClipper clipper;
-  clipper.Begin(static_cast<int>(rows.size()));
-  while (clipper.Step()) {
-    for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
-      const auto index = static_cast<std::size_t>(i);
-      const auto &row = rows[index];
-      const float top = ImGui::GetCursorScreenPos().y;
-      const float offset = row_indent(row);
-      if (offset > 0.0f) {
-        ImGui::Indent(offset);
-      }
-      if (row.is_directory) {
-        render_directory_row(context, row, cache,
-                             !query_lower.empty() || min_star_rating > 0);
-      } else {
-        render_patch_row(context, row);
-      }
-      if (offset > 0.0f) {
-        ImGui::Unindent(offset);
-      }
-      row_height = ImGui::GetCursorScreenPos().y - top;
-      DropHover held;
-      if (can_drop &&
-          row_drop_target(context, rows, index,
-                          ImRect(left, top, right, top + row_height), held)) {
-        hover = held;
-      }
+  const auto first = static_cast<std::size_t>(
+      std::upper_bound(tops.begin(), tops.end() - 1,
+                       clip.Min.y - origin.y - height) -
+      tops.begin());
+  for (std::size_t index = first;
+       index < rows.size() && origin.y + tops[index] < clip.Max.y; ++index) {
+    const auto &row = rows[index];
+    const float top = origin.y + tops[index];
+    ImGui::SetCursorScreenPos(ImVec2(left, top));
+    const float offset = row_indent(row);
+    if (offset > 0.0f) {
+      ImGui::Indent(offset);
+    }
+    if (row.is_directory) {
+      render_directory_row(context, row, cache,
+                           !query_lower.empty() || min_star_rating > 0);
+    } else {
+      render_patch_row(context, row);
+    }
+    if (offset > 0.0f) {
+      ImGui::Unindent(offset);
+    }
+    DropHover held;
+    if (can_drop &&
+        row_drop_target(context, rows, index,
+                        ImRect(left, top, right, top + height), held)) {
+      hover = held;
     }
   }
+  ImGui::SetCursorScreenPos(ImVec2(left, origin.y + tops.back()));
+  ImGui::Dummy(ImVec2(0.0f, 0.0f));
 
-  // Every row is the same height, so the folder's rows are found from the
-  // one under the mouse even where the clipper skipped them.
+  // The folder taking a drop is framed with everything listed under it,
+  // even the rows out of view.
   if (hover) {
-    const float folder_top =
-        hover->row_top -
-        static_cast<float>(hover->row - hover->folder) * row_height;
-    const float bottom =
-        hover->row_top +
-        static_cast<float>(patches::last_row_under(rows, hover->folder) -
-                           hover->row + 1) *
-            row_height;
-    draw_drop_frame(
-        ImVec2(left + row_indent(rows[hover->folder]),
-               folder_top),
-        ImVec2(right, bottom));
+    const std::size_t last = patches::last_row_under(rows, hover->folder);
+    draw_drop_frame(ImVec2(left + row_indent(rows[hover->folder]),
+                           origin.y + tops[hover->folder]),
+                    ImVec2(right, origin.y + tops[last] + height));
   }
 
   return true;
