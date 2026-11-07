@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gui/app_window.hpp"
 #include "gui/components/centred_glyph.hpp"
 
 #include <imgui.h>
@@ -30,10 +31,12 @@ inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
   if (node == nullptr || !ImGui::DockNodeBeginAmendTabBar(node)) {
     return std::nullopt;
   }
-  ImGui::SetNextItemWidth(ImGui::CalcTextSize(icon).x +
-                          ImGui::GetStyle().FramePadding.x * 2.0f);
+  // As tall as the tabs beside it, and as wide as it is tall.
+  push_window_tab_padding();
+  ImGui::SetNextItemWidth(ImGui::GetFrameHeight());
   ImGui::TabItemButton(id,
                        ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
+  ImGui::PopStyleVar();
   draw_centred_glyph(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
   FoldedTabButton button;
   button.hovered = ImGui::IsItemHovered();
