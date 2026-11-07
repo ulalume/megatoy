@@ -15,7 +15,7 @@ inline void push_window_tab_padding() {
   const ImVec2 padding = ImGui::GetStyle().FramePadding;
   ImGui::PushStyleVar(
       ImGuiStyleVar_FramePadding,
-      ImVec2(padding.x + scale::px(2.0f), padding.y + scale::px(4.0f)));
+      ImVec2(padding.x + scale::px(2.0f), padding.y + scale::px(2.0f)));
 }
 
 /// ImGui::Begin for one of the app's own windows, the ones that dock.

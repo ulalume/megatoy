@@ -65,7 +65,7 @@ ModalScope begin_modal(const char *title, ModalDismiss dismiss, float width,
   // The title bar's height is FramePadding's at Begin: a dialog's stands
   // taller than other frames.
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,
-                       ImGui::GetStyle().FramePadding.y + ui::scale::px(4.0f));
+                       ImGui::GetStyle().FramePadding.y + ui::scale::px(2.0f));
   const bool open = ImGui::BeginPopupModal(
       title, nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
   ImGui::PopStyleVar();

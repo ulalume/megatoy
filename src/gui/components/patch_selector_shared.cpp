@@ -1,5 +1,4 @@
 #include "patch_selector_shared.hpp"
-#include "gui/components/button.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
 
@@ -236,7 +235,7 @@ void render_filter_bar(PatchSelectorContext &context) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_Text,
                           ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    if (ui::button(ICON_FA_XMARK "##clear_search", ImVec2(size, size))) {
+    if (ImGui::Button(ICON_FA_XMARK "##clear_search", ImVec2(size, size))) {
       prefs.metadata_search_query.clear();
     }
     ImGui::PopStyleColor(2);

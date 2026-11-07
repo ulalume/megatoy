@@ -40,7 +40,7 @@ void apply_style(ThemeId id, float scale) {
   style.ScrollbarPadding = 0;
   style.SeparatorTextBorderSize = 1;
   style.DragDropTargetBorderSize = 1;
-  style.FramePadding = ImVec2(4, 4);
+  style.FramePadding = ImVec2(4, 6);
   style.DockingSeparatorSize = 4;
 
   apply_theme(id);

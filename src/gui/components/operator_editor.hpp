@@ -9,9 +9,9 @@
 
 namespace ui {
 
-/// A vertical slider is as wide as a horizontal one is tall, and they stand as
-/// far apart as horizontal ones do.
-inline float vslider_width() { return ImGui::GetFrameHeight(); }
+/// A vertical slider is narrower than a horizontal one is tall, and they
+/// stand as far apart as horizontal ones do.
+inline float vslider_width() { return ImGui::GetFontSize() + scale::px(8.0f); }
 inline float vslider_gap() { return ImGui::GetStyle().ItemSpacing.y; }
 /// As tall as the column beside the sliders: five rows of controls, the
 /// spacing between them and one extra break.

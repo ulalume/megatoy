@@ -2,7 +2,6 @@
 #include "audio/load_meter.hpp"
 #include "gui/app_window.hpp"
 #include "gui/areas.hpp"
-#include "gui/components/button.hpp"
 #include "gui/components/menu_rows.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/key_name_utils.hpp"
@@ -288,8 +287,9 @@ void octave_key_button(const char *id, int &stored_key,
     ImGui::PushStyleColor(ImGuiCol_Button,
                           ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
   }
-  const bool clicked = ui::button((caption + "##" + id).c_str(),
-                                  ImVec2(ImGui::GetFrameHeight() * 1.6f, 0.0f));
+  const bool clicked =
+      ImGui::Button((caption + "##" + id).c_str(),
+                    ImVec2(ImGui::GetFrameHeight() * 1.6f, 0.0f));
   if (waiting) {
     ImGui::PopStyleColor();
   }
@@ -329,12 +329,12 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   ImGui::BeginGroup();
   const ImVec2 square(ImGui::GetFrameHeight(), ImGui::GetFrameHeight());
   ImGui::BeginDisabled(slots.size() >= ui::typing_layout_max_custom_slots);
-  if (ui::button("+", square)) {
+  if (ImGui::Button("+", square)) {
     slots.push_back(static_cast<int>(ImGuiKey_None));
   }
   ImGui::EndDisabled();
   ImGui::BeginDisabled(slots.size() <= ui::typing_layout_min_custom_slots);
-  if (ui::button("-", square)) {
+  if (ImGui::Button("-", square)) {
     slots.pop_back();
     clamp_capture_state(state, prefs);
   }
@@ -354,7 +354,7 @@ void render_custom_layout_editor(UIPreferences &prefs) {
   octave_key_button("octave_up", prefs.custom_typing_octave_up_key, state,
                     CustomLayoutEditorState::OctaveCaptureTarget::Up);
 
-  if (ui::button("Reset to This Keyboard")) {
+  if (ImGui::Button("Reset to This Keyboard")) {
     reset_to_keyboard(prefs);
   }
 
@@ -504,7 +504,7 @@ void render_patches_page(PreferencesContext &context) {
       ImGui::SameLine();
       const char *remove_label =
           megatoy::platform::is_web() ? "Delete" : "Remove";
-      if (ui::button(remove_label)) {
+      if (ImGui::Button(remove_label)) {
         folder_to_remove = folder.path;
       }
     }
@@ -535,7 +535,7 @@ void render_patches_page(PreferencesContext &context) {
   }
 
   ImGui::Spacing();
-  if (ui::button("Add Folder...")) {
+  if (ImGui::Button("Add Folder...")) {
     context.open_add_folder_dialog = true;
   }
 
@@ -671,7 +671,7 @@ void render_input_page(PreferencesContext &context) {
     if (context.web_midi_button_disabled) {
       ImGui::BeginDisabled();
     }
-    if (ui::button("Enable WebMIDI")) {
+    if (ImGui::Button("Enable WebMIDI")) {
       if (context.request_web_midi) {
         context.request_web_midi();
       }

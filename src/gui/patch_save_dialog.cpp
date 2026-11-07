@@ -1,5 +1,4 @@
 #include "patch_save_dialog.hpp"
-#include "gui/components/button.hpp"
 #include "gui/components/menu_rows.hpp"
 #include "gui/components/modal.hpp"
 #include "gui/save_as_dialog.hpp"
@@ -152,13 +151,13 @@ void render_patch_save_dialog(
     ImGui::Spacing();
     const float width = dialog_button_width();
     align_buttons_right({width, width});
-    if (ui::button("Cancel", ImVec2(width, 0))) {
+    if (ImGui::Button("Cancel", ImVec2(width, 0))) {
       cancelled = true;
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!error.empty());
-    if (ui::button(overwrites ? "Overwrite" : primary_label,
-                   ImVec2(width, 0))) {
+    if (ImGui::Button(overwrites ? "Overwrite" : primary_label,
+                      ImVec2(width, 0))) {
       save = true;
     }
     ImGui::EndDisabled();

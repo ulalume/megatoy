@@ -1,5 +1,4 @@
 #include "patch_editor_tools.hpp"
-#include "gui/components/button.hpp"
 
 #include "formats/ym2612_format_adapter.hpp"
 #include "gui/clipboard.hpp"
@@ -222,7 +221,7 @@ void render_mml_section(PatchEditorContext &context,
     ui.mml_patch = saved;
   }
   const std::string &mml = ui.mml;
-  if (ui::button("Copy to Clipboard")) {
+  if (ImGui::Button("Copy to Clipboard")) {
     platform::clipboard::copy_text(mml.c_str());
   }
   ImGui::PushStyleColor(ImGuiCol_Border,

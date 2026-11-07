@@ -1,4 +1,3 @@
-#include "gui/components/button.hpp"
 #include "platform/platform_config.hpp"
 #include "web_storage_dialogs.hpp"
 
@@ -107,11 +106,11 @@ void render_folder_import_ui() {
         // pending one, and the dialog returns when the files arrive. To
         // abort, the user cancels the browser's own dialog, whose cancel
         // event frees the slot.
-        if (ui::button("Close", ImVec2(120, 0))) {
+        if (ImGui::Button("Close", ImVec2(120, 0))) {
           ImGui::CloseCurrentPopup();
           dismiss_folder_selection();
         }
-      } else if (ui::button("Cancel", ImVec2(120, 0))) {
+      } else if (ImGui::Button("Cancel", ImVec2(120, 0))) {
         // The files are already ours; destroying the slot is enough. Any
         // JavaScript still holding the token sees an unknown token, reads
         // it as abandoned and unwinds silently.
@@ -152,12 +151,12 @@ void render_folder_import_ui() {
                                   .c_str());
         }
         ImGui::Spacing();
-        if (ui::button("Cancel", ImVec2(120, 0))) {
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
           ImGui::CloseCurrentPopup();
           decide_folder_import(false);
         }
         ImGui::SameLine();
-        if (ui::button("Import", ImVec2(120, 0))) {
+        if (ImGui::Button("Import", ImVec2(120, 0))) {
           decide_folder_import(true);
           ImGui::CloseCurrentPopup();
         }
@@ -197,7 +196,7 @@ void render_folder_import_ui() {
         ImGui::ProgressBar(std::clamp(fraction, 0.0f, 1.0f), ImVec2(360, 0));
         ImGui::Spacing();
         ImGui::BeginDisabled(request.cancel_requested);
-        if (ui::button("Cancel", ImVec2(120, 0))) {
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
           cancel_folder_import();
         }
         ImGui::EndDisabled();

@@ -1,6 +1,5 @@
 #include "patch_drop.hpp"
 #include "common.hpp"
-#include "gui/components/button.hpp"
 #include "gui/components/menu_rows.hpp"
 #include "modal.hpp"
 #include <algorithm>
@@ -55,14 +54,14 @@ void render_patch_drop_feedback(PatchDropContext &context) {
       }
 
       align_buttons_right({dialog_button_width(), dialog_button_width()});
-      if (ui::button("Cancel", ImVec2(dialog_button_width(), 0))) {
+      if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
         if (context.cancel_selection) {
           context.cancel_selection();
         }
         ImGui::CloseCurrentPopup();
       }
       ImGui::SameLine();
-      if (ui::button("Load", ImVec2(dialog_button_width(), 0))) {
+      if (ImGui::Button("Load", ImVec2(dialog_button_width(), 0))) {
         if (context.apply_selection) {
           context.apply_selection(
               static_cast<size_t>(drop.selected_instrument));
@@ -72,7 +71,7 @@ void render_patch_drop_feedback(PatchDropContext &context) {
     } else {
       ImGui::TextUnformatted(kFallbackErrorMessage);
       align_buttons_right({dialog_button_width()});
-      if (ui::button("OK", ImVec2(dialog_button_width(), 0))) {
+      if (ImGui::Button("OK", ImVec2(dialog_button_width(), 0))) {
         if (context.cancel_selection) {
           context.cancel_selection();
         }

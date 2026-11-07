@@ -1,7 +1,6 @@
 #include "patch_editor.hpp"
 #include "audio/audio_manager.hpp"
 #include "gui/app_window.hpp"
-#include "gui/components/button.hpp"
 
 #include "common.hpp"
 #include "gui/areas.hpp"
@@ -90,7 +89,7 @@ void render_header_icon(const patches::PatchEntry *entry, bool editable,
   const ImGuiID popup_id = ImGui::GetID("##icon_picker");
   // No fill at rest: the icon stands alone until the pointer is over it.
   ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
-  if (ui::button("##icon", ImVec2(size, size))) {
+  if (ImGui::Button("##icon", ImVec2(size, size))) {
     ImGui::OpenPopupEx(popup_id);
   }
   ImGui::PopStyleColor();
@@ -136,7 +135,7 @@ void render_save_buttons(PatchEditorContext &context,
 
   const char *save_label = controls.save_label;
   ImVec2 pos = ImGui::GetCursorPos();
-  if (ui::button(save_label)) {
+  if (ImGui::Button(save_label)) {
     context.activate(document.id());
     if (controls.saves_in_place) {
       trigger_save(patch_session, state);
@@ -154,7 +153,7 @@ void render_save_buttons(PatchEditorContext &context,
     ImGui::EndDisabled();
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
     std::string dummy_label = std::string(save_label) + "##dummy";
-    ui::button(dummy_label.c_str());
+    ImGui::Button(dummy_label.c_str());
     ImGui::PopStyleVar();
     ImGui::BeginDisabled(true);
   }
@@ -167,7 +166,7 @@ void render_save_buttons(PatchEditorContext &context,
 
   if (controls.show_save_as) {
     ImGui::SameLine();
-    if (ui::button("Save As...")) {
+    if (ImGui::Button("Save As...")) {
       context.activate(document.id());
       request_save_as(state);
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -192,8 +191,8 @@ void render_document_header(PatchEditorContext &context,
       entry != nullptr && patch_session.repository().can_edit_metadata(*entry);
 
   // Two lines tall: the save buttons' and the path's.
-  const float height =
-      button_height() + style.ItemSpacing.y + ImGui::GetTextLineHeight();
+  const float height = ImGui::GetFrameHeight() + style.ItemSpacing.y +
+                       ImGui::GetTextLineHeight();
   const float top = ImGui::GetCursorPosY();
   MetadataEdit edit;
   render_header_icon(entry, editable, height, edit);
@@ -491,14 +490,14 @@ void render_disk_change_bar(PatchEditorContext &context,
                      ICON_FA_TRIANGLE_EXCLAMATION
                      " The file was changed outside megatoy.");
   ImGui::SameLine();
-  if (ui::button("Reload")) {
+  if (ImGui::Button("Reload")) {
     if (context.reload_from_disk) {
       context.reload_from_disk(id, *ui.disk_version);
     }
     ui.disk_version.reset();
   }
   ImGui::SameLine();
-  if (ui::button("Keep Mine")) {
+  if (ImGui::Button("Keep Mine")) {
     context.session.accept_disk_version(id, *ui.disk_version,
                                         /*replace=*/false);
     ui.disk_version.reset();

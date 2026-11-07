@@ -1,6 +1,5 @@
 #include "midi_keyboard.hpp"
 #include "gui/app_window.hpp"
-#include "gui/components/button.hpp"
 
 #include "core/types.hpp"
 #include "gui/areas.hpp"
@@ -228,7 +227,7 @@ void render_operator_switches(std::array<bool, 4> &enabled) {
     }
     const char label[] = {static_cast<char>('1' + i), '\0'};
     ImGui::PushID(static_cast<int>(i));
-    if (ui::button(label, ImVec2(size, size))) {
+    if (ImGui::Button(label, ImVec2(size, size))) {
       enabled[i] = !on;
     }
     ImGui::PopID();
@@ -407,7 +406,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), false,
                         ImGuiWindowFlags_HorizontalScrollbar)) {
     const auto &notes = context.state.display_notes;
-    const float min_key_width = ui::scale::px(16.0f);
+    const float min_key_width = ui::scale::px(18.0f);
     // One pixel kept for the last key's right border.
     const float key_width =
         notes.empty() ? min_key_width

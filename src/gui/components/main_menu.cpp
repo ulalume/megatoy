@@ -640,7 +640,7 @@ void render_main_menu(MainMenuContext &context) {
   const ImVec2 padding = ImGui::GetStyle().FramePadding;
   const float item_spacing_y = ImGui::GetStyle().ItemSpacing.y;
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                      ImVec2(padding.x, padding.y + ui::scale::px(8.0f)));
+                      ImVec2(padding.x, padding.y + ui::scale::px(6.0f)));
   if (ImGui::BeginMainMenuBar()) {
     if (begin_app_menu()) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
