@@ -27,8 +27,6 @@ namespace {
 
 /// How far each level's names sit in from the level above.
 constexpr float kDepthIndent = 10.0f;
-/// The space between a patch's instrument icon and its name.
-constexpr float kIconGap = 4.0f;
 
 /**
  * The visible rows, rebuilt only when the tree, the filters or the expansion
@@ -196,7 +194,8 @@ bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
                                        ? std::string_view(item.metadata->icon)
                                        : std::string_view();
   const char *icon = instrument_icons::glyph(icon_id);
-  const float name_x = ImGui::CalcTextSize(icon).x + ui::scale::px(kIconGap);
+  // The name starts where a folder's does past its arrow.
+  const float name_x = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.x;
   const ImVec2 pos = ImGui::GetCursorScreenPos();
   // Sized to the icon and name, which the next item follows, while the
   // highlight still spans the row.
@@ -225,11 +224,13 @@ bool is_heading(const patches::TreeRow &row) {
 /**
  * How far a row is indented. The rows under a top folder's heading start at
  * its left edge, and every level below them kDepthIndent in from the level
- * above: a folder's arrow and a patch's icon at one level line up.
+ * above. A folder's arrow sits the frame padding in from where its row
+ * starts, and a patch's icon is set in as far, so the two line up.
  */
 float row_indent(const patches::TreeRow &row) {
   const int level = std::max(row.depth - 1, 0);
-  return ui::scale::px(kDepthIndent) * static_cast<float>(level);
+  const float indent = ui::scale::px(kDepthIndent) * static_cast<float>(level);
+  return row.is_directory ? indent : indent + ImGui::GetStyle().FramePadding.x;
 }
 
 /// While filtering, every directory leading to a match is shown open, and a
