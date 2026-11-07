@@ -189,10 +189,10 @@ add_executable(patch_repository_move_test
 target_include_directories(patch_repository_move_test PRIVATE src)
 target_link_libraries(patch_repository_move_test PRIVATE megatoy_core)
 add_test(NAME patch_repository_move_test COMMAND patch_repository_move_test)
-add_executable(folder_metadata_test tests/patches/folder_metadata_test.cpp)
-target_include_directories(folder_metadata_test PRIVATE src)
-target_link_libraries(folder_metadata_test PRIVATE megatoy_core)
-add_test(NAME folder_metadata_test COMMAND folder_metadata_test)
+add_executable(patch_metadata_test tests/patches/patch_metadata_test.cpp)
+target_include_directories(patch_metadata_test PRIVATE src)
+target_link_libraries(patch_metadata_test PRIVATE megatoy_core)
+add_test(NAME patch_metadata_test COMMAND patch_metadata_test)
 add_executable(patch_tree_flatten_test tests/patches/patch_tree_flatten_test.cpp)
 target_include_directories(patch_tree_flatten_test PRIVATE src)
 target_link_libraries(patch_tree_flatten_test PRIVATE megatoy_core)
@@ -238,6 +238,13 @@ add_executable(ui_scale_test tests/gui/ui_scale_test.cpp src/gui/ui_scale.cpp)
 target_include_directories(ui_scale_test PRIVATE src)
 target_link_libraries(ui_scale_test PRIVATE imgui_lib)
 add_test(NAME ui_scale_test COMMAND ui_scale_test)
+add_executable(instrument_icons_test tests/gui/instrument_icons_test.cpp
+               src/gui/instrument_icons.cpp)
+target_include_directories(instrument_icons_test PRIVATE src)
+target_link_libraries(instrument_icons_test PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(instrument_icons_test PRIVATE
+  YM2612_PATCHES_VOCABULARY="${ym2612_patches_SOURCE_DIR}/vocabulary.json")
+add_test(NAME instrument_icons_test COMMAND instrument_icons_test)
 add_executable(layouts_test tests/gui/layouts_test.cpp)
 target_include_directories(layouts_test PRIVATE src)
 target_link_libraries(layouts_test PRIVATE megatoy_core)
@@ -373,7 +380,7 @@ add_custom_target(check
           filename_utils_test utf8_utils_test
           patch_repository_delete_test patch_repository_rename_test
           patch_repository_move_test patch_document_test folder_watcher_test
-          folder_metadata_test patch_tree_flatten_test
+          patch_metadata_test patch_tree_flatten_test
           document_decisions_test patch_entry_actions_test
           patch_tree_navigation_test patch_lab_sources_test patch_tweak_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test

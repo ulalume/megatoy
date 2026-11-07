@@ -1,7 +1,6 @@
 #include "patch_session.hpp"
 
 #include "core/status.hpp"
-#include "patches/folder_metadata.hpp"
 #include <algorithm>
 #include <utility>
 
@@ -57,16 +56,13 @@ void PatchSession::absorb_nested_folders() {
   struct Nesting {
     std::filesystem::path inner;
     std::filesystem::path outer;
-    std::filesystem::path inner_sidecar;
-    std::filesystem::path outer_sidecar;
   };
   std::vector<Nesting> nestings;
   for (const auto &folder : workspace.folders()) {
     const auto *outer = workspace.enclosing(folder.path);
     if (outer != nullptr &&
         !preferences_.workspace_folder_is_protected(folder.path)) {
-      nestings.push_back({folder.path, outer->path, folder.metadata_path(),
-                          outer->metadata_path()});
+      nestings.push_back({folder.path, outer->path});
     }
   }
   if (nestings.empty()) {
@@ -103,31 +99,7 @@ void PatchSession::absorb_nested_folders() {
   }
   const auto last_patch = resolve(preferences_.last_patch_path());
 
-  bool absorbed_any = false;
   for (const auto &nesting : nestings) {
-    // Ratings that cannot be carried over keep their folder in the list.
-    FolderMetadataStore inner_store(nesting.inner_sidecar);
-    FolderMetadataStore outer_store(nesting.outer_sidecar);
-    bool carried = inner_store.load() && outer_store.load();
-    if (carried) {
-      const auto prefix =
-          nesting.inner.lexically_relative(nesting.outer).generic_string();
-      auto entries = inner_store.entries();
-      for (auto &entry : entries) {
-        entry.path = prefix + "/" + entry.path;
-      }
-      std::size_t changed = 0;
-      carried = outer_store.merge_newer(entries, changed);
-    }
-    if (!carried) {
-      megatoy::status::warning("Could not move the ratings of \"" +
-                               nesting.inner.filename().string() +
-                               "\" into \"" +
-                               nesting.outer.filename().string() + "\".");
-      continue;
-    }
-    absorbed_any = true;
-
     // The outer folder takes the inner one's place in the list.
     const auto &folders = workspace.folders();
     const auto index_of = [&folders](const std::filesystem::path &path) {
@@ -149,9 +121,6 @@ void PatchSession::absorb_nested_folders() {
                           nesting.outer.filename().string() + "\".");
   }
 
-  if (!absorbed_any) {
-    return;
-  }
   repository_->sync_workspace();
 
   const auto relative_of =

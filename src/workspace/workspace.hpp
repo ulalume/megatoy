@@ -18,9 +18,6 @@ struct Folder {
   /// workspace over a temporary absence.
   bool available = false;
   bool writable = false;
-
-  /// Where this folder's sidecar metadata lives.
-  std::filesystem::path metadata_path() const;
 };
 
 /**

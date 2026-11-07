@@ -32,8 +32,8 @@ void show_patch_tooltip(const patches::PatchRepository &repository,
   if (entry.metadata) {
     tooltip +=
         "\nRating: " + std::to_string(entry.metadata->star_rating) + "/5";
-    if (!entry.metadata->category.empty()) {
-      tooltip += "\nCategory: " + entry.metadata->category;
+    if (!entry.metadata->icon.empty()) {
+      tooltip += "\nIcon: " + entry.metadata->icon;
     }
     if (!entry.metadata->notes.empty()) {
       tooltip += "\nNotes: " + entry.metadata->notes;

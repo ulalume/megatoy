@@ -40,7 +40,6 @@ bool PatchSession::update_entry_metadata(const PatchEntry &entry,
     return false;
   }
   auto metadata = entry.metadata.value_or(PatchMetadata{});
-  metadata.path = entry.relative_path;
   if (metadata.hash.empty()) {
     ym2612::Patch patch;
     if (repository_->load_patch(entry, patch)) {
@@ -65,15 +64,13 @@ bool PatchSession::set_entry_rating(const PatchEntry &entry, int stars) {
   });
 }
 
-bool PatchSession::set_entry_category(const PatchEntry &entry,
-                                      const std::string &category) {
-  if (entry.metadata ? entry.metadata->category == category
-                     : category.empty()) {
+bool PatchSession::set_entry_icon(const PatchEntry &entry,
+                                  const std::string &icon) {
+  if (entry.metadata ? entry.metadata->icon == icon : icon.empty()) {
     return true;
   }
-  return update_entry_metadata(entry, [&category](PatchMetadata &metadata) {
-    metadata.category = category;
-  });
+  return update_entry_metadata(
+      entry, [&icon](PatchMetadata &metadata) { metadata.icon = icon; });
 }
 
 std::optional<PatchSession::Relocation>

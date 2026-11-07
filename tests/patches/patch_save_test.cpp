@@ -1,5 +1,5 @@
 #include "formats/patch_registry.hpp"
-#include "patches/folder_metadata.hpp"
+#include "patches/patch_metadata.hpp"
 #include "session_test_environment.hpp"
 
 #include <algorithm>
@@ -52,11 +52,13 @@ void test_save_and_metadata_roundtrip() {
 
   patches::PatchMetadata metadata;
   metadata.star_rating = 4;
-  metadata.category = "bass";
+  metadata.icon = "bass";
   CHECK(repository.update_patch_metadata(relative, metadata));
 
-  // The sidecar lives inside the folder, not in the user's config directory.
-  const auto sidecar = env.folder / ".megatoy" / "patches.json";
+  // The sidecar lives beside the patch, not in the user's config directory.
+  const auto sidecar = patches::sidecar::path_for_patch(
+      repository.to_absolute_path(relative), env.folder);
+  CHECK(sidecar.parent_path().parent_path() == env.folder / ".ym2612");
   CHECK(std::filesystem::exists(sidecar));
 
   repository.refresh();
@@ -65,7 +67,7 @@ void test_save_and_metadata_roundtrip() {
   const auto &stored = entry->metadata;
   CHECK(stored.has_value());
   CHECK(stored->star_rating == 4);
-  CHECK(stored->category == "bass");
+  CHECK(stored->icon == "bass");
 
   // A fresh repository over the same folder must see the ratings again --
   // that is the point of storing them next to the patches.

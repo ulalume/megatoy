@@ -64,6 +64,7 @@ constexpr License kLicenses[] = {
     {"miniz", "MIT", "miniz-MIT.txt"},
     {"IconFontCppHeaders", "zlib", "iconfontcppheaders-zlib.txt"},
     {"Font Awesome Free", "CC BY / OFL / MIT", "font-awesome-license.txt"},
+    {"IconOven", "MIT", "iconoven-MIT.txt"},
     {"chord_detector", "MIT", "chord-detector-MIT.txt"},
     {"ym2612_format", "MIT", "ym2612-format-MIT.txt"},
     {"ym2612_eg", "MIT", "ym2612-eg-MIT.txt"},

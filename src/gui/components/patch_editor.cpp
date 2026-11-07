@@ -7,6 +7,7 @@
 #include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
+#include "gui/instrument_icons.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -20,7 +21,7 @@
 #include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
-#include <cstdio>
+#include <cfloat>
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -52,8 +53,103 @@ ImVec2 menu_anchor_below_last_item() {
 }
 #endif
 
+/// The browser's entry for the patch `document` holds, or nullptr when the
+/// browser does not list it.
+const patches::PatchEntry *
+document_entry(const patches::PatchSession &session,
+               const patches::PatchDocument &document) {
+  const auto &key = document.selection_path().empty()
+                        ? document.path()
+                        : document.selection_path();
+  return session.find_entry(key);
+}
+
+/// The glyph of the patch's instrument icon, or the none icon.
+const char *document_icon(const patches::PatchSession &session,
+                          const patches::PatchDocument &document) {
+  const auto *entry = document_entry(session, document);
+  return instrument_icons::glyph(entry != nullptr && entry->metadata
+                                     ? std::string_view(entry->metadata->icon)
+                                     : std::string_view());
+}
+
+/// The icon picker's columns, and its greatest height before it scrolls.
+constexpr int kIconPickerColumns = 8;
+constexpr float kIconPickerMaxHeight = 330.0f;
+
 /**
- * The rating and category of the patch's file, at the right of the row,
+ * The icon picker, opened below the button just drawn: a filter, None, and
+ * every group's icons that match the filter. The id picked, "" for None, or
+ * nothing while none is.
+ */
+std::optional<std::string> icon_picker(ImGuiID popup_id,
+                                       const std::string &current) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float cell = ImGui::GetFrameHeight();
+  const float width = cell * kIconPickerColumns +
+                      style.ItemSpacing.x * (kIconPickerColumns - 1) +
+                      style.ScrollbarSize;
+  const float max_height = ui::scale::px(kIconPickerMaxHeight);
+  const ImRect button(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+  ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
+                                      ImVec2(FLT_MAX, max_height));
+  if (!ImGui::BeginComboPopup(popup_id, button, ImGuiComboFlags_None)) {
+    return std::nullopt;
+  }
+  static char filter[32] = "";
+  if (ImGui::IsWindowAppearing()) {
+    filter[0] = '\0';
+    ImGui::SetKeyboardFocusHere();
+  }
+  ImGui::SetNextItemWidth(width);
+  ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " Filter...",
+                           filter, sizeof(filter));
+
+  std::optional<std::string> picked;
+  if (ImGui::Selectable("None", current.empty())) {
+    picked = std::string();
+  }
+  // The icons scroll below the filter, filling what the popup has left.
+  ImGui::SetNextWindowSizeConstraints(
+      ImVec2(0.0f, 0.0f), ImVec2(width, max_height - ImGui::GetCursorPosY() -
+                                            style.WindowPadding.y));
+  ImGui::BeginChild("##icons", ImVec2(width, 0.0f),
+                    ImGuiChildFlags_AutoResizeY);
+  ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
+  for (const auto &group : instrument_icons::groups()) {
+    int column = 0;
+    for (const auto &icon : group.icons) {
+      if (!instrument_icons::matches(icon.id, filter)) {
+        continue;
+      }
+      if (column == 0) {
+        ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%.*s",
+                           static_cast<int>(group.name.size()),
+                           group.name.data());
+      } else if (column % kIconPickerColumns != 0) {
+        ImGui::SameLine();
+      }
+      ++column;
+      const std::string id(icon.id);
+      ImGui::PushID(id.c_str());
+      if (ImGui::Selectable(icon.glyph, id == current, 0, ImVec2(cell, cell))) {
+        picked = id;
+      }
+      ImGui::SetItemTooltip("%s", id.c_str());
+      ImGui::PopID();
+    }
+  }
+  ImGui::PopStyleVar();
+  ImGui::EndChild();
+  if (picked) {
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndCombo();
+  return picked;
+}
+
+/**
+ * The icon and rating of the patch's file, at the right of the row,
  * or below it when the row has no room. Only for a patch the browser lists
  * in a folder that keeps metadata.
  */
@@ -61,16 +157,13 @@ void render_patch_metadata(PatchEditorContext &context,
                            const patches::PatchDocument &document,
                            UIState::DocumentUi &ui) {
   auto &session = context.session;
-  const auto &key = document.selection_path().empty()
-                        ? document.path()
-                        : document.selection_path();
-  const auto *entry = session.find_entry(key);
+  const auto *entry = document_entry(session, document);
   if (entry == nullptr || !session.repository().can_edit_metadata(*entry)) {
     return;
   }
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
-  const float category_width = ui::scale::px(110.0f);
-  const float needed = category_width + spacing + star_rating_width();
+  const float button_size = ImGui::GetFrameHeight();
+  const float needed = button_size + spacing + star_rating_width();
   ImGui::SameLine();
   if (ImGui::GetContentRegionAvail().x >= needed) {
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
@@ -79,21 +172,19 @@ void render_patch_metadata(PatchEditorContext &context,
     ImGui::NewLine();
   }
 
-  const std::string saved_category =
-      entry->metadata ? entry->metadata->category : std::string();
-  char buffer[64];
-  std::snprintf(buffer, sizeof(buffer), "%s",
-                ui.pending_category.value_or(saved_category).c_str());
-  ImGui::SetNextItemWidth(category_width);
-  if (ImGui::InputTextWithHint("##category", "Category", buffer,
-                               sizeof(buffer))) {
-    ui.pending_category = std::string(buffer);
+  const std::string saved_icon =
+      entry->metadata ? entry->metadata->icon : std::string();
+  const ImGuiID popup_id = ImGui::GetID("##icon_picker");
+  const std::string button_label =
+      std::string(instrument_icons::glyph(saved_icon)) + "##icon";
+  if (ImGui::Button(button_label.c_str(), ImVec2(button_size, button_size))) {
+    ImGui::OpenPopupEx(popup_id);
   }
-  if (ImGui::IsItemDeactivated() && ui.pending_category) {
-    const std::string category = std::move(*ui.pending_category);
-    ui.pending_category.reset();
+  ImGui::SetItemTooltip("Icon");
+  if (const auto picked = icon_picker(popup_id, saved_icon);
+      picked && *picked != saved_icon) {
     // The tree is rebuilt by the write, so `entry` is not used after it.
-    session.set_entry_category(*entry, category);
+    session.set_entry_icon(*entry, *picked);
     return;
   }
 
@@ -460,7 +551,9 @@ void render_document_window(PatchEditorContext &context,
   auto &session = context.session;
 
   const auto title =
-      patch_editor_window_title(document_label(document), ui.window_slot);
+      patch_editor_window_title(std::string(document_icon(session, document)) +
+                                    " " + document_label(document),
+                                ui.window_slot);
   const ImGuiWindow *existing = ImGui::FindWindowByName(title.c_str());
   ImGuiDockNode *node = existing != nullptr ? existing->DockNode : nullptr;
   areas::keep_in_area(areas::Area::Main, title.c_str(), 0,

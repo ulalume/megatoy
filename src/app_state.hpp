@@ -86,9 +86,6 @@ struct UIState {
     /// What the file holds after it was written outside megatoy while the
     /// document had unsaved changes, until the user picks one.
     std::optional<ym2612::Patch> disk_version;
-    /// The category being typed, written to the folder's metadata once the
-    /// field is left.
-    std::optional<std::string> pending_category;
     /// The rating being dragged, written once the slider is let go.
     std::optional<int> pending_rating;
     /// The instrument as a Quick Edit drag found it, which every step of the
@@ -233,6 +230,7 @@ struct UIState {
   struct PatchDuplicateState {
     ui::PatchSaveDialogState dialog;
     ym2612::Patch patch;
+    std::optional<patches::PatchMetadata> metadata;
   } patch_duplicate_state;
 
   ui::SaveExportState save_export_state;

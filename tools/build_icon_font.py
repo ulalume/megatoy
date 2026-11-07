@@ -2,8 +2,13 @@
 """Builds assets/fonts/megatoy-icons.otf from the SVGs in tools/icons.
 
 Each SVG is one filled glyph on Font Awesome's grid: a 512-high viewBox with
-the baseline at y = 448. Requires fontTools.
+the baseline at y = 448. Also writes src/gui/fonts/megatoy_icons.hpp and the
+instrument icon table, src/gui/fonts/instrument_icon_table.inc, from the
+icon groups of ym2612-patches' vocabulary.json. Requires fontTools.
+
+Usage: build_icon_font.py <ym2612-patches>/vocabulary.json
 """
+import json
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -14,10 +19,27 @@ from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.svgLib.path import parse_path
 
+# Instrument icons by group, in the order the picker shows them: the icon
+# groups of ym2612-patches' vocabulary.json, the one argument.
+if len(sys.argv) != 2:
+    sys.exit('usage: build_icon_font.py <ym2612-patches>/vocabulary.json')
+INSTRUMENT_GROUPS = [
+    (group['group'], group['ids'])
+    for group in json.loads(Path(sys.argv[1]).read_text())['icon']]
+# Shown for a patch without an icon.
+INSTRUMENT_NONE = 'music-note'
+
 # Code points below Font Awesome's range (ICON_MIN_FA = 0xe005).
 GLYPHS = {
     'piano': 0xE000,
 }
+# The instrument icons, in a block Font Awesome's font leaves empty.
+INSTRUMENT_FIRST = 0xE900
+INSTRUMENTS = [INSTRUMENT_NONE] + [
+    name for _, names in INSTRUMENT_GROUPS for name in names]
+GLYPHS.update(
+    {name: INSTRUMENT_FIRST + i for i, name in enumerate(INSTRUMENTS)})
+INSTRUMENT_LAST = INSTRUMENT_FIRST + len(INSTRUMENTS) - 1
 
 UNITS_PER_EM = 512
 ASCENT = 448
@@ -26,6 +48,8 @@ DESCENT = -64
 root = Path(__file__).resolve().parent.parent
 icons = root / 'tools' / 'icons'
 output = root / 'assets' / 'fonts' / 'megatoy-icons.otf'
+header = root / 'src' / 'gui' / 'fonts' / 'megatoy_icons.hpp'
+table = root / 'src' / 'gui' / 'fonts' / 'instrument_icon_table.inc'
 
 
 def translation(element):
@@ -54,6 +78,45 @@ def draw(svg_path, pen):
     walk(tree.getroot(), 0.0, 0.0)
 
 
+def utf8(code):
+    return ''.join(f'\\x{b:02x}' for b in chr(code).encode())
+
+
+def write_header():
+    header.write_text(f'''#pragma once
+
+// Icons drawn for megatoy: assets/fonts/megatoy-icons.otf, built from
+// tools/icons by tools/build_icon_font.py, which writes this file.
+#define ICON_MIN_MEGATOY 0xe000
+#define ICON_MAX_MEGATOY 0xe000
+#define ICON_MEGATOY_PIANO "{utf8(GLYPHS['piano'])}" // U+e000
+#define ICON_MIN_MEGATOY_INSTRUMENT {INSTRUMENT_FIRST:#x}
+#define ICON_MAX_MEGATOY_INSTRUMENT {INSTRUMENT_LAST:#x}
+''')
+
+
+def array_name(group):
+    return 'k' + group.replace(' ', '') + 'Icons'
+
+
+def write_table():
+    none = utf8(GLYPHS[INSTRUMENT_NONE])
+    lines = ['// Written by tools/build_icon_font.py.',
+             '// clang-format off',
+             f'constexpr char kNoneGlyph[] = "{none}";']
+    for group, names in INSTRUMENT_GROUPS:
+        var = array_name(group)
+        lines.append(f'constexpr Icon {var}[] = {{')
+        lines += [f'    {{"{name}", "{utf8(GLYPHS[name])}"}},'
+                  for name in names]
+        lines.append('};')
+    lines.append('constexpr Group kGroups[] = {')
+    lines += [f'    {{"{group}", {array_name(group)}}},'
+              for group, _ in INSTRUMENT_GROUPS]
+    lines.append('};')
+    table.write_text('\n'.join(lines) + '\n')
+
+
 def main():
     names = ['.notdef'] + list(GLYPHS)
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
@@ -80,6 +143,8 @@ def main():
                      usWinAscent=ASCENT, usWinDescent=-DESCENT)
     builder.setupPost()
     builder.save(output)
+    write_header()
+    write_table()
     print(output)
 
 

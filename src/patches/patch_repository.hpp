@@ -1,7 +1,7 @@
 #pragma once
 
 #include "folder_watcher.hpp"
-#include "patches/folder_metadata.hpp"
+#include "patches/patch_metadata.hpp"
 #include "platform/std_file_system.hpp"
 #include "save_patch_result.hpp"
 #include "workspace/workspace.hpp"
@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace patches {
@@ -114,8 +115,11 @@ public:
   std::string display_path(const std::string &relative) const;
   bool can_edit_metadata(const PatchEntry &entry) const;
 
-  // Batch operations
-  void cleanup_orphaned_metadata();
+  /// Give `file`, a patch megatoy just wrote as a copy, the metadata of the
+  /// one it copies, without its hash and timestamps. Nothing outside the
+  /// writable folders.
+  void copy_patch_metadata(const std::optional<PatchMetadata> &source,
+                           const std::filesystem::path &file);
 
   /// The folders the tree mirrors, in the order it lists them.
   const megatoy::workspace::Workspace &workspace() const { return workspace_; }
@@ -127,6 +131,7 @@ private:
   static constexpr const char *kBuiltinRootName = "presets";
 
   void rebuild_storages();
+  void index_tree();
 
   const megatoy::workspace::Workspace &workspace_;
   std::filesystem::path builtin_presets_directory_;
@@ -135,6 +140,10 @@ private:
   PersistentParseCache *persistent_cache_;
 
   std::vector<PatchEntry> tree_cache_;
+  /// tree_cache_'s patches by relative_path and by source_relative_path,
+  /// the first in tree order kept for each.
+  std::unordered_map<std::string, const PatchEntry *> by_path_;
+  std::unordered_map<std::string, const PatchEntry *> by_source_path_;
   std::vector<std::filesystem::path> watched_directories_;
   FolderWatcher folder_watcher_;
   std::vector<std::filesystem::file_time_type> watched_times_;

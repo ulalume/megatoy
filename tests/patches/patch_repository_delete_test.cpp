@@ -1,7 +1,7 @@
 #include "../test_check.hpp"
 #include "formats/ginpkg.hpp"
 #include "patches/filesystem_patch_storage.hpp"
-#include "patches/folder_metadata.hpp"
+#include "patches/patch_metadata.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_write.hpp"
 #include "platform/std_file_system.hpp"
@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -73,11 +74,8 @@ void test_writable_storage_deletes_patch(const fs::path &root) {
   CHECK(!fs::exists(saved.path));
   CHECK(find_entry(repository.tree(), saved.path) == nullptr);
 
-  patches::FolderMetadataStore metadata_store(writable / ".megatoy" /
-                                              "patches.json");
-  CHECK(metadata_store.load());
-  CHECK(
-      !metadata_store.get(saved.path.filename().generic_string()).has_value());
+  CHECK(!fs::exists(patches::sidecar::path_for(saved.path)));
+  CHECK(!fs::exists(saved.path.parent_path() / ".ym2612"));
 }
 
 void test_read_only_storage_refuses_delete(const fs::path &root) {
@@ -124,18 +122,18 @@ void test_builtin_metadata_lives_outside_presets(const fs::path &root) {
 
     patches::PatchMetadata metadata;
     metadata.star_rating = 4;
-    metadata.category = "bass";
+    metadata.icon = "bass";
     CHECK(repository.update_patch_metadata(entry.relative_path, metadata));
   }
   CHECK(fs::exists(stored));
-  CHECK(!fs::exists(builtin / ".megatoy"));
+  CHECK(!fs::exists(builtin / ".ym2612"));
 
   patches::PatchRepository reopened(file_system, workspace, builtin, stored);
   const auto *found = find_entry(reopened.tree(), path);
   CHECK(found != nullptr);
   CHECK(found->metadata.has_value());
   CHECK(found->metadata->star_rating == 4);
-  CHECK(found->metadata->category == "bass");
+  CHECK(found->metadata->icon == "bass");
 
   // Gone presets leave nothing behind, but missing ones lose nothing.
   patches::PatchRepository elsewhere(file_system, workspace,
@@ -143,6 +141,52 @@ void test_builtin_metadata_lives_outside_presets(const fs::path &root) {
   patches::PatchRepository again(file_system, workspace, builtin, stored);
   found = find_entry(again.tree(), path);
   CHECK(found != nullptr && found->metadata.has_value());
+}
+
+void test_builtin_presets_show_bundled_metadata(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto builtin = root / "builtin_bundled";
+  const auto bundled = builtin / ".ym2612" / "preset.dmp.json";
+  const auto stored = root / "config" / "bundled_presets.json";
+  fs::create_directories(bundled.parent_path());
+  const std::string bundled_text = R"({
+  "icon": "organ",
+  "role": "keys"
+}
+)";
+  {
+    std::ofstream file(bundled);
+    file << bundled_text;
+  }
+
+  ym2612::Patch patch;
+  patch.name = "preset";
+  const auto path = builtin / "preset.dmp";
+  CHECK(patches::write_patch(patch, path));
+
+  megatoy::workspace::Workspace workspace;
+  {
+    patches::PatchRepository repository(file_system, workspace, builtin,
+                                        stored);
+    const auto *found = find_entry(repository.tree(), path);
+    CHECK(found != nullptr && found->metadata.has_value());
+    CHECK(found->metadata->icon == "organ");
+    CHECK(!fs::exists(stored));
+
+    auto metadata = *found->metadata;
+    metadata.star_rating = 5;
+    CHECK(repository.update_patch_metadata(found->relative_path, metadata));
+  }
+  std::ifstream file(bundled);
+  const std::string after{std::istreambuf_iterator<char>(file),
+                          std::istreambuf_iterator<char>()};
+  CHECK(after == bundled_text);
+
+  patches::PatchRepository reopened(file_system, workspace, builtin, stored);
+  const auto *found = find_entry(reopened.tree(), path);
+  CHECK(found != nullptr && found->metadata.has_value());
+  CHECK(found->metadata->icon == "organ");
+  CHECK(found->metadata->star_rating == 5);
 }
 
 void test_duplicate_save_requires_overwrite(const fs::path &root) {
@@ -213,8 +257,7 @@ void test_container_parse_cache_invalidates_on_change(const fs::path &root) {
   CHECK(container->children.front().metadata->star_rating == 4);
 
   patches::FilesystemPatchStorage storage(file_system, writable, "cache",
-                                          /*writable=*/true,
-                                          /*metadata_file=*/{});
+                                          /*writable=*/true);
   std::vector<patches::PatchEntry> tree;
   storage.append_entries(tree);
   CHECK(storage.container_parse_count_for_testing() == 1);
@@ -307,6 +350,7 @@ int main() {
   test_writable_storage_deletes_patch(root);
   test_read_only_storage_refuses_delete(root);
   test_builtin_metadata_lives_outside_presets(root);
+  test_builtin_presets_show_bundled_metadata(root);
   test_duplicate_save_requires_overwrite(root);
   test_container_parse_cache_invalidates_on_change(root);
   test_repository_revision_tracks_refresh(root);

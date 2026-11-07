@@ -294,8 +294,7 @@ int main() {
   pipeline::store_warmed_container(*warm_package,
                                    warm_validation.warmed_container);
   platform::StdFileSystem file_system;
-  patches::FilesystemPatchStorage storage(file_system, warm_root, "warm", true,
-                                          /*metadata_file=*/{});
+  patches::FilesystemPatchStorage storage(file_system, warm_root, "warm", true);
   std::vector<patches::PatchEntry> tree;
   storage.append_entries(tree);
   CHECK(storage.container_parse_count_for_testing() == 0);

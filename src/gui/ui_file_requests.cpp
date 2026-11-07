@@ -432,6 +432,7 @@ void request_patch_duplicate(AppContext &ctx,
   // No file dialog to name the copy, so the dialog at the top level does.
   auto &duplicate = ctx.ui_state().patch_duplicate_state;
   duplicate.patch = std::move(patch);
+  duplicate.metadata = entry.metadata;
   duplicate.dialog.stem = stem;
   duplicate.dialog.extension = extension;
   duplicate.dialog.folder = save_as_initial_folder(
@@ -467,6 +468,9 @@ void request_patch_duplicate(AppContext &ctx,
   }
   ctx.services.preference_manager.set_last_save_directory(
       selected.parent_path());
+  if (selected != entry.full_path) {
+    session.repository().copy_patch_metadata(entry.metadata, selected);
+  }
   session.repository().refresh();
   announce_saved_patch(ctx, selected);
   open_duplicate(ctx, selected, patch);
@@ -492,6 +496,9 @@ void render_patch_duplicate_dialog(AppContext &ctx) {
             extension);
         switch (result.status) {
         case patches::SavePatchResult::Status::Success:
+          patch_session.repository().copy_patch_metadata(
+              ctx.ui_state().patch_duplicate_state.metadata, result.path);
+          patch_session.repository().refresh();
           announce_saved_patch(ctx, result.path);
           open_duplicate(ctx, result.path,
                          ctx.ui_state().patch_duplicate_state.patch);
