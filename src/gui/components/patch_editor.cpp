@@ -245,7 +245,7 @@ float lfo_slider_width() {
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   // The LFO's switch and rate are how the patch is played, set from the
   // menu bar; what the patch holds is how far it follows the LFO.
-  ImGui::SeparatorText("Low Frequency Oscillator");
+  ImGui::SeparatorText("LFO");
 
   ImGui::PushItemWidth(lfo_slider_width());
 
