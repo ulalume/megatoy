@@ -260,6 +260,7 @@ void GuiManager::begin_frame() {
                                                                  : 0.0f;
   ui::touch::drag_to_scroll();
   ui::layouts::fit_footer_to_width();
+  ui::layouts::fit_footer_to_waveform();
   ui::layouts::fit_sidebar_to_width();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();

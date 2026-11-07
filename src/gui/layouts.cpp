@@ -5,6 +5,7 @@
 #include "gui/window_title.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <optional>
 #include <string>
 
 namespace ui::layouts {
@@ -128,6 +129,55 @@ void fit_footer_to_width() {
   waveform->DockNode->SizeRef[axis] = size[axis] * waveform_share[axis];
   other->SizeRef[axis] = size[axis] - waveform->DockNode->SizeRef[axis];
   waveform->DockNode->SizeRef[was] = other->SizeRef[was] = size[was];
+  ImGui::MarkIniSettingsDirty();
+}
+
+void fit_footer_to_waveform() {
+  // Whether the waveform was laid out last frame, and its height then.
+  static std::optional<bool> shown;
+  static float waveform_height = 0.0f;
+
+  // Closed, the window leaves its group but keeps its id, which keeps the
+  // group in the tree.
+  const ImGuiWindow *waveform = ImGui::FindWindowByName(ui::WAVEFORM_TITLE);
+  const ImGuiDockNode *node =
+      waveform != nullptr && waveform->DockId != 0
+          ? ImGui::DockContextFindNodeByID(GImGui, waveform->DockId)
+          : nullptr;
+  if (node == nullptr) {
+    return;
+  }
+  ImGuiDockNode *footer = node->ParentNode;
+  if (footer == nullptr || !footer->IsSplitNode() ||
+      footer->ChildNodes[0] != node) {
+    return;
+  }
+  const bool now = node->IsVisible;
+  const bool changed = shown.has_value() && *shown != now;
+  shown = now;
+  if (now) {
+    waveform_height = node->Size.y + GImGui->Style.DockingSeparatorSize;
+  }
+
+  ImGuiDockNode *frame = footer->ParentNode;
+  if (!changed || footer->SplitAxis != ImGuiAxis_Y || frame == nullptr ||
+      !frame->IsSplitNode() || frame->SplitAxis != ImGuiAxis_Y ||
+      frame->ChildNodes[1] != footer) {
+    return;
+  }
+  // Stacked on the keyboard, the waveform's height comes from the editor
+  // and goes back to it: the keyboard keeps its own.
+  float height = footer->Size.y;
+  if (now) {
+    height = waveform_height > 0.0f
+                 ? height + waveform_height
+                 : height / (1.0f - waveform_share[ImGuiAxis_Y]);
+    height = ImMin(height, frame->Size.y * kFooterMaxShare);
+  } else {
+    height = ImMax(height - waveform_height, GImGui->Style.WindowMinSize.y);
+  }
+  footer->SizeRef.y = height;
+  frame->ChildNodes[0]->SizeRef.y = frame->Size.y - height;
   ImGui::MarkIniSettingsDirty();
 }
 

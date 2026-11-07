@@ -20,6 +20,13 @@ void build_default_layout(unsigned int dockspace_id);
 void fit_footer_to_width();
 
 /**
+ * While the waveform is above the keyboard, hands its height to the patch
+ * editor when it is closed and takes it back when it is shown, so the
+ * keyboard keeps its own. Called before the dockspace is submitted.
+ */
+void fit_footer_to_waveform();
+
+/**
  * Narrows the patch browser before the patch editor as the window narrows,
  * down to its least width, then the editor to its own. Below the two least
  * widths together the browser is folded away. Called before the dockspace is
