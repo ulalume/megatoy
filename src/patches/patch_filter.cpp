@@ -1,5 +1,7 @@
 #include "patch_filter.hpp"
 
+#include "gui/instrument_icons.hpp"
+
 #include <cctype>
 
 namespace patches {
@@ -46,8 +48,9 @@ bool entry_matches_query(const PatchEntry &entry,
   if (contains_case_insensitive(entry.name, query_lower)) {
     return true;
   }
-  return entry.metadata &&
-         contains_case_insensitive(entry.metadata->icon, query_lower);
+  // By the icon's name or its group's, such as "drums" for a kick.
+  return entry.metadata && !entry.metadata->icon.empty() &&
+         ui::instrument_icons::matches(entry.metadata->icon, query_lower);
 }
 
 } // namespace patches

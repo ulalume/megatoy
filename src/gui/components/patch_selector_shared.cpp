@@ -1,8 +1,10 @@
 #include "patch_selector_shared.hpp"
+#include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
 
 #include "common.hpp"
 #include "file_manager.hpp"
+#include "gui/instrument_icons.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_tree_view.hpp"
@@ -33,7 +35,8 @@ void show_patch_tooltip(const patches::PatchRepository &repository,
     tooltip +=
         "\nRating: " + std::to_string(entry.metadata->star_rating) + "/5";
     if (!entry.metadata->icon.empty()) {
-      tooltip += "\nIcon: " + entry.metadata->icon;
+      tooltip +=
+          "\nIcon: " + ui::instrument_icons::display_name(entry.metadata->icon);
     }
     if (!entry.metadata->notes.empty()) {
       tooltip += "\nNotes: " + entry.metadata->notes;
@@ -149,15 +152,27 @@ void entry_context_menu(PatchSelectorContext &context,
 
   // Written once the tree is drawn: the write rebuilds it, and `entry`
   // with it.
-  if (begin_group(actions.rate) && ui::begin_menu("Rating")) {
-    const int rating = entry.metadata ? entry.metadata->star_rating : 0;
-    for (int stars = 0; stars <= 5; ++stars) {
-      const char *label = stars == 0 ? "None" : kStarLabels[stars].data();
-      if (ImGui::MenuItem(label, nullptr, stars == rating)) {
-        context.pending_rating = PendingRating{entry.relative_path, stars};
+  if (begin_group(actions.rate)) {
+    if (ui::begin_menu("Icon")) {
+      const std::string icon =
+          entry.metadata ? entry.metadata->icon : std::string();
+      if (auto picked = instrument_icon_list(icon)) {
+        context.pending_icon =
+            PendingIcon{entry.relative_path, std::move(*picked)};
+        ImGui::CloseCurrentPopup();
       }
+      ui::end_menu();
     }
-    ui::end_menu();
+    if (ui::begin_menu("Rating")) {
+      const int rating = entry.metadata ? entry.metadata->star_rating : 0;
+      for (int stars = 0; stars <= 5; ++stars) {
+        const char *label = stars == 0 ? "None" : kStarLabels[stars].data();
+        if (ImGui::MenuItem(label, nullptr, stars == rating)) {
+          context.pending_rating = PendingRating{entry.relative_path, stars};
+        }
+      }
+      ui::end_menu();
+    }
   }
 
   // Whether a file manager exists is the composition root's call -- the

@@ -3,6 +3,7 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/instrument_icon_picker.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -36,13 +37,37 @@ current_entries(PatchLabState &state,
   return state.entries;
 }
 
-/// What a source is called and what it holds; false when its entry has gone.
+/// The instrument icon of a browser entry, or "" for none.
+std::string entry_icon(const patches::PatchEntry *entry) {
+  return entry != nullptr && entry->metadata ? entry->metadata->icon
+                                             : std::string();
+}
+
+/// A row of the source list: the icon, then the label.
+bool icon_selectable(const std::string &icon, const std::string &label,
+                     bool selected) {
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  const float icon_width = ImGui::GetFontSize() * 1.25f;
+  const bool clicked = ImGui::Selectable("##row", selected);
+  const float line = ImGui::GetTextLineHeight();
+  draw_instrument_icon(icon, pos, ImVec2(pos.x + icon_width, pos.y + line));
+  ImGui::GetWindowDrawList()->AddText(
+      ImVec2(pos.x + icon_width + ImGui::GetStyle().ItemInnerSpacing.x, pos.y),
+      ImGui::GetColorU32(ImGuiCol_Text), label.c_str());
+  return clicked;
+}
+
+/// What a source is called, its icon and what it holds; false when its
+/// entry has gone.
 bool resolve_source(const patches::PatchSession &session,
                     const PatchLabSource &source, std::string *label,
-                    ym2612::Patch *patch) {
+                    ym2612::Patch *patch, std::string *icon = nullptr) {
   if (source.patch) {
     if (label != nullptr) {
       *label = source.label;
+    }
+    if (icon != nullptr) {
+      *icon = source.icon;
     }
     if (patch != nullptr) {
       *patch = *source.patch;
@@ -52,6 +77,9 @@ bool resolve_source(const patches::PatchSession &session,
   const auto *entry = session.find_entry(source.entry_path);
   if (entry == nullptr) {
     return false;
+  }
+  if (icon != nullptr) {
+    *icon = entry_icon(entry);
   }
   if (label != nullptr) {
     *label = entry->name.empty()
@@ -96,8 +124,12 @@ bool render_source_list(const patches::PatchSession &session,
       }
       if (item.kind == SourceRowKind::Document) {
         ImGui::PushID(static_cast<int>(item.document->id()));
-        if (ImGui::Selectable(item.label.c_str())) {
-          source = {.patch = item.document->patch(), .label = item.label};
+        const std::string icon =
+            entry_icon(session.document_entry(*item.document));
+        if (icon_selectable(icon, item.label, false)) {
+          source = {.patch = item.document->patch(),
+                    .label = item.label,
+                    .icon = icon};
           changed = true;
         }
         ImGui::PopID();
@@ -105,7 +137,11 @@ bool render_source_list(const patches::PatchSession &session,
       }
       const auto &entry = *item.entry->entry;
       const bool selected = source.entry_path == entry.relative_path;
-      if (ImGui::Selectable(item.text().c_str(), selected)) {
+      ImGui::PushID(entry.relative_path.c_str());
+      const bool clicked =
+          icon_selectable(entry_icon(&entry), item.text(), selected);
+      ImGui::PopID();
+      if (clicked) {
         source = {.entry_path = entry.relative_path};
         changed = true;
       }
@@ -118,6 +154,9 @@ bool render_source_list(const patches::PatchSession &session,
   return changed;
 }
 
+/// How much larger than the text a slot draws its patch's icon.
+constexpr float kSlotIconScale = 1.75f;
+
 /// A slot for one source: a click lists what it can take, and a patch
 /// dragged from the browser drops into it.
 void render_source_slot(const char *id,
@@ -126,7 +165,9 @@ void render_source_slot(const char *id,
                         PatchLabSource &source, std::string &filter_text,
                         float width) {
   std::string name;
-  if (!source.empty() && !resolve_source(session, source, &name, nullptr)) {
+  std::string icon;
+  if (!source.empty() &&
+      !resolve_source(session, source, &name, nullptr, &icon)) {
     source = {};
   }
 
@@ -181,8 +222,14 @@ void render_source_slot(const char *id,
                              nullptr, ImVec2(0.5f, 0.5f));
     ImGui::PopStyleColor();
   } else {
+    // The icon at the left, as large as the slot's two lines allow.
+    const float icon_size = inner_max.y - inner_min.y;
+    draw_instrument_icon(icon, inner_min,
+                         ImVec2(inner_min.x + icon_size, inner_max.y),
+                         kSlotIconScale);
+    const float text_x = inner_min.x + icon_size + style.ItemInnerSpacing.x;
     const float top = (min.y + max.y - ImGui::GetTextLineHeight()) * 0.5f;
-    ImGui::RenderTextEllipsis(draw_list, ImVec2(inner_min.x, top), inner_max,
+    ImGui::RenderTextEllipsis(draw_list, ImVec2(text_x, top), inner_max,
                               inner_max.x, name.c_str(), nullptr, nullptr);
   }
   if (hovered) {

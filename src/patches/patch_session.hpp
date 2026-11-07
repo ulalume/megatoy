@@ -77,6 +77,9 @@ public:
   /// The browser's entry for a repository-relative path: the entry itself,
   /// or failing that the first one read from that file.
   const PatchEntry *find_entry(const std::string &relative_path) const;
+  /// The browser's entry for the patch a document holds, or nullptr when
+  /// the browser does not list it.
+  const PatchEntry *document_entry(const PatchDocument &document) const;
   /// The open document showing this repository entry, if any.
   std::optional<DocumentId>
   find_document_by_selection_path(const std::filesystem::path &path) const;

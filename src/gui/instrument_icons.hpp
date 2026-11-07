@@ -1,6 +1,7 @@
 #pragma once
 
 #include <span>
+#include <string>
 #include <string_view>
 
 namespace ui::instrument_icons {
@@ -26,8 +27,20 @@ const char *none_glyph();
 /// The glyph of `id`, or the none glyph for an empty or unknown id.
 const char *glyph(std::string_view id);
 
-/// Whether `id` holds `filter`, ignoring case. An empty filter matches every
-/// id.
+/// Whether `id` names one of the icons.
+bool known(std::string_view id);
+
+/// What `id` is called on screen, such as "Grand Piano" for "grand-piano".
+std::string display_name(std::string_view id);
+
+/// The name of the group holding `id`, or empty for an unknown id.
+std::string_view group_name(std::string_view id);
+
+/**
+ * Whether `filter` is found in the id, its name or its group's name,
+ * ignoring case, and with a space and a hyphen the same. An empty filter
+ * matches every id.
+ */
 bool matches(std::string_view id, std::string_view filter);
 
 } // namespace ui::instrument_icons

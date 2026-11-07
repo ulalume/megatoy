@@ -270,6 +270,14 @@ PatchSession::find_entry(const std::string &relative_path) const {
   return repository_->find_entry(relative_path);
 }
 
+const PatchEntry *
+PatchSession::document_entry(const PatchDocument &document) const {
+  const auto &key = document.selection_path().empty()
+                        ? document.path()
+                        : document.selection_path();
+  return find_entry(key);
+}
+
 void PatchSession::set_current_patch(const ym2612::Patch &patch,
                                      const std::filesystem::path &source_path,
                                      RememberPatchPath remember) {

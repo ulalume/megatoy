@@ -1,4 +1,5 @@
 #include "patch_tree_view.hpp"
+#include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
 #include "gui/instrument_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -191,9 +192,10 @@ bool row_selectable(const char *label, bool selected = false) {
 
 /// A patch's instrument icon and name, over a selectable that spans the row.
 bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
-  const char *icon = instrument_icons::glyph(
-      item.metadata ? std::string_view(item.metadata->icon)
-                    : std::string_view());
+  const std::string_view icon_id = item.metadata
+                                       ? std::string_view(item.metadata->icon)
+                                       : std::string_view();
+  const char *icon = instrument_icons::glyph(icon_id);
   const float name_x = ImGui::CalcTextSize(icon).x + ui::scale::px(kIconGap);
   const ImVec2 pos = ImGui::GetCursorScreenPos();
   // Sized to the icon and name, which the next item follows, while the
@@ -208,9 +210,9 @@ bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
   const ImVec2 text(pos.x,
                     pos.y + (row_height() - ImGui::GetTextLineHeight()) * 0.5f);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
-  draw_list->AddText(text, color, icon);
-  draw_list->AddText(ImVec2(text.x + name_x, text.y), color, item.name.c_str());
+  draw_list->AddText(text, instrument_icon_color(icon_id), icon);
+  draw_list->AddText(ImVec2(text.x + name_x, text.y),
+                     ImGui::GetColorU32(ImGuiCol_Text), item.name.c_str());
   return clicked;
 }
 

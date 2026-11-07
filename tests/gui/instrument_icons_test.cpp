@@ -45,7 +45,24 @@ void test_filter() {
   CHECK(!matches("grand-piano", "guitar"));
   CHECK(!matches("bell", "bells"));
   CHECK(matches("", ""));
+  CHECK(matches("grand-piano", "Grand Piano"));
+  CHECK(matches("kick", "drums"));
+  CHECK(matches("xylophone", "chromatic"));
+  CHECK(!matches("kick", "piano"));
   std::cout << "test_filter passed" << std::endl;
+}
+
+void test_names() {
+  CHECK(known("grand-piano"));
+  CHECK(!known(""));
+  CHECK(!known("Bright lead"));
+  CHECK(display_name("grand-piano") == "Grand Piano");
+  CHECK(display_name("triangle-wave") == "Triangle Wave");
+  CHECK(display_name("fx") == "FX");
+  CHECK(display_name("ufo") == "UFO");
+  CHECK(group_name("kick") == "Drums");
+  CHECK(group_name("Bright lead").empty());
+  std::cout << "test_names passed" << std::endl;
 }
 
 void test_groups_follow_the_library_vocabulary() {
@@ -71,6 +88,7 @@ int main() {
   test_glyph_lookup();
   test_every_icon_has_its_own_glyph();
   test_filter();
+  test_names();
   test_groups_follow_the_library_vocabulary();
   return 0;
 }

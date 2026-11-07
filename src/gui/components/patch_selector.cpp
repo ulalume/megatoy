@@ -141,6 +141,14 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
     }
   }
 
+  if (context.pending_icon) {
+    const auto icon = std::move(*context.pending_icon);
+    context.pending_icon.reset();
+    if (const auto *entry = context.session.find_entry(icon.relative_path)) {
+      context.session.set_entry_icon(*entry, icon.icon);
+    }
+  }
+
   if (context.pending_menu_action) {
     context.pending_menu_action.reset();
     if (context.save_current_patch) {

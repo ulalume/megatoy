@@ -18,6 +18,11 @@ struct PendingRating {
   int stars = 0;
 };
 
+struct PendingIcon {
+  std::string relative_path;
+  std::string icon;
+};
+
 struct PendingMove {
   patches::PatchEntry entry;
   patches::PatchEntry destination;
@@ -66,6 +71,7 @@ struct PatchSelectorContext {
   std::optional<std::filesystem::path> pending_remove_folder;
   std::optional<PendingMenuAction> pending_menu_action;
   std::optional<PendingRating> pending_rating;
+  std::optional<PendingIcon> pending_icon;
   /// A drop in the tree, carried out once the tree is no longer being drawn.
   std::optional<PendingMove> pending_move;
 };

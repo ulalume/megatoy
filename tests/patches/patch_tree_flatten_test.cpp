@@ -42,7 +42,8 @@ patches::PatchEntry make_directory(const std::string &name,
 }
 
 /**
- * banks/            lead.dmp (5 stars), fx/ zap.opm (2 stars, "percussion")
+ * banks/            lead.dmp (5 stars, "sawtooth"), fx/ zap.opm (2 stars,
+ *                   "percussion")
  * empty/            no patch files, though not empty on disk
  * fresh/            nothing on disk at all
  * solo.dmp          0 stars
@@ -53,7 +54,8 @@ std::vector<patches::PatchEntry> make_tree() {
       make_file("zap.opm", "banks/fx/zap.opm", 2, "percussion"));
 
   std::vector<patches::PatchEntry> bank_children;
-  bank_children.push_back(make_file("lead.dmp", "banks/lead.dmp", 5, "lead"));
+  bank_children.push_back(
+      make_file("lead.dmp", "banks/lead.dmp", 5, "sawtooth"));
   bank_children.push_back(
       make_directory("fx", "banks/fx", std::move(fx_children)));
 
@@ -164,6 +166,11 @@ void test_query_keeps_the_ancestors_of_a_match() {
   const auto by_icon = flatten_visible_rows(tree, "percussion", 0, open_nested);
   CHECK(paths_of(by_icon) ==
         std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
+
+  // And by the icon's group.
+  const auto by_group = flatten_visible_rows(tree, "synth", 0, open_nested);
+  CHECK(paths_of(by_group) ==
+        std::vector<std::string>({"banks", "banks/lead.dmp"}));
 }
 
 void test_directory_name_match_needs_no_visible_files() {

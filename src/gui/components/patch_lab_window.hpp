@@ -28,6 +28,8 @@ struct PatchLabSource {
   std::string entry_path;
   std::optional<ym2612::Patch> patch;
   std::string label;
+  /// The document's instrument icon when it was picked.
+  std::string icon;
 
   bool empty() const { return entry_path.empty() && !patch; }
 };

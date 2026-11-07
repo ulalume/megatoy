@@ -4,6 +4,7 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
@@ -21,7 +22,6 @@
 #include "view_patch_drop.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
-#include <cfloat>
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -53,162 +53,77 @@ ImVec2 menu_anchor_below_last_item() {
 }
 #endif
 
-/// The browser's entry for the patch `document` holds, or nullptr when the
-/// browser does not list it.
-const patches::PatchEntry *
-document_entry(const patches::PatchSession &session,
-               const patches::PatchDocument &document) {
-  const auto &key = document.selection_path().empty()
-                        ? document.path()
-                        : document.selection_path();
-  return session.find_entry(key);
-}
-
 /// The glyph of the patch's instrument icon, or the none icon.
 const char *document_icon(const patches::PatchSession &session,
                           const patches::PatchDocument &document) {
-  const auto *entry = document_entry(session, document);
+  const auto *entry = session.document_entry(document);
   return instrument_icons::glyph(entry != nullptr && entry->metadata
                                      ? std::string_view(entry->metadata->icon)
                                      : std::string_view());
 }
 
-/// The icon picker's columns, and its greatest height before it scrolls.
-constexpr int kIconPickerColumns = 8;
-constexpr float kIconPickerMaxHeight = 330.0f;
+/// How much larger than the text the header draws the patch's icon.
+constexpr float kHeaderIconScale = 2.0f;
+
+/// What the header's metadata asks to write, once it is drawn.
+struct MetadataEdit {
+  std::optional<std::string> icon;
+  std::optional<int> rating;
+};
 
 /**
- * The icon picker, opened below the button just drawn: a filter, None, and
- * every group's icons that match the filter. The id picked, "" for None, or
- * nothing while none is.
+ * The patch's instrument icon, large, at the start of the header. A button
+ * that picks another for a patch the browser lists in a folder that keeps
+ * metadata.
  */
-std::optional<std::string> icon_picker(ImGuiID popup_id,
-                                       const std::string &current) {
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const float cell = ImGui::GetFrameHeight();
-  const float width = cell * kIconPickerColumns +
-                      style.ItemSpacing.x * (kIconPickerColumns - 1) +
-                      style.ScrollbarSize;
-  const float max_height = ui::scale::px(kIconPickerMaxHeight);
-  const ImRect button(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
-  ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
-                                      ImVec2(FLT_MAX, max_height));
-  if (!ImGui::BeginComboPopup(popup_id, button, ImGuiComboFlags_None)) {
-    return std::nullopt;
-  }
-  static char filter[32] = "";
-  if (ImGui::IsWindowAppearing()) {
-    filter[0] = '\0';
-    ImGui::SetKeyboardFocusHere();
-  }
-  ImGui::SetNextItemWidth(width);
-  ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " Filter...",
-                           filter, sizeof(filter));
-
-  std::optional<std::string> picked;
-  if (ImGui::Selectable("None", current.empty())) {
-    picked = std::string();
-  }
-  // The icons scroll below the filter, filling what the popup has left.
-  ImGui::SetNextWindowSizeConstraints(
-      ImVec2(0.0f, 0.0f), ImVec2(width, max_height - ImGui::GetCursorPosY() -
-                                            style.WindowPadding.y));
-  ImGui::BeginChild("##icons", ImVec2(width, 0.0f),
-                    ImGuiChildFlags_AutoResizeY);
-  ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
-  for (const auto &group : instrument_icons::groups()) {
-    int column = 0;
-    for (const auto &icon : group.icons) {
-      if (!instrument_icons::matches(icon.id, filter)) {
-        continue;
-      }
-      if (column == 0) {
-        ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%.*s",
-                           static_cast<int>(group.name.size()),
-                           group.name.data());
-      } else if (column % kIconPickerColumns != 0) {
-        ImGui::SameLine();
-      }
-      ++column;
-      const std::string id(icon.id);
-      ImGui::PushID(id.c_str());
-      if (ImGui::Selectable(icon.glyph, id == current, 0, ImVec2(cell, cell))) {
-        picked = id;
-      }
-      ImGui::SetItemTooltip("%s", id.c_str());
-      ImGui::PopID();
-    }
-  }
-  ImGui::PopStyleVar();
-  ImGui::EndChild();
-  if (picked) {
-    ImGui::CloseCurrentPopup();
-  }
-  ImGui::EndCombo();
-  return picked;
-}
-
-/**
- * The icon and rating of the patch's file, at the right of the row,
- * or below it when the row has no room. Only for a patch the browser lists
- * in a folder that keeps metadata.
- */
-void render_patch_metadata(PatchEditorContext &context,
-                           const patches::PatchDocument &document,
-                           UIState::DocumentUi &ui) {
-  auto &session = context.session;
-  const auto *entry = document_entry(session, document);
-  if (entry == nullptr || !session.repository().can_edit_metadata(*entry)) {
+void render_header_icon(const patches::PatchEntry *entry, bool editable,
+                        float size, MetadataEdit &edit) {
+  const std::string icon =
+      entry != nullptr && entry->metadata ? entry->metadata->icon : "";
+  if (!editable) {
+    ImGui::Dummy(ImVec2(size, size));
+    draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                         kHeaderIconScale);
     return;
   }
-  const float spacing = ImGui::GetStyle().ItemSpacing.x;
-  const float button_size = ImGui::GetFrameHeight();
-  const float needed = button_size + spacing + star_rating_width();
-  ImGui::SameLine();
-  if (ImGui::GetContentRegionAvail().x >= needed) {
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                         ImGui::GetContentRegionAvail().x - needed);
-  } else {
-    ImGui::NewLine();
-  }
-
-  const std::string saved_icon =
-      entry->metadata ? entry->metadata->icon : std::string();
   const ImGuiID popup_id = ImGui::GetID("##icon_picker");
-  const std::string button_label =
-      std::string(instrument_icons::glyph(saved_icon)) + "##icon";
-  if (ImGui::Button(button_label.c_str(), ImVec2(button_size, button_size))) {
+  if (ImGui::Button("##icon", ImVec2(size, size))) {
     ImGui::OpenPopupEx(popup_id);
   }
-  ImGui::SetItemTooltip("Icon");
-  if (const auto picked = icon_picker(popup_id, saved_icon);
-      picked && *picked != saved_icon) {
-    // The tree is rebuilt by the write, so `entry` is not used after it.
-    session.set_entry_icon(*entry, *picked);
-    return;
+  draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                       kHeaderIconScale);
+  if (instrument_icons::known(icon)) {
+    ImGui::SetItemTooltip("Icon: %s",
+                          instrument_icons::display_name(icon).c_str());
+  } else {
+    ImGui::SetItemTooltip("Icon");
   }
+  if (auto picked = instrument_icon_popup(popup_id, icon);
+      picked && *picked != icon) {
+    edit.icon = std::move(picked);
+  }
+}
 
-  // Written once let go, as the browser's star filter is dragged the same.
-  ImGui::SameLine(0.0f, spacing);
+/// The rating, written once let go as the browser's star filter is.
+void render_header_rating(const patches::PatchEntry &entry,
+                          UIState::DocumentUi &ui, MetadataEdit &edit) {
   int rating = ui.pending_rating.value_or(
-      entry->metadata ? entry->metadata->star_rating : 0);
+      entry.metadata ? entry.metadata->star_rating : 0);
   if (star_rating_slider("##rating", rating, "Rating")) {
     ui.pending_rating = rating;
   }
   if (ImGui::IsItemDeactivated() && ui.pending_rating) {
-    const int chosen = *ui.pending_rating;
+    edit.rating = *ui.pending_rating;
     ui.pending_rating.reset();
-    session.set_entry_rating(*entry, chosen);
   }
 }
 
-void render_save_export_buttons(PatchEditorContext &context,
-                                patches::PatchDocument &document,
-                                UIState::DocumentUi &ui,
-                                PatchEditorState &state, bool is_active) {
+/// Save, and Save As... where it is offered, as one row.
+void render_save_buttons(PatchEditorContext &context,
+                         patches::PatchDocument &document,
+                         const patches::SaveControls &controls,
+                         PatchEditorState &state) {
   auto &patch_session = context.session;
-
-  const auto controls = patches::save_controls(patch_session, document);
   const bool save_button_is_disabled = !controls.save_enabled;
 
   if (save_button_is_disabled) {
@@ -256,15 +171,76 @@ void render_save_export_buttons(PatchEditorContext &context,
 #endif
     }
   }
+}
+
+/// How wide render_save_buttons draws.
+float save_buttons_width(const patches::SaveControls &controls) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  float width =
+      ImGui::CalcTextSize(controls.save_label).x + style.FramePadding.x * 2.0f;
+  if (controls.show_save_as) {
+    width += style.ItemSpacing.x + ImGui::CalcTextSize("Save As...").x +
+             style.FramePadding.x * 2.0f;
+  }
+  return width;
+}
+
+/**
+ * The header: the patch's icon, its rating over where it is kept, and the
+ * save buttons at the right, or below when the row has no room.
+ */
+void render_document_header(PatchEditorContext &context,
+                            patches::PatchDocument &document,
+                            UIState::DocumentUi &ui, PatchEditorState &state,
+                            bool is_active) {
+  auto &patch_session = context.session;
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const auto *entry = patch_session.document_entry(document);
+  const bool editable =
+      entry != nullptr && patch_session.repository().can_edit_metadata(*entry);
+
+  // Two lines tall: the rating's and the path's.
+  const float height = ImGui::GetFrameHeight() + style.ItemSpacing.y +
+                       ImGui::GetTextLineHeight();
+  const float top = ImGui::GetCursorPosY();
+  MetadataEdit edit;
+  render_header_icon(entry, editable, height, edit);
 
   ImGui::SameLine();
+  ImGui::BeginGroup();
+  if (editable) {
+    render_header_rating(*entry, ui, edit);
+  } else {
+    ImGui::SetCursorPosY(top + (height - ImGui::GetTextLineHeight()) * 0.5f);
+  }
   const auto &repository = patch_session.repository();
   const auto relative_path =
       repository.to_relative_path(document.path()).generic_string();
   ImGui::TextColored(
       styles::color(styles::MegatoyCol::TextMuted), "%s",
       display_preset_path(repository.display_path(relative_path)).c_str());
-  render_patch_metadata(context, document, ui);
+  ImGui::EndGroup();
+
+  const auto controls = patches::save_controls(patch_session, document);
+  const float buttons_width = save_buttons_width(controls);
+  ImGui::SameLine();
+  if (ImGui::GetContentRegionAvail().x >= buttons_width) {
+    ImGui::SetCursorPos(
+        ImVec2(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x -
+                   buttons_width,
+               top + (height - ImGui::GetFrameHeight()) * 0.5f));
+  } else {
+    ImGui::NewLine();
+  }
+  render_save_buttons(context, document, controls, state);
+
+  // Written once the header is drawn: a write rebuilds the browser's tree,
+  // and `entry` with it.
+  if (edit.icon) {
+    patch_session.set_entry_icon(*entry, *edit.icon);
+  } else if (edit.rating) {
+    patch_session.set_entry_rating(*entry, *edit.rating);
+  }
 
   // Render popups in the same window/ID stack as the actions that open them.
   // They act on the active document, so only its window holds them.
@@ -677,7 +653,7 @@ void render_document_window(PatchEditorContext &context,
     if (ui.disk_version) {
       render_disk_change_bar(context, id, ui);
     }
-    render_save_export_buttons(context, document, ui, state, is_active);
+    render_document_header(context, document, ui, state, is_active);
     ImGui::Spacing();
 
     // Side by side while each of the two even columns holds the LFO's
