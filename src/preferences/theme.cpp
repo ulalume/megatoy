@@ -9,9 +9,9 @@ namespace {
 const std::vector<ThemeDefinition> &all_theme_definitions() {
   // The storage keys predate the current names; saved preferences use them.
   static const std::vector<ThemeDefinition> themes = {
-      {ThemeId::Megatoy, "Megatoy", "megatoy-dark", "megatoy_dark"},
-      {ThemeId::ImGuiDark, "ImGui Dark", "imgui-dark", "imgui_dark"},
-      {ThemeId::ImGuiLight, "ImGui Light", "megatoy-light", "imgui_light"},
+      {ThemeId::Megatoy, "Megatoy", "megatoy-dark"},
+      {ThemeId::ImGuiDark, "ImGui Dark", "imgui-dark"},
+      {ThemeId::ImGuiLight, "ImGui Light", "megatoy-light"},
   };
   return themes;
 }
@@ -42,9 +42,5 @@ ThemeId theme_id_from_storage_key(const std::string &key, ThemeId fallback) {
 }
 
 const char *storage_key(ThemeId id) { return theme_definition(id).storage_key; }
-
-const char *asset_subdirectory(ThemeId id) {
-  return theme_definition(id).asset_subdirectory;
-}
 
 } // namespace ui::styles

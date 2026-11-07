@@ -2,7 +2,6 @@
 #include "fonts/icon_font.hpp"
 #include "gui/app_window.hpp"
 #include "gui/areas.hpp"
-#include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/input/touch.hpp"
 #include "gui/layouts.hpp"
@@ -212,9 +211,6 @@ void GuiManager::shutdown() {
   if (!initialized_) {
     return;
   }
-
-  // Reset preview textures
-  ui::reset_ssg_preview_textures();
 
   // Cleanup
   ImGui_ImplOpenGL3_Shutdown();
@@ -465,9 +461,6 @@ bool GuiManager::supports_quit() const {
 void GuiManager::set_theme(ui::styles::ThemeId theme) {
   theme_ = theme;
   ui::styles::apply_style(theme_, ui_scale_);
-  if (ImGui::GetCurrentContext() != nullptr) {
-    ui::reset_ssg_preview_textures();
-  }
 }
 
 float GuiManager::display_scale() const {

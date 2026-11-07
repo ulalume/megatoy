@@ -1,33 +1,106 @@
 #include "ssg_preview.hpp"
 
-#include <string>
-#include <vector>
+#include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <imgui.h>
 
 namespace ui {
 namespace {
-std::vector<std::string> build_filenames() {
-  std::vector<std::string> names;
-  names.reserve(9);
-  for (int i = 0; i < 8; ++i) {
-    names.emplace_back("ssg" + std::to_string(i) + ".png");
-  }
-  names.emplace_back("ssgoff.png");
-  return names;
-}
 
-PreviewImageList g_ssg_previews(build_filenames());
-constexpr int kOffIndex = 8;
+/// A point of an envelope's outline: x in cycles from 0 to 4, level from 0
+/// at the floor to 1 at the top.
+struct Point {
+  float cycle;
+  float level;
+};
+
+struct Shape {
+  std::array<Point, 8> points;
+  int count;
+};
+
+/// Each type's outline. The attack is instant, so a decaying type starts at
+/// the top and an inverted one at the floor.
+constexpr std::array<Shape, 8> kShapes = {{
+    {{{{0, 1}, {1, 0}, {1, 1}, {2, 0}, {2, 1}, {3, 0}, {3, 1}, {4, 0}}}, 8},
+    {{{{0, 1}, {1, 0}, {4, 0}}}, 3},
+    {{{{0, 1}, {1, 0}, {2, 1}, {3, 0}, {4, 1}}}, 5},
+    {{{{0, 1}, {1, 0}, {1, 1}, {4, 1}}}, 4},
+    {{{{0, 0}, {1, 1}, {1, 0}, {2, 1}, {2, 0}, {3, 1}, {3, 0}, {4, 1}}}, 8},
+    {{{{0, 0}, {1, 1}, {4, 1}}}, 3},
+    {{{{0, 0}, {1, 1}, {2, 0}, {3, 1}, {4, 0}}}, 5},
+    {{{{0, 0}, {1, 1}, {1, 0}, {4, 0}}}, 4},
+}};
+
+/// The frame, as four strips so its edges stay sharp.
+void draw_frame(ImDrawList *draw_list, ImVec2 min, ImVec2 max, ImU32 color) {
+  const float width = ui::scale::px(1.0f);
+  draw_list->AddRectFilled(min, ImVec2(max.x, min.y + width), color);
+  draw_list->AddRectFilled(ImVec2(min.x, max.y - width), max, color);
+  draw_list->AddRectFilled(ImVec2(min.x, min.y + width),
+                           ImVec2(min.x + width, max.y - width), color);
+  draw_list->AddRectFilled(ImVec2(max.x - width, min.y + width),
+                           ImVec2(max.x, max.y - width), color);
+}
 
 } // namespace
 
-const PreviewTexture *get_ssg_preview_texture(int envelope_type) {
-  return g_ssg_previews.get(envelope_type);
-}
+void ssg_diagram(bool enabled, int envelope_type, ImVec2 size) {
+  ImGui::Dummy(size);
+  const ImVec2 min = ImGui::GetItemRectMin();
+  const ImVec2 max = ImGui::GetItemRectMax();
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  draw_frame(draw_list, min, max,
+             styles::color_u32(styles::MegatoyCol::PreviewBorder));
 
-const PreviewTexture *get_ssg_preview_off_texture() {
-  return g_ssg_previews.get(kOffIndex);
-}
+  if (!enabled) {
+    const char *label = "OFF";
+    const ImVec2 text = ImGui::CalcTextSize(label);
+    draw_list->AddText(ImVec2(std::round((min.x + max.x - text.x) * 0.5f),
+                              std::round((min.y + max.y - text.y) * 0.5f)),
+                       styles::color_u32(styles::MegatoyCol::TextMuted), label);
+    return;
+  }
 
-void reset_ssg_preview_textures() { g_ssg_previews.reset(); }
+  // The cycles fill the frame but for a margin as wide as the space above
+  // and below them.
+  const float margin = std::round((max.y - min.y) * 0.25f);
+  const float left = min.x + margin;
+  const float right = max.x - margin;
+  const float top = min.y + margin;
+  const float bottom = max.y - margin;
+  const Shape &shape =
+      kShapes[static_cast<std::size_t>(std::clamp(envelope_type, 0, 7))];
+  const auto at = [&](const Point &point) {
+    return ImVec2(std::round(left + (right - left) * point.cycle / 4.0f),
+                  std::round(bottom - (bottom - top) * point.level));
+  };
+
+  const ImU32 line = styles::color_u32(styles::MegatoyCol::EnvelopeCurve);
+  const ImU32 fill =
+      (line & ~IM_COL32_A_MASK) | (((line >> IM_COL32_A_SHIFT) & 0xFF) * 2 / 5)
+                                      << IM_COL32_A_SHIFT;
+  // The fill under each slope, down to the floor.
+  for (int i = 1; i < shape.count; ++i) {
+    const ImVec2 from = at(shape.points[i - 1]);
+    const ImVec2 to = at(shape.points[i]);
+    if (to.x <= from.x) {
+      continue;
+    }
+    const ImVec2 quad[] = {from, to, ImVec2(to.x, bottom),
+                           ImVec2(from.x, bottom)};
+    draw_list->AddConvexPolyFilled(quad, 4, fill);
+  }
+  // The outline on the pixel centres, so it stays sharp.
+  for (int i = 0; i < shape.count; ++i) {
+    const ImVec2 point = at(shape.points[i]);
+    draw_list->PathLineTo(ImVec2(point.x + 0.5f, point.y + 0.5f));
+  }
+  draw_list->PathStroke(line, ImDrawFlags_None, ui::scale::px(1.0f));
+}
 
 } // namespace ui

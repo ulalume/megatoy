@@ -161,7 +161,6 @@ set(MEGATOY_CORE_SOURCES
   src/gui/save_export_actions.cpp
   src/gui/components/status_toasts.cpp
   src/gui/components/preview/algorithm_preview.cpp
-  src/gui/components/preview/preview.cpp
   src/gui/components/preview/ssg_preview.cpp
   src/gui/components/waveform.cpp
   src/gui/gui_manager.cpp

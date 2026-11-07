@@ -842,13 +842,11 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   // SSG Type Envelope Control (0-7)
-  const int ssg_type = op.ssg_type_envelope_control;
-  if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
-                                          : get_ssg_preview_off_texture()) {
-    if (preview->valid()) {
-      preview_image(*preview, ImGui::GetFrameHeight());
-    }
-  }
+  // As tall as a frame, and as wide as the four cycles need.
+  const float ssg_height = ImGui::GetFrameHeight();
+  ssg_diagram(op.ssg_enable, op.ssg_type_envelope_control,
+              ImVec2(ui::scale::px(72.0f) + ssg_height - ui::scale::px(18.0f),
+                     ssg_height));
   ImGui::SameLine();
 
   // Named while the name fits before the panel's edge; the slider below
