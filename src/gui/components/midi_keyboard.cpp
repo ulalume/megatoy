@@ -524,6 +524,12 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         const ImU32 col =
             is_white ? (is_pressed ? white_key_pressed_col : white_key_col)
                      : (is_pressed ? black_key_pressed_col : black_key_col);
+        if (!is_white && keyboard_settings.scale == Scale::CHROMATIC) {
+          // Over the white keys, so the colour, translucent, goes on the
+          // window's background rather than on them.
+          draw_list->AddRectFilled(key_min, key_max,
+                                   ImGui::GetColorU32(ImGuiCol_WindowBg));
+        }
         draw_list->AddRectFilled(key_min, key_max, col);
         // One pixel further right, onto the next key's left edge, where that
         // key's own border draws over it again: neighbours share one line.
