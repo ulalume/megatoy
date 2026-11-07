@@ -314,11 +314,13 @@ void panel_menu_item(const char *icon, const char *title, bool &shown) {
   }
 }
 
-/// How much of the bar fits: the load graph's width (0 leaves it out), and
-/// how much of the menus and the middle.
+/// How much of the bar fits: the load graph's width (0 leaves it out), how
+/// much of the menus and the middle, and whether the LFO menu drops its name
+/// and keeps only On or Off.
 struct BarFit {
   float graph_width = 0.0f;
   BarCentreFit centre = BarCentreFit::Full;
+  bool lfo_short = false;
 };
 
 /// A menu of the bar, named with its icon, or shown as the icon alone.
@@ -342,19 +344,18 @@ float bar_menu_advance(const char *label) {
 }
 
 /**
- * The LFO menu's label, which says whether the LFO is on. Padded to the
- * width of the wider one, so the menu keeps its size as it switches. Its
- * icon alone is muted while it is off.
+ * The LFO menu's label, which says whether the LFO is on, short of its name
+ * where the bar is narrow. Padded to the width of the wider one, so the menu
+ * keeps its size as it switches.
  */
-std::string lfo_menu_label(BarCentreFit fit, bool on) {
-  if (fit == BarCentreFit::Icon) {
-    return ICON_FA_WAVE_SQUARE "###LFO";
-  }
-  constexpr const char *kOn = ICON_FA_WAVE_SQUARE " LFO On";
-  constexpr const char *kOff = ICON_FA_WAVE_SQUARE " LFO Off";
-  const float widest =
-      std::max(ImGui::CalcTextSize(kOn).x, ImGui::CalcTextSize(kOff).x);
-  std::string label = on ? kOn : kOff;
+std::string lfo_menu_label(bool short_label, bool on) {
+  const char *on_label =
+      short_label ? ICON_FA_WAVE_SQUARE " On" : ICON_FA_WAVE_SQUARE " LFO On";
+  const char *off_label =
+      short_label ? ICON_FA_WAVE_SQUARE " Off" : ICON_FA_WAVE_SQUARE " LFO Off";
+  const float widest = std::max(ImGui::CalcTextSize(on_label).x,
+                                ImGui::CalcTextSize(off_label).x);
+  std::string label = on ? on_label : off_label;
   const float space = ImGui::CalcTextSize(" ").x;
   for (float width = ImGui::CalcTextSize(label.c_str()).x;
        width + space * 0.5f < widest; width += space) {
@@ -364,15 +365,16 @@ std::string lfo_menu_label(BarCentreFit fit, bool on) {
 }
 
 /// How far the LFO menu reaches left of the middle, on or off.
-float lfo_menu_advance(BarCentreFit fit) {
-  return std::max(bar_menu_advance(lfo_menu_label(fit, true).c_str()),
-                  bar_menu_advance(lfo_menu_label(fit, false).c_str()));
+float lfo_menu_advance(bool short_label) {
+  return std::max(bar_menu_advance(lfo_menu_label(short_label, true).c_str()),
+                  bar_menu_advance(lfo_menu_label(short_label, false).c_str()));
 }
 
 /**
  * As the bar narrows, the load graph shrinks to the reading it holds and
- * then goes, then the middle loses its note, and then the menus and the
- * middle keep only their icons. Measured from after the app menu.
+ * then goes, then the middle loses its note, then the menus and the middle
+ * keep only their icons, and last the LFO menu keeps only On or Off.
+ * Measured from after the app menu.
  */
 BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const ImGuiStyle &style = ImGui::GetStyle();
@@ -387,9 +389,10 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   // The room the middle leaves before a load area `load_width` wide: it sits
   // centred in the bar, but never over the menus.
   // The LFO menu stands just left of the load area.
-  const auto room = [&](BarCentreFit fit, float load_width) {
+  const auto room = [&](BarCentreFit fit, float load_width,
+                        bool lfo_short = false) {
     const float right_start = width - load_width - style.FramePadding.x * 2.0f -
-                              lfo_menu_advance(fit);
+                              lfo_menu_advance(lfo_short);
     if (!context.bar_centre_size) {
       return right_start - menus_end(fit);
     }
@@ -417,7 +420,10 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   if (room(BarCentreFit::Short, reading_width) >= 0.0f) {
     return {0.0f, BarCentreFit::Short};
   }
-  return {0.0f, BarCentreFit::Icon};
+  if (room(BarCentreFit::Icon, reading_width) >= 0.0f) {
+    return {0.0f, BarCentreFit::Icon};
+  }
+  return {0.0f, BarCentreFit::Icon, true};
 }
 
 void file_menu_items(MainMenuContext &context,
@@ -719,9 +725,9 @@ void render_main_menu(MainMenuContext &context) {
     // back.
     auto &playback = context.patch_session.playback();
     const std::string lfo_label =
-        lfo_menu_label(fit.centre, playback.lfo_enable);
+        lfo_menu_label(fit.lfo_short, playback.lfo_enable);
     const float lfo_x =
-        std::max(menus_end, load_start - lfo_menu_advance(fit.centre));
+        std::max(menus_end, load_start - lfo_menu_advance(fit.lfo_short));
     ImGui::SetCursorPos(ImVec2(lfo_x, row_y));
     const bool lfo_muted = !playback.lfo_enable;
     const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
