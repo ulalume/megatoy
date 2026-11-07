@@ -6,6 +6,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <system_error>
 #endif
 
 namespace patches {
@@ -50,14 +51,19 @@ struct FolderWatcher::Impl : efsw::FileWatchListener {
   Clock::time_point last_change{};
 
   void handleFileAction(efsw::WatchID id, const std::string &dir,
-                        const std::string &filename, efsw::Action,
+                        const std::string &filename, efsw::Action action,
                         const std::string &) override {
+    const auto path = std::filesystem::path(dir) / filename;
+    // What changed inside a folder is reported on its own, hidden or not.
+    std::error_code ec;
+    if (action == efsw::Actions::Modified &&
+        std::filesystem::is_directory(path, ec)) {
+      return;
+    }
     std::lock_guard lock(mutex);
     const auto root = roots.find(id);
     if (root != roots.end()) {
-      const auto relative = (std::filesystem::path(dir) / filename)
-                                .lexically_relative(root->second);
-      if (is_hidden(relative)) {
+      if (is_hidden(path.lexically_relative(root->second))) {
         return;
       }
     }
