@@ -25,6 +25,12 @@ namespace {
 
 constexpr float playback_step_duration = 0.35f;
 
+/// The chromatic keyboard's narrowest white key, and its black keys' width
+/// and height against a white key's.
+constexpr float kMinWhiteKeyWidth = 24.0f;
+constexpr float kBlackKeyWidth = 0.6f;
+constexpr float kBlackKeyHeight = 0.6f;
+
 std::vector<ym2612::Note>
 build_playback_sequence(const std::vector<Key> &scale_keys,
                         uint8_t base_octave) {
@@ -406,19 +412,78 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), false,
                         ImGuiWindowFlags_HorizontalScrollbar)) {
     const auto &notes = context.state.display_notes;
-    const float min_key_width = ui::scale::px(18.0f);
-    // One pixel kept for the last key's right border.
-    const float key_width =
-        notes.empty() ? min_key_width
-                      : std::max(min_key_width,
-                                 (available_region.x - 1.0f) / notes.size());
-
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
+    const float key_height = ImGui::GetContentRegionAvail().y;
+    const float y = cursor.y;
 
-    float key_height = ImGui::GetContentRegionAvail().y;
-    float y = ImGui::GetCursorScreenPos().y;
-    float x = cursor.x;
+    struct KeyRect {
+      ImRect rect;
+      ym2612::Note note;
+      bool white;
+    };
+    std::vector<KeyRect> key_rects;
+    key_rects.reserve(notes.size());
+    // The chromatic scale is laid out as a piano's: white keys side by side,
+    // black keys shorter and narrower over the line between two. Any other
+    // scale lays its notes side by side alike.
+    if (keyboard_settings.scale == Scale::CHROMATIC) {
+      const auto whites = static_cast<float>(
+          std::count_if(notes.begin(), notes.end(), [](const auto &note) {
+            return ui::is_white_key(note.key);
+          }));
+      const bool black_first =
+          !notes.empty() && !ui::is_white_key(notes.front().key);
+      const bool black_last =
+          !notes.empty() && !ui::is_white_key(notes.back().key);
+      // A black key at either end stands half out past the white keys.
+      const float ends =
+          (black_first ? 0.5f : 0.0f) + (black_last ? 0.5f : 0.0f);
+      const float min_white_width = ui::scale::px(kMinWhiteKeyWidth);
+      // One pixel kept for the last key's right border.
+      const float white_width =
+          whites == 0.0f
+              ? min_white_width
+              : std::max(min_white_width, (available_region.x - 1.0f) /
+                                              (whites + ends * kBlackKeyWidth));
+      const float black_width = std::round(white_width * kBlackKeyWidth);
+      const float black_height = std::round(key_height * kBlackKeyHeight);
+      float x = cursor.x + (black_first ? black_width * 0.5f : 0.0f);
+      for (const auto &note : notes) {
+        if (ui::is_white_key(note.key)) {
+          key_rects.push_back(
+              {ImRect(std::floor(x), y, std::floor(x + white_width),
+                      y + key_height),
+               note, true});
+          x += white_width;
+        } else {
+          const float left = std::floor(x - black_width * 0.5f);
+          key_rects.push_back(
+              {ImRect(left, y, left + black_width, y + black_height), note,
+               false});
+        }
+      }
+    } else {
+      const float min_key_width = ui::scale::px(18.0f);
+      // One pixel kept for the last key's right border.
+      const float key_width =
+          notes.empty() ? min_key_width
+                        : std::max(min_key_width,
+                                   (available_region.x - 1.0f) / notes.size());
+      float x = cursor.x;
+      for (const auto &note : notes) {
+        // On whole pixels, so the borders do not blur across two.
+        key_rects.push_back({ImRect(std::floor(x), y, std::floor(x + key_width),
+                                    y + key_height),
+                             note, ui::is_white_key(note.key)});
+        x += key_width;
+      }
+    }
+    // Black keys lie over white ones, so they take the pointer first.
+    std::stable_partition(
+        key_rects.begin(), key_rects.end(), [&](const KeyRect &key) {
+          return !key.white && keyboard_settings.scale == Scale::CHROMATIC;
+        });
 
     // A press on any key sounds whichever key the pointer is over, so a drag
     // plays each key it crosses. On a touch screen the fingers play, each its
@@ -427,86 +492,79 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         ImGui::GetIO().MouseSource == ImGuiMouseSource_TouchScreen;
     bool pointer_held = false;
     std::optional<ym2612::Note> under_pointer;
-    struct KeyRect {
-      ImRect rect;
-      ym2612::Note note;
-    };
-    std::vector<KeyRect> key_rects;
-    key_rects.reserve(notes.size());
+    for (const auto &key : key_rects) {
+      ImGui::SetCursorScreenPos(key.rect.Min);
+      ImGui::PushID(key.note.midi_note());
+      ImGui::InvisibleButton("key", key.rect.GetSize());
+      pointer_held |= ImGui::IsItemActive() && !by_touch;
+      if (!under_pointer &&
+          ImGui::IsItemHovered(
+              ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
+        under_pointer = key.note;
+      }
+      ImGui::PopID();
+    }
+
     // Where the keys typing plays begin and end.
     float typed_min = FLT_MAX;
     float typed_max = -FLT_MAX;
-
-    for (auto note : notes) {
-      bool is_key_mapped = context.state.reverse_mappings.find(note) !=
-                           context.state.reverse_mappings.end();
-
-      bool is_white = ui::is_white_key(note.key);
-      bool is_pressed =
-          context.key_is_pressed ? context.key_is_pressed(note) : false;
-
-      // On whole pixels, so the borders do not blur across two.
-      ImVec2 key_min(std::floor(x), y);
-      ImVec2 key_max(std::floor(x + key_width), y + key_height);
-
-      ImGui::SetCursorScreenPos(key_min);
-      ImGui::PushID(note.midi_note());
-
-      ImGui::InvisibleButton("white_key",
-                             ImVec2(key_max.x - key_min.x, key_height));
-
-      key_rects.push_back({ImRect(key_min, key_max), note});
-      pointer_held |= ImGui::IsItemActive() && !by_touch;
-      if (ImGui::IsItemHovered(
-              ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
-        under_pointer = note;
-      }
-
-      ImGui::PopID();
-
-      ImU32 col = is_white
-                      ? (is_pressed ? white_key_pressed_col : white_key_col)
-                      : (is_pressed ? black_key_pressed_col : black_key_col);
-      draw_list->AddRectFilled(key_min, key_max, col);
-      // One pixel further right, onto the next key's left edge, where that
-      // key's own border draws over it again: neighbours share one line.
-      draw_list->AddRect(key_min, ImVec2(key_max.x + 1.0f, key_max.y),
-                         key_border_col, 0, 0, 1.0f);
-
-      if (is_key_mapped) {
-        typed_min = std::min(typed_min, key_min.x);
-        typed_max = std::max(typed_max, key_max.x);
-        // A bar along the top of each key typing plays, and its key's name
-        // a little below it.
-        ImVec2 key_max_mapped(x + key_width, y + ui::scale::px(4.0f));
-        draw_list->AddRectFilled(key_min, key_max_mapped,
-                                 white_key_pressed_col);
-        ImU32 text_color = is_white ? white_key_text_col : black_key_text_col;
-        auto it = context.state.reverse_mappings.find(note);
-        ImGuiKey mapped_key = (it != context.state.reverse_mappings.end())
-                                  ? it->second
-                                  : ImGuiKey_None;
-        std::string key_text = mapped_key == ImGuiKey_None
-                                   ? std::string()
-                                   : short_key_name(mapped_key);
-        if (key_text.empty()) {
-          const char *fallback = ImGui::GetKeyName(mapped_key);
-          key_text = fallback ? fallback : "";
+    // Drawn white keys first, so the black ones lie over them.
+    for (const bool white_pass : {true, false}) {
+      for (const auto &key : key_rects) {
+        if (key.white != white_pass) {
+          continue;
         }
-        ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
-        ImVec2 text_pos(key_min.x + (key_width - text_size.x) * 0.5f,
-                        key_max_mapped.y + ui::scale::px(3.0f));
-        draw_list->AddText(text_pos, text_color, key_text.c_str());
+        const auto &note = key.note;
+        const ImVec2 key_min = key.rect.Min;
+        const ImVec2 key_max = key.rect.Max;
+        const float key_width = key_max.x - key_min.x;
+        const bool is_white = key.white;
+        const bool is_pressed =
+            context.key_is_pressed ? context.key_is_pressed(note) : false;
+        const ImU32 col =
+            is_white ? (is_pressed ? white_key_pressed_col : white_key_col)
+                     : (is_pressed ? black_key_pressed_col : black_key_col);
+        draw_list->AddRectFilled(key_min, key_max, col);
+        // One pixel further right, onto the next key's left edge, where that
+        // key's own border draws over it again: neighbours share one line.
+        draw_list->AddRect(key_min, ImVec2(key_max.x + 1.0f, key_max.y),
+                           key_border_col, 0, 0, 1.0f);
+
+        const ImU32 text_color =
+            is_white ? white_key_text_col : black_key_text_col;
+        const auto mapped = context.state.reverse_mappings.find(note);
+        if (mapped != context.state.reverse_mappings.end()) {
+          typed_min = std::min(typed_min, key_min.x);
+          typed_max = std::max(typed_max, key_max.x);
+          // A bar along the top of each key typing plays, and its key's name
+          // a little below it: below the black keys on a white one that has
+          // them beside it.
+          const ImVec2 bar_max(key_max.x, key_min.y + ui::scale::px(4.0f));
+          draw_list->AddRectFilled(key_min, bar_max, white_key_pressed_col);
+          std::string key_text = short_key_name(mapped->second);
+          if (key_text.empty()) {
+            const char *fallback = ImGui::GetKeyName(mapped->second);
+            key_text = fallback ? fallback : "";
+          }
+          float text_top = bar_max.y + ui::scale::px(3.0f);
+          if (is_white && keyboard_settings.scale == Scale::CHROMATIC) {
+            text_top =
+                key_min.y + key_height * kBlackKeyHeight + ui::scale::px(3.0f);
+          }
+          const ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
+          draw_list->AddText(
+              ImVec2(key_min.x + (key_width - text_size.x) * 0.5f, text_top),
+              text_color, key_text.c_str());
+        }
+        if (note.key == keyboard_settings.key) {
+          const std::string key_text = note.name();
+          const ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
+          draw_list->AddText(
+              ImVec2(key_min.x + (key_width - text_size.x) * 0.5f,
+                     key_max.y - text_size.y - 5.0f),
+              text_color, key_text.c_str());
+        }
       }
-      if (note.key == keyboard_settings.key) {
-        ImU32 text_color = is_white ? white_key_text_col : black_key_text_col;
-        std::string key_text = note.name();
-        ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
-        ImVec2 text_pos(key_min.x + (key_width - text_size.x) * 0.5f,
-                        key_max.y - text_size.y - 5.0f);
-        draw_list->AddText(text_pos, text_color, key_text.c_str());
-      }
-      x += key_width;
     }
 
     // Once the keys typing plays move, the keyboard scrolls to centre them
