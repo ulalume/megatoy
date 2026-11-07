@@ -255,26 +255,26 @@ void render_directory_row(PatchSelectorContext &context,
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, row_margin() * 0.5f);
   // Folders are muted beside the patches they hold; a top folder's heading
-  // is not, and has a line under it.
+  // is a bar, as an editor section's is.
   const bool heading = is_heading(row);
-  if (!heading) {
+  if (heading) {
+    using styles::MegatoyCol;
+    ImGui::PushStyleColor(ImGuiCol_Header,
+                          styles::color(MegatoyCol::SectionHeader));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                          styles::color(MegatoyCol::SectionHeaderHovered));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                          styles::color(MegatoyCol::SectionHeaderActive));
+  } else {
     ImGui::PushStyleColor(ImGuiCol_Text,
                           styles::color(styles::MegatoyCol::TextMuted));
   }
-  const bool open = ImGui::TreeNodeEx(display_name.c_str(),
-                                      ImGuiTreeNodeFlags_SpanFullWidth |
-                                          ImGuiTreeNodeFlags_FramePadding |
-                                          ImGuiTreeNodeFlags_NoTreePushOnOpen);
-  if (heading) {
-    const ImVec2 min = ImGui::GetItemRectMin();
-    const ImVec2 max = ImGui::GetItemRectMax();
-    const float line = std::max(1.0f, std::floor(ui::scale::px(1.0f)));
-    ImGui::GetWindowDrawList()->AddRectFilled(
-        ImVec2(min.x, max.y - line), max,
-        ImGui::GetColorU32(ImGuiCol_Separator));
-  } else {
-    ImGui::PopStyleColor();
-  }
+  const bool open = ImGui::TreeNodeEx(
+      display_name.c_str(),
+      ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding |
+          ImGuiTreeNodeFlags_NoTreePushOnOpen |
+          (heading ? ImGuiTreeNodeFlags_Framed : ImGuiTreeNodeFlags_None));
+  ImGui::PopStyleColor(heading ? 3 : 1);
   ImGui::PopStyleVar(2);
   entry_context_menu(context, item,
                      row.depth == 0 &&
