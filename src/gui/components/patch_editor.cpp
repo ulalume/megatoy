@@ -62,9 +62,6 @@ const char *document_icon(const patches::PatchSession &session,
                                      : std::string_view());
 }
 
-/// How much larger than the text the header draws the patch's icon.
-constexpr float kHeaderIconScale = 2.0f;
-
 /// What the header's metadata asks to write, once it is drawn.
 struct MetadataEdit {
   std::optional<std::string> icon;
@@ -83,7 +80,7 @@ void render_header_icon(const patches::PatchEntry *entry, bool editable,
   if (!editable) {
     ImGui::Dummy(ImVec2(size, size));
     draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
-                         kHeaderIconScale);
+                         kLargeIconScale);
     return;
   }
   const ImGuiID popup_id = ImGui::GetID("##icon_picker");
@@ -94,7 +91,7 @@ void render_header_icon(const patches::PatchEntry *entry, bool editable,
   }
   ImGui::PopStyleColor();
   draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
-                       kHeaderIconScale);
+                       kLargeIconScale);
   if (instrument_icons::known(icon)) {
     ImGui::SetItemTooltip("Icon: %s",
                           instrument_icons::display_name(icon).c_str());

@@ -1,6 +1,7 @@
 #include "instrument_icon_picker.hpp"
 
 #include "gui/components/centred_glyph.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/frame_requests.hpp"
 #include "gui/instrument_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -19,74 +20,65 @@
 namespace ui {
 namespace {
 
-/// How much larger than the text the list draws its icons.
-constexpr float kListIconScale = 1.75f;
 /// The gap between icons, across and down.
 constexpr float kCellGap = 2.0f;
-/// The gap between rows of groups, and between groups in a row.
+/// The gap between rows.
 constexpr float kRowGap = 6.0f;
 
-/// A group in the list, named as shown: a long name broken in two.
-struct ListGroup {
-  std::string_view name;
-  const char *label;
-};
-
-/// The groups the list sets side by side, row by row.
-constexpr ListGroup kPiano[] = {{"Piano", "Piano"}, {"Organ", "Organ"}};
-constexpr ListGroup kPlucked[] = {
-    {"Guitar", "Guitar"}, {"Bass", "Bass"}, {"Strings", "Strings"}};
-constexpr ListGroup kVoices[] = {
-    {"Ensemble", "Ensemble"}, {"Brass", "Brass"}, {"Voice", "Voice"}};
-constexpr ListGroup kWind[] = {{"Reed", "Reed"}, {"Pipe", "Pipe"}};
-constexpr ListGroup kSynth[] = {{"Synth", "Synth"}};
-constexpr ListGroup kEthnic[] = {{"Ethnic", "Ethnic"}};
-constexpr ListGroup kPercussion[] = {
-    {"Chromatic Percussion", "Chromatic\nPercussion"},
-    {"Percussive", "Percussive"}};
-constexpr ListGroup kDrums[] = {{"Drums", "Drums"}};
-constexpr ListGroup kEffects[] = {{"Sound Effects", "Sound Effects"}};
-constexpr std::span<const ListGroup> kListRows[] = {
+/// The groups the list sets on one row, under one name.
+constexpr std::string_view kPiano[] = {"Piano", "Organ"};
+constexpr std::string_view kPlucked[] = {"Guitar", "Bass", "Strings"};
+constexpr std::string_view kVoices[] = {"Ensemble", "Brass", "Voice"};
+constexpr std::string_view kWind[] = {"Reed", "Pipe"};
+constexpr std::string_view kSynth[] = {"Synth"};
+constexpr std::string_view kEthnic[] = {"Ethnic"};
+constexpr std::string_view kPercussion[] = {"Chromatic Percussion",
+                                            "Percussive"};
+constexpr std::string_view kDrums[] = {"Drums"};
+constexpr std::string_view kEffects[] = {"Sound Effects"};
+constexpr std::span<const std::string_view> kListRows[] = {
     kPiano,  kPlucked,    kVoices, kWind,   kSynth,
     kEthnic, kPercussion, kDrums,  kEffects};
 
-/// One group placed in the list: its icons and the name shown before them.
-struct PlacedGroup {
-  const instrument_icons::Group *group;
-  const char *label;
+/// One row of the list: its groups' names, and their icons in order.
+struct ListRow {
+  std::string label;
+  std::vector<const instrument_icons::Icon *> icons;
 };
 
 /**
  * The list's rows: kListRows, then any group it leaves out on a row of its
  * own.
  */
-const std::vector<std::vector<PlacedGroup>> &list_rows() {
-  static const std::vector<std::vector<PlacedGroup>> rows = [] {
-    std::vector<std::vector<PlacedGroup>> out;
+const std::vector<ListRow> &list_rows() {
+  static const std::vector<ListRow> rows = [] {
+    std::vector<ListRow> out;
     std::vector<const instrument_icons::Group *> placed;
-    const auto find = [](std::string_view name) {
-      for (const auto &group : instrument_icons::groups()) {
-        if (group.name == name) {
-          return &group;
-        }
+    const auto add = [&](ListRow &row, const instrument_icons::Group &group) {
+      row.label += (row.label.empty() ? "" : " / ") + std::string(group.name);
+      for (const auto &icon : group.icons) {
+        row.icons.push_back(&icon);
       }
-      return static_cast<const instrument_icons::Group *>(nullptr);
+      placed.push_back(&group);
     };
-    for (const auto row : kListRows) {
-      std::vector<PlacedGroup> line;
-      for (const auto &entry : row) {
-        if (const auto *group = find(entry.name)) {
-          line.push_back({group, entry.label});
-          placed.push_back(group);
+    for (const auto names : kListRows) {
+      ListRow row;
+      for (const auto name : names) {
+        for (const auto &group : instrument_icons::groups()) {
+          if (group.name == name) {
+            add(row, group);
+          }
         }
       }
-      if (!line.empty()) {
-        out.push_back(std::move(line));
+      if (!row.icons.empty()) {
+        out.push_back(std::move(row));
       }
     }
     for (const auto &group : instrument_icons::groups()) {
       if (std::find(placed.begin(), placed.end(), &group) == placed.end()) {
-        out.push_back({{&group, group.name.data()}});
+        ListRow row;
+        add(row, group);
+        out.push_back(std::move(row));
       }
     }
     return out;
@@ -112,33 +104,35 @@ void draw_instrument_icon(std::string_view id, ImVec2 min, ImVec2 max,
 
 std::optional<std::string> instrument_icon_list(const std::string &current) {
   const ImGuiStyle &style = ImGui::GetStyle();
-  const float cell = std::round(ImGui::GetFontSize() * kListIconScale +
+  const float cell = std::round(ImGui::GetFontSize() * kLargeIconScale +
                                 style.FramePadding.y * 2.0f);
   const float gap = scale::px(kCellGap);
   const float row_gap = scale::px(kRowGap);
-  const float label_gap = style.ItemSpacing.x;
-  const float group_gap = style.ItemSpacing.x * 3.0f;
-  const auto group_width = [&](const char *label, std::size_t icons) {
-    return ImGui::CalcTextSize(label).x + label_gap +
-           cell * static_cast<float>(icons) +
-           gap * static_cast<float>(icons - 1);
-  };
 
-  // As wide as the widest row, or as the screen leaves room for.
-  float widest = 0.0f;
+  // The names stand in a column at the left, as wide as the longest group's
+  // name; a row naming more than one breaks onto further lines.
+  float label_width = 0.0f;
+  for (const auto &group : instrument_icons::groups()) {
+    label_width = std::max(
+        label_width, ImGui::CalcTextSize(group.name.data(),
+                                         group.name.data() + group.name.size())
+                         .x);
+  }
+  const float icons_x = label_width + style.ItemSpacing.x * 2.0f;
+
+  // The icons on a grid: as many columns as the longest row has icons, or as
+  // the screen leaves room for.
+  std::size_t longest = 1;
   for (const auto &row : list_rows()) {
-    float row_width = 0.0f;
-    for (const auto &placed : row) {
-      row_width += (row_width > 0.0f ? group_gap : 0.0f) +
-                   group_width(placed.label, placed.group->icons.size());
-    }
-    widest = std::max(widest, row_width);
+    longest = std::max(longest, row.icons.size());
   }
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  const float room = viewport->WorkSize.x * 0.9f - icons_x -
+                     style.WindowPadding.x * 2.0f - style.ScrollbarSize;
+  const int columns = std::clamp(static_cast<int>((room + gap) / (cell + gap)),
+                                 1, static_cast<int>(longest));
   const float width =
-      std::min(widest, viewport->WorkSize.x * 0.9f -
-                           style.WindowPadding.x * 2.0f - style.ScrollbarSize) +
-      style.ScrollbarSize;
+      icons_x + cell * columns + gap * (columns - 1) + style.ScrollbarSize;
 
   static char filter[32] = "";
   // The list takes its height from what it held the frame before, so the
@@ -157,9 +151,14 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
                            filter, sizeof(filter));
 
   std::optional<std::string> picked;
-  if (ImGui::Selectable("None", current.empty(), 0, ImVec2(width, 0.0f))) {
+  // As tall as a list row.
+  ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+  if (ImGui::Selectable(
+          "None", current.empty(), 0,
+          ImVec2(width, ImGui::GetTextLineHeight() + list_row_spacing()))) {
     picked = std::string();
   }
+  ImGui::PopStyleVar();
 
   // The icons scroll below the filter, up to most of the screen's height.
   const float max_height = viewport->WorkSize.y * 0.7f;
@@ -169,57 +168,47 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
                     ImGuiChildFlags_AutoResizeY);
   const ImU32 muted =
       ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
-  // Groups follow one another along a row and go on to the next line where
-  // the row is out of room; so do a group's icons, under its first.
+  ImFont *font = ImGui::GetFont();
+  const float font_size = ImGui::GetFontSize();
   const ImVec2 origin = ImGui::GetCursorScreenPos();
-  const float right = origin.x + width - style.ScrollbarSize;
   float y = origin.y;
   std::vector<const instrument_icons::Icon *> shown;
   for (const auto &row : list_rows()) {
-    float x = origin.x;
-    bool row_used = false;
-    for (const auto &placed : row) {
-      shown.clear();
-      for (const auto &icon : placed.group->icons) {
-        if (instrument_icons::matches(icon.id, filter)) {
-          shown.push_back(&icon);
-        }
+    shown.clear();
+    for (const auto *icon : row.icons) {
+      if (instrument_icons::matches(icon->id, filter)) {
+        shown.push_back(icon);
       }
-      if (shown.empty()) {
-        continue;
-      }
-      if (row_used && x + group_width(placed.label, shown.size()) > right) {
-        x = origin.x;
-        y += cell + gap;
-      }
-      const ImVec2 label = ImGui::CalcTextSize(placed.label);
-      ImGui::GetWindowDrawList()->AddText(
-          ImVec2(x, y + (cell - label.y) * 0.5f), muted, placed.label);
-      const float icons_x = x + label.x + label_gap;
-      float icon_x = icons_x;
-      for (const auto *icon : shown) {
-        if (icon_x > icons_x && icon_x + cell > right) {
-          icon_x = icons_x;
-          y += cell + gap;
-        }
-        const std::string id(icon->id);
-        ImGui::SetCursorScreenPos(ImVec2(icon_x, y));
-        ImGui::PushID(id.c_str());
-        if (ImGui::Selectable("##icon", id == current, 0, ImVec2(cell, cell))) {
-          picked = id;
-        }
-        draw_instrument_icon(id, ImGui::GetItemRectMin(),
-                             ImGui::GetItemRectMax(), kListIconScale);
-        ImGui::SetItemTooltip("%s", instrument_icons::display_name(id).c_str());
-        ImGui::PopID();
-        icon_x += cell + gap;
-      }
-      x = icon_x - gap + group_gap;
-      row_used = true;
     }
-    if (row_used) {
-      y += cell + row_gap;
+    if (shown.empty()) {
+      continue;
     }
+    const auto lines = static_cast<int>((shown.size() + columns - 1) / columns);
+    const float icons_height = cell * lines + gap * (lines - 1);
+    const ImVec2 label =
+        font->CalcTextSizeA(font_size, FLT_MAX, label_width, row.label.c_str());
+    const float height = std::max(icons_height, label.y);
+    ImGui::GetWindowDrawList()->AddText(
+        font, font_size, ImVec2(origin.x, y + (height - label.y) * 0.5f), muted,
+        row.label.c_str(), nullptr, label_width);
+    const float icons_top = y + (height - icons_height) * 0.5f;
+    for (std::size_t i = 0; i < shown.size(); ++i) {
+      const auto column = static_cast<float>(i % columns);
+      const auto line = static_cast<float>(i / columns);
+      ImGui::SetCursorScreenPos(
+          ImVec2(origin.x + icons_x + column * (cell + gap),
+                 icons_top + line * (cell + gap)));
+      const std::string id(shown[i]->id);
+      ImGui::PushID(id.c_str());
+      if (ImGui::Selectable("##icon", id == current, 0, ImVec2(cell, cell))) {
+        picked = id;
+      }
+      draw_instrument_icon(id, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                           kLargeIconScale);
+      ImGui::SetItemTooltip("%s", instrument_icons::display_name(id).c_str());
+      ImGui::PopID();
+    }
+    y += height + row_gap;
   }
   ImGui::SetCursorScreenPos(ImVec2(origin.x, y));
   ImGui::Dummy(ImVec2(0.0f, 0.0f));

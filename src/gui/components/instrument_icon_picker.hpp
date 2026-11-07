@@ -7,6 +7,10 @@
 
 namespace ui {
 
+/// How much larger than the text an icon is drawn where it is chosen: in the
+/// editor's header and the icon list.
+inline constexpr float kLargeIconScale = 2.0f;
+
 /// The colour an icon is drawn in: muted for a patch without one.
 ImU32 instrument_icon_color(std::string_view id);
 
