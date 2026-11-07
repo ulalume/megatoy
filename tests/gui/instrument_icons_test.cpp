@@ -1,7 +1,9 @@
 #include "../test_check.hpp"
 #include "gui/instrument_icons.hpp"
 #include <cstring>
+#include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <set>
 #include <string>
 
@@ -46,9 +48,29 @@ void test_filter() {
   std::cout << "test_filter passed" << std::endl;
 }
 
+void test_groups_follow_the_library_vocabulary() {
+  std::ifstream file(YM2612_PATCHES_VOCABULARY);
+  CHECK(file.good());
+  const auto vocabulary = nlohmann::json::parse(file);
+  const auto &library = vocabulary.at("icon");
+  CHECK(library.size() == groups().size());
+  std::size_t index = 0;
+  for (const auto &group : groups()) {
+    const auto &expected = library.at(index++);
+    CHECK(expected.at("group").get<std::string>() == group.name);
+    const auto &ids = expected.at("ids");
+    CHECK(ids.size() == group.icons.size());
+    for (std::size_t i = 0; i < ids.size(); ++i) {
+      CHECK(ids.at(i).get<std::string>() == group.icons[i].id);
+    }
+  }
+  std::cout << "test_groups_follow_the_library_vocabulary passed" << std::endl;
+}
+
 int main() {
   test_glyph_lookup();
   test_every_icon_has_its_own_glyph();
   test_filter();
+  test_groups_follow_the_library_vocabulary();
   return 0;
 }

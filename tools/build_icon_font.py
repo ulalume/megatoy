@@ -3,9 +3,12 @@
 
 Each SVG is one filled glyph on Font Awesome's grid: a 512-high viewBox with
 the baseline at y = 448. Also writes src/gui/fonts/megatoy_icons.hpp and the
-instrument icon table, src/gui/fonts/instrument_icon_table.inc. Requires
-fontTools.
+instrument icon table, src/gui/fonts/instrument_icon_table.inc, from the
+icon groups of ym2612-patches' vocabulary.json. Requires fontTools.
+
+Usage: build_icon_font.py <ym2612-patches>/vocabulary.json
 """
+import json
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -16,32 +19,13 @@ from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.svgLib.path import parse_path
 
-# Instrument icons by group, in the order the picker shows them.
+# Instrument icons by group, in the order the picker shows them: the icon
+# groups of ym2612-patches' vocabulary.json, the one argument.
+if len(sys.argv) != 2:
+    sys.exit('usage: build_icon_font.py <ym2612-patches>/vocabulary.json')
 INSTRUMENT_GROUPS = [
-    ('Piano', ['grand-piano', 'upright-piano', 'keyboard', 'harpsichord']),
-    ('Chromatic Percussion', ['xylophone', 'bell', 'church-bell', 'music-box',
-                              'glockenspiel']),
-    ('Organ', ['pipe-organ', 'organ', 'accordion', 'harmonica']),
-    ('Guitar', ['acoustic-guitar', 'electric-guitar']),
-    ('Bass', ['bass', 'upright-bass']),
-    ('Strings', ['violin', 'cello', 'harp']),
-    ('Ensemble', ['choir', 'orchestra', 'strings-ensemble']),
-    ('Brass', ['trumpet', 'trombone', 'tuba', 'french-horn', 'horn']),
-    ('Reed', ['saxophone', 'clarinet', 'oboe', 'bassoon']),
-    ('Pipe', ['flute', 'recorder', 'pan-flute', 'ocarina', 'whistle']),
-    ('Synth', ['synthesizer', 'synth-bass', 'sine', 'square', 'sawtooth',
-               'triangle-wave', 'pad', 'fx']),
-    ('Ethnic', ['sitar', 'banjo', 'mandolin', 'ukulele', 'lute', 'shamisen',
-                'koto', 'kalimba', 'bagpipe', 'didgeridoo']),
-    ('Percussive', ['timpani', 'gong', 'cowbell', 'triangle', 'steel-drum',
-                    'taiko']),
-    ('Drums', ['drum-kit', 'drum-machine', 'kick', 'snare', 'cymbal', 'conga',
-               'bongos', 'tambourine', 'maracas', 'castanets', 'clap']),
-    ('Voice', ['voice', 'mic']),
-    ('Sound Effects', ['bird', 'phone', 'helicopter', 'siren', 'explosion',
-                       'thunder', 'wind', 'rain', 'seashore', 'laser', 'ufo',
-                       'robot']),
-]
+    (group['group'], group['ids'])
+    for group in json.loads(Path(sys.argv[1]).read_text())['icon']]
 # Shown for a patch without an icon.
 INSTRUMENT_NONE = 'music-note'
 
