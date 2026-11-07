@@ -7,15 +7,17 @@
 namespace ui {
 
 /// Tabs, a window's own and those of a tab bar inside it, are padded more
-/// than other frames. ImGui sizes a dock node's tab bar from FramePadding when
-/// the dock space is updated, where a docked window's contents start from it
-/// at the window's Begin, and a tab bar and its tabs from it as each is begun,
-/// so all of these are called with this pushed.
-inline void push_window_tab_padding() {
+/// than other frames, a pixel taller in all. ImGui sizes a dock node's tab bar
+/// from FramePadding when the dock space is updated, where a docked window's
+/// contents start from it at the window's Begin, and a tab bar and its tabs
+/// from it as each is begun, so all of these are called with this pushed.
+inline ImVec2 window_tab_padding() {
   const ImVec2 padding = ImGui::GetStyle().FramePadding;
-  ImGui::PushStyleVar(
-      ImGuiStyleVar_FramePadding,
-      ImVec2(padding.x + scale::px(2.0f), padding.y + scale::px(2.0f)));
+  return ImVec2(padding.x + scale::px(2.0f), padding.y + scale::px(2.5f));
+}
+
+inline void push_window_tab_padding() {
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, window_tab_padding());
 }
 
 /// ImGui::Begin for one of the app's own windows, the ones that dock.
