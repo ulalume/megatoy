@@ -426,6 +426,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     # their own preload to keep landing at the same MEMFS path,
     # /app/assets/presets, that src/system/path_service.cpp expects.
     "SHELL:--preload-file ${MEGATOY_PRESETS_SOURCE_DIR}@/app/assets/presets"
+    "SHELL:--exclude-file */.git"
   )
   if(MEGATOY_GENERATE_SIMPLE_HTML)
     set(MEGATOY_SIMPLE_SHELL_SRC "${CMAKE_SOURCE_DIR}/dist/web_shell_simple.html")
@@ -474,9 +475,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set(MEGATOY_WEB_DIST_DIR "${CMAKE_BINARY_DIR}/web_dist")
   if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
     set(MEGATOY_WEB_PRESETS_COMMAND
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${MEGATOY_PRESETS_SOURCE_DIR}"
-                "${MEGATOY_WEB_DIST_DIR}/presets")
+        COMMAND ${CMAKE_COMMAND}
+                "-DSOURCE=${MEGATOY_PRESETS_SOURCE_DIR}"
+                "-DDESTINATION=${MEGATOY_WEB_DIST_DIR}/presets"
+                -P "${CMAKE_SOURCE_DIR}/cmake/copy_presets.cmake")
   else()
     set(MEGATOY_WEB_PRESETS_COMMAND
         COMMAND ${CMAKE_COMMAND} -E echo
@@ -546,17 +548,17 @@ if(EXISTS "${MEGATOY_PRESETS_SOURCE_DIR}")
 
   add_custom_command(
       TARGET megatoy POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E remove_directory
-              "${MEGATOY_PRESETS_DESTINATION}"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-              "${MEGATOY_PRESETS_SOURCE_DIR}"
-              "${MEGATOY_PRESETS_DESTINATION}"
+      COMMAND ${CMAKE_COMMAND}
+              "-DSOURCE=${MEGATOY_PRESETS_SOURCE_DIR}"
+              "-DDESTINATION=${MEGATOY_PRESETS_DESTINATION}"
+              -P "${CMAKE_SOURCE_DIR}/cmake/copy_presets.cmake"
   )
 
   # Ensure presets are part of install / CPack artefacts on every platform.
   install(
     DIRECTORY "${MEGATOY_PRESETS_SOURCE_DIR}/"
     DESTINATION "$<IF:$<PLATFORM_ID:Darwin>,Resources/presets,presets>"
+    PATTERN ".git" EXCLUDE
   )
 else()
   message(WARNING
