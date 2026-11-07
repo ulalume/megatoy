@@ -20,7 +20,8 @@ FilesystemPatchStorage::FilesystemPatchStorage(
     platform::StdFileSystem &vfs, std::filesystem::path root,
     std::string relative_root_label, bool writable,
     std::filesystem::path metadata_file, PersistentParseCache *persistent_cache,
-    std::filesystem::path legacy_metadata_file)
+    std::filesystem::path legacy_metadata_file,
+    std::filesystem::path metadata_defaults_file)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)), writable_(writable),
       label_(root_label_), persistent_cache_(persistent_cache) {
@@ -30,7 +31,8 @@ FilesystemPatchStorage::FilesystemPatchStorage(
   }
   if (!metadata_file.empty()) {
     metadata_ = std::make_unique<FolderMetadataStore>(
-        std::move(metadata_file), std::move(legacy_metadata_file));
+        std::move(metadata_file), std::move(legacy_metadata_file),
+        std::move(metadata_defaults_file));
     metadata_->load();
   }
 }

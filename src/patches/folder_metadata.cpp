@@ -57,6 +57,26 @@ std::string iso8601_utc_now() {
 constexpr std::array<std::string_view, 7> kKnownFields = {
     "hash", "star_rating", "icon", "tags", "notes", "created_at", "updated_at"};
 
+bool is_known_field(std::string_view key) {
+  return std::find(kKnownFields.begin(), kKnownFields.end(), key) !=
+         kKnownFields.end();
+}
+
+bool is_stamp(std::string_view key) {
+  return key == "created_at" || key == "updated_at";
+}
+
+/// The value a known field has when it is unset.
+nlohmann::json empty_value_of(std::string_view key) {
+  if (key == "star_rating") {
+    return 0;
+  }
+  if (key == "tags") {
+    return nlohmann::json::array();
+  }
+  return std::string{};
+}
+
 PatchMetadata metadata_from_json(const std::string &path,
                                  const nlohmann::json &j) {
   PatchMetadata metadata;
@@ -74,8 +94,7 @@ PatchMetadata metadata_from_json(const std::string &path,
     metadata.tags = j["tags"].get<std::vector<std::string>>();
   }
   for (const auto &[key, value] : j.items()) {
-    if (std::find(kKnownFields.begin(), kKnownFields.end(), key) ==
-        kKnownFields.end()) {
+    if (!is_known_field(key)) {
       metadata.extra[key] = value;
     }
   }
@@ -147,14 +166,74 @@ nlohmann::json patches_of(const nlohmann::json &root) {
 
 FolderMetadataStore::FolderMetadataStore(
     std::filesystem::path sidecar_path,
-    std::filesystem::path legacy_sidecar_path)
+    std::filesystem::path legacy_sidecar_path,
+    std::filesystem::path defaults_path)
     : sidecar_path_(std::move(sidecar_path)),
-      legacy_sidecar_path_(std::move(legacy_sidecar_path)) {}
+      legacy_sidecar_path_(std::move(legacy_sidecar_path)),
+      defaults_path_(std::move(defaults_path)) {}
+
+void FolderMetadataStore::load_defaults() {
+  defaults_.clear();
+  if (defaults_path_.empty()) {
+    return;
+  }
+  const auto root = read_sidecar(defaults_path_);
+  if (!root) {
+    return;
+  }
+  const auto patches = patches_of(*root);
+  for (const auto &[path, value] : patches.items()) {
+    if (value.is_object()) {
+      defaults_.emplace(path, value);
+    }
+  }
+}
+
+std::optional<PatchMetadata>
+FolderMetadataStore::defaults_entry(const std::string &relative_path) const {
+  const auto it = defaults_.find(relative_path);
+  if (it == defaults_.end()) {
+    return std::nullopt;
+  }
+  return metadata_from_json(relative_path, it->second);
+}
+
+nlohmann::json
+FolderMetadataStore::sidecar_entry(const PatchMetadata &metadata) const {
+  auto full = metadata_to_json(metadata);
+  const auto it = defaults_.find(metadata.path);
+  if (it == defaults_.end()) {
+    return full;
+  }
+  const auto &base = it->second;
+  nlohmann::json own = nlohmann::json::object();
+  for (const auto &[key, value] : full.items()) {
+    const auto in_base = base.find(key);
+    if (in_base == base.end() || *in_base != value) {
+      own[key] = value;
+    }
+  }
+  // An unset field is left out of `full`; where the defaults set it, the
+  // empty value is written so that it stays cleared.
+  for (const auto &[key, value] : base.items()) {
+    if (!full.contains(key) && is_known_field(key) && !is_stamp(key) &&
+        value != empty_value_of(key)) {
+      own[key] = empty_value_of(key);
+    }
+  }
+  for (const auto &[key, value] : own.items()) {
+    if (!is_stamp(key)) {
+      return own;
+    }
+  }
+  return nullptr;
+}
 
 bool FolderMetadataStore::load() {
   entries_.clear();
   extra_ = nlohmann::json::object();
   legacy_loaded_ = false;
+  load_defaults();
 
   const auto root = read_sidecar(sidecar_path_);
   if (!root) {
@@ -191,6 +270,18 @@ bool FolderMetadataStore::load() {
 
   try {
     for (const auto &[path, value] : patches.items()) {
+      const auto base = defaults_.find(path);
+      if (base == defaults_.end() || !value.is_object()) {
+        entries_.emplace(path, metadata_from_json(path, value));
+        continue;
+      }
+      auto merged = base->second;
+      for (const auto &[key, field] : value.items()) {
+        merged[key] = field;
+      }
+      entries_.emplace(path, metadata_from_json(path, merged));
+    }
+    for (const auto &[path, value] : defaults_) {
       entries_.emplace(path, metadata_from_json(path, value));
     }
   } catch (const std::exception &e) {
@@ -235,7 +326,10 @@ bool FolderMetadataStore::save() {
 
   nlohmann::json patches = nlohmann::json::object();
   for (const auto &[path, metadata] : entries_) {
-    patches[path] = metadata_to_json(metadata);
+    auto entry = sidecar_entry(metadata);
+    if (!entry.is_null()) {
+      patches[path] = std::move(entry);
+    }
   }
 
   nlohmann::json root = extra_;
@@ -332,8 +426,14 @@ bool FolderMetadataStore::merge_newer(
 }
 
 bool FolderMetadataStore::remove(const std::string &relative_path) {
-  if (entries_.erase(relative_path) == 0) {
+  const auto it = entries_.find(relative_path);
+  if (it == entries_.end()) {
     return false;
+  }
+  if (auto base = defaults_entry(relative_path)) {
+    it->second = std::move(*base);
+  } else {
+    entries_.erase(it);
   }
   return save();
 }
@@ -369,6 +469,11 @@ bool FolderMetadataStore::rename_key_prefix(
   for (auto &[old_key, metadata] : moved) {
     entries_.insert_or_assign(metadata.path, std::move(metadata));
   }
+  for (const auto &[old_key, metadata] : moved) {
+    if (auto base = defaults_entry(old_key)) {
+      entries_.emplace(old_key, std::move(*base));
+    }
+  }
   if (save()) {
     return true;
   }
@@ -386,8 +491,8 @@ bool FolderMetadataStore::retain_only(
     if (std::binary_search(sorted.begin(), sorted.end(), it->first)) {
       ++it;
     } else {
+      changed = changed || !sidecar_entry(it->second).is_null();
       it = entries_.erase(it);
-      changed = true;
     }
   }
 

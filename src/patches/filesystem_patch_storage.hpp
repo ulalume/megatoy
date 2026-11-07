@@ -27,7 +27,8 @@ class PersistentParseCache;
  * Metadata lives in a sidecar inside the folder itself and is therefore keyed
  * by a path relative to `root`, not to the repository -- that is what lets a
  * folder be moved or shared without losing its ratings. A read-only folder
- * keeps its metadata elsewhere, or has none.
+ * keeps its metadata elsewhere, or has none; `metadata_defaults_file` is a
+ * read-only base layer under it (see FolderMetadataStore).
  */
 class FilesystemPatchStorage {
 public:
@@ -36,7 +37,8 @@ public:
                          std::string relative_root_label, bool writable,
                          std::filesystem::path metadata_file,
                          PersistentParseCache *persistent_cache = nullptr,
-                         std::filesystem::path legacy_metadata_file = {});
+                         std::filesystem::path legacy_metadata_file = {},
+                         std::filesystem::path metadata_defaults_file = {});
 
   void append_entries(std::vector<PatchEntry> &tree) const;
   bool load_patch(const PatchEntry &entry, ym2612::Patch &out_patch) const;

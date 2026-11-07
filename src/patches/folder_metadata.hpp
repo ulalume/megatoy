@@ -43,9 +43,17 @@ public:
    * `legacy_sidecar_path`, when given, is read too: its fields fill those an
    * entry lacks, except `category`, which is dropped. The next save removes
    * it, and its directory if that is left empty.
+   *
+   * `defaults_path`, when given, is a sidecar read as a base layer and never
+   * written. What get() and entries() return is each defaults entry with the
+   * sidecar's fields laid over it. A save writes to the sidecar only the
+   * fields that differ from the defaults; a field the defaults set and the
+   * caller cleared is written with its empty value. An entry left with
+   * nothing but timestamps is not written.
    */
   explicit FolderMetadataStore(std::filesystem::path sidecar_path,
-                               std::filesystem::path legacy_sidecar_path = {});
+                               std::filesystem::path legacy_sidecar_path = {},
+                               std::filesystem::path defaults_path = {});
 
   /// Load the sidecar. A missing file is not an error -- it just means no
   /// metadata has been recorded yet. Returns false only on a corrupt file.
@@ -74,7 +82,8 @@ public:
   bool rename_key_prefix(const std::string &old_relative_path,
                          const std::string &new_relative_path);
 
-  /// Drop entries whose patch file is no longer in `existing_paths`.
+  /// Drop entries whose patch file is no longer in `existing_paths`. The
+  /// defaults are left as they are.
   bool retain_only(const std::vector<std::string> &existing_paths);
 
   const std::filesystem::path &sidecar_path() const { return sidecar_path_; }
@@ -83,9 +92,17 @@ public:
 private:
   bool save();
   void remove_legacy_sidecar();
+  void load_defaults();
+  /// The defaults entry for `relative_path` alone, if there is one.
+  std::optional<PatchMetadata>
+  defaults_entry(const std::string &relative_path) const;
+  /// What the sidecar holds for `metadata`; null when it holds nothing.
+  nlohmann::json sidecar_entry(const PatchMetadata &metadata) const;
 
   std::filesystem::path sidecar_path_;
   std::filesystem::path legacy_sidecar_path_;
+  std::filesystem::path defaults_path_;
+  std::map<std::string, nlohmann::json> defaults_;
   bool legacy_loaded_ = false;
   nlohmann::json extra_ = nlohmann::json::object();
   std::map<std::string, PatchMetadata> entries_;

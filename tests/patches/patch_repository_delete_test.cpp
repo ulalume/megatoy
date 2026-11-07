@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -143,6 +144,57 @@ void test_builtin_metadata_lives_outside_presets(const fs::path &root) {
   patches::PatchRepository again(file_system, workspace, builtin, stored);
   found = find_entry(again.tree(), path);
   CHECK(found != nullptr && found->metadata.has_value());
+}
+
+void test_builtin_presets_show_bundled_metadata(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto builtin = root / "builtin_bundled";
+  const auto bundled = builtin / ".ym2612" / "patches.json";
+  const auto stored = root / "config" / "bundled_presets.json";
+  fs::create_directories(bundled.parent_path());
+  const std::string bundled_text = R"({
+  "patches": {
+    "preset.dmp": {
+      "icon": "organ",
+      "role": "keys"
+    }
+  },
+  "version": 1
+}
+)";
+  {
+    std::ofstream file(bundled);
+    file << bundled_text;
+  }
+
+  ym2612::Patch patch;
+  patch.name = "preset";
+  const auto path = builtin / "preset.dmp";
+  CHECK(patches::write_patch(patch, path));
+
+  megatoy::workspace::Workspace workspace;
+  {
+    patches::PatchRepository repository(file_system, workspace, builtin,
+                                        stored);
+    const auto *found = find_entry(repository.tree(), path);
+    CHECK(found != nullptr && found->metadata.has_value());
+    CHECK(found->metadata->icon == "organ");
+    CHECK(!fs::exists(stored));
+
+    auto metadata = *found->metadata;
+    metadata.star_rating = 5;
+    CHECK(repository.update_patch_metadata(found->relative_path, metadata));
+  }
+  std::ifstream file(bundled);
+  const std::string after{std::istreambuf_iterator<char>(file),
+                          std::istreambuf_iterator<char>()};
+  CHECK(after == bundled_text);
+
+  patches::PatchRepository reopened(file_system, workspace, builtin, stored);
+  const auto *found = find_entry(reopened.tree(), path);
+  CHECK(found != nullptr && found->metadata.has_value());
+  CHECK(found->metadata->icon == "organ");
+  CHECK(found->metadata->star_rating == 5);
 }
 
 void test_duplicate_save_requires_overwrite(const fs::path &root) {
@@ -307,6 +359,7 @@ int main() {
   test_writable_storage_deletes_patch(root);
   test_read_only_storage_refuses_delete(root);
   test_builtin_metadata_lives_outside_presets(root);
+  test_builtin_presets_show_bundled_metadata(root);
   test_duplicate_save_requires_overwrite(root);
   test_container_parse_cache_invalidates_on_change(root);
   test_repository_revision_tracks_refresh(root);

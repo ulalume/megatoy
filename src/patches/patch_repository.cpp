@@ -93,11 +93,15 @@ void PatchRepository::rebuild_storages() {
     // Without the presets there would be nothing to keep, and the cleanup
     // after a scan would drop every rating.
     const bool keep_metadata = vfs_.is_directory(builtin_presets_directory_);
+    // The sidecar the presets ship with is the base layer under the user's.
+    megatoy::workspace::Folder bundled;
+    bundled.path = builtin_presets_directory_;
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, builtin_presets_directory_, kBuiltinRootName,
         /*writable=*/false,
         keep_metadata ? builtin_presets_metadata_ : std::filesystem::path{},
-        persistent_cache_));
+        persistent_cache_, /*legacy_metadata_file=*/std::filesystem::path{},
+        bundled.metadata_path()));
     watched_directories_.push_back(builtin_presets_directory_);
   }
 
