@@ -88,6 +88,8 @@ public:
 
   /// Notes currently sounding, in channel order.
   std::vector<ym2612::Note> published_notes() const;
+  /// The same into `out`, without allocating; returns how many there are.
+  std::size_t published_notes(std::array<ym2612::Note, 6> &out) const;
   bool published_contains(const ym2612::Note &note) const;
 
   /**

@@ -78,12 +78,8 @@ WORKLET_EXPORT(mt_snapshot) const web_audio::Snapshot *mt_snapshot() {
   snapshot = {};
   if (engine != nullptr) {
     snapshot.voices = engine->voice_activity();
-    const auto notes = engine->notes().published_notes();
     snapshot.note_count =
-        static_cast<uint32_t>(std::min<std::size_t>(notes.size(), 6));
-    for (uint32_t i = 0; i < snapshot.note_count; ++i) {
-      snapshot.notes[i] = notes[i];
-    }
+        static_cast<uint32_t>(engine->notes().published_notes(snapshot.notes));
   }
   return &snapshot;
 }

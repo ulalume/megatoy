@@ -31,11 +31,6 @@ platform::StdFileSystem &WebPlatformServices::file_system() {
   return file_system_;
 }
 
-// The engine renders in an audio worklet instead; see web_audio_worklet.cpp.
-std::unique_ptr<AudioTransport> WebPlatformServices::create_audio_transport() {
-  return nullptr;
-}
-
 std::unique_ptr<MidiBackend> WebPlatformServices::create_midi_backend() {
   return std::make_unique<WebMidiBackend>();
 }

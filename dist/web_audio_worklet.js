@@ -58,7 +58,13 @@ class MegatoyProcessor extends AudioWorkletProcessor {
       engine.mt_init(sampleRate) === 1;
     this.reportFrames = settings.reportFrames;
     this.loadFrames = settings.loadFrames;
-    this.scope = new Float32Array(this.reportFrames * 2);
+    this.snapshotSize = settings.snapshotSize;
+    // A report is one buffer: the output since the last one, interleaved,
+    // then the engine's snapshot. The page hands each back once it has read
+    // it, so reports allocate nothing once a few are in circulation.
+    this.reportBytes = this.reportFrames * 8 + this.snapshotSize;
+    this.spare = [];
+    this.report = this.takeBuffer();
     this.filled = 0;
     // Rendering time is summed over a few reports before it is sent: an audio
     // worklet's clock may tick only every millisecond.
@@ -69,6 +75,16 @@ class MegatoyProcessor extends AudioWorkletProcessor {
     this.port.postMessage({ type: 'ready', ok: this.ready });
   }
 
+  takeBuffer() {
+    const buffer = this.spare.pop() || new ArrayBuffer(this.reportBytes);
+    return {
+      buffer: buffer,
+      scope: new Float32Array(buffer, 0, this.reportFrames * 2),
+    };
+  }
+
+  /// Applies one message; false for a command the engine's queue has no
+  /// room for until it renders.
   apply(message) {
     const engine = this.engine;
     switch (message.type) {
@@ -79,17 +95,22 @@ class MegatoyProcessor extends AudioWorkletProcessor {
               new Uint8Array(engine.memory.buffer, engine.mt_inbox(), bytes.length);
         }
         this.inbox.set(bytes);
-        engine.mt_submit();
-        break;
+        return engine.mt_submit() === 1;
       }
       case 'noteOptions':
         engine.mt_set_note_options(message.velocity, message.depth,
                                    message.steal);
-        break;
+        return true;
       case 'performance':
         engine.mt_set_performance_options(message.bend, message.wheel);
-        break;
+        return true;
+      case 'recycle':
+        if (message.buffer.byteLength === this.reportBytes) {
+          this.spare.push(message.buffer);
+        }
+        return true;
     }
+    return true;
   }
 
   process(_inputs, outputs) {
@@ -98,10 +119,13 @@ class MegatoyProcessor extends AudioWorkletProcessor {
       return true;
     }
     const started = now();
-    for (const message of this.pending) {
-      this.apply(message);
+    // In order, as far as the engine takes them: what is left, after a
+    // stretch the player was stopped for, waits for the next block.
+    let applied = 0;
+    while (applied < this.pending.length && this.apply(this.pending[applied])) {
+      ++applied;
     }
-    this.pending.length = 0;
+    this.pending.splice(0, applied);
 
     // The engine's memory never grows, so views into it stay good for as
     // long as it keeps rendering into the same place.
@@ -122,38 +146,43 @@ class MegatoyProcessor extends AudioWorkletProcessor {
       output[1].set(right);
     }
 
+    const scope = this.report.scope;
     let to = this.filled * 2;
-    for (let i = 0; i < frames && to < this.scope.length; ++i) {
-      this.scope[to++] = left[i];
-      this.scope[to++] = right[i];
+    for (let i = 0; i < frames && to < scope.length; ++i) {
+      scope[to++] = left[i];
+      scope[to++] = right[i];
     }
     this.filled = Math.min(this.filled + frames, this.reportFrames);
     this.elapsed += now() - started;
     this.timed += frames;
 
     if (this.filled >= this.reportFrames) {
-      this.report();
+      this.send();
     }
     return true;
   }
 
   // What the page draws: the output since the last report, the engine's
   // notes and voices, and now and then how long rendering took.
-  report() {
+  send() {
     const engine = this.engine;
-    const snapshot = new Uint8Array(engine.memory.buffer, engine.mt_snapshot(),
-                                    engine.mt_snapshot_size()).slice();
-    const scope = this.scope;
+    const buffer = this.report.buffer;
+    const at = engine.mt_snapshot();
+    if (at !== this.snapshotAt) {
+      this.snapshot = new Uint8Array(engine.memory.buffer, at, this.snapshotSize);
+      this.snapshotAt = at;
+    }
+    new Uint8Array(buffer, this.reportFrames * 8, this.snapshotSize)
+        .set(this.snapshot);
     const timed = this.timed >= this.loadFrames;
     this.port.postMessage({
       type: 'report',
       frames: this.filled,
-      scope: scope.buffer,
-      snapshot: snapshot.buffer,
+      buffer: buffer,
       timedFrames: timed ? this.timed : 0,
       elapsedMs: timed ? this.elapsed : 0,
-    }, [scope.buffer, snapshot.buffer]);
-    this.scope = new Float32Array(this.reportFrames * 2);
+    }, [buffer]);
+    this.report = this.takeBuffer();
     this.filled = 0;
     if (timed) {
       this.elapsed = 0;

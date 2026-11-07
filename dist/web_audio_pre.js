@@ -5,8 +5,10 @@ Module['megatoyAudio'] = (() => {
   const audio = {
     context: null,
     node: null,
-    // Messages for a worklet still loading, sent once it has.
+    // Messages for a worklet still loading, sent once it has; none are kept
+    // once it has failed to load.
     queue: [],
+    failed: false,
     // Each start counts, so a worklet that finishes loading after a newer
     // start is dropped rather than connected.
     generation: 0,
@@ -36,14 +38,20 @@ Module['megatoyAudio'] = (() => {
     }
   });
 
-  const receive = (data) => {
+  const receive = (port, data, settings) => {
     if (data.type === 'report') {
       const frames = data.frames;
-      const scope = new Float32Array(data.scope, 0, frames * 2);
-      HEAPF32.set(scope, _megatoy_audio_scope_inbox(frames) >> 2);
-      const snapshot = new Uint8Array(data.snapshot);
-      HEAPU8.set(snapshot, _megatoy_audio_snapshot_inbox());
+      const scope = new Float32Array(data.buffer, 0, frames * 2);
+      const snapshot = new Uint8Array(data.buffer, settings.reportFrames * 8,
+                                      settings.snapshotSize);
+      // The inboxes first: making room may grow memory, which replaces the
+      // HEAP views.
+      const scopeAt = _megatoy_audio_scope_inbox(frames);
+      const snapshotAt = _megatoy_audio_snapshot_inbox();
+      HEAPF32.set(scope, scopeAt >> 2);
+      HEAPU8.set(snapshot, snapshotAt);
       _megatoy_audio_report(frames, data.timedFrames, data.elapsedMs);
+      port.postMessage({type: 'recycle', buffer: data.buffer}, [data.buffer]);
     } else if (data.type === 'ready' && !data.ok) {
       console.error('megatoy: the audio worklet did not start');
     }
@@ -72,6 +80,7 @@ Module['megatoyAudio'] = (() => {
     const generation = ++audio.generation;
     audio.context = context;
     audio.node = null;
+    audio.failed = false;
     audio.wasm = audio.wasm ||
                  fetch(locate('megatoy-audio.wasm')).then((response) => {
                    if (!response.ok) {
@@ -92,7 +101,8 @@ Module['megatoyAudio'] = (() => {
             outputChannelCount: [2],
             processorOptions: Object.assign({wasm: wasm.slice(0)}, settings),
           });
-          node.port.onmessage = (event) => receive(event.data);
+          node.port.onmessage = (event) =>
+              receive(node.port, event.data, settings);
           node.connect(context.destination);
           audio.node = node;
           for (const message of audio.queue) {
@@ -102,6 +112,10 @@ Module['megatoyAudio'] = (() => {
         })
         .catch((error) => {
           audio.wasm = null;
+          if (generation === audio.generation) {
+            audio.failed = true;
+            audio.queue = [];
+          }
           console.error('megatoy: audio did not start', error);
         });
     return context.sampleRate;
@@ -125,7 +139,7 @@ Module['megatoyAudio'] = (() => {
   audio.post = (message) => {
     if (audio.node) {
       audio.node.port.postMessage(message);
-    } else {
+    } else if (!audio.failed) {
       audio.queue.push(message);
     }
   };

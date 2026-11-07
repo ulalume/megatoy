@@ -91,15 +91,22 @@ std::array<VoiceActivity, 6> ChannelAllocator::published_voices() const {
 }
 
 std::vector<ym2612::Note> ChannelAllocator::published_notes() const {
-  std::vector<ym2612::Note> notes;
+  std::array<ym2612::Note, 6> notes{};
+  const std::size_t count = published_notes(notes);
+  return {notes.begin(), notes.begin() + static_cast<std::ptrdiff_t>(count)};
+}
+
+std::size_t
+ChannelAllocator::published_notes(std::array<ym2612::Note, 6> &out) const {
+  std::size_t count = 0;
   for (const auto &slot : published_) {
     const uint16_t value = slot.load(std::memory_order_acquire);
     if (value != 0) {
-      notes.push_back(
-          ym2612::Note::from_midi_note(static_cast<uint8_t>(value - 1)));
+      out[count++] =
+          ym2612::Note::from_midi_note(static_cast<uint8_t>(value - 1));
     }
   }
-  return notes;
+  return count;
 }
 
 bool ChannelAllocator::published_contains(const ym2612::Note &note) const {

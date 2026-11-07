@@ -147,6 +147,11 @@ private:
   audio::ScopeBuffer scope_;
   audio::LoadMeter load_;
   web_audio::Snapshot snapshot_{};
+  // Added to what a worklet reports, so voice sequences and the clock keep
+  // rising across a reopen, which starts an engine that counts from zero:
+  // the envelope graphs rely on both only ever growing.
+  uint64_t sequence_base_ = 0;
+  uint64_t clock_base_ = 0;
   uint32_t sample_rate_ = 0;
   bool running_ = false;
   // What sets the engine up rather than plays it: kept for a worklet started

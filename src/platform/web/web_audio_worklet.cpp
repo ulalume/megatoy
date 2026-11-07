@@ -79,6 +79,7 @@ EMSCRIPTEN_KEEPALIVE void megatoy_audio_report(uint32_t frames,
 
 AudioManager::AudioManager() = default;
 
+// The engine needs no transport here; app_services passes none.
 AudioManager::AudioManager(std::unique_ptr<AudioTransport>) {}
 
 AudioManager::~AudioManager() { shutdown(); }
@@ -99,6 +100,7 @@ bool AudioManager::initialize(uint32_t, int) {
   sample_rate_ = static_cast<uint32_t>(rate);
   snapshot_ = {};
   snapshot_.voices.sample_rate = sample_rate_;
+  snapshot_.voices.now_samples = clock_base_;
   scope_.clear();
   load_.clear();
   running_ = true;
@@ -113,12 +115,19 @@ int AudioManager::buffer_frames() const { return 0; }
 
 int AudioManager::default_buffer_frames() const { return 0; }
 
+// Tried again each time the page shows, so one that fails is not the last.
 bool AudioManager::reopen_device() {
-  if (!running_) {
-    return false;
+  if (sample_rate_ == 0) {
+    return false; // never had sound to bring back
   }
-  worklet_stop();
-  running_ = false;
+  if (running_) {
+    worklet_stop();
+    running_ = false;
+  }
+  clock_base_ = snapshot_.voices.now_samples;
+  for (const auto &voice : snapshot_.voices.voices) {
+    sequence_base_ = std::max(sequence_base_, voice.sequence);
+  }
   if (!initialize(sample_rate_, 0)) {
     return false;
   }
@@ -210,6 +219,14 @@ void AudioManager::receive_report(const float *scope, uint32_t frames,
                  timed_frames, sample_rate_);
   }
   snapshot_ = snapshot;
+  snapshot_.voices.now_samples += clock_base_;
+  for (auto &voice : snapshot_.voices.voices) {
+    if (voice.valid()) {
+      voice.sequence += sequence_base_;
+      voice.key_on_sample += clock_base_;
+      voice.key_off_sample += clock_base_;
+    }
+  }
 }
 
 const audio::ScopeBuffer &AudioManager::scope_buffer() const { return scope_; }
