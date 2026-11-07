@@ -3,7 +3,7 @@
 
 Each SVG is one filled glyph on Font Awesome's grid: a 512-high viewBox with
 the baseline at y = 448. Also writes src/gui/fonts/megatoy_icons.hpp and the
-instrument icon table, src/gui/fonts/instrument_icon_table.inc, from the
+instrument icon table, src/patches/instrument_icon_table.inc, from the
 icon groups of ym2612-patches' vocabulary.json. Requires fontTools.
 
 Usage: build_icon_font.py <ym2612-patches>/vocabulary.json
@@ -49,7 +49,7 @@ root = Path(__file__).resolve().parent.parent
 icons = root / 'tools' / 'icons'
 output = root / 'assets' / 'fonts' / 'megatoy-icons.otf'
 header = root / 'src' / 'gui' / 'fonts' / 'megatoy_icons.hpp'
-table = root / 'src' / 'gui' / 'fonts' / 'instrument_icon_table.inc'
+table = root / 'src' / 'patches' / 'instrument_icon_table.inc'
 
 
 def translation(element):

@@ -1,8 +1,8 @@
 #include "patch_tree_view.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
-#include "gui/instrument_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "patches/instrument_icons.hpp"
 
 #include "common.hpp"
 #include "gui/ui_scale.hpp"
@@ -193,7 +193,7 @@ bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
   const std::string_view icon_id = item.metadata
                                        ? std::string_view(item.metadata->icon)
                                        : std::string_view();
-  const char *icon = instrument_icons::glyph(icon_id);
+  const char *icon = patches::instrument_icons::glyph(icon_id);
   // The name starts where a folder's does past its arrow.
   const float name_x = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.x;
   const ImVec2 pos = ImGui::GetCursorScreenPos();

@@ -8,7 +8,6 @@
 #include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
-#include "gui/instrument_icons.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -16,6 +15,7 @@
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
 #include "patch_editor_tools.hpp"
+#include "patches/instrument_icons.hpp"
 #include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
@@ -57,9 +57,10 @@ ImVec2 menu_anchor_below_last_item() {
 const char *document_icon(const patches::PatchSession &session,
                           const patches::PatchDocument &document) {
   const auto *entry = session.document_entry(document);
-  return instrument_icons::glyph(entry != nullptr && entry->metadata
-                                     ? std::string_view(entry->metadata->icon)
-                                     : std::string_view());
+  return patches::instrument_icons::glyph(
+      entry != nullptr && entry->metadata
+          ? std::string_view(entry->metadata->icon)
+          : std::string_view());
 }
 
 /// What the header's metadata asks to write, once it is drawn.
@@ -92,9 +93,9 @@ void render_header_icon(const patches::PatchEntry *entry, bool editable,
   ImGui::PopStyleColor();
   draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
                        kLargeIconScale);
-  if (instrument_icons::known(icon)) {
-    ImGui::SetItemTooltip("Icon: %s",
-                          instrument_icons::display_name(icon).c_str());
+  if (patches::instrument_icons::known(icon)) {
+    ImGui::SetItemTooltip(
+        "Icon: %s", patches::instrument_icons::display_name(icon).c_str());
   } else {
     ImGui::SetItemTooltip("Icon");
   }

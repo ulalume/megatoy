@@ -3,10 +3,10 @@
 #include <algorithm>
 #include <cctype>
 
-namespace ui::instrument_icons {
+namespace patches::instrument_icons {
 
 namespace {
-#include "gui/fonts/instrument_icon_table.inc"
+#include "patches/instrument_icon_table.inc"
 
 const Icon *find(std::string_view id) {
   for (const auto &group : kGroups) {
@@ -87,4 +87,4 @@ bool matches(std::string_view id, std::string_view filter) {
   return contains(id, filter) || contains(group_name(id), filter);
 }
 
-} // namespace ui::instrument_icons
+} // namespace patches::instrument_icons

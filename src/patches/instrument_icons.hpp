@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-namespace ui::instrument_icons {
+namespace patches::instrument_icons {
 
 /// A patch's instrument icon: the id the folder's metadata keeps, and its
 /// glyph in megatoy's icon font as UTF-8.
@@ -43,4 +43,4 @@ std::string_view group_name(std::string_view id);
  */
 bool matches(std::string_view id, std::string_view filter);
 
-} // namespace ui::instrument_icons
+} // namespace patches::instrument_icons

@@ -87,7 +87,7 @@ set(MEGATOY_LOGIC_SOURCES
   src/patches/patch_tree_navigation.cpp
   src/patches/patch_tree_flatten.cpp
   src/patches/patch_filter.cpp
-  src/gui/instrument_icons.cpp
+  src/patches/instrument_icons.cpp
   src/patches/patch_document.cpp
   src/patches/patch_session.cpp
   src/patches/patch_session_documents.cpp

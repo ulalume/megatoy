@@ -3,9 +3,9 @@
 #include "gui/components/centred_glyph.hpp"
 #include "gui/components/menu_rows.hpp"
 #include "gui/frame_requests.hpp"
-#include "gui/instrument_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
+#include "patches/instrument_icons.hpp"
 
 #include <IconsFontAwesome7.h>
 #include <algorithm>
@@ -43,7 +43,7 @@ constexpr std::span<const std::string_view> kListRows[] = {
 /// One row of the list: its groups' names, and their icons in order.
 struct ListRow {
   std::string label;
-  std::vector<const instrument_icons::Icon *> icons;
+  std::vector<const patches::instrument_icons::Icon *> icons;
 };
 
 /**
@@ -53,8 +53,9 @@ struct ListRow {
 const std::vector<ListRow> &list_rows() {
   static const std::vector<ListRow> rows = [] {
     std::vector<ListRow> out;
-    std::vector<const instrument_icons::Group *> placed;
-    const auto add = [&](ListRow &row, const instrument_icons::Group &group) {
+    std::vector<const patches::instrument_icons::Group *> placed;
+    const auto add = [&](ListRow &row,
+                         const patches::instrument_icons::Group &group) {
       row.label += (row.label.empty() ? "" : " / ") + std::string(group.name);
       for (const auto &icon : group.icons) {
         row.icons.push_back(&icon);
@@ -64,7 +65,7 @@ const std::vector<ListRow> &list_rows() {
     for (const auto names : kListRows) {
       ListRow row;
       for (const auto name : names) {
-        for (const auto &group : instrument_icons::groups()) {
+        for (const auto &group : patches::instrument_icons::groups()) {
           if (group.name == name) {
             add(row, group);
           }
@@ -74,7 +75,7 @@ const std::vector<ListRow> &list_rows() {
         out.push_back(std::move(row));
       }
     }
-    for (const auto &group : instrument_icons::groups()) {
+    for (const auto &group : patches::instrument_icons::groups()) {
       if (std::find(placed.begin(), placed.end(), &group) == placed.end()) {
         ListRow row;
         add(row, group);
@@ -89,7 +90,7 @@ const std::vector<ListRow> &list_rows() {
 } // namespace
 
 ImU32 instrument_icon_color(std::string_view id) {
-  return instrument_icons::known(id)
+  return patches::instrument_icons::known(id)
              ? ImGui::GetColorU32(ImGuiCol_Text)
              : ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
 }
@@ -97,7 +98,7 @@ ImU32 instrument_icon_color(std::string_view id) {
 void draw_instrument_icon(std::string_view id, ImVec2 min, ImVec2 max,
                           float scale) {
   ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * scale);
-  draw_centred_glyph(instrument_icons::glyph(id), min, max,
+  draw_centred_glyph(patches::instrument_icons::glyph(id), min, max,
                      instrument_icon_color(id));
   ImGui::PopFont();
 }
@@ -112,7 +113,7 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
   // The names stand in a column at the left, as wide as the longest group's
   // name; a row naming more than one breaks onto further lines.
   float label_width = 0.0f;
-  for (const auto &group : instrument_icons::groups()) {
+  for (const auto &group : patches::instrument_icons::groups()) {
     label_width = std::max(
         label_width, ImGui::CalcTextSize(group.name.data(),
                                          group.name.data() + group.name.size())
@@ -172,11 +173,11 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
   const float font_size = ImGui::GetFontSize();
   const ImVec2 origin = ImGui::GetCursorScreenPos();
   float y = origin.y;
-  std::vector<const instrument_icons::Icon *> shown;
+  std::vector<const patches::instrument_icons::Icon *> shown;
   for (const auto &row : list_rows()) {
     shown.clear();
     for (const auto *icon : row.icons) {
-      if (instrument_icons::matches(icon->id, filter)) {
+      if (patches::instrument_icons::matches(icon->id, filter)) {
         shown.push_back(icon);
       }
     }
@@ -205,7 +206,8 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
       }
       draw_instrument_icon(id, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
                            kLargeIconScale);
-      ImGui::SetItemTooltip("%s", instrument_icons::display_name(id).c_str());
+      ImGui::SetItemTooltip(
+          "%s", patches::instrument_icons::display_name(id).c_str());
       ImGui::PopID();
     }
     y += height + row_gap;

@@ -1,5 +1,5 @@
 #include "../test_check.hpp"
-#include "gui/instrument_icons.hpp"
+#include "patches/instrument_icons.hpp"
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -7,7 +7,7 @@
 #include <set>
 #include <string>
 
-using namespace ui::instrument_icons;
+using namespace patches::instrument_icons;
 
 void test_glyph_lookup() {
   CHECK(std::strcmp(glyph(""), none_glyph()) == 0);

@@ -4,10 +4,10 @@
 
 #include "common.hpp"
 #include "file_manager.hpp"
-#include "gui/instrument_icons.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_tree_view.hpp"
+#include "patches/instrument_icons.hpp"
 #include "patches/patch_entry_actions.hpp"
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
@@ -35,8 +35,8 @@ void show_patch_tooltip(const patches::PatchRepository &repository,
     tooltip +=
         "\nRating: " + std::to_string(entry.metadata->star_rating) + "/5";
     if (!entry.metadata->icon.empty()) {
-      tooltip +=
-          "\nIcon: " + ui::instrument_icons::display_name(entry.metadata->icon);
+      tooltip += "\nIcon: " +
+                 patches::instrument_icons::display_name(entry.metadata->icon);
     }
     if (!entry.metadata->notes.empty()) {
       tooltip += "\nNotes: " + entry.metadata->notes;

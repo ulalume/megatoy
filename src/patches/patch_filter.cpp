@@ -1,6 +1,6 @@
 #include "patch_filter.hpp"
 
-#include "gui/instrument_icons.hpp"
+#include "patches/instrument_icons.hpp"
 
 #include <cctype>
 
@@ -50,7 +50,7 @@ bool entry_matches_query(const PatchEntry &entry,
   }
   // By the icon's name or its group's, such as "drums" for a kick.
   return entry.metadata && !entry.metadata->icon.empty() &&
-         ui::instrument_icons::matches(entry.metadata->icon, query_lower);
+         instrument_icons::matches(entry.metadata->icon, query_lower);
 }
 
 } // namespace patches
