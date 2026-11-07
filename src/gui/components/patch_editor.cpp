@@ -247,34 +247,53 @@ void render_document_header(PatchEditorContext &context,
   }
 }
 
+/// The LFO section's sliders' names, in full or as AMS and FMS.
+struct LfoNames {
+  const char *ams;
+  const char *fms;
+};
+constexpr LfoNames kLfoFullNames{"Amplitude Modulation Sensitivity",
+                                 "Frequency Modulation Sensitivity"};
+constexpr LfoNames kLfoShortNames{"AMS", "FMS"};
+
 /// The LFO section's sliders: one width for the two, wide enough for the
 /// longer name.
-float lfo_slider_width() {
-  return std::max(
-      hslider_width(),
-      named_slider_fit_width("Frequency Modulation Sensitivity", "0"));
+float lfo_slider_width(const LfoNames &names) {
+  return std::max(hslider_width(), named_slider_fit_width(names.fms, "0"));
 }
 
-void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
+void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
+                        const LfoNames &names) {
   // The LFO's switch and rate are how the patch is played, set from the
   // menu bar; what the patch holds is how far it follows the LFO.
   ImGui::SeparatorText("LFO");
 
   // The sensitivities do nothing while the LFO is off, which is said by the
   // one being touched.
+  // A short name is told in full there too.
   const bool lfo_on = context.session.playback().lfo_enable;
-  const auto tell_if_off = [lfo_on] {
-    if (!lfo_on && (ImGui::IsItemHovered() || ImGui::IsItemActive())) {
-      ImGui::SetTooltip("The LFO is off. Turn it on from the LFO menu.");
+  const bool short_names = names.ams != kLfoFullNames.ams;
+  const auto tell = [&](const char *full_name) {
+    const bool touched = ImGui::IsItemHovered() || ImGui::IsItemActive();
+    if (!touched) {
+      return;
+    }
+    constexpr const char *kOff =
+        "The LFO is off. Turn it on from the LFO menu.";
+    if (!lfo_on && short_names) {
+      ImGui::SetTooltip("%s\n%s", full_name, kOff);
+    } else if (!lfo_on) {
+      ImGui::SetTooltip("%s", kOff);
+    } else if (short_names && ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", full_name);
     }
   };
 
-  ImGui::PushItemWidth(lfo_slider_width());
+  ImGui::PushItemWidth(lfo_slider_width(names));
 
   int ams = patch.channel.amplitude_modulation_sensitivity;
-  bool ams_changed =
-      named_slider_int("Amplitude Modulation Sensitivity", &ams, 0, 3);
-  tell_if_off();
+  bool ams_changed = named_slider_int(names.ams, &ams, 0, 3);
+  tell(kLfoFullNames.ams);
   track_patch_history(context, "Amplitude Modulation Sensitivity",
                       "channel.am_sensitivity");
   if (ams_changed) {
@@ -282,9 +301,8 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   }
 
   int fms = patch.channel.frequency_modulation_sensitivity;
-  bool fms_changed =
-      named_slider_int("Frequency Modulation Sensitivity", &fms, 0, 7);
-  tell_if_off();
+  bool fms_changed = named_slider_int(names.fms, &fms, 0, 7);
+  tell(kLfoFullNames.fms);
   track_patch_history(context, "Frequency Modulation Sensitivity",
                       "channel.fm_sensitivity");
   if (fms_changed) {
@@ -666,13 +684,24 @@ void render_document_window(PatchEditorContext &context,
     ImGui::Spacing();
 
     // Side by side while each of the two even columns holds the LFO's
-    // sliders.
+    // sliders, named in full or else as AMS and FMS; one above the other,
+    // in full, after that.
+    // The Channel column needs the diagram and the Algorithm slider named
+    // beside it.
     const auto available_width = ImGui::GetContentRegionAvail().x;
-    const float column_width =
-        lfo_slider_width() + ImGui::GetStyle().ItemSpacing.x * 2.0f;
-    ImGui::Columns(available_width >= column_width * 2.0f ? 2 : 1,
-                   "##lfo_channel_columns", false);
-    render_lfo_section(context, patch);
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float channel_width =
+        hslider_width() + spacing + named_slider_fit_width("Algorithm", "0");
+    const auto fits_beside = [&](const LfoNames &names) {
+      const float column =
+          std::max(lfo_slider_width(names), channel_width) + spacing * 2.0f;
+      return available_width >= column * 2.0f;
+    };
+    const bool full_beside = fits_beside(kLfoFullNames);
+    const bool beside = full_beside || fits_beside(kLfoShortNames);
+    ImGui::Columns(beside ? 2 : 1, "##lfo_channel_columns", false);
+    render_lfo_section(context, patch,
+                       beside && !full_beside ? kLfoShortNames : kLfoFullNames);
     ImGui::NextColumn();
     render_channel_section(context, patch);
     ImGui::Columns(1);
