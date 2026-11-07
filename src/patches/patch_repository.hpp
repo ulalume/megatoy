@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace patches {
@@ -130,6 +131,7 @@ private:
   static constexpr const char *kBuiltinRootName = "presets";
 
   void rebuild_storages();
+  void index_tree();
 
   const megatoy::workspace::Workspace &workspace_;
   std::filesystem::path builtin_presets_directory_;
@@ -138,6 +140,10 @@ private:
   PersistentParseCache *persistent_cache_;
 
   std::vector<PatchEntry> tree_cache_;
+  /// tree_cache_'s patches by relative_path and by source_relative_path,
+  /// the first in tree order kept for each.
+  std::unordered_map<std::string, const PatchEntry *> by_path_;
+  std::unordered_map<std::string, const PatchEntry *> by_source_path_;
   std::vector<std::filesystem::path> watched_directories_;
   FolderWatcher folder_watcher_;
   std::vector<std::filesystem::file_time_type> watched_times_;

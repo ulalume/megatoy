@@ -121,6 +121,7 @@ void PatchRepository::refresh() {
   for (const auto &storage : storages_) {
     storage->append_entries(tree_cache_);
   }
+  index_tree();
 
   if (persistent_cache_ && persistent_cache_->dirty() &&
       persistent_cache_->save()) {
@@ -131,6 +132,22 @@ void PatchRepository::refresh() {
 
   cache_initialized_ = true;
   ++revision_;
+}
+
+void PatchRepository::index_tree() {
+  by_path_.clear();
+  by_source_path_.clear();
+  const auto add = [this](const auto &self,
+                          const std::vector<PatchEntry> &entries) -> void {
+    for (const auto &entry : entries) {
+      if (!entry.is_directory) {
+        by_path_.emplace(entry.relative_path, &entry);
+        by_source_path_.emplace(entry.source_relative_path, &entry);
+      }
+      self(self, entry.children);
+    }
+  };
+  add(add, tree_cache_);
 }
 
 const std::vector<PatchEntry> &PatchRepository::tree() const {
@@ -390,25 +407,11 @@ PatchRepository::find_entry(const std::string &relative_path) const {
   if (relative_path.empty()) {
     return nullptr;
   }
-  const auto search = [&](const auto &self,
-                          const std::vector<PatchEntry> &entries,
-                          bool by_source) -> const PatchEntry * {
-    for (const auto &entry : entries) {
-      if (!entry.is_directory &&
-          (by_source ? entry.source_relative_path == relative_path
-                     : entry.relative_path == relative_path)) {
-        return &entry;
-      }
-      if (const auto *found = self(self, entry.children, by_source)) {
-        return found;
-      }
-    }
-    return nullptr;
-  };
-  if (const auto *exact = search(search, tree(), false)) {
-    return exact;
+  if (const auto it = by_path_.find(relative_path); it != by_path_.end()) {
+    return it->second;
   }
-  return search(search, tree(), true);
+  const auto it = by_source_path_.find(relative_path);
+  return it == by_source_path_.end() ? nullptr : it->second;
 }
 
 } // namespace patches
