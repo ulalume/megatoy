@@ -2,6 +2,7 @@
 #include "gui/app_window.hpp"
 
 #include "gui/areas.hpp"
+#include "gui/components/centred_glyph.hpp"
 #include "gui/layouts.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
@@ -148,19 +149,6 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
   }
 }
 
-/// Draws a one-glyph `icon` centred in the rectangle by the glyph's outline.
-void draw_centred_glyph(const char *icon, ImVec2 min, ImVec2 max) {
-  unsigned int codepoint = 0;
-  ImTextCharFromUtf8(&codepoint, icon, nullptr);
-  const ImFontGlyph *glyph =
-      ImGui::GetFontBaked()->FindGlyph(static_cast<ImWchar>(codepoint));
-  const ImVec2 centre((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f);
-  const ImVec2 pos(IM_ROUND(centre.x - (glyph->X0 + glyph->X1) * 0.5f),
-                   IM_ROUND(centre.y - (glyph->Y0 + glyph->Y1) * 0.5f));
-  ImGui::GetWindowDrawList()->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text),
-                                      icon);
-}
-
 /**
  * The patch browser folded into a button at the left of the editors' tabs.
  * It opens the browser as a menu does, over the editor at its least width,
@@ -244,9 +232,7 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(350, 500)),
                            ImGuiCond_FirstUseEver);
 
-  // Match the waveform panel: no tab bar while this window is docked alone.
-  areas::keep_in_area(areas::Area::Sidebar, title,
-                      ImGuiDockNodeFlags_AutoHideTabBar);
+  areas::keep_in_area(areas::Area::Sidebar, title, ImGuiDockNodeFlags_NoTabBar);
   // Only the tree scrolls; it runs to the bottom edge.
   if (!ui::begin_window(title, &prefs.show_patch_selector,
                         ImGuiWindowFlags_NoScrollbar |

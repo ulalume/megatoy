@@ -3,15 +3,19 @@
 
 #include "audio/scope_trigger.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/centred_glyph.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
+#include "gui/window_title.hpp"
 
+#include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chord_detector.h>
 #include <cmath>
 #include <cstdio>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <string>
 #include <vector>
 
@@ -238,16 +242,53 @@ void draw_chord(const Panel &panel, const std::string &chord) {
       ImGui::GetColorU32(ImGuiCol_Text), chord.c_str());
 }
 
+/// The tab group of the soft keyboard and Patch Lab, while one is shown.
+ImGuiDockNode *footer_right_node() {
+  for (ImGuiWindow *window : GImGui->Windows) {
+    if (window->Active && window->DockNode != nullptr &&
+        areas::area_of(window->Name) == areas::Area::FooterRight) {
+      return window->DockNode;
+    }
+  }
+  return nullptr;
+}
+
+/// The closed waveform as a button at the left of the soft keyboard's tabs,
+/// which shows it again.
+void render_folded_waveform(bool &show_waveform) {
+  ImGuiDockNode *node = footer_right_node();
+  if (node == nullptr || !ImGui::DockNodeBeginAmendTabBar(node)) {
+    return;
+  }
+  // A button added to a dock's tab bar does not take clicks itself, so the
+  // click is read here.
+  ImGui::SetNextItemWidth(ImGui::CalcTextSize(WAVEFORM_ICON).x +
+                          ImGui::GetStyle().FramePadding.x * 2.0f);
+  ImGui::TabItemButton("##folded_waveform",
+                       ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
+  draw_centred_glyph(WAVEFORM_ICON, ImGui::GetItemRectMin(),
+                     ImGui::GetItemRectMax());
+  const bool hovered = ImGui::IsItemHovered();
+  ImGui::DockNodeEndAmendTabBar();
+  if (hovered) {
+    ImGui::SetTooltip("%s", WAVEFORM_TITLE);
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+      show_waveform = true;
+    }
+  }
+}
+
 } // namespace
 
 void render_waveform(const char *title, WaveformContext &context) {
   auto &ui_prefs = context.ui_prefs;
   if (!ui_prefs.show_waveform) {
+    render_folded_waveform(ui_prefs.show_waveform);
     return;
   }
 
   areas::keep_in_area(areas::Area::FooterLeft, title,
-                      ImGuiDockNodeFlags_AutoHideTabBar);
+                      ImGuiDockNodeFlags_NoTabBar);
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(420.0f, 240.0f)),
                            ImGuiCond_FirstUseEver);
@@ -272,6 +313,22 @@ void render_waveform(const char *title, WaveformContext &context) {
 
   // Side by side in a wide area, one above the other in a tall one.
   const ImVec2 available = ImGui::GetContentRegionAvail();
+
+  // The close mark in the top right corner, over the graphs. Submitted before
+  // them so it, not they, takes the pointer there; drawn after them.
+  const ImVec2 origin = ImGui::GetCursorScreenPos();
+  const float close_size = ImGui::GetFrameHeight();
+  ImGui::SetCursorScreenPos(
+      ImVec2(origin.x + available.x - close_size, origin.y));
+  const bool close = ImGui::InvisibleButton("##close_waveform",
+                                            ImVec2(close_size, close_size));
+  const bool close_hovered = ImGui::IsItemHovered();
+  const ImVec2 close_min = ImGui::GetItemRectMin();
+  const ImVec2 close_max = ImGui::GetItemRectMax();
+  if (close_hovered) {
+    ImGui::SetTooltip("Close");
+  }
+  ImGui::SetCursorScreenPos(origin);
   const bool stacked = available.y > available.x;
   const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
   const ImVec2 panel_size =
@@ -299,7 +356,15 @@ void render_waveform(const char *title, WaveformContext &context) {
   draw_spectrum(spectrum_panel, context.spectrum, context.sample_rate);
   end_panel(spectrum_panel);
 
+  draw_centred_glyph(ICON_FA_XMARK, close_min, close_max,
+                     close_hovered
+                         ? ImGui::GetColorU32(ImGuiCol_Text)
+                         : styles::color_u32(styles::MegatoyCol::TextMuted));
+
   ImGui::End();
+  if (close) {
+    ui_prefs.show_waveform = false;
+  }
 }
 
 } // namespace ui

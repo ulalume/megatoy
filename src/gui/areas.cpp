@@ -112,7 +112,8 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
                   unsigned int main_dock_id) {
   // The groups have no close-all button: each tab closes on its own, and
   // hiding a view is the View menu's. Nor a tab list: the tabs are few, and
-  // the patch browser's button takes the place at the left when it folds.
+  // the folded patch browser's and waveform's buttons take the place at the
+  // left.
   ImGuiWindowClass window_class;
   window_class.DockNodeFlagsOverrideSet =
       static_cast<ImGuiDockNodeFlags>(node_flags) |
