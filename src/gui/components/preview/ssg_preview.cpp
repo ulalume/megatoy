@@ -84,6 +84,11 @@ void ssg_diagram(bool enabled, int envelope_type, ImVec2 size) {
   const ImU32 fill =
       (line & ~IM_COL32_A_MASK) | (((line >> IM_COL32_A_SHIFT) & 0xFF) * 2 / 5)
                                       << IM_COL32_A_SHIFT;
+  // Without anti-aliasing, so neighbouring pieces of the fill meet without a
+  // seam and the outline sits on whole pixels.
+  const ImDrawListFlags flags = draw_list->Flags;
+  draw_list->Flags &=
+      ~(ImDrawListFlags_AntiAliasedFill | ImDrawListFlags_AntiAliasedLines);
   // The fill under each slope, down to the floor.
   for (int i = 1; i < shape.count; ++i) {
     const ImVec2 from = at(shape.points[i - 1]);
@@ -101,6 +106,7 @@ void ssg_diagram(bool enabled, int envelope_type, ImVec2 size) {
     draw_list->PathLineTo(ImVec2(point.x + 0.5f, point.y + 0.5f));
   }
   draw_list->PathStroke(line, ImDrawFlags_None, ui::scale::px(1.0f));
+  draw_list->Flags = flags;
 }
 
 } // namespace ui
