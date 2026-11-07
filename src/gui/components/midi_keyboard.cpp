@@ -542,11 +542,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         if (mapped != context.state.reverse_mappings.end()) {
           typed_min = std::min(typed_min, key_min.x);
           typed_max = std::max(typed_max, key_max.x);
-          // A bar along the top of each key typing plays, and its key's name
-          // a little below it: below the black keys on a white one that has
-          // them beside it.
+          // The key's name a little below the bar over the keys typing
+          // plays: below the black keys on a white one that has them beside
+          // it.
           const ImVec2 bar_max(key_max.x, key_min.y + ui::scale::px(4.0f));
-          draw_list->AddRectFilled(key_min, bar_max, white_key_pressed_col);
           std::string key_text = short_key_name(mapped->second);
           if (key_text.empty()) {
             const char *fallback = ImGui::GetKeyName(mapped->second);
@@ -571,6 +570,14 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
               text_color, key_text.c_str());
         }
       }
+    }
+
+    // One bar along the top of the keys typing plays, over the white and
+    // black keys alike.
+    if (typed_min < typed_max) {
+      draw_list->AddRectFilled(ImVec2(typed_min, y),
+                               ImVec2(typed_max, y + ui::scale::px(4.0f)),
+                               white_key_pressed_col);
     }
 
     // Once the keys typing plays move, the keyboard scrolls to centre them
