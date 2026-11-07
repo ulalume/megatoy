@@ -107,13 +107,20 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
   }
 
   // The add-folder icon closes the filter row, which is kept clear of it.
+  // Docked, the row stands at the window's top as tall as the editors' tabs
+  // beside it.
   ImGuiWindow *window = ImGui::GetCurrentWindow();
+  if (window->DockNode != nullptr) {
+    ImGui::SetCursorPosY(0.0f);
+  }
+  push_window_tab_padding();
   const float work_right = window->WorkRect.Max.x;
   if (context.add_folder) {
     window->WorkRect.Max.x -= render_add_folder_icon(context);
   }
   render_filter_bar(context);
   window->WorkRect.Max.x = work_right;
+  ImGui::PopStyleVar();
   render_tree(context);
 
   if (context.pending_remove_folder && context.remove_folder) {
