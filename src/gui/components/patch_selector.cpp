@@ -2,7 +2,7 @@
 #include "gui/app_window.hpp"
 
 #include "gui/areas.hpp"
-#include "gui/components/centred_glyph.hpp"
+#include "gui/components/folded_tab_button.hpp"
 #include "gui/layouts.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
@@ -161,31 +161,16 @@ void render_folded_patch_selector(PatchSelectorContext &context) {
   // closed it, as a press outside it does, and the release leaves it so.
   static bool open_at_press = false;
 
-  ImGuiDockNode *editors =
-      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID);
-  if (editors == nullptr || !ImGui::DockNodeBeginAmendTabBar(editors)) {
+  const auto button = folded_tab_button(
+      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID),
+      "##folded_patch_browser", PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE);
+  if (!button) {
     return;
   }
-  // Drawn as a tab button, but a button added to a dock's tab bar does not
-  // take clicks itself, so the press and release are read here. The icon is
-  // drawn over it centred by its own outline: the glyph sits low in its line.
-  ImGui::SetNextItemWidth(ImGui::CalcTextSize(PATCH_BROWSER_ICON).x +
-                          ImGui::GetStyle().FramePadding.x * 2.0f);
-  ImGui::TabItemButton("##folded_patch_browser",
-                       ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
-  draw_centred_glyph(PATCH_BROWSER_ICON, ImGui::GetItemRectMin(),
-                     ImGui::GetItemRectMax());
-  const bool hovered = ImGui::IsItemHovered();
+  const ImVec2 below(button->min.x, button->max.y);
   // Also through the open browser, so a press here while it is open is
   // known for the one that closes it.
-  const bool under_pointer =
-      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
-  const ImVec2 below(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y);
-  ImGui::DockNodeEndAmendTabBar();
-  if (hovered) {
-    ImGui::SetTooltip("%s", PATCH_BROWSER_TITLE);
-  }
-  if (under_pointer) {
+  if (button->under_pointer) {
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
       open_at_press = ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None);
     }

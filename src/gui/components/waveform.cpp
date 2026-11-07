@@ -3,8 +3,9 @@
 
 #include "audio/scope_trigger.hpp"
 #include "gui/areas.hpp"
-#include "gui/components/centred_glyph.hpp"
+#include "gui/components/folded_tab_button.hpp"
 #include "gui/components/panel.hpp"
+#include "gui/layouts.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -242,39 +243,34 @@ void draw_chord(const Panel &panel, const std::string &chord) {
       ImGui::GetColorU32(ImGuiCol_Text), chord.c_str());
 }
 
-/// The tab group of the soft keyboard and Patch Lab, while one is shown.
-ImGuiDockNode *footer_right_node() {
+/// The tab group of the soft keyboard and Patch Lab while one is shown, else
+/// the patch editors'.
+ImGuiDockNode *folded_waveform_node() {
   for (ImGuiWindow *window : GImGui->Windows) {
     if (window->Active && window->DockNode != nullptr &&
         areas::area_of(window->Name) == areas::Area::FooterRight) {
       return window->DockNode;
     }
   }
-  return nullptr;
+  return ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID);
 }
 
-/// The closed waveform as a button at the left of the soft keyboard's tabs,
-/// which shows it again.
+/// The closed waveform as a button at the left of a tab group, which shows
+/// it again when pressed and released on it.
 void render_folded_waveform(bool &show_waveform) {
-  ImGuiDockNode *node = footer_right_node();
-  if (node == nullptr || !ImGui::DockNodeBeginAmendTabBar(node)) {
-    return;
+  static bool pressed = false;
+  const auto button =
+      folded_tab_button(folded_waveform_node(), "##folded_waveform",
+                        WAVEFORM_ICON, WAVEFORM_TITLE);
+  const bool hovered = button && button->hovered;
+  if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    pressed = true;
   }
-  // A button added to a dock's tab bar does not take clicks itself, so the
-  // click is read here.
-  ImGui::SetNextItemWidth(ImGui::CalcTextSize(WAVEFORM_ICON).x +
-                          ImGui::GetStyle().FramePadding.x * 2.0f);
-  ImGui::TabItemButton("##folded_waveform",
-                       ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
-  draw_centred_glyph(WAVEFORM_ICON, ImGui::GetItemRectMin(),
-                     ImGui::GetItemRectMax());
-  const bool hovered = ImGui::IsItemHovered();
-  ImGui::DockNodeEndAmendTabBar();
-  if (hovered) {
-    ImGui::SetTooltip("%s", WAVEFORM_TITLE);
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+  if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+    if (pressed && hovered) {
       show_waveform = true;
     }
+    pressed = false;
   }
 }
 
@@ -282,6 +278,7 @@ void render_folded_waveform(bool &show_waveform) {
 
 void render_waveform(const char *title, WaveformContext &context) {
   auto &ui_prefs = context.ui_prefs;
+  layouts::track_waveform_shown(&ui_prefs.show_waveform);
   if (!ui_prefs.show_waveform) {
     render_folded_waveform(ui_prefs.show_waveform);
     return;

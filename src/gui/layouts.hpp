@@ -26,6 +26,9 @@ void fit_footer_to_width();
  */
 void fit_footer_to_waveform();
 
+/// The waveform's shown preference, for fit_footer_to_waveform to read.
+void track_waveform_shown(const bool *shown);
+
 /**
  * Narrows the patch browser before the patch editor as the window narrows,
  * down to its least width, then the editor to its own. Below the two least
