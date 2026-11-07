@@ -16,6 +16,7 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 #include <emscripten.h>
 #endif
+#include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -133,8 +134,14 @@ const std::string &license_text(int index) {
   return text;
 }
 
+/// The narrowest the license text stands beside the list.
+constexpr float kMinLicenseTextWidth = 240.0f;
+
 struct AboutModalState {
   int selected_license = 0;
+  /// Where the list and the text do not fit side by side, the text shown in
+  /// the list's place.
+  bool license_open = false;
   UpdateStatus status = UpdateStatus::Idle;
   std::string latest_version;
   std::string release_url;
@@ -143,6 +150,7 @@ struct AboutModalState {
 
   void reset() {
     selected_license = 0;
+    license_open = false;
     status = UpdateStatus::Idle;
     latest_version.clear();
     release_url.clear();
@@ -330,6 +338,8 @@ void render_header() {
 }
 
 /// The components on the left, the chosen one's license text on the right.
+/// Where the two do not fit side by side, the list alone, and a component
+/// chosen from it shows its text in the list's place with a way back.
 void render_licenses(AboutModalState &state) {
   ImGui::SeparatorText("Third-Party Licenses");
   const ImGuiStyle &style = ImGui::GetStyle();
@@ -346,12 +356,46 @@ void render_licenses(AboutModalState &state) {
                            style.ItemSpacing.x * 2.0f +
                            style.WindowPadding.x * 2.0f;
   const float height = ui::scale::px(240.0f);
+  const bool side_by_side =
+      ImGui::GetContentRegionAvail().x >=
+      list_width + style.ItemSpacing.x + ui::scale::px(kMinLicenseTextWidth);
+  if (side_by_side) {
+    state.license_open = false;
+  }
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         styles::color(styles::MegatoyCol::DialogPaneBg));
   ImGui::PushStyleColor(ImGuiCol_Border,
                         styles::color(styles::MegatoyCol::DialogPaneBorder));
 
-  if (ImGui::BeginChild("##license_list", ImVec2(list_width, height),
+  const auto render_text = [&](float text_height) {
+    if (ImGui::BeginChild("##license_text", ImVec2(0.0f, text_height),
+                          ImGuiChildFlags_Borders)) {
+      if (ImGui::IsWindowAppearing()) {
+        ImGui::SetScrollY(0.0f);
+      }
+      ImGui::PushTextWrapPos(0.0f);
+      ImGui::TextUnformatted(license_text(state.selected_license).c_str());
+      ImGui::PopTextWrapPos();
+    }
+    ImGui::EndChild();
+  };
+
+  if (state.license_open) {
+    // Back to the list, at the top left, beside the component's name.
+    if (ImGui::Button(ICON_FA_ARROW_LEFT "##back_to_licenses")) {
+      state.license_open = false;
+    }
+    ImGui::SetItemTooltip("All licenses");
+    ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(kLicenses[state.selected_license].name);
+    render_text(height - ImGui::GetFrameHeightWithSpacing());
+    ImGui::PopStyleColor(2);
+    return;
+  }
+
+  if (ImGui::BeginChild("##license_list",
+                        ImVec2(side_by_side ? list_width : 0.0f, height),
                         ImGuiChildFlags_Borders)) {
     // Rows as tall as the patch tree's.
     ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
@@ -359,8 +403,10 @@ void render_licenses(AboutModalState &state) {
     for (int i = 0; i < static_cast<int>(std::size(kLicenses)); ++i) {
       const License &license = kLicenses[i];
       ImGui::PushID(i);
-      if (ImGui::Selectable(license.name, state.selected_license == i)) {
+      if (ImGui::Selectable(license.name,
+                            side_by_side && state.selected_license == i)) {
         state.selected_license = i;
+        state.license_open = !side_by_side;
       }
       ImGui::SameLine(right - ImGui::CalcTextSize(license.license).x);
       ImGui::TextColored(muted, "%s", license.license);
@@ -370,17 +416,10 @@ void render_licenses(AboutModalState &state) {
   }
   ImGui::EndChild();
 
-  ImGui::SameLine();
-  if (ImGui::BeginChild("##license_text", ImVec2(0.0f, height),
-                        ImGuiChildFlags_Borders)) {
-    if (ImGui::IsWindowAppearing()) {
-      ImGui::SetScrollY(0.0f);
-    }
-    ImGui::PushTextWrapPos(0.0f);
-    ImGui::TextUnformatted(license_text(state.selected_license).c_str());
-    ImGui::PopTextWrapPos();
+  if (side_by_side) {
+    ImGui::SameLine();
+    render_text(height);
   }
-  ImGui::EndChild();
   ImGui::PopStyleColor(2);
 }
 
