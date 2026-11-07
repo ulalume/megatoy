@@ -118,6 +118,19 @@ SaveResult PatchSession::save_current_patch_as_impl(
     extension = "." + extension;
   }
 
+  // The copy takes the metadata of the patch it was opened from.
+  std::optional<PatchMetadata> source_metadata;
+  std::filesystem::path source_file;
+  if (const auto *source = repository_->find_entry(current_patch_path())) {
+    source_metadata = source->metadata;
+    source_file = source->full_path;
+  }
+  const auto carry_metadata = [&](const std::filesystem::path &written) {
+    if (written != source_file) {
+      repository_->copy_patch_metadata(source_metadata, written);
+    }
+  };
+
   if (megatoy::platform::is_web()) {
     auto patch_to_write = written_patch();
     patch_to_write.name = sanitized_name;
@@ -128,6 +141,8 @@ SaveResult PatchSession::save_current_patch_as_impl(
             : repository_->save_patch_in(folder, patch_to_write, sanitized_name,
                                          overwrite, extension);
     if (result.status == SavePatchResult::Status::Success) {
+      carry_metadata(result.path);
+      repository_->refresh();
       auto loaded = formats::load_patch_from_file(result.path);
       if (loaded.status == formats::PatchLoadStatus::Success &&
           loaded.patches.size() == 1) {
@@ -179,6 +194,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
   }
 
   preferences_.set_last_save_directory(selected.parent_path());
+  carry_metadata(selected);
   auto loaded = formats::load_patch_from_file(selected);
   if (loaded.status == formats::PatchLoadStatus::Success &&
       loaded.patches.size() == 1) {

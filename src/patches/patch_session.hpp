@@ -350,10 +350,9 @@ private:
   void remember_disk_time(const PatchDocument &document);
   /**
    * Fold every workspace folder that lies inside another into the outer one:
-   * its ratings and icons move to the outer folder's sidecar, it leaves
-   * the list with the outer one taking its place, and the documents, the
-   * remembered ones and the last patch are re-pointed at the outer folder's
-   * paths. My Patches is never let go of.
+   * it leaves the list with the outer one taking its place, and the
+   * documents, the remembered ones and the last patch are re-pointed at the
+   * outer folder's paths. My Patches is never let go of.
    */
   void absorb_nested_folders();
   /// The entry's metadata with `change` applied, written and the tree

@@ -1,5 +1,4 @@
 #include "../test_check.hpp"
-#include "patches/folder_metadata.hpp"
 #include "workspace/path_policy.hpp"
 #include "workspace/workspace.hpp"
 
@@ -163,38 +162,6 @@ void test_path_comparison_policy(const fs::path &root) {
   CHECK(!megatoy::workspace::paths_equal(alpha, root / "beta"));
 }
 
-void test_metadata_sidecar(const fs::path &root) {
-  const auto sidecar = root / "alpha" / ".ym2612" / "patches.json";
-
-  {
-    patches::FolderMetadataStore store(sidecar);
-    CHECK(store.load());
-    CHECK(store.empty());
-
-    patches::PatchMetadata metadata;
-    metadata.path = "leads/bright.dmp";
-    metadata.star_rating = 5;
-    metadata.icon = "lead";
-    CHECK(store.put(metadata));
-  }
-
-  CHECK(fs::exists(sidecar));
-
-  {
-    patches::FolderMetadataStore store(sidecar);
-    CHECK(store.load());
-    const auto stored = store.get("leads/bright.dmp");
-    CHECK(stored.has_value());
-    CHECK(stored->star_rating == 5);
-    CHECK(stored->icon == "lead");
-    CHECK(!stored->created_at.empty());
-
-    // Entries for files that no longer exist are dropped.
-    CHECK(store.retain_only({"leads/other.dmp"}));
-    CHECK(!store.get("leads/bright.dmp").has_value());
-  }
-}
-
 } // namespace
 
 void test_same_named_folders_are_told_apart(const fs::path &root) {
@@ -235,7 +202,6 @@ int main() {
   test_same_named_folders_are_told_apart(root);
   test_revision_tracks_changes(root);
   test_path_comparison_policy(root);
-  test_metadata_sidecar(root);
 
   fs::remove_all(root);
   std::cout << "All workspace tests passed\n";

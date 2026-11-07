@@ -40,7 +40,6 @@ bool PatchSession::update_entry_metadata(const PatchEntry &entry,
     return false;
   }
   auto metadata = entry.metadata.value_or(PatchMetadata{});
-  metadata.path = entry.relative_path;
   if (metadata.hash.empty()) {
     ym2612::Patch patch;
     if (repository_->load_patch(entry, patch)) {

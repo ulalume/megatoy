@@ -189,10 +189,10 @@ add_executable(patch_repository_move_test
 target_include_directories(patch_repository_move_test PRIVATE src)
 target_link_libraries(patch_repository_move_test PRIVATE megatoy_core)
 add_test(NAME patch_repository_move_test COMMAND patch_repository_move_test)
-add_executable(folder_metadata_test tests/patches/folder_metadata_test.cpp)
-target_include_directories(folder_metadata_test PRIVATE src)
-target_link_libraries(folder_metadata_test PRIVATE megatoy_core)
-add_test(NAME folder_metadata_test COMMAND folder_metadata_test)
+add_executable(patch_metadata_test tests/patches/patch_metadata_test.cpp)
+target_include_directories(patch_metadata_test PRIVATE src)
+target_link_libraries(patch_metadata_test PRIVATE megatoy_core)
+add_test(NAME patch_metadata_test COMMAND patch_metadata_test)
 add_executable(patch_tree_flatten_test tests/patches/patch_tree_flatten_test.cpp)
 target_include_directories(patch_tree_flatten_test PRIVATE src)
 target_link_libraries(patch_tree_flatten_test PRIVATE megatoy_core)
@@ -377,7 +377,7 @@ add_custom_target(check
           filename_utils_test utf8_utils_test
           patch_repository_delete_test patch_repository_rename_test
           patch_repository_move_test patch_document_test folder_watcher_test
-          folder_metadata_test patch_tree_flatten_test
+          patch_metadata_test patch_tree_flatten_test
           document_decisions_test patch_entry_actions_test
           patch_tree_navigation_test patch_lab_sources_test patch_tweak_test
           workspace_test vgm_multi_instrument_test frame_scheduler_test

@@ -12,20 +12,6 @@ namespace megatoy::workspace {
 
 namespace fs = std::filesystem;
 
-namespace {
-constexpr const char *kSidecarDirectory = ".ym2612";
-constexpr const char *kLegacySidecarDirectory = ".megatoy";
-constexpr const char *kSidecarFile = "patches.json";
-} // namespace
-
-fs::path Folder::metadata_path() const {
-  return path / kSidecarDirectory / kSidecarFile;
-}
-
-fs::path Folder::legacy_metadata_path() const {
-  return path / kLegacySidecarDirectory / kSidecarFile;
-}
-
 bool Workspace::probe_writable(const fs::path &path) {
   std::error_code ec;
   const auto status = fs::status(path, ec);

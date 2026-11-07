@@ -230,6 +230,7 @@ struct UIState {
   struct PatchDuplicateState {
     ui::PatchSaveDialogState dialog;
     ym2612::Patch patch;
+    std::optional<patches::PatchMetadata> metadata;
   } patch_duplicate_state;
 
   ui::SaveExportState save_export_state;

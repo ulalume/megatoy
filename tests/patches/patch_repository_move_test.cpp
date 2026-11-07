@@ -1,5 +1,5 @@
 #include "../test_check.hpp"
-#include "patches/folder_metadata.hpp"
+#include "patches/patch_metadata.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_write.hpp"
 #include "platform/std_file_system.hpp"
@@ -76,18 +76,19 @@ void test_file_move(const fs::path &root) {
   CHECK(moved->metadata.has_value());
   CHECK(moved->metadata->star_rating == 4);
 
-  patches::FolderMetadataStore store(folder / ".ym2612" / "patches.json");
-  CHECK(store.load());
-  CHECK(!store.get("lead.dmp").has_value());
-  const auto followed = store.get("pads/lead.dmp");
+  CHECK(!fs::exists(folder / ".ym2612"));
+  const auto followed =
+      patches::sidecar::read(folder / "pads" / ".ym2612" / "lead.dmp.json");
   CHECK(followed.has_value());
-  CHECK(followed->icon == "Lead");
+  CHECK((*followed)["icon"] == "Lead");
 
   // And back up into the workspace folder itself.
   const auto back = *moved;
   CHECK(repository.move_patch(back, entry_at(repository, folder)));
   CHECK(fs::exists(folder / "lead.dmp"));
   CHECK(!fs::exists(folder / "pads" / "lead.dmp"));
+  CHECK(fs::exists(folder / ".ym2612" / "lead.dmp.json"));
+  CHECK(!fs::exists(folder / "pads" / ".ym2612"));
 }
 
 void test_directory_move(const fs::path &root) {
@@ -134,10 +135,8 @@ void test_directory_move(const fs::path &root) {
   CHECK(moved->metadata->star_rating == 5);
   CHECK(moved->metadata->icon == "Bass");
 
-  patches::FolderMetadataStore store(folder / ".ym2612" / "patches.json");
-  CHECK(store.load());
-  CHECK(!store.get("bass/inner/sub.dmp").has_value());
-  CHECK(store.get("low/bass/inner/sub.dmp").has_value());
+  CHECK(fs::exists(folder / "low" / "bass" / "inner" / ".ym2612" /
+                   "sub.dmp.json"));
 
   // The workspace folder itself is never moved.
   fs::create_directories(folder / "low" / "elsewhere");
@@ -220,12 +219,16 @@ void test_containers(const fs::path &root) {
   // The package file itself moves, and its versions' metadata with it.
   CHECK(repository.move_patch(package, keep));
   CHECK(fs::exists(folder / "keep" / saved.path.filename()));
-  patches::FolderMetadataStore store(folder / ".ym2612" / "patches.json");
-  CHECK(store.load());
-  const auto followed =
-      store.get("keep/" + saved.path.filename().generic_string() + "/latest");
+  CHECK(!fs::exists(folder / ".ym2612" / saved.path.filename()));
+  const auto followed = patches::sidecar::read(patches::sidecar::path_for(
+      folder / "keep" / saved.path.filename(), "latest"));
   CHECK(followed.has_value());
-  CHECK(followed->star_rating == 2);
+  CHECK((*followed)["star_rating"] == 2);
+  const auto *moved =
+      find_entry(repository.tree(), folder / "keep" / saved.path.filename());
+  CHECK(moved != nullptr && !moved->children.empty());
+  CHECK(moved->children.front().metadata.has_value());
+  CHECK(moved->children.front().metadata->star_rating == 2);
 }
 
 void test_cross_storage_refused(const fs::path &root) {

@@ -10,7 +10,6 @@
 #endif
 #include "ym2612/patch.hpp"
 #include <algorithm>
-#include <functional>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -76,12 +75,12 @@ void PatchRepository::rebuild_storages() {
   used_labels.emplace_back(kBuiltinRootName);
 
   for (const auto &folder : workspace_.folders()) {
+    if (folder.writable) {
+      sidecar::migrate_folder(folder.path);
+    }
     auto storage = std::make_unique<FilesystemPatchStorage>(
         vfs_, folder.path, unique_label(folder.name), folder.writable,
-        folder.writable ? folder.metadata_path() : std::filesystem::path{},
-        persistent_cache_,
-        folder.writable ? folder.legacy_metadata_path()
-                        : std::filesystem::path{});
+        persistent_cache_);
     storage->set_listed_as(folder.name, workspace_.telling_parents(folder));
     storages_.push_back(std::move(storage));
     if (folder.available) {
@@ -90,18 +89,10 @@ void PatchRepository::rebuild_storages() {
   }
 
   if (show_builtin_presets_ && !builtin_presets_directory_.empty()) {
-    // Without the presets there would be nothing to keep, and the cleanup
-    // after a scan would drop every rating.
-    const bool keep_metadata = vfs_.is_directory(builtin_presets_directory_);
-    // The sidecar the presets ship with is the base layer under the user's.
-    megatoy::workspace::Folder bundled;
-    bundled.path = builtin_presets_directory_;
+    // The sidecars the presets ship with are the base under the user's own.
     storages_.push_back(std::make_unique<FilesystemPatchStorage>(
         vfs_, builtin_presets_directory_, kBuiltinRootName,
-        /*writable=*/false,
-        keep_metadata ? builtin_presets_metadata_ : std::filesystem::path{},
-        persistent_cache_, /*legacy_metadata_file=*/std::filesystem::path{},
-        bundled.metadata_path()));
+        /*writable=*/false, persistent_cache_, builtin_presets_metadata_));
     watched_directories_.push_back(builtin_presets_directory_);
   }
 
@@ -271,7 +262,6 @@ bool PatchRepository::delete_patch(const PatchEntry &entry) {
       return false;
     }
     refresh();
-    cleanup_orphaned_metadata();
 #if defined(MEGATOY_PLATFORM_WEB)
     platform::web::request_storage_persist();
 #endif
@@ -385,26 +375,13 @@ bool PatchRepository::update_patch_metadata(const std::string &relative_path,
   return false;
 }
 
-void PatchRepository::cleanup_orphaned_metadata() {
-  // Collect all existing patch paths
-  std::vector<std::string> existing_paths;
-
-  std::function<void(const std::vector<PatchEntry> &)> collect_paths;
-  collect_paths = [&](const std::vector<PatchEntry> &entries) {
-    for (const auto &entry : entries) {
-      if (entry.is_directory) {
-        collect_paths(entry.children);
-      } else {
-        existing_paths.push_back(entry.relative_path);
-      }
-    }
-  };
-
-  collect_paths(tree_cache_);
-
-  // Cleanup orphaned entries
+void PatchRepository::copy_patch_metadata(
+    const std::optional<PatchMetadata> &source,
+    const std::filesystem::path &file) {
   for (const auto &storage : storages_) {
-    storage->cleanup_metadata(existing_paths);
+    if (storage->copy_metadata_to(source, file)) {
+      return;
+    }
   }
 }
 

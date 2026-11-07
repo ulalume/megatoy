@@ -172,7 +172,7 @@ set(YM2612_EG_BUILD_GOLDEN_GEN OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ym2612_eg)
 
 # ym2612-patches - the built-in CC0 preset library. Data only (LICENSE,
-# .gitignore, *.dmp files, their metadata in .ym2612/patches.json); it ships
+# .gitignore, *.dmp files, their metadata in .ym2612/ folders); it ships
 # no CMakeLists.txt, so FetchContent_MakeAvailable just populates
 # ym2612_patches_SOURCE_DIR instead of add_subdirectory()-ing it. The repo
 # publishes no tags, so the pin below is a commit SHA -- bumping that SHA is

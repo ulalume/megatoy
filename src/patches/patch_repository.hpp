@@ -1,7 +1,7 @@
 #pragma once
 
 #include "folder_watcher.hpp"
-#include "patches/folder_metadata.hpp"
+#include "patches/patch_metadata.hpp"
 #include "platform/std_file_system.hpp"
 #include "save_patch_result.hpp"
 #include "workspace/workspace.hpp"
@@ -114,8 +114,11 @@ public:
   std::string display_path(const std::string &relative) const;
   bool can_edit_metadata(const PatchEntry &entry) const;
 
-  // Batch operations
-  void cleanup_orphaned_metadata();
+  /// Give `file`, a patch megatoy just wrote as a copy, the metadata of the
+  /// one it copies, without its hash and timestamps. Nothing outside the
+  /// writable folders.
+  void copy_patch_metadata(const std::optional<PatchMetadata> &source,
+                           const std::filesystem::path &file);
 
   /// The folders the tree mirrors, in the order it lists them.
   const megatoy::workspace::Workspace &workspace() const { return workspace_; }

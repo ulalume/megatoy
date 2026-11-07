@@ -1,7 +1,7 @@
 #include "../test_check.hpp"
 #include "formats/ginpkg.hpp"
 #include "patches/filesystem_patch_storage.hpp"
-#include "patches/folder_metadata.hpp"
+#include "patches/patch_metadata.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_write.hpp"
 #include "platform/std_file_system.hpp"
@@ -74,11 +74,8 @@ void test_writable_storage_deletes_patch(const fs::path &root) {
   CHECK(!fs::exists(saved.path));
   CHECK(find_entry(repository.tree(), saved.path) == nullptr);
 
-  patches::FolderMetadataStore metadata_store(writable / ".ym2612" /
-                                              "patches.json");
-  CHECK(metadata_store.load());
-  CHECK(
-      !metadata_store.get(saved.path.filename().generic_string()).has_value());
+  CHECK(!fs::exists(patches::sidecar::path_for(saved.path)));
+  CHECK(!fs::exists(saved.path.parent_path() / ".ym2612"));
 }
 
 void test_read_only_storage_refuses_delete(const fs::path &root) {
@@ -149,17 +146,12 @@ void test_builtin_metadata_lives_outside_presets(const fs::path &root) {
 void test_builtin_presets_show_bundled_metadata(const fs::path &root) {
   platform::StdFileSystem file_system;
   const auto builtin = root / "builtin_bundled";
-  const auto bundled = builtin / ".ym2612" / "patches.json";
+  const auto bundled = builtin / ".ym2612" / "preset.dmp.json";
   const auto stored = root / "config" / "bundled_presets.json";
   fs::create_directories(bundled.parent_path());
   const std::string bundled_text = R"({
-  "patches": {
-    "preset.dmp": {
-      "icon": "organ",
-      "role": "keys"
-    }
-  },
-  "version": 1
+  "icon": "organ",
+  "role": "keys"
 }
 )";
   {
@@ -265,8 +257,7 @@ void test_container_parse_cache_invalidates_on_change(const fs::path &root) {
   CHECK(container->children.front().metadata->star_rating == 4);
 
   patches::FilesystemPatchStorage storage(file_system, writable, "cache",
-                                          /*writable=*/true,
-                                          /*metadata_file=*/{});
+                                          /*writable=*/true);
   std::vector<patches::PatchEntry> tree;
   storage.append_entries(tree);
   CHECK(storage.container_parse_count_for_testing() == 1);

@@ -19,9 +19,8 @@ namespace patches {
 FilesystemPatchStorage::FilesystemPatchStorage(
     platform::StdFileSystem &vfs, std::filesystem::path root,
     std::string relative_root_label, bool writable,
-    std::filesystem::path metadata_file, PersistentParseCache *persistent_cache,
-    std::filesystem::path legacy_metadata_file,
-    std::filesystem::path metadata_defaults_file)
+    PersistentParseCache *persistent_cache,
+    std::filesystem::path metadata_overlay_file)
     : vfs_(vfs), root_(std::move(root)),
       root_label_(std::move(relative_root_label)), writable_(writable),
       label_(root_label_), persistent_cache_(persistent_cache) {
@@ -29,11 +28,9 @@ FilesystemPatchStorage::FilesystemPatchStorage(
     label_ = root_.filename().generic_string();
     root_label_ = label_;
   }
-  if (!metadata_file.empty()) {
-    metadata_ = std::make_unique<FolderMetadataStore>(
-        std::move(metadata_file), std::move(legacy_metadata_file),
-        std::move(metadata_defaults_file));
-    metadata_->load();
+  if (!writable_ && !metadata_overlay_file.empty()) {
+    overlay_ =
+        std::make_unique<MetadataOverlay>(std::move(metadata_overlay_file));
   }
 }
 
@@ -228,17 +225,12 @@ bool FilesystemPatchStorage::move_patch(const PatchEntry &entry,
     return false;
   }
 
-  if (metadata_) {
-    const auto moved_relative =
-        std::filesystem::path(destination.relative_path) /
-        entry.full_path.filename();
-    if (!metadata_->rename_key_prefix(
-            metadata_key(entry.relative_path),
-            metadata_key(moved_relative.generic_string()))) {
-      std::error_code rollback_error;
-      std::filesystem::rename(target, entry.full_path, rollback_error);
-      return false;
-    }
+  // A folder's sidecars are inside it and go with it.
+  if (std::filesystem::is_regular_file(target, ec) &&
+      !sidecar::move(entry.full_path, target)) {
+    std::error_code rollback_error;
+    std::filesystem::rename(target, entry.full_path, rollback_error);
+    return false;
   }
   return true;
 }
@@ -258,9 +250,7 @@ bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
   if (!std::filesystem::remove(entry.full_path, ec) || ec) {
     return false;
   }
-  if (metadata_) {
-    metadata_->remove(metadata_key(entry.relative_path));
-  }
+  sidecar::remove(entry.full_path);
   return true;
 }
 
@@ -296,58 +286,86 @@ bool FilesystemPatchStorage::rename_patch(const PatchEntry &entry,
     return false;
   }
 
-  // The sidecar lives inside the storage root with keys relative to it, so
-  // renaming the root moves the file and leaves every key correct. Anything
-  // below the root needs its keys re-prefixed.
-  const bool is_storage_root = entry.relative_path == root_label_;
-  if (metadata_ && !is_storage_root) {
-    const auto relative = std::filesystem::path(entry.relative_path);
-    const auto renamed_relative = relative.parent_path() / target.filename();
-    if (!metadata_->rename_key_prefix(
-            metadata_key(entry.relative_path),
-            metadata_key(renamed_relative.generic_string()))) {
-      std::error_code rollback_error;
-      std::filesystem::rename(target, entry.full_path, rollback_error);
-      return false;
-    }
+  // A folder's sidecars are inside it and go with it.
+  if (!is_directory && !sidecar::move(entry.full_path, target)) {
+    std::error_code rollback_error;
+    std::filesystem::rename(target, entry.full_path, rollback_error);
+    return false;
   }
   return true;
 }
 
 bool FilesystemPatchStorage::can_edit_metadata(const PatchEntry &entry) const {
-  return metadata_ && owns_relative_path(entry.relative_path);
+  return (writable_ || overlay_) && owns_relative_path(entry.relative_path);
+}
+
+std::optional<nlohmann::json>
+FilesystemPatchStorage::read_metadata(const std::filesystem::path &sidecar,
+                                      const std::string &relative_path) const {
+  auto entry = sidecar::read(sidecar);
+  if (entry && overlay_) {
+    return overlay_->apply(metadata_key(relative_path), std::move(*entry));
+  }
+  return entry;
 }
 
 bool FilesystemPatchStorage::update_patch_metadata(
     const std::string &relative_path, const PatchMetadata &metadata) {
-  if (!metadata_ || !owns_relative_path(relative_path)) {
+  if ((!writable_ && !overlay_) || !owns_relative_path(relative_path)) {
     return false;
   }
-
-  const auto key = metadata_key(relative_path);
-  PatchMetadata stored = metadata;
-  stored.path = key;
-  // Keep the recorded hash: this path only edits ratings and icons, and
-  // the caller has no patch to hash.
-  if (auto existing = metadata_->get(key)) {
-    stored.hash = existing->hash;
+  const auto absolute = to_absolute_path(relative_path);
+  if (!absolute) {
+    return false;
   }
-  return metadata_->put(std::move(stored));
+  const auto path = sidecar::path_for_patch(*absolute, root_);
+  const auto base = path.empty() ? std::nullopt : sidecar::read(path);
+  if (!base) {
+    return false;
+  }
+  const auto current =
+      overlay_ ? overlay_->apply(metadata_key(relative_path), *base) : *base;
+
+  // Fields megatoy does not model are taken as they are now, and the hash
+  // and creation time as first recorded.
+  const auto existing = metadata_from_json(current);
+  PatchMetadata stored = metadata;
+  stored.extra = existing.extra;
+  if (!existing.hash.empty()) {
+    stored.hash = existing.hash;
+  }
+  const auto now = iso8601_utc_now();
+  if (!existing.created_at.empty()) {
+    stored.created_at = existing.created_at;
+  } else if (stored.created_at.empty()) {
+    stored.created_at = now;
+  }
+  stored.updated_at = now;
+
+  const auto entry = metadata_to_json(stored);
+  if (overlay_) {
+    return overlay_->put(metadata_key(relative_path), entry, *base);
+  }
+  return sidecar::write(path, entry);
 }
 
-void FilesystemPatchStorage::cleanup_metadata(
-    const std::vector<std::string> &paths) const {
-  if (!metadata_) {
-    return;
+bool FilesystemPatchStorage::copy_metadata_to(
+    const std::optional<PatchMetadata> &source,
+    const std::filesystem::path &file) {
+  if (!writable_ || !to_relative_path(file)) {
+    return false;
   }
-  std::vector<std::string> mine;
-  mine.reserve(paths.size());
-  for (const auto &path : paths) {
-    if (owns_relative_path(path)) {
-      mine.push_back(metadata_key(path));
-    }
+  PatchMetadata copied = source.value_or(PatchMetadata{});
+  copied.hash.clear();
+  copied.created_at.clear();
+  copied.updated_at.clear();
+  auto entry = metadata_to_json(copied);
+  if (!holds_nothing_of_note(entry)) {
+    const auto now = iso8601_utc_now();
+    entry["created_at"] = now;
+    entry["updated_at"] = now;
   }
-  metadata_->retain_only(mine);
+  return sidecar::write(sidecar::path_for(file), entry);
 }
 
 std::optional<std::filesystem::path> FilesystemPatchStorage::to_relative_path(
@@ -392,6 +410,11 @@ bool FilesystemPatchStorage::scan_directory(
   }
 
   auto entries = vfs_.read_directory(dir_path);
+  const bool sidecars_here =
+      std::any_of(entries.begin(), entries.end(), [](const auto &entry) {
+        return entry.is_directory &&
+               entry.path.filename() == sidecar::kDirectory;
+      });
   const bool holds_nothing =
       std::all_of(entries.begin(), entries.end(), [](const auto &entry) {
         return entry.path.filename().string().starts_with(".");
@@ -474,7 +497,7 @@ bool FilesystemPatchStorage::scan_directory(
             cached->second.file_size == file_size &&
             cached->second.modified == modified) {
           auto container = cached->second.subtree;
-          load_metadata_for_subtree(container);
+          load_metadata_for_subtree(container, sidecars_here);
           tree.push_back(std::move(container));
           continue;
         }
@@ -490,7 +513,7 @@ bool FilesystemPatchStorage::scan_directory(
           if (persistent) {
             parse_cache_.insert_or_assign(
                 cache_path, ParseCacheEntry{file_size, modified, *persistent});
-            load_metadata_for_subtree(*persistent);
+            load_metadata_for_subtree(*persistent, sidecars_here);
             tree.push_back(std::move(*persistent));
             continue;
           }
@@ -595,7 +618,7 @@ bool FilesystemPatchStorage::scan_directory(
                                        root_label_, *parsed_container);
             }
           }
-          load_metadata_for_subtree(*parsed_container);
+          load_metadata_for_subtree(*parsed_container, sidecars_here);
           tree.push_back(std::move(*parsed_container));
         }
         continue;
@@ -609,7 +632,7 @@ bool FilesystemPatchStorage::scan_directory(
       info.format = detect_format(path);
       info.name = path.stem().string();
 
-      load_metadata_for_entry(info);
+      load_metadata_for_entry(info, sidecars_here);
       tree.push_back(std::move(info));
     }
   }
@@ -649,23 +672,35 @@ bool FilesystemPatchStorage::is_supported_file(
          supported.end();
 }
 
-void FilesystemPatchStorage::load_metadata_for_entry(PatchEntry &entry) const {
-  if (!metadata_ || entry.is_directory) {
+void FilesystemPatchStorage::load_metadata_for_entry(PatchEntry &entry,
+                                                     bool sidecars_here) const {
+  entry.metadata.reset();
+  if (entry.is_directory || (!sidecars_here && !overlay_)) {
     return;
   }
-  entry.metadata = metadata_->get(metadata_key(entry.relative_path));
+  // An instrument in a bank or package is named by its path below the file.
+  std::string item;
+  if (!entry.source_relative_path.empty() &&
+      entry.relative_path.size() > entry.source_relative_path.size()) {
+    item = entry.relative_path.substr(entry.source_relative_path.size() + 1);
+  }
+  const auto path = sidecars_here ? sidecar::path_for(entry.full_path, item)
+                                  : std::filesystem::path{};
+  const auto json = read_metadata(path, entry.relative_path);
+  if (json && !json->empty()) {
+    entry.metadata = metadata_from_json(*json);
+  }
 }
 
 void FilesystemPatchStorage::load_metadata_for_subtree(
-    PatchEntry &entry) const {
+    PatchEntry &entry, bool sidecars_here) const {
   if (entry.is_directory) {
     for (auto &child : entry.children) {
-      load_metadata_for_subtree(child);
+      load_metadata_for_subtree(child, sidecars_here);
     }
     return;
   }
-  entry.metadata.reset();
-  load_metadata_for_entry(entry);
+  load_metadata_for_entry(entry, sidecars_here);
 }
 
 } // namespace patches

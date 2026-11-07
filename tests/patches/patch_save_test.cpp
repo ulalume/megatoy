@@ -1,5 +1,5 @@
 #include "formats/patch_registry.hpp"
-#include "patches/folder_metadata.hpp"
+#include "patches/patch_metadata.hpp"
 #include "session_test_environment.hpp"
 
 #include <algorithm>
@@ -55,8 +55,10 @@ void test_save_and_metadata_roundtrip() {
   metadata.icon = "bass";
   CHECK(repository.update_patch_metadata(relative, metadata));
 
-  // The sidecar lives inside the folder, not in the user's config directory.
-  const auto sidecar = env.folder / ".ym2612" / "patches.json";
+  // The sidecar lives beside the patch, not in the user's config directory.
+  const auto sidecar = patches::sidecar::path_for_patch(
+      repository.to_absolute_path(relative), env.folder);
+  CHECK(sidecar.parent_path().parent_path() == env.folder / ".ym2612");
   CHECK(std::filesystem::exists(sidecar));
 
   repository.refresh();

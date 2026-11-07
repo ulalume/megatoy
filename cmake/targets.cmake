@@ -104,7 +104,7 @@ set(MEGATOY_LOGIC_SOURCES
   src/patches/patch_repository.cpp
   src/patches/patch_write.cpp
   src/patches/filesystem_patch_storage.cpp
-  src/patches/folder_metadata.cpp
+  src/patches/patch_metadata.cpp
   src/platform/file_dialog.cpp
   src/preferences/preference_manager.cpp
   src/preferences/preference_storage_json.cpp

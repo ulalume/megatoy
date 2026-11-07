@@ -22,7 +22,6 @@ patches::PatchEntry make_file(const std::string &name,
   entry.is_directory = false;
 
   patches::PatchMetadata metadata;
-  metadata.path = relative_path;
   metadata.star_rating = stars;
   metadata.icon = icon;
   entry.metadata = metadata;

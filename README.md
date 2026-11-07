@@ -54,7 +54,7 @@ You add folders of patches and it reads them where they are.
 
 - **File ▸ Add Folder to Workspace...** — add as many folders as you like.
 - **Drag & drop** a patch file onto the window to load it without adding a folder.
-- Star ratings and icons are stored in a `.ym2612/patches.json` sidecar inside each folder, shared with other tools.
+- Star ratings and icons are stored next to each patch, in `.ym2612/<patch file name>.json`, shared with other tools.
 
 Built-in patches:
 
