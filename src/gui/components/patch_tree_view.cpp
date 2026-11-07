@@ -1,5 +1,6 @@
 #include "patch_tree_view.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/instrument_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
 
 #include "common.hpp"
@@ -25,6 +26,8 @@ namespace {
 
 /// How far each level's names sit in from the level above.
 constexpr float kDepthIndent = 10.0f;
+/// The space between a patch's instrument icon and its name.
+constexpr float kIconGap = 4.0f;
 
 /**
  * The visible rows, rebuilt only when the tree, the filters or the expansion
@@ -186,10 +189,35 @@ bool row_selectable(const char *label, bool selected = false) {
   return clicked;
 }
 
+/// A patch's instrument icon and name, over a selectable that spans the row.
+bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
+  const char *icon = instrument_icons::glyph(
+      item.metadata ? std::string_view(item.metadata->icon)
+                    : std::string_view());
+  const float name_x = ImGui::CalcTextSize(icon).x + ui::scale::px(kIconGap);
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  // Sized to the icon and name, which the next item follows, while the
+  // highlight still spans the row.
+  ImGuiSelectableFlags flags = ImGuiSelectableFlags_AllowDoubleClick;
+  flags |= ImGuiSelectableFlags_SpanAvailWidth;
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+  const bool clicked = ImGui::Selectable(
+      "##name", selected, flags,
+      ImVec2(name_x + ImGui::CalcTextSize(item.name.c_str()).x, row_height()));
+  ImGui::PopStyleVar();
+  const ImVec2 text(pos.x,
+                    pos.y + (row_height() - ImGui::GetTextLineHeight()) * 0.5f);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+  draw_list->AddText(text, color, icon);
+  draw_list->AddText(ImVec2(text.x + name_x, text.y), color, item.name.c_str());
+  return clicked;
+}
+
 /**
- * How far a row is indented. Every level's names sit kDepthIndent in from
- * the level above, a folder's and a file's alike; a folder's arrow stands
- * out to the left of its name.
+ * How far a row is indented. Every level's rows start kDepthIndent in from
+ * the level above, at a folder's name and a patch's icon alike; a folder's
+ * arrow stands out to the left of its name.
  */
 float row_indent(const patches::TreeRow &row) {
   const float label_spacing = ImGui::GetTreeNodeToLabelSpacing();
@@ -253,7 +281,7 @@ void render_patch_row(PatchSelectorContext &context,
   // context menu and tooltip attach to whichever was drawn last, so both
   // are registered after each selectable. The name's selectable spans the
   // row, so it alone carries the current patch's highlight.
-  const bool name_clicked = row_selectable(item.name.c_str(), is_current);
+  const bool name_clicked = patch_name_selectable(item, is_current);
   entry_context_menu(context, item);
   show_patch_tooltip(context.repository, item);
   entry_drag_source(context, item, row.depth);
