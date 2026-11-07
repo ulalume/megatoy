@@ -15,6 +15,15 @@ constexpr std::string_view kFormatDetails[] = {
     ".spat, .tyi and .y12 can also be saved",
 };
 
+constexpr std::string_view kEnvelopeTimingDetails[] = {
+    "Warns when a fast SSG-EG decay can skip the sustain level",
+};
+constexpr ChangelogItem kItems_0_10_0[] = {
+    {"Envelope graphs follow the chip's timing exactly",
+     kEnvelopeTimingDetails},
+    {"The keyboard's Major Blues scale plays the right notes", {}},
+};
+
 constexpr ChangelogItem kItems_0_9_3[] = {
     {"Drag the dots on the envelope graph to shape the envelope", {}},
     {"New folders and duplicates from the patch browser's context menu", {}},
@@ -77,12 +86,11 @@ constexpr ChangelogItem kItems_0_6_0[] = {
 };
 
 constexpr ChangelogEntry kEntries[] = {
-    {"v0.9.3", kItems_0_9_3}, {"v0.9.2", kItems_0_9_2},
-    {"v0.9.1", kItems_0_9_1},
-    {"v0.9.0", kItems_0_9_0},
-    {"v0.8.4", kItems_0_8_4},
-    {"v0.8.3", kItems_0_8_3}, {"v0.8.2", kItems_0_8_2},
-    {"v0.8.1", kItems_0_8_1}, {"v0.8.0", kItems_0_8_0},
+    {"v0.10.0", kItems_0_10_0}, {"v0.9.3", kItems_0_9_3},
+    {"v0.9.2", kItems_0_9_2},   {"v0.9.1", kItems_0_9_1},
+    {"v0.9.0", kItems_0_9_0},   {"v0.8.4", kItems_0_8_4},
+    {"v0.8.3", kItems_0_8_3},   {"v0.8.2", kItems_0_8_2},
+    {"v0.8.1", kItems_0_8_1},   {"v0.8.0", kItems_0_8_0},
     {"v0.6.0", kItems_0_6_0},
 };
 
