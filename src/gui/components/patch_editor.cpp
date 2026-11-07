@@ -87,9 +87,12 @@ void render_header_icon(const patches::PatchEntry *entry, bool editable,
     return;
   }
   const ImGuiID popup_id = ImGui::GetID("##icon_picker");
+  // No fill at rest: the icon stands alone until the pointer is over it.
+  ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
   if (ImGui::Button("##icon", ImVec2(size, size))) {
     ImGui::OpenPopupEx(popup_id);
   }
+  ImGui::PopStyleColor();
   draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
                        kHeaderIconScale);
   if (instrument_icons::known(icon)) {
@@ -247,11 +250,21 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   // menu bar; what the patch holds is how far it follows the LFO.
   ImGui::SeparatorText("LFO");
 
+  // The sensitivities do nothing while the LFO is off, which is said by the
+  // one being touched.
+  const bool lfo_on = context.session.playback().lfo_enable;
+  const auto tell_if_off = [lfo_on] {
+    if (!lfo_on && (ImGui::IsItemHovered() || ImGui::IsItemActive())) {
+      ImGui::SetTooltip("The LFO is off. Turn it on from the LFO menu.");
+    }
+  };
+
   ImGui::PushItemWidth(lfo_slider_width());
 
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed =
       named_slider_int("Amplitude Modulation Sensitivity", &ams, 0, 3);
+  tell_if_off();
   track_patch_history(context, "Amplitude Modulation Sensitivity",
                       "channel.am_sensitivity");
   if (ams_changed) {
@@ -261,6 +274,7 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
   int fms = patch.channel.frequency_modulation_sensitivity;
   bool fms_changed =
       named_slider_int("Frequency Modulation Sensitivity", &fms, 0, 7);
+  tell_if_off();
   track_patch_history(context, "Frequency Modulation Sensitivity",
                       "channel.fm_sensitivity");
   if (fms_changed) {
