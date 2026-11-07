@@ -225,15 +225,11 @@ bool is_heading(const patches::TreeRow &row) {
 /**
  * How far a row is indented. The rows under a top folder's heading start at
  * its left edge, and every level below them kDepthIndent in from the level
- * above, at a folder's name and a patch's icon alike; a folder's arrow stands
- * out to the left of its name.
+ * above: a folder's arrow and a patch's icon at one level line up.
  */
 float row_indent(const patches::TreeRow &row) {
-  const float label_spacing = ImGui::GetTreeNodeToLabelSpacing();
   const int level = std::max(row.depth - 1, 0);
-  const float name_x =
-      label_spacing + ui::scale::px(kDepthIndent) * static_cast<float>(level);
-  return row.is_directory ? name_x - label_spacing : name_x;
+  return ui::scale::px(kDepthIndent) * static_cast<float>(level);
 }
 
 /// While filtering, every directory leading to a match is shown open, and a
@@ -252,29 +248,43 @@ void render_directory_row(PatchSelectorContext &context,
   // The row list owns the open state, so the node is driven rather than left
   // to ImGui's storage; a toggle is picked up from the returned value.
   ImGui::SetNextItemOpen(row.is_open, ImGuiCond_Always);
+  // Headings stand as far apart as any two items.
+  const float heading_gap = ImGui::GetStyle().ItemSpacing.y;
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, row_margin() * 0.5f);
   // Folders are muted beside the patches they hold; a top folder's heading
-  // is a bar, as an editor section's is.
+  // is a bar, as an editor section's is, drawn behind the node and short of
+  // the row's top and bottom, so two headings stand apart as sections do.
   const bool heading = is_heading(row);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
   if (heading) {
-    using styles::MegatoyCol;
-    ImGui::PushStyleColor(ImGuiCol_Header,
-                          styles::color(MegatoyCol::SectionHeader));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                          styles::color(MegatoyCol::SectionHeaderHovered));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                          styles::color(MegatoyCol::SectionHeaderActive));
+    draw_list->ChannelsSplit(2);
+    draw_list->ChannelsSetCurrent(1);
+    const ImVec4 none(0.0f, 0.0f, 0.0f, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, none);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, none);
   } else {
     ImGui::PushStyleColor(ImGuiCol_Text,
                           styles::color(styles::MegatoyCol::TextMuted));
   }
-  const bool open = ImGui::TreeNodeEx(
-      display_name.c_str(),
-      ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding |
-          ImGuiTreeNodeFlags_NoTreePushOnOpen |
-          (heading ? ImGuiTreeNodeFlags_Framed : ImGuiTreeNodeFlags_None));
-  ImGui::PopStyleColor(heading ? 3 : 1);
+  const bool open = ImGui::TreeNodeEx(display_name.c_str(),
+                                      ImGuiTreeNodeFlags_SpanFullWidth |
+                                          ImGuiTreeNodeFlags_FramePadding |
+                                          ImGuiTreeNodeFlags_NoTreePushOnOpen);
+  ImGui::PopStyleColor(heading ? 2 : 1);
+  if (heading) {
+    using styles::MegatoyCol;
+    const auto col = ImGui::IsItemActive()    ? MegatoyCol::SectionHeaderActive
+                     : ImGui::IsItemHovered() ? MegatoyCol::SectionHeaderHovered
+                                              : MegatoyCol::SectionHeader;
+    const float inset = heading_gap * 0.5f;
+    draw_list->ChannelsSetCurrent(0);
+    draw_list->AddRectFilled(
+        ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMin().y + inset),
+        ImVec2(ImGui::GetItemRectMax().x, ImGui::GetItemRectMax().y - inset),
+        styles::color_u32(col), ImGui::GetStyle().FrameRounding);
+    draw_list->ChannelsMerge();
+  }
   ImGui::PopStyleVar(2);
   entry_context_menu(context, item,
                      row.depth == 0 &&
