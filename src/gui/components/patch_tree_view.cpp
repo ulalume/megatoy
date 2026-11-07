@@ -216,15 +216,23 @@ bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
   return clicked;
 }
 
+/// Whether a row heads one of the top folders, whose contents stand below it
+/// without indent.
+bool is_heading(const patches::TreeRow &row) {
+  return row.is_directory && row.depth == 0;
+}
+
 /**
- * How far a row is indented. Every level's rows start kDepthIndent in from
- * the level above, at a folder's name and a patch's icon alike; a folder's
- * arrow stands out to the left of its name.
+ * How far a row is indented. The rows under a top folder's heading start at
+ * its left edge, and every level below them kDepthIndent in from the level
+ * above, at a folder's name and a patch's icon alike; a folder's arrow stands
+ * out to the left of its name.
  */
 float row_indent(const patches::TreeRow &row) {
   const float label_spacing = ImGui::GetTreeNodeToLabelSpacing();
-  const float name_x = label_spacing + ui::scale::px(kDepthIndent) *
-                                           static_cast<float>(row.depth);
+  const int level = std::max(row.depth - 1, 0);
+  const float name_x =
+      label_spacing + ui::scale::px(kDepthIndent) * static_cast<float>(level);
   return row.is_directory ? name_x - label_spacing : name_x;
 }
 
@@ -246,14 +254,27 @@ void render_directory_row(PatchSelectorContext &context,
   ImGui::SetNextItemOpen(row.is_open, ImGuiCond_Always);
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, row_margin() * 0.5f);
-  // Folders are muted beside the patches they hold.
-  ImGui::PushStyleColor(ImGuiCol_Text,
-                        styles::color(styles::MegatoyCol::TextMuted));
+  // Folders are muted beside the patches they hold; a top folder's heading
+  // is not, and has a line under it.
+  const bool heading = is_heading(row);
+  if (!heading) {
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          styles::color(styles::MegatoyCol::TextMuted));
+  }
   const bool open = ImGui::TreeNodeEx(display_name.c_str(),
                                       ImGuiTreeNodeFlags_SpanFullWidth |
                                           ImGuiTreeNodeFlags_FramePadding |
                                           ImGuiTreeNodeFlags_NoTreePushOnOpen);
-  ImGui::PopStyleColor();
+  if (heading) {
+    const ImVec2 min = ImGui::GetItemRectMin();
+    const ImVec2 max = ImGui::GetItemRectMax();
+    const float line = std::max(1.0f, std::floor(ui::scale::px(1.0f)));
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImVec2(min.x, max.y - line), max,
+        ImGui::GetColorU32(ImGuiCol_Separator));
+  } else {
+    ImGui::PopStyleColor();
+  }
   ImGui::PopStyleVar(2);
   entry_context_menu(context, item,
                      row.depth == 0 &&
