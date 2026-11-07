@@ -173,21 +173,9 @@ void render_save_buttons(PatchEditorContext &context,
   }
 }
 
-/// How wide render_save_buttons draws.
-float save_buttons_width(const patches::SaveControls &controls) {
-  const ImGuiStyle &style = ImGui::GetStyle();
-  float width =
-      ImGui::CalcTextSize(controls.save_label).x + style.FramePadding.x * 2.0f;
-  if (controls.show_save_as) {
-    width += style.ItemSpacing.x + ImGui::CalcTextSize("Save As...").x +
-             style.FramePadding.x * 2.0f;
-  }
-  return width;
-}
-
 /**
- * The header: the patch's icon, its rating over where it is kept, and the
- * save buttons at the right, or below when the row has no room.
+ * The header: the patch's icon, the save buttons over where it is kept, and
+ * the rating at the top right, or below when the row has no room.
  */
 void render_document_header(PatchEditorContext &context,
                             patches::PatchDocument &document,
@@ -199,7 +187,7 @@ void render_document_header(PatchEditorContext &context,
   const bool editable =
       entry != nullptr && patch_session.repository().can_edit_metadata(*entry);
 
-  // Two lines tall: the rating's and the path's.
+  // Two lines tall: the save buttons' and the path's.
   const float height = ImGui::GetFrameHeight() + style.ItemSpacing.y +
                        ImGui::GetTextLineHeight();
   const float top = ImGui::GetCursorPosY();
@@ -208,11 +196,8 @@ void render_document_header(PatchEditorContext &context,
 
   ImGui::SameLine();
   ImGui::BeginGroup();
-  if (editable) {
-    render_header_rating(*entry, ui, edit);
-  } else {
-    ImGui::SetCursorPosY(top + (height - ImGui::GetTextLineHeight()) * 0.5f);
-  }
+  const auto controls = patches::save_controls(patch_session, document);
+  render_save_buttons(context, document, controls, state);
   const auto &repository = patch_session.repository();
   const auto relative_path =
       repository.to_relative_path(document.path()).generic_string();
@@ -221,18 +206,18 @@ void render_document_header(PatchEditorContext &context,
       display_preset_path(repository.display_path(relative_path)).c_str());
   ImGui::EndGroup();
 
-  const auto controls = patches::save_controls(patch_session, document);
-  const float buttons_width = save_buttons_width(controls);
-  ImGui::SameLine();
-  if (ImGui::GetContentRegionAvail().x >= buttons_width) {
-    ImGui::SetCursorPos(
-        ImVec2(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x -
-                   buttons_width,
-               top + (height - ImGui::GetFrameHeight()) * 0.5f));
-  } else {
-    ImGui::NewLine();
+  if (editable) {
+    ImGui::SameLine();
+    if (ImGui::GetContentRegionAvail().x >= star_rating_width()) {
+      ImGui::SetCursorPos(ImVec2(ImGui::GetCursorPosX() +
+                                     ImGui::GetContentRegionAvail().x -
+                                     star_rating_width(),
+                                 top));
+    } else {
+      ImGui::NewLine();
+    }
+    render_header_rating(*entry, ui, edit);
   }
-  render_save_buttons(context, document, controls, state);
 
   // Written once the header is drawn: a write rebuilds the browser's tree,
   // and `entry` with it.
