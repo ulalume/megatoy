@@ -16,7 +16,7 @@ void test_current_patch_rename_preserves_clean_identity() {
   LaunchedEnvironment env("current_patch_path_test");
   auto patch = env.session.current_patch();
   patch.name = "embedded old name";
-  const auto source_path = env.folder / "session-old.gin";
+  const auto source_path = env.folder / "session-old.dmp";
   CHECK(patches::write_patch(patch, source_path));
   env.session.repository().refresh();
 
@@ -38,7 +38,7 @@ void test_current_patch_rename_preserves_clean_identity() {
 
   CHECK(env.session.rename_patch(entry, "session-new"));
   CHECK(!std::filesystem::exists(source_path));
-  CHECK(std::filesystem::exists(env.folder / "session-new.gin"));
+  CHECK(std::filesystem::exists(env.folder / "session-new.dmp"));
   CHECK(std::filesystem::path(env.session.current_patch_path()).stem() ==
         "session-new");
   CHECK(env.session.current_patch().name == "session-new");
@@ -48,13 +48,13 @@ void test_current_patch_rename_preserves_clean_identity() {
 
 void test_current_patch_path_recording() {
   LaunchedEnvironment env("current_patch_path_test");
-  env.preferences.set_last_patch_path("patches/remembered.gin");
+  env.preferences.set_last_patch_path("patches/remembered.dmp");
   const auto url_patch = env.session.current_patch();
   env.session.set_current_patch(url_patch, {},
                                 patches::PatchSession::RememberPatchPath::No);
-  CHECK(env.preferences.last_patch_path() == "patches/remembered.gin");
+  CHECK(env.preferences.last_patch_path() == "patches/remembered.dmp");
 
-  const auto source_path = env.folder / "recorded.gin";
+  const auto source_path = env.folder / "recorded.dmp";
   env.session.set_current_patch_path(source_path);
   CHECK(
       env.preferences.last_patch_path() ==
@@ -73,11 +73,11 @@ void test_folder_rename_follows_the_current_patch() {
   std::filesystem::create_directories(env.folder / "elsewhere");
 
   auto patch = env.session.current_patch();
-  const auto source_path = folder / "warm.gin";
+  const auto source_path = folder / "warm.dmp";
   CHECK(patches::write_patch(patch, source_path));
   // An empty directory does not show up in the tree, so the decoy needs
   // something in it too.
-  CHECK(patches::write_patch(patch, env.folder / "elsewhere" / "x.gin"));
+  CHECK(patches::write_patch(patch, env.folder / "elsewhere" / "x.dmp"));
   env.session.repository().refresh();
 
   const auto *found =
@@ -104,7 +104,7 @@ void test_folder_rename_follows_the_current_patch() {
   CHECK(env.session.rename_patch(pads_entry, "warm pads"));
 
   CHECK(!std::filesystem::exists(folder));
-  CHECK(std::filesystem::exists(env.folder / "warm pads" / "warm.gin"));
+  CHECK(std::filesystem::exists(env.folder / "warm pads" / "warm.dmp"));
   CHECK(env.session.current_patch_path() != path_before);
   CHECK(std::filesystem::path(env.session.current_patch_path())
             .parent_path()
@@ -122,15 +122,15 @@ void test_move_follows_the_current_patch() {
   std::filesystem::create_directories(crate / "strings");
   std::filesystem::create_directories(shelf);
   auto patch = env.session.current_patch();
-  CHECK(patches::write_patch(patch, crate / "strings" / "violin.gin"));
-  CHECK(patches::write_patch(patch, shelf / "filler.gin"));
+  CHECK(patches::write_patch(patch, crate / "strings" / "violin.dmp"));
+  CHECK(patches::write_patch(patch, shelf / "filler.dmp"));
   CHECK(formats::PatchRegistry::instance()
             .save_package(".ginpkg", crate / "strings", "cello", patch)
             .has_value());
   repository.refresh();
 
   const auto *violin =
-      find_patch_entry(repository.tree(), crate / "strings" / "violin.gin");
+      find_patch_entry(repository.tree(), crate / "strings" / "violin.dmp");
   CHECK(violin != nullptr);
   CHECK(env.session.load_patch_from_entry(*violin));
 
@@ -142,7 +142,7 @@ void test_move_follows_the_current_patch() {
   const auto shelf_copy = *shelf_entry;
   CHECK(env.session.move_patch(strings_entry, shelf_copy));
 
-  const auto moved_violin = shelf / "strings" / "violin.gin";
+  const auto moved_violin = shelf / "strings" / "violin.dmp";
   CHECK(std::filesystem::exists(moved_violin));
   CHECK(!std::filesystem::exists(crate / "strings"));
   const auto expected =
@@ -160,7 +160,7 @@ void test_move_follows_the_current_patch() {
   const auto root_entry = *root;
   CHECK(env.session.move_patch(file_entry, root_entry));
   const auto at_root =
-      repository.to_relative_path(env.folder / "violin.gin").generic_string();
+      repository.to_relative_path(env.folder / "violin.dmp").generic_string();
   CHECK(env.session.current_patch_path() == at_root);
   CHECK(env.preferences.last_patch_path() == at_root);
 
@@ -225,7 +225,7 @@ void test_restore_last_patch() {
   auto patch = env.session.current_patch();
   patch.name = "embedded name";
   patch.instrument.algorithm = 6;
-  const auto source_path = env.folder / "restored.gin";
+  const auto source_path = env.folder / "restored.dmp";
   CHECK(patches::write_patch(patch, source_path));
   env.session.repository().refresh();
 
@@ -256,7 +256,7 @@ void test_missing_last_patch_falls_back_silently() {
   LaunchedEnvironment env("current_patch_path_test");
   env.session.initialize_patch_defaults();
   const auto fallback = env.session.capture_snapshot();
-  const std::string missing = "patches/missing.gin";
+  const std::string missing = "patches/missing.dmp";
   env.preferences.set_last_patch_path(missing);
   megatoy::status::clear();
 
@@ -298,7 +298,7 @@ void test_session_path_survives_workspace_relabel() {
   ym2612::Patch patch;
   patch.name = "same name";
   const auto saved = session.repository().save_patch_in(
-      second, patch, patch.name, /*overwrite=*/true, ".gin");
+      second, patch, patch.name, /*overwrite=*/true, ".dmp");
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
   session.set_current_patch_path(saved.path);
   const auto before = session.current_patch_path();

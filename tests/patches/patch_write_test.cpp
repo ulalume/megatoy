@@ -17,7 +17,6 @@ int main() {
   // Single-patch writable formats: safe to overwrite.
   CHECK(can_overwrite_in_place("song.dmp"));
   CHECK(can_overwrite_in_place("song.fui"));
-  CHECK(can_overwrite_in_place("song.gin"));
   CHECK(can_overwrite_in_place("song.tfi"));
   CHECK(can_overwrite_in_place("song.vgi"));
   CHECK(can_overwrite_in_place("song.eif"));
@@ -25,6 +24,9 @@ int main() {
 
   // megatoy's container appends a version instead of replacing.
   CHECK(can_overwrite_in_place("song.ginpkg"));
+
+  // Read only.
+  CHECK(!can_overwrite_in_place("song.gin"));
 
   // Banks hold other instruments a single patch would destroy.
   CHECK(!can_overwrite_in_place("module.fur"));
@@ -49,7 +51,7 @@ int main() {
   patch.instrument.algorithm = 5;
   patch.instrument.operators[0].attack_rate = 20;
 
-  for (const char *name : {"out.dmp", "out.gin", "out.mml", "out.ginpkg"}) {
+  for (const char *name : {"out.dmp", "out.mml", "out.ginpkg"}) {
     const auto path = dir / name;
     CHECK(patches::write_patch(patch, path));
     auto loaded = formats::load_patch_from_file(

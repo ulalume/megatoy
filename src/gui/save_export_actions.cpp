@@ -68,7 +68,7 @@ std::string save_as_stem_suggestion(const patches::PatchSession &session) {
 #if defined(MEGATOY_PLATFORM_WEB)
 
 constexpr const char *kSaveAsMenuId = "##save_as_menu";
-constexpr const char *kSaveToStorageTitle = "Save to browser storage";
+constexpr const char *kSaveToStorageTitle = "Save to Browser Storage";
 
 void open_save_to_storage_dialog(patches::PatchSession &session,
                                  SaveExportState &state) {
@@ -97,7 +97,7 @@ void render_save_as_menu(patches::PatchSession &session,
 
   const auto download_extension = download_format_menu(session);
   bool save_to_storage = false;
-  if (ImGui::MenuItem("Save to browser storage...")) {
+  if (ImGui::MenuItem("Save to Browser Storage...")) {
     save_to_storage = true;
   }
   ui::end_popup();

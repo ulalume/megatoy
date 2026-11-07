@@ -3,7 +3,9 @@
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
 #include "formats/ym2612_format_adapter.hpp"
+#include "patches/patch_write.hpp"
 #include "ym2612/patch.hpp"
+#include "ym2612/playback.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -70,8 +72,8 @@ void clean_dir(const std::filesystem::path &dir) {
 
 // Formats that carry the full megatoy patch, so equality must hold exactly.
 bool is_lossless(const std::string &extension) {
-  return extension == ".gin" || extension == ".ginpkg" || extension == ".dmp" ||
-         extension == ".fui" || extension == ".mml";
+  return extension == ".ginpkg" || extension == ".dmp" || extension == ".fui" ||
+         extension == ".mml";
 }
 
 } // namespace
@@ -91,6 +93,41 @@ int main() {
   CHECK(ginpkg_loaded.status == formats::PatchLoadStatus::Success);
   CHECK(ginpkg_loaded.patches.size() == 1);
   CHECK(ginpkg_loaded.patches[0] == patch);
+
+  // How a patch is played is neither saved with it nor read back.
+  auto played = patch;
+  played.global = {true, true, 5};
+  played.channel.left_speaker = false;
+  played.instrument.operators[2].enable = false;
+  const auto played_path =
+      formats::ginpkg::save_patch(tmp, played, "played").value();
+  const auto played_loaded = formats::load_patch_from_file(played_path);
+  CHECK(played_loaded.status == formats::PatchLoadStatus::Success);
+  CHECK(played_loaded.patches.size() == 1);
+  CHECK(played_loaded.patches[0] == patch);
+
+  // MML names the LFO menu's rate, on or off, for a patch the LFO reaches,
+  // and leaves the LFO out of one it does not.
+  {
+    ym2612::PlaybackSettings settings;
+    settings.lfo_enable = false;
+    settings.lfo_frequency = 5;
+    auto reached = patch;
+    reached.channel.amplitude_modulation_sensitivity = 1;
+    reached.channel.frequency_modulation_sensitivity = 2;
+    const auto mml = formats::adapter::serialize_text(
+        ym2612_format::Format::Mml, ym2612::written(reached, settings));
+    CHECK(mml.has_value());
+    CHECK(mml->find("'lforate 6' 'lfo 1 2'") != std::string::npos);
+
+    auto unreached = patch;
+    unreached.channel.amplitude_modulation_sensitivity = 0;
+    unreached.channel.frequency_modulation_sensitivity = 0;
+    const auto quiet = formats::adapter::serialize_text(
+        ym2612_format::Format::Mml, ym2612::written(unreached, settings));
+    CHECK(quiet.has_value());
+    CHECK(quiet->find("lfo") == std::string::npos);
+  }
 
   // Every writable format the registry offers has to survive a save/load
   // cycle. Driving this from save_formats() means a format added upstream
@@ -131,10 +168,12 @@ int main() {
   }
 
   // Guard against the registry quietly losing a format.
-  for (const char *required :
-       {".dmp", ".fui", ".mml", ".gin", ".vgi", ".eif"}) {
+  for (const char *required : {".dmp", ".fui", ".mml", ".vgi", ".eif"}) {
     CHECK(std::find(covered.begin(), covered.end(), required) != covered.end());
   }
+  // .gin is read only.
+  CHECK(std::find(covered.begin(), covered.end(), ".gin") == covered.end());
+  CHECK(!patches::can_overwrite_in_place(tmp / "read_only.gin"));
 
   // A file explicitly named .dmp keeps the legacy best-effort behaviour even
   // when its tail is truncated. The format registry supplies that explicit

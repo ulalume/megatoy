@@ -45,21 +45,21 @@ void test_file_move(const fs::path &root) {
   platform::StdFileSystem file_system;
   const auto folder = root / "files";
   fs::create_directories(folder / "pads");
-  CHECK(patches::write_patch(make_patch(1), folder / "pads" / "keep.gin"));
-  CHECK(patches::write_patch(make_patch(3), folder / "lead.gin"));
+  CHECK(patches::write_patch(make_patch(1), folder / "pads" / "keep.dmp"));
+  CHECK(patches::write_patch(make_patch(3), folder / "lead.dmp"));
 
   megatoy::workspace::Workspace workspace;
   CHECK(workspace.add(folder));
   patches::PatchRepository repository(file_system, workspace);
 
   const auto relative =
-      repository.to_relative_path(folder / "lead.gin").generic_string();
+      repository.to_relative_path(folder / "lead.dmp").generic_string();
   patches::PatchMetadata metadata;
   metadata.star_rating = 4;
   metadata.category = "Lead";
   CHECK(repository.update_patch_metadata(relative, metadata));
 
-  const auto file = entry_at(repository, folder / "lead.gin");
+  const auto file = entry_at(repository, folder / "lead.dmp");
   const auto pads = entry_at(repository, folder / "pads");
   const auto root_entry = entry_at(repository, folder);
 
@@ -68,26 +68,26 @@ void test_file_move(const fs::path &root) {
   CHECK(repository.can_move_patch(file, pads));
   CHECK(repository.move_patch(file, pads));
 
-  CHECK(!fs::exists(folder / "lead.gin"));
-  CHECK(fs::exists(folder / "pads" / "lead.gin"));
+  CHECK(!fs::exists(folder / "lead.dmp"));
+  CHECK(fs::exists(folder / "pads" / "lead.dmp"));
   const auto *moved =
-      find_entry(repository.tree(), folder / "pads" / "lead.gin");
+      find_entry(repository.tree(), folder / "pads" / "lead.dmp");
   CHECK(moved != nullptr);
   CHECK(moved->metadata.has_value());
   CHECK(moved->metadata->star_rating == 4);
 
   patches::FolderMetadataStore store(folder / ".megatoy" / "patches.json");
   CHECK(store.load());
-  CHECK(!store.get("lead.gin").has_value());
-  const auto followed = store.get("pads/lead.gin");
+  CHECK(!store.get("lead.dmp").has_value());
+  const auto followed = store.get("pads/lead.dmp");
   CHECK(followed.has_value());
   CHECK(followed->category == "Lead");
 
   // And back up into the workspace folder itself.
   const auto back = *moved;
   CHECK(repository.move_patch(back, entry_at(repository, folder)));
-  CHECK(fs::exists(folder / "lead.gin"));
-  CHECK(!fs::exists(folder / "pads" / "lead.gin"));
+  CHECK(fs::exists(folder / "lead.dmp"));
+  CHECK(!fs::exists(folder / "pads" / "lead.dmp"));
 }
 
 void test_directory_move(const fs::path &root) {
@@ -95,17 +95,17 @@ void test_directory_move(const fs::path &root) {
   const auto folder = root / "dirs";
   fs::create_directories(folder / "bass" / "inner");
   fs::create_directories(folder / "low");
-  CHECK(patches::write_patch(make_patch(6), folder / "bass" / "deep.gin"));
+  CHECK(patches::write_patch(make_patch(6), folder / "bass" / "deep.dmp"));
   CHECK(patches::write_patch(make_patch(2),
-                             folder / "bass" / "inner" / "sub.gin"));
-  CHECK(patches::write_patch(make_patch(1), folder / "low" / "x.gin"));
+                             folder / "bass" / "inner" / "sub.dmp"));
+  CHECK(patches::write_patch(make_patch(1), folder / "low" / "x.dmp"));
 
   megatoy::workspace::Workspace workspace;
   CHECK(workspace.add(folder));
   patches::PatchRepository repository(file_system, workspace);
 
   const auto nested =
-      repository.to_relative_path(folder / "bass" / "inner" / "sub.gin")
+      repository.to_relative_path(folder / "bass" / "inner" / "sub.dmp")
           .generic_string();
   patches::PatchMetadata metadata;
   metadata.star_rating = 5;
@@ -124,11 +124,11 @@ void test_directory_move(const fs::path &root) {
   CHECK(repository.can_move_patch(bass, low));
   CHECK(repository.move_patch(bass, low));
   CHECK(!fs::exists(folder / "bass"));
-  CHECK(fs::exists(folder / "low" / "bass" / "deep.gin"));
-  CHECK(fs::exists(folder / "low" / "bass" / "inner" / "sub.gin"));
+  CHECK(fs::exists(folder / "low" / "bass" / "deep.dmp"));
+  CHECK(fs::exists(folder / "low" / "bass" / "inner" / "sub.dmp"));
 
   const auto *moved = find_entry(repository.tree(),
-                                 folder / "low" / "bass" / "inner" / "sub.gin");
+                                 folder / "low" / "bass" / "inner" / "sub.dmp");
   CHECK(moved != nullptr);
   CHECK(moved->metadata.has_value());
   CHECK(moved->metadata->star_rating == 5);
@@ -136,13 +136,13 @@ void test_directory_move(const fs::path &root) {
 
   patches::FolderMetadataStore store(folder / ".megatoy" / "patches.json");
   CHECK(store.load());
-  CHECK(!store.get("bass/inner/sub.gin").has_value());
-  CHECK(store.get("low/bass/inner/sub.gin").has_value());
+  CHECK(!store.get("bass/inner/sub.dmp").has_value());
+  CHECK(store.get("low/bass/inner/sub.dmp").has_value());
 
   // The workspace folder itself is never moved.
   fs::create_directories(folder / "low" / "elsewhere");
   CHECK(patches::write_patch(make_patch(1),
-                             folder / "low" / "elsewhere" / "y.gin"));
+                             folder / "low" / "elsewhere" / "y.dmp"));
   repository.refresh();
   CHECK(!repository.can_move_patch(
       entry_at(repository, folder),
@@ -154,37 +154,37 @@ void test_collision_refused(const fs::path &root) {
   const auto folder = root / "collide";
   fs::create_directories(folder / "kit" / "drums");
   fs::create_directories(folder / "drums");
-  CHECK(patches::write_patch(make_patch(1), folder / "x.gin"));
-  CHECK(patches::write_patch(make_patch(2), folder / "kit" / "x.gin"));
+  CHECK(patches::write_patch(make_patch(1), folder / "x.dmp"));
+  CHECK(patches::write_patch(make_patch(2), folder / "kit" / "x.dmp"));
   CHECK(
-      patches::write_patch(make_patch(3), folder / "kit" / "drums" / "a.gin"));
-  CHECK(patches::write_patch(make_patch(4), folder / "drums" / "b.gin"));
+      patches::write_patch(make_patch(3), folder / "kit" / "drums" / "a.dmp"));
+  CHECK(patches::write_patch(make_patch(4), folder / "drums" / "b.dmp"));
 
   megatoy::workspace::Workspace workspace;
   CHECK(workspace.add(folder));
   patches::PatchRepository repository(file_system, workspace);
 
-  const auto file = entry_at(repository, folder / "x.gin");
+  const auto file = entry_at(repository, folder / "x.dmp");
   const auto kit = entry_at(repository, folder / "kit");
   CHECK(!repository.move_patch(file, kit));
-  CHECK(fs::exists(folder / "x.gin"));
+  CHECK(fs::exists(folder / "x.dmp"));
   ym2612::Patch kept;
-  CHECK(repository.load_patch(entry_at(repository, folder / "kit" / "x.gin"),
+  CHECK(repository.load_patch(entry_at(repository, folder / "kit" / "x.dmp"),
                               kept));
   CHECK(kept.instrument.algorithm == 2);
 
   const auto drums = entry_at(repository, folder / "drums");
   CHECK(!repository.move_patch(drums, kit));
-  CHECK(fs::exists(folder / "drums" / "b.gin"));
-  CHECK(fs::exists(folder / "kit" / "drums" / "a.gin"));
-  CHECK(!fs::exists(folder / "kit" / "drums" / "b.gin"));
+  CHECK(fs::exists(folder / "drums" / "b.dmp"));
+  CHECK(fs::exists(folder / "kit" / "drums" / "a.dmp"));
+  CHECK(!fs::exists(folder / "kit" / "drums" / "b.dmp"));
 }
 
 void test_containers(const fs::path &root) {
   platform::StdFileSystem file_system;
   const auto folder = root / "containers";
   fs::create_directories(folder / "keep");
-  CHECK(patches::write_patch(make_patch(1), folder / "keep" / "x.gin"));
+  CHECK(patches::write_patch(make_patch(1), folder / "keep" / "x.dmp"));
 
   megatoy::workspace::Workspace workspace;
   CHECK(workspace.add(folder));
@@ -194,7 +194,7 @@ void test_containers(const fs::path &root) {
                                            /*overwrite=*/true, ".ginpkg");
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
   CHECK(
-      repository.save_patch(make_patch(2), "loose", /*overwrite=*/true, ".gin")
+      repository.save_patch(make_patch(2), "loose", /*overwrite=*/true, ".dmp")
           .status == patches::SavePatchResult::Status::Success);
   const auto package_relative =
       repository.to_relative_path(saved.path).generic_string();
@@ -209,7 +209,7 @@ void test_containers(const fs::path &root) {
   const auto latest = package.children.front();
   CHECK(!latest.container_item_id.empty());
   const auto keep = entry_at(repository, folder / "keep");
-  const auto loose = entry_at(repository, folder / "loose.gin");
+  const auto loose = entry_at(repository, folder / "loose.dmp");
 
   // One version out of a package is not a file of its own.
   CHECK(!repository.can_move_patch(latest, keep));
@@ -234,35 +234,35 @@ void test_cross_storage_refused(const fs::path &root) {
   const auto second = root / "second";
   fs::create_directories(first);
   fs::create_directories(second / "sub");
-  CHECK(patches::write_patch(make_patch(1), first / "a.gin"));
-  CHECK(patches::write_patch(make_patch(2), second / "sub" / "b.gin"));
+  CHECK(patches::write_patch(make_patch(1), first / "a.dmp"));
+  CHECK(patches::write_patch(make_patch(2), second / "sub" / "b.dmp"));
 
   megatoy::workspace::Workspace workspace;
   CHECK(workspace.add(first));
   CHECK(workspace.add(second));
   patches::PatchRepository repository(file_system, workspace);
 
-  const auto file = entry_at(repository, first / "a.gin");
+  const auto file = entry_at(repository, first / "a.dmp");
   CHECK(!repository.can_move_patch(file, entry_at(repository, second)));
   CHECK(!repository.can_move_patch(file, entry_at(repository, second / "sub")));
   CHECK(!repository.move_patch(file, entry_at(repository, second / "sub")));
-  CHECK(fs::exists(first / "a.gin"));
+  CHECK(fs::exists(first / "a.dmp"));
 }
 
 void test_read_only_refused(const fs::path &root) {
   platform::StdFileSystem file_system;
   const auto builtin = root / "builtin";
   fs::create_directories(builtin / "sub");
-  CHECK(patches::write_patch(make_patch(1), builtin / "preset.gin"));
-  CHECK(patches::write_patch(make_patch(2), builtin / "sub" / "other.gin"));
+  CHECK(patches::write_patch(make_patch(1), builtin / "preset.dmp"));
+  CHECK(patches::write_patch(make_patch(2), builtin / "sub" / "other.dmp"));
 
   megatoy::workspace::Workspace workspace;
   patches::PatchRepository repository(file_system, workspace, builtin);
-  const auto preset = entry_at(repository, builtin / "preset.gin");
+  const auto preset = entry_at(repository, builtin / "preset.dmp");
   const auto sub = entry_at(repository, builtin / "sub");
   CHECK(!repository.can_move_patch(preset, sub));
   CHECK(!repository.move_patch(preset, sub));
-  CHECK(fs::exists(builtin / "preset.gin"));
+  CHECK(fs::exists(builtin / "preset.dmp"));
 }
 
 } // namespace

@@ -2,9 +2,11 @@
 #include "core/status.hpp"
 #include "envelope_image.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/envelope/envelope_handles.hpp"
+#include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_editor.hpp"
@@ -21,17 +23,6 @@
 #include <string>
 
 namespace ui {
-
-void text_centered(std::string text, float frame_width) {
-  ImGui::Dummy(ImVec2(frame_width, ImGui::GetTextLineHeight()));
-
-  ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
-  ImVec2 cursor_pos = ImGui::GetItemRectMin();
-  cursor_pos.x += (frame_width - text_size.x) * 0.5f;
-
-  ImGui::GetWindowDrawList()->AddText(
-      cursor_pos, ImGui::GetColorU32(ImGuiCol_Text), text.c_str());
-}
 
 // Helper function to update slider state
 inline void
@@ -51,15 +42,6 @@ namespace {
 float frame_padding() { return ui::scale::px(8.0f); }
 // Clearance either side of the header where the top border breaks for it.
 float header_gap() { return ui::scale::px(4.0f); }
-
-/// The envelope graph and the rate slider row beneath it, as one height.
-float total_level_slider_height() {
-  return envelope_graph_height() + vslider_height() +
-         ImGui::GetStyle().ItemSpacing.y;
-}
-
-/// What the TL column costs the graph beside it: one slider and the gap.
-float total_level_column_width() { return vslider_width() + vslider_gap(); }
 
 ym2612::MultiEditMode multi_edit_mode(const PatchEditorContext &context) {
   return context.prefs.multi_operator_edit_absolute
@@ -141,35 +123,28 @@ void draw_operator_fill(const OperatorEditState &state, int slot,
 }
 
 /**
- * The frame, cut open at the corners the header and the Carrier badge sit
- * across: the top border runs from past the label to short of the badge, the
- * left border starts below the checkbox and the right one below the badge.
+ * The frame, cut open at the corner the header sits across: the top border
+ * runs from past the label, and the left border starts below the checkbox.
  *
  * The half-pixel inset is what AddRect does internally; without it the line
  * falls between two pixels and blurs.
  */
 void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
-                         float top_resume_x, float top_end_x,
-                         float left_resume_y, float right_resume_y,
-                         ImU32 color) {
+                         float top_resume_x, float left_resume_y, ImU32 color) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float left = min.x + 0.5f;
   const float top = min.y + 0.5f;
   const float right = max.x - 0.5f;
   const float bottom = max.y - 0.5f;
 
-  const float top_end = std::min(top_end_x, right);
-  if (top_resume_x < top_end) {
-    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(top_end, top), color);
+  if (top_resume_x < right) {
+    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(right, top), color);
   }
   if (left_resume_y < bottom) {
     draw_list->AddLine(ImVec2(left, left_resume_y), ImVec2(left, bottom),
                        color);
   }
-  if (right_resume_y < bottom) {
-    draw_list->AddLine(ImVec2(right, std::max(top, right_resume_y)),
-                       ImVec2(right, bottom), color);
-  }
+  draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
   draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
 }
 
@@ -229,8 +204,8 @@ struct OperatorWidget {
  * One operator parameter, with the selection, the relative spreading and the
  * undo history in a single place rather than repeated per slider.
  *
- * `vertical_size` picks a VSliderInt, and those hide their label, so they are
- * the ones that get a tooltip.
+ * `vertical_size` picks a vertical slider, named inside by the short name
+ * before "##", so those get a tooltip with the full one.
  */
 void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
                      const char *id, const ImVec2 *vertical_size,
@@ -260,8 +235,8 @@ void operator_slider(OperatorWidget &widget, ym2612::OperatorField field,
   int value = ym2612::read_operator_field(op, field);
   const bool changed =
       vertical_size
-          ? ImGui::VSliderInt(id, *vertical_size, &value, range.max, range.min)
-          : ImGui::SliderInt(id, &value, range.min, range.max, value_format);
+          ? named_vslider_int(id, *vertical_size, &value, range.max, range.min)
+          : named_slider_int(id, &value, range.min, range.max, value_format);
   if (lit_elsewhere) {
     ImGui::PopStyleColor();
   }
@@ -519,11 +494,14 @@ HandleTouch operator_handle(OperatorWidget &widget,
   return touch;
 }
 
-/// The handles on one graph. Returns whether one of them is being dragged,
-/// which is what holds the time axis still.
+/// The handles on one graph, each lit as the sliders for what it sets are,
+/// on this operator (`sliders`) or another selected one (`echoed`). Returns
+/// whether one of them is being dragged, which is what holds the time axis
+/// still.
 bool render_envelope_handles(OperatorWidget &widget,
                              const ui::envelope::EnvelopeHandles &handles,
                              UIState::EnvelopeState::HandleLit &handle_states,
+                             UIState::EnvelopeState::HandleLit sliders,
                              UIState::EnvelopeState::HandleLit echoed) {
   constexpr size_t count = std::size(kHandleSpecs);
   const ui::envelope::HandleIndex nearest = ui::envelope::nearest_handle(
@@ -542,15 +520,19 @@ bool render_envelope_handles(OperatorWidget &widget,
       continue;
     }
     active |= touched[i].lit == UIState::EnvelopeState::SliderState::Active;
-    // Lit too when another selected operator is changing what it stands for.
+    // Lit too when a slider for what it stands for is pointed at, here or
+    // on another selected operator.
     SliderState lit = touched[i].lit;
     const HandleAxes axes = axes_of(kHandleSpecs[i].handle);
     for (const auto &field : {axes.across, axes.down}) {
       if (!field) {
         continue;
       }
-      if (const auto *from = slider_state_for(echoed, *field)) {
-        lit = UIState::EnvelopeState::stronger(lit, *from);
+      for (auto *from : {slider_state_for(sliders, *field),
+                         slider_state_for(echoed, *field)}) {
+        if (from != nullptr) {
+          lit = UIState::EnvelopeState::stronger(lit, *from);
+        }
       }
     }
     draw_envelope_handle(handles, kHandleSpecs[i].handle, lit);
@@ -560,15 +542,12 @@ bool render_envelope_handles(OperatorWidget &widget,
 
 /**
  * A per-operator flag. Booleans have no delta, so spreading one is absolute
- * in both modes. `spread` is off for the enable flag: it is a mute, and
- * dragging the others along would undo the audition it was set up for.
+ * in both modes.
  */
 void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
-                       bool ym2612::OperatorSettings::*flag, bool spread) {
+                       bool ym2612::OperatorSettings::*flag) {
   auto &state = widget.editor.operator_edit();
-  auto &op = ym2612::operator_at(widget.instrument, widget.slot);
-
-  bool value = op.*flag;
+  bool value = ym2612::operator_at(widget.instrument, widget.slot).*flag;
   const bool changed = ImGui::Checkbox(id, &value);
   if (ImGui::IsItemActivated()) {
     note_operator_edit(state.selection, widget.slot);
@@ -576,12 +555,8 @@ void operator_checkbox(OperatorWidget &widget, const char *id, const char *name,
   if (changed) {
     track_instant_patch_history(
         widget.editor, history_label(state.selection, widget.slot, name), [&] {
-          if (spread) {
-            ym2612::apply_operator_flag_edit(
-                widget.instrument, state.selection.selected, flag, value);
-          } else {
-            op.*flag = value;
-          }
+          ym2612::apply_operator_flag_edit(
+              widget.instrument, state.selection.selected, flag, value);
         });
   }
 }
@@ -600,8 +575,14 @@ struct OperatorHeader {
   float end_x;
   /// The name takes clicks for dragging, so it reports them to select with.
   bool name_clicked;
-  bool is_carrier;
 };
+
+/// Whether the operator in display `slot` reaches the output under
+/// `algorithm`, rather than only feeding other operators.
+bool is_carrier(int slot, uint8_t algorithm) {
+  return ym2612::operator_register_index(slot) >=
+         ym2612::algorithm_modulator_count[algorithm];
+}
 
 /// Inside an open drag source: what is carried and the tooltip that follows
 /// the pointer.
@@ -655,46 +636,25 @@ void drag_from_background(OperatorEditState &state,
   }
 }
 
-/// The Carrier badge, as tall as the checkbox across the other end of the
-/// top border, its right edge at `right`. Returns its left edge.
-float draw_carrier_badge(float right, float top) {
-  constexpr const char *kBadge = "Carrier";
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 text_size = ImGui::CalcTextSize(kBadge);
-  const ImVec2 size(text_size.x + style.FramePadding.x * 2.0f,
-                    ImGui::GetFrameHeight());
-  const ImVec2 min(right - size.x, top);
-  const ImVec2 max(right, top + size.y);
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  draw_list->AddRectFilled(min, max,
-                           styles::color_u32(styles::MegatoyCol::CarrierBadge),
-                           size.y * 0.5f);
-  draw_list->AddText(
-      ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y),
-      ImGui::GetColorU32(ImGuiCol_Text), kBadge);
-  return min.x;
+/// Whether the left button moved far enough while down to count as a drag.
+bool was_dragged() {
+  const float threshold = ImGui::GetIO().MouseDragThreshold;
+  return ImGui::GetIO().MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] >=
+         threshold * threshold;
 }
 
-/// The operator's enable checkbox and name, sitting in the frame's top
-/// border.
-OperatorHeader render_operator_header(OperatorWidget &widget, uint8_t algorithm,
+/// The operator's name, sitting in the frame's top border.
+OperatorHeader render_operator_header(OperatorWidget &widget,
                                       const ImVec2 &header_min) {
   const int slot = widget.slot;
-  // Carriers reach the output; modulators only feed other operators. Which
-  // is which moves with the algorithm, so it is worth saying on every one.
-  const bool is_modulator = ym2612::operator_register_index(slot) <
-                            ym2612::algorithm_modulator_count[algorithm];
-
   ImGui::SetCursorScreenPos(header_min);
   ImGui::BeginGroup();
-  operator_checkbox(widget, "##Operator Enable", "Enable",
-                    &ym2612::OperatorSettings::enable, false);
-  ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+  ImGui::AlignTextToFramePadding();
   ImGui::TextUnformatted(operator_slot_label(slot).c_str());
   const bool name_clicked =
       operator_name_drag_source(widget.editor.document, slot);
   ImGui::EndGroup();
-  return {ImGui::GetItemRectMax().x, name_clicked, !is_modulator};
+  return {ImGui::GetItemRectMax().x, name_clicked};
 }
 
 /// The whole frame takes an operator dropped from another one: swapped, or
@@ -757,111 +717,76 @@ bool operator_drop_target(PatchEditorContext &context,
 }
 
 /**
- * TL's own column, the label above a slider as tall as the envelope graph and
- * the rate slider row together.
- *
- * TL runs 0..127 where the rate sliders run 0..31 and 0..15, so it takes both
- * rows' height for one step to stay wider than a pixel under the mouse. It
- * sits beside the graph rather than under it because the graph's vertical
- * axis is attenuation and TL is the operator's output level: the two read as
- * one axis.
- */
-void render_total_level_slider(OperatorWidget &widget,
-                               UIState::EnvelopeState &envelope_state) {
-  const ImVec2 slider_size(vslider_width(), total_level_slider_height());
-
-  ImGui::BeginGroup();
-  text_centered("TL", slider_size.x);
-  operator_slider(widget, ym2612::OperatorField::TotalLevel, "##Total Level",
-                  &slider_size, nullptr, &envelope_state.total_level,
-                  lit_from_outside(envelope_state, &Lit::total_level));
-  ImGui::EndGroup();
-}
-
-/**
- * The five rate sliders under the graph, labelled.
- *
- * Five columns and the gaps between them, which together with the TL column
- * beside them comes to hslider_width(). The graph above is wider than this in
- * the two-column layout, and the sliders deliberately do not follow it --
- * widening them would claim they share the graph's axis.
+ * TL and the five rate sliders under the graph, hslider_width() across. The
+ * graph above is wider than this, and the sliders deliberately do not follow
+ * it -- widening them would claim they share the graph's axis.
  */
 void render_envelope_sliders(OperatorWidget &widget,
                              UIState::EnvelopeState &envelope_state) {
   const ImVec2 slider_size = vslider_size();
-  const float label_width = slider_size.x;
-
-  ImGui::BeginGroup(); // ADSR slider block
 
   ImGui::BeginGroup();
-  text_centered("AR", label_width);
+  operator_slider(widget, ym2612::OperatorField::TotalLevel, "TL##Total Level",
+                  &slider_size, nullptr, &envelope_state.total_level,
+                  lit_from_outside(envelope_state, &Lit::total_level));
   ImGui::SameLine(0.0f, vslider_gap());
-  text_centered("DR", label_width);
-  ImGui::SameLine(0.0f, vslider_gap());
-  text_centered("SL", label_width);
-  ImGui::SameLine(0.0f, vslider_gap());
-  text_centered("SR", label_width);
-  ImGui::SameLine(0.0f, vslider_gap());
-  text_centered("RR", label_width);
-  ImGui::EndGroup();
-
-  ImGui::BeginGroup();
-  operator_slider(widget, ym2612::OperatorField::AttackRate, "##Attack Rate",
+  operator_slider(widget, ym2612::OperatorField::AttackRate, "AR##Attack Rate",
                   &slider_size, nullptr, &envelope_state.attack_rate,
                   lit_from_outside(envelope_state, &Lit::attack_rate));
   ImGui::SameLine(0.0f, vslider_gap());
-  operator_slider(widget, ym2612::OperatorField::DecayRate, "##Decay Rate",
+  operator_slider(widget, ym2612::OperatorField::DecayRate, "DR##Decay Rate",
                   &slider_size, nullptr, &envelope_state.decay_rate,
                   lit_from_outside(envelope_state, &Lit::decay_rate));
   ImGui::SameLine(0.0f, vslider_gap());
   operator_slider(widget, ym2612::OperatorField::SustainLevel,
-                  "##Sustain Level", &slider_size, nullptr,
+                  "SL##Sustain Level", &slider_size, nullptr,
                   &envelope_state.sustain_level,
                   lit_from_outside(envelope_state, &Lit::sustain_level));
   ImGui::SameLine(0.0f, vslider_gap());
-  operator_slider(widget, ym2612::OperatorField::SustainRate, "##Sustain Rate",
-                  &slider_size, nullptr, &envelope_state.sustain_rate,
+  operator_slider(widget, ym2612::OperatorField::SustainRate,
+                  "SR##Sustain Rate", &slider_size, nullptr,
+                  &envelope_state.sustain_rate,
                   lit_from_outside(envelope_state, &Lit::sustain_rate));
   ImGui::SameLine(0.0f, vslider_gap());
-  operator_slider(widget, ym2612::OperatorField::ReleaseRate, "##Release Rate",
-                  &slider_size, nullptr, &envelope_state.release_rate,
+  operator_slider(widget, ym2612::OperatorField::ReleaseRate,
+                  "RR##Release Rate", &slider_size, nullptr,
+                  &envelope_state.release_rate,
                   lit_from_outside(envelope_state, &Lit::release_rate));
   ImGui::EndGroup();
-
-  ImGui::EndGroup(); // End ADSR slider block
 }
 
 void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                               int slot, UIState::EnvelopeState &envelope_state,
-                              bool space_for_feedback,
                               const EnvelopeVoices &voices) {
   auto &state = context.operator_edit();
   auto &instrument = patch.instrument;
   auto &op = ym2612::operator_at(instrument, slot);
   OperatorWidget widget{context, instrument, slot};
 
-  // Two columns only when the right-hand one fits whole. Its widest row is a
-  // full-width slider plus its label, and the gap between the columns is the
-  // SameLine/Spacing/SameLine below.
   const ImGuiStyle &style = ImGui::GetStyle();
   const float content_width = ImGui::GetContentRegionAvail().x;
-  const float side_column_width = hslider_width() + style.ItemInnerSpacing.x +
-                                  ImGui::CalcTextSize("SSG EG Type").x;
-  const float two_column_width =
-      hslider_width() + style.ItemSpacing.x * 2.0f + side_column_width;
-  const bool column_layout = content_width > two_column_width;
 
-  if (!op.enable) {
+  const bool sounds = context.session.playback()
+                          .operator_enable[static_cast<std::size_t>(slot)];
+  if (!sounds) {
     ImGui::BeginDisabled();
   }
   ImGui::PushItemWidth(hslider_width());
 
+  const float row_left = ImGui::GetCursorPosX();
+  operator_checkbox(widget, "Amplitude Modulation", "Amplitude Modulation",
+                    &ym2612::OperatorSettings::amplitude_modulation_enable);
   if (slot == 0) {
     // Feedback belongs to the channel, not to an operator -- there is one of
     // it, and OP1's panel is only where it is drawn. So it spreads nowhere,
-    // but it still leads: editing it makes OP1 the primary operator.
+    // but it still leads: editing it makes OP1 the primary operator. It
+    // takes the rest of the row, out to the graph's right edge.
+    ImGui::SameLine();
+    const float row_end = row_left + content_width - frame_padding();
+    ImGui::SetNextItemWidth(
+        std::max(row_end - ImGui::GetCursorPosX(), ImGui::GetFrameHeight()));
     int feedback = instrument.feedback;
-    const bool feedback_changed = ImGui::SliderInt("Feedback", &feedback, 0, 7);
+    const bool feedback_changed = named_slider_int("Feedback", &feedback, 0, 7);
     if (ImGui::IsItemActivated()) {
       note_operator_edit(state.selection, 0);
     }
@@ -869,53 +794,48 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     if (feedback_changed) {
       instrument.feedback = static_cast<uint8_t>(feedback);
     }
-  } else if (space_for_feedback) {
-    // Stand in for the Feedback slider OP1 has and the others do not, so all
-    // four line up.
-    ImVec2 feedback_gap = ImGui::GetCursorPos();
-    ImGui::SetCursorPosY(feedback_gap.y + ImGui::GetFrameHeightWithSpacing());
   }
-
-  operator_checkbox(widget, "Amplitude Modulation", "Amplitude Modulation",
-                    &ym2612::OperatorSettings::amplitude_modulation_enable,
-                    true);
   ImGui::Spacing();
 
-  // TL runs down the left of the panel in every layout; the graph and the rate
-  // sliders start to the right of it.
+  // The graph is what the panel is read for, so it spans the panel in every
+  // layout, with the sliders underneath. frame_padding() comes off the right
+  // so it clears the border by as much as the contents do on the left. Only
+  // the pixels change: the time axis is unaffected.
   const float block_left = ImGui::GetCursorPosX();
-  render_total_level_slider(widget, envelope_state);
-  ImGui::SameLine(0.0f, vslider_gap());
-
-  // The graph is what the panel is read for, so it spans what the TL column
-  // leaves in every layout, with the rate sliders underneath. frame_padding()
-  // comes off the right so it clears the border by as much as the contents do
-  // on the left. Only the pixels change: the time axis is unaffected.
-  ImGui::BeginGroup();
-  const ui::envelope::EnvelopeHandles handles = render_envelope_image(
-      op, envelope_state,
-      ImVec2(content_width - frame_padding() - total_level_column_width(),
-             envelope_graph_height()),
-      voices);
+  // Carriers reach the output; modulators only feed other operators. Which
+  // is which moves with the algorithm, so the graph says it on every one.
+  const bool carrier = is_carrier(slot, instrument.algorithm);
+  const ImVec2 graph_size(content_width - frame_padding(),
+                          envelope_graph_height());
+  const ui::envelope::EnvelopeHandles handles =
+      render_envelope_image(op, envelope_state, graph_size, voices, carrier,
+                            state.selection.contains(slot));
   // Inside the graph's own window, which render_envelope_image leaves open:
   // an item anywhere else could not be hovered over the graph.
   envelope_state.handles = UIState::EnvelopeState::HandleLit{};
+  const UIState::EnvelopeState::HandleLit sliders{
+      envelope_state.total_level,  envelope_state.attack_rate,
+      envelope_state.decay_rate,   envelope_state.sustain_level,
+      envelope_state.sustain_rate, envelope_state.release_rate,
+  };
   envelope_state.handle_active = render_envelope_handles(
-      widget, handles, envelope_state.handles, envelope_state.echoed);
+      widget, handles, envelope_state.handles, sliders, envelope_state.echoed);
   end_envelope_image();
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
-  ImGui::EndGroup();
 
-  if (column_layout) {
-    // Placed against the slider block, not the group just closed -- that
-    // group is as wide as the graph, so SameLine() off it would land past
-    // the panel's right edge. Level with the vertical sliders rather than
-    // with the graph, so the SSG controls sit straight above Key Scale.
-    ImGui::SetCursorPos(
-        ImVec2(block_left + hslider_width() + ImGui::GetStyle().ItemSpacing.x * 2,
-               sliders_top));
+  // SSG-EG and the controls under it stand in the room right of RR, out to
+  // the graph's right edge, as tall as the sliders, when that is wide enough
+  // for the narrowest of them; otherwise they go under the sliders.
+  const float side_left = block_left + hslider_width() + style.ItemSpacing.x;
+  const float side_room =
+      block_left + content_width - frame_padding() - side_left;
+  const bool beside_rates =
+      side_room >= named_slider_fit_width("SSG EG Type", "0");
+  if (beside_rates) {
+    ImGui::SetCursorPos(ImVec2(side_left, sliders_top));
     ImGui::BeginGroup();
+    ImGui::PushItemWidth(side_room);
   } else {
     ImGui::Spacing();
   }
@@ -930,8 +850,17 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
   ImGui::SameLine();
 
-  operator_checkbox(widget, "SSG-EG", "SSG-EG",
-                    &ym2612::OperatorSettings::ssg_enable, true);
+  // Named while the name fits before the panel's edge; the slider below
+  // names it anyway.
+  const bool ssg_named = ImGui::GetCursorPosX() + ImGui::GetFrameHeight() +
+                             style.ItemInnerSpacing.x +
+                             ImGui::CalcTextSize("SSG-EG").x <=
+                         block_left + content_width - frame_padding();
+  operator_checkbox(widget, ssg_named ? "SSG-EG" : "##SSG-EG", "SSG-EG",
+                    &ym2612::OperatorSettings::ssg_enable);
+  if (!ssg_named && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("SSG-EG");
+  }
 
   const bool ssg_enable = op.ssg_enable;
   if (!ssg_enable) {
@@ -943,11 +872,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndDisabled();
   }
 
-  // Only the single-column layout needs a break here: in the two-column one
-  // the SSG controls already stand clear of the sliders beside them.
-  if (!column_layout) {
-    ImGui::Spacing();
-  }
+  ImGui::Spacing();
 
   operator_slider(widget, ym2612::OperatorField::KeyScale, "Key Scale", nullptr,
                   nullptr, nullptr);
@@ -964,12 +889,13 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                       op, ym2612::OperatorField::Detune)],
                   nullptr);
 
-  if (column_layout) {
+  if (beside_rates) {
+    ImGui::PopItemWidth();
     ImGui::EndGroup();
   }
   ImGui::PopItemWidth();
 
-  if (!op.enable) {
+  if (!sounds) {
     ImGui::EndDisabled();
   }
 }
@@ -978,7 +904,6 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
 
 void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
-                            bool space_for_feedback,
                             const EnvelopeVoices &voices) {
   auto &state = context.operator_edit();
   OperatorWidget widget{context, patch.instrument, slot};
@@ -995,24 +920,16 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
   draw_operator_fill(state, slot, block_min, frame_min, frame_width);
-  const OperatorHeader header =
-      render_operator_header(widget, patch.instrument.algorithm, block_min);
+  const OperatorHeader header = render_operator_header(widget, block_min);
   const float top_resume_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
   const float left_resume_y = block_min.y + header_height + header_gap();
-  const float frame_right = frame_min.x + frame_width;
-  const float top_end_x =
-      header.is_carrier
-          ? draw_carrier_badge(frame_right, block_min.y) - header_gap()
-          : frame_right;
-  const float right_resume_y = header.is_carrier ? left_resume_y : frame_min.y;
 
   ImGui::SetCursorScreenPos(
       ImVec2(frame_min.x + frame_padding(),
              block_min.y + header_height + frame_padding()));
   ImGui::BeginGroup();
-  render_operator_contents(context, patch, slot, envelope_state,
-                           space_for_feedback, voices);
+  render_operator_contents(context, patch, slot, envelope_state, voices);
   ImGui::EndGroup();
 
   const float content_height =
@@ -1045,6 +962,14 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left))) {
     note_operator_click(state.selection, slot);
     state.click_claimed = true;
+    state.reveal_press_slot = slot;
+  }
+  if (state.reveal_press_slot == slot &&
+      ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+    state.reveal_press_slot = -1;
+    if (!was_dragged()) {
+      scroll_reveal::request(block_min.y, frame_max.y);
+    }
   }
   drag_from_background(
       state, context.document, slot,
@@ -1073,8 +998,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   draw_operator_frame(
-      frame_min, frame_max, top_resume_x, top_end_x, left_resume_y,
-      right_resume_y,
+      frame_min, frame_max, top_resume_x, left_resume_y,
       receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
                 : operator_frame_color(state.selection.contains(slot),
                                        state.selection.primary == slot,
@@ -1120,7 +1044,13 @@ void echo_selection_highlights(PatchEditorContext &context) {
         }
       }
     }
-    context.envelope_state(slot).echoed = echoed;
+    auto &state = context.envelope_state(slot);
+    for (const auto field : kLit) {
+      echoed.*field = UIState::EnvelopeState::stronger(echoed.*field,
+                                                       state.quick_edit.*field);
+    }
+    state.quick_edit = {};
+    state.echoed = echoed;
   }
 }
 

@@ -140,8 +140,6 @@ void test_morph_endpoints_return_the_source_patches() {
   const int ordinary[4] = {20, 30, 5, 60};
   const ym2612::Patch sawtooth = patch_with_levels(7, silenced, 1);
   ym2612::Patch four_op = patch_with_levels(4, ordinary, 11);
-  four_op.global.lfo_enable = true;
-  four_op.global.lfo_frequency = 5;
   four_op.channel.frequency_modulation_sensitivity = 4;
   four_op.instrument.feedback = 6;
   four_op.instrument.operators[1].detune = 4;
@@ -361,12 +359,8 @@ void test_category_ids_and_labels_generate_the_same_seeded_sound() {
     CHECK(by_id.patch.channel.right_speaker);
     CHECK(!by_id.patch.global.dac_enable);
     check_register_ranges(by_id.patch);
-    if (category.id == "bass" || category.id == "bell") {
-      CHECK(!by_id.patch.global.lfo_enable);
-      CHECK(by_id.patch.global.lfo_frequency == 0);
-    } else {
-      CHECK(by_id.patch.global.lfo_enable);
-    }
+    CHECK(!by_id.patch.global.lfo_enable);
+    CHECK(by_id.patch.global.lfo_frequency == 0);
     options.mutate_iterations = -5;
     CHECK(patch_lab::random_patch(options).patch == by_id.patch);
   }
@@ -455,10 +449,7 @@ void test_morph_clamps_mix_and_switches_flags_at_operator_thresholds() {
   b.name = "Second";
   a.instrument.algorithm = 0;
   b.instrument.algorithm = 7;
-  b.global.lfo_enable = true;
-  b.global.lfo_frequency = 6;
   for (auto &op : b.instrument.operators) {
-    op.enable = false;
     op.ssg_enable = true;
     op.ssg_type_envelope_control = 5;
     op.amplitude_modulation_enable = true;
@@ -469,12 +460,10 @@ void test_morph_clamps_mix_and_switches_flags_at_operator_thresholds() {
     const auto result = patch_lab::morph(a, b, morph_options(mix, false));
     CHECK(result.seed == 0);
     CHECK(result.patch.name.empty());
-    CHECK(result.patch.global.lfo_enable == (mix >= 0.5f));
     CHECK(result.patch.instrument.algorithm == (mix < 0.5f ? 0 : 7));
     for (int i = 0; i < 4; ++i) {
       const bool from_b = mix >= static_cast<float>(i + 1) / 4.0f;
       const auto &op = result.patch.instrument.operators[i];
-      CHECK(op.enable == !from_b);
       CHECK(op.ssg_enable == from_b);
       CHECK(op.amplitude_modulation_enable == from_b);
       CHECK(op.ssg_type_envelope_control == (from_b ? 5 : 0));
@@ -482,7 +471,6 @@ void test_morph_clamps_mix_and_switches_flags_at_operator_thresholds() {
   }
   const auto interpolated = patch_lab::morph(a, b, morph_options(0.5f, true));
   CHECK(interpolated.patch.instrument.algorithm == 4);
-  CHECK(interpolated.patch.global.lfo_frequency == 3);
 }
 
 void test_merge_repeats_without_modifying_either_source() {

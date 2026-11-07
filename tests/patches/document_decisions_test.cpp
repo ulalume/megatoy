@@ -82,7 +82,7 @@ void test_document_flows() {
   auto &untitled = env.open({});
   CHECK(patches::document_label(untitled) == "Untitled");
   check_document(env, untitled, false, "Save As...");
-  auto &writable = env.open(env.folder / "lead.gin");
+  auto &writable = env.open(env.folder / "lead.dmp");
   CHECK(patches::document_label(writable) == "lead");
   check_document(env, writable, true, "Overwrite");
   // The only changed document need not be the active one.
@@ -113,7 +113,7 @@ void test_document_flows() {
   CHECK(patches::document_label(bank) == "Bank instrument");
   check_document(env, bank, false, "Save As...");
 
-  auto &outside = env.open(env.root / "outside.gin");
+  auto &outside = env.open(env.root / "outside.dmp");
   check_document(env, outside, true, "Overwrite");
   env.set_read_only();
   check_document(env, writable, false, "Save As...");

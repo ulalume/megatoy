@@ -2,9 +2,9 @@
 #include "fonts/icon_font.hpp"
 #include "gui/app_window.hpp"
 #include "gui/areas.hpp"
-#include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
+#include "gui/input/touch.hpp"
 #include "gui/layouts.hpp"
 #if defined(__APPLE__)
 #include "gui/mac_window_menu.hpp"
@@ -17,6 +17,7 @@
 #include <imgui.h>
 #if defined(MEGATOY_PLATFORM_WEB)
 #define IMGUI_IMPL_OPENGL_ES3 1
+#include <emscripten/html5.h>
 #endif
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
@@ -62,6 +63,24 @@ bool GuiManager::initialize(const std::string &window_title, int width,
     return true;
   }
 
+  // The fingers drive the mouse instead: see ui::touch::drag_to_scroll().
+  SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#if defined(MEGATOY_PLATFORM_WEB)
+  // A lift the browser loses is made good when it says none is left.
+  const auto all_lifted = [](int, const EmscriptenTouchEvent *event, void *) {
+    for (int i = 0; i < event->numTouches; ++i) {
+      if (!event->touches[i].isChanged) {
+        return false;
+      }
+    }
+    ui::touch::release_all();
+    return false;
+  };
+  emscripten_set_touchend_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr,
+                                   true, all_lifted);
+  emscripten_set_touchcancel_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr,
+                                      true, all_lifted);
+#endif
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     std::cerr << "Failed to initialize SDL3: " << SDL_GetError() << std::endl;
     return false;
@@ -159,6 +178,10 @@ bool GuiManager::initialize(const std::string &window_title, int width,
       ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
 
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
+#if defined(MEGATOY_PLATFORM_WEB)
+  // On a phone a finger on a window's empty space means to scroll it.
+  io.ConfigWindowsMoveFromTitleBarOnly = true;
+#endif
 
   // Apply theme and scale from preferences
   theme_ = preferences_.theme();
@@ -191,7 +214,6 @@ void GuiManager::shutdown() {
   }
 
   // Reset preview textures
-  ui::reset_algorithm_preview_textures();
   ui::reset_ssg_preview_textures();
 
   // Cleanup
@@ -228,7 +250,17 @@ void GuiManager::begin_frame() {
   // Start the Dear ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
+  ui::touch::before_new_frame();
   ImGui::NewFrame();
+  // A finger lands without hovering first, so a tap meant to select a tab
+  // would find its close button already there: under a finger only the
+  // selected tab shows one.
+  ImGui::GetStyle().TabCloseButtonMinWidthUnselected =
+      ImGui::GetIO().MouseSource == ImGuiMouseSource_TouchScreen ? FLT_MAX
+                                                                 : 0.0f;
+  ui::touch::drag_to_scroll();
+  ui::layouts::fit_footer_to_width();
+  ui::layouts::fit_sidebar_to_width();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
@@ -262,6 +294,8 @@ void GuiManager::setup_default_layout(unsigned int dockspace_id) {
   ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
   ui::layouts::build_default_layout(dockspace_id);
   ImGui::DockBuilderFinish(dockspace_id);
+  // Saved like a change made by hand, so a reset outlasts a reload.
+  ImGui::MarkIniSettingsDirty();
 }
 
 void GuiManager::end_frame() {
@@ -316,6 +350,25 @@ void GuiManager::process_event(const SDL_Event &event) {
     if (event.window.windowID == window_id_ &&
         ui_scale_preference_ == ui::scale::kAuto) {
       apply_ui_scale(ui_scale_preference_);
+    }
+    break;
+  // Only a screen touched directly: a trackpad's fingers are the pointer's.
+  case SDL_EVENT_FINGER_DOWN:
+  case SDL_EVENT_FINGER_MOTION:
+  case SDL_EVENT_FINGER_UP:
+  case SDL_EVENT_FINGER_CANCELED:
+    if (SDL_GetTouchDeviceType(event.tfinger.touchID) ==
+        SDL_TOUCH_DEVICE_DIRECT) {
+      const ImVec2 size = ImGui::GetIO().DisplaySize;
+      const ImVec2 pos(event.tfinger.x * size.x, event.tfinger.y * size.y);
+      const auto id = static_cast<std::uint64_t>(event.tfinger.fingerID);
+      if (event.type == SDL_EVENT_FINGER_DOWN) {
+        ui::touch::finger_down(id, pos);
+      } else if (event.type == SDL_EVENT_FINGER_MOTION) {
+        ui::touch::finger_moved(id, pos);
+      } else {
+        ui::touch::finger_up(id);
+      }
     }
     break;
   case SDL_EVENT_DROP_FILE:
@@ -412,7 +465,6 @@ void GuiManager::set_theme(ui::styles::ThemeId theme) {
   theme_ = theme;
   ui::styles::apply_style(theme_, ui_scale_);
   if (ImGui::GetCurrentContext() != nullptr) {
-    ui::reset_algorithm_preview_textures();
     ui::reset_ssg_preview_textures();
   }
 }
@@ -453,9 +505,11 @@ void GuiManager::apply_imgui_ini_binding() {
   }
 
   ImGuiIO &io = ImGui::GetIO();
-  if (imgui_ini_file_path_.empty() && megatoy::platform::is_web()) {
-    static const char kWebIniName[] = "megatoy_imgui_ini";
-    io.IniFilename = kWebIniName;
+  if (megatoy::platform::is_web()) {
+    // Kept in the page's storage instead: ImGui only says when it changed,
+    // and save_web_layout_ini() writes it.
+    io.IniFilename = nullptr;
+    io.IniSavingRate = 1.0f;
   } else {
     io.IniFilename =
         imgui_ini_file_path_.empty() ? nullptr : imgui_ini_file_path_.c_str();

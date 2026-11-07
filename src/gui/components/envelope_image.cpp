@@ -4,6 +4,7 @@
 #include "common.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/envelope/envelope_handles.hpp"
+#include "gui/frame_requests.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "ym2612/note.hpp"
@@ -68,13 +69,6 @@ int &voice_build_budget() {
     budget = kVoiceBuildsPerFrame;
   }
   return budget;
-}
-
-/// The last ImGui frame that drew a sounding voice, or left one waiting for
-/// its curve.
-int &voices_drawn_frame() {
-  static int frame = -1;
-  return frame;
 }
 
 /**
@@ -435,10 +429,6 @@ void draw_warning(ImDrawList *draw_list, const std::string &warning,
 
 } // namespace
 
-bool envelope_voices_moving() {
-  return voices_drawn_frame() == ImGui::GetFrameCount();
-}
-
 EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   EnvelopeVoices out;
   const double rate =
@@ -491,7 +481,8 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
 ui::envelope::EnvelopeHandles
 render_envelope_image(const ym2612::OperatorSettings &op,
                       const UIState::EnvelopeState &slider_state, ImVec2 size,
-                      const EnvelopeVoices &voices) {
+                      const EnvelopeVoices &voices, bool carrier,
+                      bool selected) {
   // Before BeginChild, so the ID comes from the operator's stack rather than
   // from the child window.
   EnvelopeSlot &slot = slot_for(ImGui::GetID("##envelope_curve"));
@@ -553,10 +544,14 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   const ImVec2 canvas_min = ImGui::GetCursorScreenPos();
   const ImVec2 canvas_max(canvas_min.x + size.x, canvas_min.y + size.y);
 
-  draw_list->AddRectFilled(canvas_min, canvas_max,
-                           styles::color_u32(styles::MegatoyCol::EnvelopeBg));
-  draw_list->AddRect(canvas_min, canvas_max,
-                     styles::color_u32(styles::MegatoyCol::EnvelopeGrid));
+  draw_list->AddRectFilled(
+      canvas_min, canvas_max,
+      styles::color_u32(carrier ? styles::MegatoyCol::EnvelopeBgCarrier
+                                : styles::MegatoyCol::EnvelopeBg));
+  draw_list->AddRect(
+      canvas_min, canvas_max,
+      styles::color_u32(carrier ? styles::MegatoyCol::EnvelopeFrameCarrier
+                                : styles::MegatoyCol::EnvelopeGrid));
 
   // The time labels get a strip of their own along the top: a curve at full
   // volume runs along the very top of the plot.
@@ -565,18 +560,36 @@ render_envelope_image(const ym2612::OperatorSettings &op,
       to_point(ImVec2(canvas_min.x + 1.0f, canvas_min.y + label_height + 1.0f));
   plot.max = to_point(ImVec2(canvas_max.x - 1.0f, canvas_max.y - 1.0f));
 
-  // The note the axis is drawn at, at the far end of the same strip; the
-  // milliseconds stop short of it.
+  // A carrier says so at the far end of the strip, and the milliseconds stop
+  // short of it.
   const float label_baseline = canvas_min.y + 1.0f;
+  const ImGuiStyle &style = ImGui::GetStyle();
+  float labels_end = plot.max.x;
+  if (carrier) {
+    constexpr const char *kCarrier = "Carrier";
+    const float tag_width =
+        ImGui::CalcTextSize(kCarrier).x + style.FramePadding.x * 2.0f;
+    const ImVec2 tag_min(plot.max.x - tag_width, label_baseline);
+    draw_list->AddRectFilled(
+        tag_min, ImVec2(plot.max.x, plot.min.y),
+        styles::color_u32(styles::MegatoyCol::CarrierBadge),
+        ui::scale::px(3.0f), ImDrawFlags_RoundCornersBottomLeft);
+    draw_list->AddText(ImVec2(tag_min.x + style.FramePadding.x, label_baseline),
+                       ImGui::GetColorU32(ImGuiCol_Text), kCarrier);
+    labels_end = tag_min.x;
+  }
+  draw_time_grid(draw_list, plot, label_baseline,
+                 labels_end - ui::scale::px(6.0f));
+
+  // The note the axis is drawn at, in the plot's bottom right corner.
   const std::string note_name =
       ym2612::Note::from_midi_note(
           static_cast<uint8_t>(ui::envelope::reference_midi_note()))
           .name();
-  const float note_x = plot.max.x - ImGui::CalcTextSize(note_name.c_str()).x;
-  draw_list->AddText(ImVec2(note_x, label_baseline), axis_label_color(),
-                     note_name.c_str());
-
-  draw_time_grid(draw_list, plot, label_baseline, note_x - ui::scale::px(6.0f));
+  const ImVec2 note_size = ImGui::CalcTextSize(note_name.c_str());
+  draw_list->AddText(ImVec2(plot.max.x - note_size.x - ui::scale::px(2.0f),
+                            plot.max.y - note_size.y),
+                     axis_label_color(), note_name.c_str());
 
   const PhaseColors colors = {
       color_from_slider_state(state.attack_rate),
@@ -610,7 +623,7 @@ render_envelope_image(const ym2612::OperatorSettings &op,
                         curve, build_budget);
     // From here the next frame draws something new: a curve built, or a
     // cursor further along.
-    voices_drawn_frame() = ImGui::GetFrameCount();
+    keep_drawing();
     if (voice_curve == nullptr) {
       continue; // its curve is being built next frame
     }
@@ -679,18 +692,19 @@ render_envelope_image(const ym2612::OperatorSettings &op,
 
   // The handles are the editor's to place, so all that is settled here is
   // where they would go. They keep out of the way until the pointer is on the
-  // graph, and stay up for as long as one is held wherever the pointer wanders
-  // off to.
-  const bool wanted = state.handle_active || ImGui::IsWindowHovered();
+  // graph or its operator is selected, and stay up for as long as one is held
+  // wherever the pointer wanders off to.
+  const bool wanted =
+      selected || state.handle_active || ImGui::IsWindowHovered();
   if (!wanted) {
     return {};
   }
-  // The dots drawn twice the library's size; its grab box already covers
-  // that.
+  // The dots drawn a pixel wider all round than twice the library's size,
+  // and the grab box grown to cover them.
   const ui::envelope::HandleMetrics unscaled;
   const ui::envelope::HandleMetrics metrics{
-      ui::scale::px(unscaled.radius * 2.0f),
-      ui::scale::px(unscaled.grab),
+      ui::scale::px(unscaled.radius * 2.0f + 1.0f),
+      ui::scale::px(unscaled.grab + 1.0f),
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
   };

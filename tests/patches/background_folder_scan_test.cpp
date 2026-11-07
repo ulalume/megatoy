@@ -52,7 +52,7 @@ Library make_library(const fs::path &root, const std::string &name) {
   // what makes them padding for the file counter and nothing else.
   for (const auto *stem : {"lead", "bass"}) {
     CHECK(patches::write_patch(sample_patch(stem),
-                               library.folder / (std::string(stem) + ".gin")));
+                               library.folder / (std::string(stem) + ".dmp")));
     ++library.file_count;
   }
   return library;

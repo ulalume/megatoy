@@ -39,7 +39,7 @@ void test_repository_rename(const fs::path &root) {
   patch.name = "embedded name must be replaced";
   patch.instrument.algorithm = 4;
   const auto gin_roundtrip = repository.save_patch(patch, "roundtrip-stem",
-                                                   /*overwrite=*/true, ".gin");
+                                                   /*overwrite=*/true, ".dmp");
   CHECK(gin_roundtrip.status == patches::SavePatchResult::Status::Success);
   const auto *gin_entry = find_entry(repository.tree(), gin_roundtrip.path);
   CHECK(gin_entry != nullptr);
@@ -117,18 +117,18 @@ void test_directory_rename(const fs::path &root) {
   ym2612::Patch patch;
   patch.instrument.algorithm = 6;
   const auto saved = repository.save_patch(patch, "deep",
-                                           /*overwrite=*/true, ".gin");
+                                           /*overwrite=*/true, ".dmp");
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
   // Taken from the repository rather than from the path handed to add(): the
   // root it stores is resolved, and on macOS /var resolves to /private/var.
   const auto writable = saved.path.parent_path();
 
   fs::create_directories(writable / "bass");
-  fs::rename(saved.path, writable / "bass" / "deep.gin");
+  fs::rename(saved.path, writable / "bass" / "deep.dmp");
   repository.refresh();
 
   const auto nested =
-      repository.to_relative_path(writable / "bass" / "deep.gin")
+      repository.to_relative_path(writable / "bass" / "deep.dmp")
           .generic_string();
   patches::PatchMetadata metadata;
   metadata.star_rating = 3;
@@ -146,10 +146,10 @@ void test_directory_rename(const fs::path &root) {
   CHECK(repository.rename_patch(folder_entry, "low"));
 
   CHECK(!fs::exists(writable / "bass"));
-  CHECK(fs::exists(writable / "low" / "deep.gin"));
+  CHECK(fs::exists(writable / "low" / "deep.dmp"));
 
   const auto *moved =
-      find_entry(repository.tree(), writable / "low" / "deep.gin");
+      find_entry(repository.tree(), writable / "low" / "deep.dmp");
   CHECK(moved != nullptr);
   ym2612::Patch loaded;
   CHECK(repository.load_patch(*moved, loaded));
@@ -158,32 +158,32 @@ void test_directory_rename(const fs::path &root) {
   patches::FolderMetadataStore metadata_store(writable / ".megatoy" /
                                               "patches.json");
   CHECK(metadata_store.load());
-  CHECK(!metadata_store.get("bass/deep.gin").has_value());
-  const auto followed = metadata_store.get("low/deep.gin");
+  CHECK(!metadata_store.get("bass/deep.dmp").has_value());
+  const auto followed = metadata_store.get("low/deep.dmp");
   CHECK(followed.has_value());
   CHECK(followed->star_rating == 3);
 
   // A folder's name is its whole name: the dot is not an extension to keep.
   fs::create_directories(writable / "kit.old");
-  fs::copy_file(writable / "low" / "deep.gin", writable / "kit.old" / "a.gin");
+  fs::copy_file(writable / "low" / "deep.dmp", writable / "kit.old" / "a.dmp");
   repository.refresh();
   const auto *dotted = find_entry(repository.tree(), writable / "kit.old");
   CHECK(dotted != nullptr);
   const auto dotted_entry = *dotted;
   CHECK(repository.rename_patch(dotted_entry, "kit"));
-  CHECK(fs::exists(writable / "kit" / "a.gin"));
+  CHECK(fs::exists(writable / "kit" / "a.dmp"));
   CHECK(!fs::exists(writable / "kit.old"));
 
   // Renaming onto a folder that is already there is refused.
   fs::create_directories(writable / "taken");
-  fs::copy_file(writable / "low" / "deep.gin", writable / "taken" / "b.gin");
+  fs::copy_file(writable / "low" / "deep.dmp", writable / "taken" / "b.dmp");
   repository.refresh();
   const auto *collide = find_entry(repository.tree(), writable / "low");
   CHECK(collide != nullptr);
   const auto collide_entry = *collide;
   CHECK(!repository.rename_patch(collide_entry, "taken"));
-  CHECK(fs::exists(writable / "low" / "deep.gin"));
-  CHECK(fs::exists(writable / "taken" / "b.gin"));
+  CHECK(fs::exists(writable / "low" / "deep.dmp"));
+  CHECK(fs::exists(writable / "taken" / "b.dmp"));
 }
 
 // The workspace root is a folder too, and the one whose rename the workspace
@@ -200,7 +200,7 @@ void test_workspace_root_rename(const fs::path &root) {
   ym2612::Patch patch;
   patch.instrument.algorithm = 2;
   const auto saved = repository.save_patch(patch, "lead",
-                                           /*overwrite=*/true, ".gin");
+                                           /*overwrite=*/true, ".dmp");
   CHECK(saved.status == patches::SavePatchResult::Status::Success);
   const auto original = saved.path.parent_path();
 
@@ -223,14 +223,14 @@ void test_workspace_root_rename(const fs::path &root) {
   CHECK(repository.rename_patch(entry, "sounds"));
   const auto renamed = original.parent_path() / "sounds";
   CHECK(!fs::exists(original));
-  CHECK(fs::exists(renamed / "lead.gin"));
+  CHECK(fs::exists(renamed / "lead.dmp"));
 
   // The sidecar travels inside the folder and its keys are relative to it, so
   // they are still correct without being rewritten.
   patches::FolderMetadataStore metadata_store(renamed / ".megatoy" /
                                               "patches.json");
   CHECK(metadata_store.load());
-  const auto kept = metadata_store.get("lead.gin");
+  const auto kept = metadata_store.get("lead.dmp");
   CHECK(kept.has_value());
   CHECK(kept->star_rating == 4);
 
@@ -242,7 +242,7 @@ void test_workspace_root_rename(const fs::path &root) {
   CHECK(workspace.folders().size() == 1);
 
   CHECK(repository.sync_workspace());
-  CHECK(find_entry(repository.tree(), renamed / "lead.gin") != nullptr);
+  CHECK(find_entry(repository.tree(), renamed / "lead.dmp") != nullptr);
 }
 
 void test_workspace_rename_keeps_position_and_refuses_collisions(

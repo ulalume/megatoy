@@ -2,6 +2,7 @@
 
 #include "gui/ui_scale.hpp"
 
+#include <algorithm>
 #include <imgui.h>
 
 namespace ui {
@@ -9,6 +10,13 @@ namespace ui {
 /// Space between the rows of the patch tree and between the items of a menu,
 /// so the two stand as tall as each other.
 inline float list_row_spacing() { return scale::px(10.0f); }
+
+/// Space the menu bar's items are laid out with, which makes their highlight
+/// stop 6 px short of the bar's top and bottom.
+inline float bar_item_spacing() {
+  return std::max(ImGui::GetStyle().FramePadding.y * 2.0f - scale::px(12.0f),
+                  0.0f);
+}
 
 /// BeginMenu, BeginPopup and BeginPopupContextItem with their items spaced
 /// like list rows. Each that returns true is closed by end_menu or end_popup.

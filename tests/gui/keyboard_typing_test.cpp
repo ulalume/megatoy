@@ -59,36 +59,40 @@ struct TestEnvironment {
   }
 };
 
-void test_builtin_layouts_map_semitones_and_octave_rollover() {
+void test_auto_layout_maps_semitones_and_octave_rollover() {
   const std::vector<ym2612::Note> expected{
       {3, Key::C},       {3, Key::C_SHARP}, {3, Key::D},
       {3, Key::D_SHARP}, {3, Key::E},       {3, Key::F},
       {3, Key::F_SHARP}, {3, Key::G},       {3, Key::G_SHARP},
       {3, Key::A},       {3, Key::A_SHARP}, {3, Key::B},
       {4, Key::C},       {4, Key::C_SHARP}, {4, Key::D},
-      {4, Key::D_SHARP}, {4, Key::E}};
-  for (const auto layout :
-       {TypingKeyboardLayout::Qwerty, TypingKeyboardLayout::Azerty}) {
-    const auto mapping =
-        ui::create_key_mappings(Scale::CHROMATIC, Key::C, 3, layout, {});
-    const auto keys = ui::builtin_typing_layout(layout);
-    CHECK(mapping.size() == expected.size());
-    for (std::size_t i = 0; i < expected.size(); ++i) {
-      CHECK(mapping.at(keys[i]) == expected[i]);
-    }
-    CHECK(!mapping.contains(ImGuiKey_None));
+      {4, Key::D_SHARP}, {4, Key::E},       {4, Key::F},
+      {4, Key::F_SHARP}, {4, Key::G}};
+  const auto mapping = ui::create_key_mappings(Scale::CHROMATIC, Key::C, 3,
+                                               TypingKeyboardLayout::Auto, {});
+  const auto keys = ui::keyboard_typing_layout();
+  CHECK(keys.size() == expected.size() + 1);
+  CHECK(mapping.size() == expected.size());
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    CHECK(mapping.at(keys[i]) == expected[i]);
   }
+  CHECK(!mapping.contains(ImGuiKey_None));
+  // Without a keyboard to ask, SDL answers for a US one.
+  CHECK(keys[0] == ImGuiKey_A && keys[1] == ImGuiKey_W);
+  CHECK(keys[16] == ImGuiKey_Semicolon && keys[19] == ImGuiKey_Backslash);
 }
 
 void test_non_chromatic_scales_use_white_key_positions() {
   const auto major = ui::create_key_mappings(Scale::MAJOR, Key::G, 2,
-                                             TypingKeyboardLayout::Qwerty, {});
+                                             TypingKeyboardLayout::Auto, {});
   const std::vector<ImGuiKey> keys{
-      ImGuiKey_A, ImGuiKey_S, ImGuiKey_D, ImGuiKey_F, ImGuiKey_G,
-      ImGuiKey_H, ImGuiKey_J, ImGuiKey_K, ImGuiKey_L, ImGuiKey_Semicolon};
+      ImGuiKey_A, ImGuiKey_S,         ImGuiKey_D,          ImGuiKey_F,
+      ImGuiKey_G, ImGuiKey_H,         ImGuiKey_J,          ImGuiKey_K,
+      ImGuiKey_L, ImGuiKey_Semicolon, ImGuiKey_Apostrophe, ImGuiKey_Backslash};
   const std::vector<ym2612::Note> expected{
-      {2, Key::G}, {2, Key::A},       {2, Key::B}, {3, Key::C}, {3, Key::D},
-      {3, Key::E}, {3, Key::F_SHARP}, {3, Key::G}, {3, Key::A}, {3, Key::B}};
+      {2, Key::G}, {2, Key::A}, {2, Key::B},       {3, Key::C},
+      {3, Key::D}, {3, Key::E}, {3, Key::F_SHARP}, {3, Key::G},
+      {3, Key::A}, {3, Key::B}, {4, Key::C},       {4, Key::D}};
   CHECK(major.size() == expected.size());
   for (std::size_t i = 0; i < keys.size(); ++i) {
     CHECK(major.at(keys[i]) == expected[i]);
@@ -226,7 +230,7 @@ void test_disabled_octave_keys_and_absent_callbacks_are_supported() {
 } // namespace
 
 int main() {
-  test_builtin_layouts_map_semitones_and_octave_rollover();
+  test_auto_layout_maps_semitones_and_octave_rollover();
   test_non_chromatic_scales_use_white_key_positions();
   test_custom_layouts_allow_empty_short_and_unterminated_input();
   test_press_hold_and_release_emit_one_pair_of_events();

@@ -56,7 +56,6 @@ void test_saved_layout_accepts_main_splits_and_shared_side_tabs() {
   ImGui::DockBuilderDockWindow("Cold###Patch Editor 2", second_main);
   ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, second_main);
   ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, footer);
-  ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, footer);
   ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, footer);
   ImGui::DockBuilderDockWindow("Debug", second_main);
   CHECK(ui::areas::layout_fits_areas());
@@ -75,9 +74,9 @@ void test_saved_layout_rejects_mixed_areas_and_separate_side_tabs() {
                               &second_footer);
   ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, 0);
   ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, first_footer);
-  ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, second_footer);
+  ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, second_footer);
   CHECK(!ui::areas::layout_fits_areas());
-  ImGui::DockBuilderDockWindow(ui::MML_CONSOLE_TITLE, first_footer);
+  ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, first_footer);
   CHECK(ui::areas::layout_fits_areas());
 }
 

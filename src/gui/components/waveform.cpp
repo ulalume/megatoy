@@ -8,9 +8,11 @@
 #include "gui/ui_scale.hpp"
 
 #include <algorithm>
+#include <chord_detector.h>
 #include <cmath>
 #include <cstdio>
 #include <imgui.h>
+#include <string>
 #include <vector>
 
 namespace ui {
@@ -211,6 +213,31 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
   }
 }
 
+/// The chord the sounding notes make, or nothing for fewer than two.
+std::string chord_of(const std::vector<ym2612::Note> &notes) {
+  if (notes.size() < 2) {
+    return {};
+  }
+  std::vector<int> midi_notes;
+  midi_notes.reserve(notes.size());
+  for (const auto &note : notes) {
+    midi_notes.push_back(static_cast<int>(note.midi_note()));
+  }
+  return get_chord_name(midi_notes, false, true);
+}
+
+/// The chord at the top of the scope, in the middle.
+void draw_chord(const Panel &panel, const std::string &chord) {
+  if (chord.empty()) {
+    return;
+  }
+  const float width = ImGui::CalcTextSize(chord.c_str()).x;
+  panel.draw_list->AddText(
+      ImVec2(std::round((panel.min.x + panel.max.x - width) * 0.5f),
+             panel.min.y + ui::scale::px(4.0f)),
+      ImGui::GetColorU32(ImGuiCol_Text), chord.c_str());
+}
+
 } // namespace
 
 void render_waveform(const char *title, WaveformContext &context) {
@@ -243,19 +270,29 @@ void render_waveform(const char *title, WaveformContext &context) {
 
   const bool clipped = context.scope.clipped_within(kClipHoldFrames);
 
+  // Side by side in a wide area, one above the other in a tall one.
   const ImVec2 available = ImGui::GetContentRegionAvail();
-  const float spacing = ImGui::GetStyle().ItemSpacing.x;
-  const ImVec2 panel_size(std::max(32.0f, (available.x - spacing) * 0.5f),
-                          std::max(32.0f, available.y));
+  const bool stacked = available.y > available.x;
+  const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
+  const ImVec2 panel_size =
+      stacked ? ImVec2(std::max(32.0f, available.x),
+                       std::max(32.0f, (available.y - spacing.y) * 0.5f))
+              : ImVec2(std::max(32.0f, (available.x - spacing.x) * 0.5f),
+                       std::max(32.0f, available.y));
 
   const ImU32 background = styles::color_u32(styles::MegatoyCol::WaveformBg);
   const ImU32 border = styles::color_u32(styles::MegatoyCol::WaveformBorder);
   const Panel scope_panel =
       begin_panel(panel_size, "##scope", background, border);
   draw_scope(scope_panel, left, right, mono, clipped);
+  draw_chord(scope_panel,
+             chord_of(context.active_notes ? context.active_notes()
+                                           : std::vector<ym2612::Note>{}));
   end_panel(scope_panel);
 
-  ImGui::SameLine();
+  if (!stacked) {
+    ImGui::SameLine();
+  }
 
   const Panel spectrum_panel =
       begin_panel(panel_size, "##spectrum", background, border);

@@ -49,6 +49,12 @@ public:
    */
   bool set_buffer_frames(int buffer_frames);
 
+  /**
+   * Close the device and open it again at the same size, for a browser
+   * that stopped the old one for good.
+   */
+  bool reopen_device();
+
   /// Frames per callback the open device was asked for.
   int buffer_frames() const { return buffer_frames_; }
 

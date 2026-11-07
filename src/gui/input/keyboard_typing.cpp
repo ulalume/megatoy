@@ -69,7 +69,7 @@ create_key_mappings(Scale scale, Key key, uint8_t selected_octave,
                     const TypingLayout &custom_layout) {
   const auto base_layout = layout == TypingKeyboardLayout::Custom
                                ? custom_layout
-                               : builtin_typing_layout(layout);
+                               : keyboard_typing_layout();
   const auto keyboard_keys = keys_for_scale(scale, base_layout);
 
   auto keys = keys_from_scale_and_key(scale, key);

@@ -102,10 +102,6 @@ public:
           data.ui_preferences.show_patch_selector =
               ui["show_patch_selector"].get<bool>();
         }
-        if (ui.contains("show_mml_console")) {
-          data.ui_preferences.show_mml_console =
-              ui["show_mml_console"].get<bool>();
-        }
         if (ui.contains("show_wave_viewer")) {
           data.ui_preferences.show_waveform =
               ui["show_wave_viewer"].get<bool>();
@@ -116,6 +112,13 @@ public:
         }
         if (ui.contains("show_patch_lab")) {
           data.ui_preferences.show_patch_lab = ui["show_patch_lab"].get<bool>();
+        }
+        if (ui.contains("show_quick_edit")) {
+          data.ui_preferences.show_quick_edit =
+              ui["show_quick_edit"].get<bool>();
+        }
+        if (ui.contains("show_mml")) {
+          data.ui_preferences.show_mml = ui["show_mml"].get<bool>();
         }
         if (ui.contains("ym2612_chip_type")) {
           data.ui_preferences.ym2612_chip_type =
@@ -235,9 +238,10 @@ public:
       nlohmann::json ui;
       ui["show_midi_keyboard"] = data.ui_preferences.show_midi_keyboard;
       ui["show_patch_selector"] = data.ui_preferences.show_patch_selector;
-      ui["show_mml_console"] = data.ui_preferences.show_mml_console;
       ui["show_preferences"] = data.ui_preferences.show_preferences;
       ui["show_patch_lab"] = data.ui_preferences.show_patch_lab;
+      ui["show_quick_edit"] = data.ui_preferences.show_quick_edit;
+      ui["show_mml"] = data.ui_preferences.show_mml;
       ui["show_wave_viewer"] = data.ui_preferences.show_waveform;
       ui["ym2612_chip_type"] = data.ui_preferences.ym2612_chip_type;
       ui["ym2612_core"] = data.ui_preferences.ym2612_core;

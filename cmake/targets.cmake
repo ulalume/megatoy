@@ -137,15 +137,16 @@ set(MEGATOY_CORE_SOURCES
   src/gui/envelope/envelope_curve.cpp
   src/gui/input/history_shortcuts.cpp
   src/gui/input/keyboard_typing.cpp
+  src/gui/input/touch.cpp
   src/gui/components/main_menu.cpp
   src/gui/components/modal.cpp
   src/gui/components/midi_keyboard.cpp
-  src/gui/components/mml_console.cpp
   src/gui/components/operator_commands.cpp
   src/gui/components/operator_editor.cpp
   src/gui/components/operator_selection.cpp
   src/gui/components/patch_drop.cpp
   src/gui/components/patch_editor.cpp
+  src/gui/components/patch_editor_tools.cpp
   src/gui/components/patch_lab_window.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/patch_selector_shared.cpp

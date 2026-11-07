@@ -9,6 +9,7 @@
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
+#include "ym2612/playback.hpp"
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -223,6 +224,16 @@ public:
                          RememberPatchPath remember = RememberPatchPath::Yes);
 
   // Audio integration
+  /// How the current patch is played. Changing it marks nothing modified
+  /// and adds nothing to the history; the next audio update applies it.
+  ym2612::PlaybackSettings &playback() { return playback_; }
+  const ym2612::PlaybackSettings &playback() const { return playback_; }
+  /// The current patch as the playback settings play it, which is also what
+  /// it is saved as: the settings reach only formats that keep them, such
+  /// as MML's comments.
+  ym2612::Patch played_patch() const;
+  /// The current patch as saved: see ym2612::written().
+  ym2612::Patch written_patch() const;
   void apply_patch_to_audio();
   bool apply_patch_to_audio_if_changed();
 
@@ -405,6 +416,7 @@ private:
   DocumentDiskVersions disk_versions_;
   DocumentId active_id_ = 0;
   DocumentId next_id_ = 1;
+  ym2612::PlaybackSettings playback_;
   /// What the chip has, whichever document it came from.
   ym2612::Patch last_applied_;
   bool has_applied_patch_ = false;

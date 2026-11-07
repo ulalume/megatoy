@@ -1,5 +1,6 @@
 #include "main_menu.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/components/named_slider.hpp"
 
 #include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
@@ -19,6 +20,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
+#include <IconsFontAwesome7.h>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -35,6 +37,7 @@ namespace {
 // Full scale on the graph is the render deadline: 1.0 means a block took as
 // long to produce as it takes to play.
 constexpr float kLoadWarningLevel = 0.7f;
+/// The graph's least width, which a short reading leaves room around.
 constexpr float kLoadGraphWidth = 64.0f;
 // How far back the graph reaches: long enough that a glitch is still on
 // screen once the ear has noticed it and the eye has arrived.
@@ -160,7 +163,7 @@ void draw_load_graph(const Panel &panel, const LoadWindow &window) {
 /// disabled and says so.
 /// The graph's readings in words, for its tooltip and the top of its menu.
 void render_load_status(const LoadWindow &window) {
-  ImGui::TextUnformatted("Sound processing load");
+  ImGui::TextUnformatted("Sound Processing Load");
   ImGui::Text("  Now %.0f%%   Peak %.0f%%   Average %.0f%%",
               static_cast<double>(window.latest) * 100.0,
               static_cast<double>(window.peak) * 100.0,
@@ -171,12 +174,12 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
   auto &ui_prefs = context.ui_prefs;
 
   render_load_status(window);
-  ImGui::SeparatorText("Improve performance");
+  ImGui::SeparatorText("Improve Performance");
 
   const bool core_at_best =
       ui_prefs.ym2612_core == static_cast<int>(ym2612::CoreType::Ymfm);
-  if (ImGui::MenuItem(core_at_best ? "Switch core to ymfm (already set)"
-                                   : "Switch core to ymfm...",
+  if (ImGui::MenuItem(core_at_best ? "Switch Core to ymfm (Already Set)"
+                                   : "Switch Core to ymfm...",
                       nullptr, false, !core_at_best)) {
     context.open_sound_preferences = true;
   }
@@ -187,8 +190,8 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
                                 ? ui_prefs.audio_buffer_frames
                                 : context.default_audio_buffer_frames;
   const bool buffer_at_best = buffer_frames >= largest_buffer;
-  if (ImGui::MenuItem(buffer_at_best ? "Increase buffer size (already set)"
-                                     : "Increase buffer size...",
+  if (ImGui::MenuItem(buffer_at_best ? "Increase Buffer Size (Already Set)"
+                                     : "Increase Buffer Size...",
                       nullptr, false, !buffer_at_best)) {
     context.open_sound_preferences = true;
   }
@@ -198,46 +201,52 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
   // the time the waveform takes comes out of the same deadline. Where audio
   // has a thread of its own it cannot, and the item is not offered.
   const bool waveform_at_best = !ui_prefs.show_waveform;
-  if (ImGui::MenuItem(waveform_at_best ? "Hide waveform (already set)"
-                                       : "Hide waveform",
+  if (ImGui::MenuItem(waveform_at_best ? "Hide Waveform (Already Set)"
+                                       : "Hide Waveform",
                       nullptr, false, !waveform_at_best)) {
     ui_prefs.show_waveform = false;
   }
 #endif
 }
 
-/// The load graph, at the right-hand end of the bar.
-void render_audio_load(MainMenuContext &context) {
+/**
+ * The load reading at the right-hand end of the bar, inside its graph when
+ * `graph_width` is more than 0 and alone otherwise. Returns where it starts.
+ */
+float render_audio_load(MainMenuContext &context, const LoadWindow &window,
+                        const char *reading, float graph_width) {
   const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 size(ui::scale::px(kLoadGraphWidth),
-                    ImGui::GetTextLineHeight() + ui::scale::px(4.0f));
-
-  const auto history = context.audio_load.history();
-  const LoadWindow window = load_window(history, size.x);
-  char reading[32];
-  format_load_reading(
-      reading, sizeof(reading), window,
-      audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
-  const float reading_width = ImGui::CalcTextSize(reading).x;
   const float row = ImGui::GetTextLineHeight();
+  const float width =
+      graph_width > 0.0f ? graph_width : ImGui::CalcTextSize(reading).x;
 
   // Never left of the menus: an overlap would take their clicks.
-  const float x = std::max(ImGui::GetCursorPosX(),
-                           ImGui::GetWindowWidth() - size.x - reading_width -
-                               style.ItemSpacing.x -
-                               style.FramePadding.x * 2.0f);
-  // Text in the bar is drawn the frame padding below the cursor.
-  ImGui::SetCursorPos(ImVec2(
-      x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
-  ImGui::TextUnformatted(reading);
-
-  ImGui::SetCursorPos(ImVec2(x + reading_width + style.ItemSpacing.x,
-                             (ImGui::GetWindowHeight() - size.y) * 0.5f));
-  const Panel panel = begin_panel(size, "##audio_load");
-  const bool clicked = ImGui::IsItemClicked();
-  const bool hovered = ImGui::IsItemHovered();
-  draw_load_graph(panel, window);
-  end_panel(panel);
+  const float x =
+      std::max(ImGui::GetCursorPosX(),
+               ImGui::GetWindowWidth() - width - style.FramePadding.x * 2.0f);
+  bool clicked = false;
+  bool hovered = false;
+  if (graph_width > 0.0f) {
+    // As tall as the menus' highlight.
+    const ImVec2 size(graph_width, row + ui::bar_item_spacing());
+    ImGui::SetCursorPos(ImVec2(x, (ImGui::GetWindowHeight() - size.y) * 0.5f));
+    const Panel panel = begin_panel(size, "##audio_load");
+    clicked = ImGui::IsItemClicked();
+    hovered = ImGui::IsItemHovered();
+    draw_load_graph(panel, window);
+    panel.draw_list->AddText(
+        ImVec2(panel.min.x + style.FramePadding.x,
+               panel.min.y + (size.y - row) * 0.5f),
+        ImGui::GetColorU32(ImGuiCol_Text), reading);
+    end_panel(panel);
+  } else {
+    // Text in the bar is drawn the frame padding below the cursor.
+    ImGui::SetCursorPos(ImVec2(
+        x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
+    ImGui::TextUnformatted(reading);
+    clicked = ImGui::IsItemClicked();
+    hovered = ImGui::IsItemHovered();
+  }
 
   if (hovered && ImGui::BeginTooltip()) {
     render_load_status(window);
@@ -251,6 +260,7 @@ void render_audio_load(MainMenuContext &context) {
     render_load_menu(context, window);
     ui::end_popup();
   }
+  return x;
 }
 
 } // namespace
@@ -264,8 +274,7 @@ namespace {
  */
 /// A menu in the bar, highlighted from the bar's top to its bottom.
 bool begin_bar_menu(const char *label) {
-  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing,
-                       ImGui::GetStyle().FramePadding.y * 2.0f);
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::bar_item_spacing());
   const bool open = ImGui::BeginMenu(label);
   ImGui::PopStyleVar();
   if (open) {
@@ -279,7 +288,7 @@ bool begin_app_menu() {
   if (icon == ImTextureID{}) {
     return begin_bar_menu("megatoy");
   }
-  const float size = ImGui::GetTextLineHeight() + ui::scale::px(6.0f);
+  const float size = ImGui::GetTextLineHeight() + ui::scale::px(10.0f);
   const float space = ImGui::CalcTextSize(" ").x;
   const std::string label =
       std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
@@ -305,6 +314,316 @@ void panel_menu_item(const char *icon, const char *title, bool &shown) {
   }
 }
 
+/// How much of the bar fits: the load graph's width (0 leaves it out), and
+/// how much of the menus and the middle.
+struct BarFit {
+  float graph_width = 0.0f;
+  BarCentreFit centre = BarCentreFit::Full;
+};
+
+/// A menu of the bar, named with its icon, or shown as the icon alone.
+struct BarMenu {
+  const char *full;
+  const char *icon;
+  const char *label(BarCentreFit fit) const {
+    return fit == BarCentreFit::Icon ? icon : full;
+  }
+};
+constexpr BarMenu kFileMenu{ICON_FA_FILE " File###File",
+                            ICON_FA_FILE "###File"};
+constexpr BarMenu kEditMenu{ICON_FA_PEN_TO_SQUARE " Edit###Edit",
+                            ICON_FA_PEN_TO_SQUARE "###Edit"};
+constexpr BarMenu kViewMenu{ICON_FA_EYE " View###View", ICON_FA_EYE "###View"};
+
+/// How far a menu in the bar takes the next one along.
+float bar_menu_advance(const char *label) {
+  return ImGui::CalcTextSize(label, nullptr, true).x +
+         ImGui::GetStyle().ItemSpacing.x * 2.0f;
+}
+
+/**
+ * The LFO menu's label, which says whether the LFO is on. Padded to the
+ * width of the wider one, so the menu keeps its size as it switches. Its
+ * icon alone is muted while it is off.
+ */
+std::string lfo_menu_label(BarCentreFit fit, bool on) {
+  if (fit == BarCentreFit::Icon) {
+    return ICON_FA_WAVE_SQUARE "###LFO";
+  }
+  constexpr const char *kOn = ICON_FA_WAVE_SQUARE " LFO On";
+  constexpr const char *kOff = ICON_FA_WAVE_SQUARE " LFO Off";
+  const float widest =
+      std::max(ImGui::CalcTextSize(kOn).x, ImGui::CalcTextSize(kOff).x);
+  std::string label = on ? kOn : kOff;
+  const float space = ImGui::CalcTextSize(" ").x;
+  for (float width = ImGui::CalcTextSize(label.c_str()).x;
+       width + space * 0.5f < widest; width += space) {
+    label += ' ';
+  }
+  return label + "###LFO";
+}
+
+/// How far the LFO menu reaches left of the middle, on or off.
+float lfo_menu_advance(BarCentreFit fit) {
+  return std::max(bar_menu_advance(lfo_menu_label(fit, true).c_str()),
+                  bar_menu_advance(lfo_menu_label(fit, false).c_str()));
+}
+
+/**
+ * As the bar narrows, the load graph shrinks to the reading it holds and
+ * then goes, then the middle loses its note, and then the menus and the
+ * middle keep only their icons. Measured from after the app menu.
+ */
+BarFit fit_bar(const MainMenuContext &context, const char *reading) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float spacing = style.ItemSpacing.x;
+  const float width = ImGui::GetWindowWidth();
+  const float menus_start = ImGui::GetCursorPosX();
+  const auto menus_end = [&](BarCentreFit fit) {
+    return menus_start + bar_menu_advance(kFileMenu.label(fit)) +
+           bar_menu_advance(kEditMenu.label(fit)) +
+           bar_menu_advance(kViewMenu.label(fit));
+  };
+  // The room the middle leaves before a load area `load_width` wide: it sits
+  // centred in the bar, but never over the menus.
+  // The LFO menu stands just left of the load area.
+  const auto room = [&](BarCentreFit fit, float load_width) {
+    const float right_start = width - load_width - style.FramePadding.x * 2.0f -
+                              lfo_menu_advance(fit);
+    if (!context.bar_centre_size) {
+      return right_start - menus_end(fit);
+    }
+    const BarCentreSize size = context.bar_centre_size(fit);
+    const float x =
+        std::max(width * 0.5f - size.centred * 0.5f, menus_end(fit) + spacing);
+    return right_start - spacing - (x + size.total);
+  };
+
+  // The graph holds the reading, so it is never narrower than that, and is
+  // no wider unless the reading is short.
+  const float reading_width = ImGui::CalcTextSize(reading).x;
+  const float least = reading_width + style.FramePadding.x * 2.0f;
+  const float full = std::max(least, ui::scale::px(kLoadGraphWidth));
+  const float graph_room = full + room(BarCentreFit::Full, full);
+  if (graph_room >= full) {
+    return {full, BarCentreFit::Full};
+  }
+  if (graph_room >= least) {
+    return {graph_room, BarCentreFit::Full};
+  }
+  if (room(BarCentreFit::Full, reading_width) >= 0.0f) {
+    return {0.0f, BarCentreFit::Full};
+  }
+  if (room(BarCentreFit::Short, reading_width) >= 0.0f) {
+    return {0.0f, BarCentreFit::Short};
+  }
+  return {0.0f, BarCentreFit::Icon};
+}
+
+void file_menu_items(MainMenuContext &context,
+                     const patches::SaveControls &controls) {
+  const ImGuiIO &io = ImGui::GetIO();
+  auto &session = context.patch_session;
+  const bool is_user_patch = controls.saves_in_place;
+  const bool save_disabled = !controls.save_enabled;
+  const bool mac_behavior = io.ConfigMacOSXBehaviors;
+  // The browser keeps Ctrl+N for a new window of its own.
+  const char *new_shortcut = megatoy::platform::is_web()
+                                 ? nullptr
+                                 : (mac_behavior ? "Cmd+N" : "Ctrl+N");
+  if (ImGui::MenuItem("New Patch", new_shortcut) && context.new_patch) {
+    context.new_patch();
+  }
+  ImGui::Separator();
+
+  const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
+#if defined(MEGATOY_PLATFORM_WEB)
+  // The two ways out of the editor, as the patch tree names them. The
+  // shortcuts offer the same two at the pointer, so neither row shows one.
+  if (is_user_patch) {
+    ImGui::BeginDisabled(save_disabled);
+    if (ImGui::MenuItem(controls.save_label, save_shortcut)) {
+      trigger_save(session, context.save_state);
+    }
+    ImGui::EndDisabled();
+  }
+  if (const auto extension = download_format_menu(session)) {
+    download_current_patch(session, *extension);
+  }
+  if (ImGui::MenuItem("Save to Browser Storage...")) {
+    request_save_to_storage(context.save_state);
+  }
+#else
+  const char *save_label = controls.save_label;
+  if (save_disabled)
+    ImGui::BeginDisabled(true);
+  if (ImGui::MenuItem(save_label, save_shortcut)) {
+    if (is_user_patch) {
+      trigger_save(session, context.save_state);
+    } else {
+      request_save_as(context.save_state);
+    }
+  }
+  if (save_disabled)
+    ImGui::EndDisabled();
+
+  const char *save_as_shortcut =
+      mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
+  if (controls.show_save_as &&
+      ImGui::MenuItem("Save As...", save_as_shortcut)) {
+    request_save_as(context.save_state);
+  }
+#endif
+
+  ImGui::Separator();
+  // The browser keeps Ctrl+W for closing its own tab.
+  const char *close_shortcut = megatoy::platform::is_web()
+                                   ? nullptr
+                                   : (mac_behavior ? "Cmd+W" : "Ctrl+W");
+  if (ImGui::MenuItem("Close Patch", close_shortcut) &&
+      context.close_patch) {
+    context.close_patch();
+  }
+
+  {
+    ImGui::Separator();
+    // In the browser a folder is copied in rather than referenced, so it
+    // is labelled for what it does.
+    const char *label = PreferenceManager::folder_add_is_import()
+                            ? "Import Folder into Workspace..."
+                            : "Add Folder to Workspace...";
+    if (ImGui::MenuItem(label)) {
+      context.open_add_folder_dialog = true;
+    }
+
+    const auto &folders = context.preferences.workspace().folders();
+    const bool has_removable_folder = std::any_of(
+        folders.begin(), folders.end(), [&](const auto &folder) {
+          return !context.preferences.workspace_folder_is_protected(
+              folder.path);
+        });
+    const char *remove_label =
+        megatoy::platform::is_web() ? "Delete Folder" : "Remove Folder";
+    if (ui::begin_menu(remove_label, has_removable_folder)) {
+      std::optional<std::filesystem::path> to_remove;
+      for (const auto &folder : folders) {
+        if (context.preferences.workspace_folder_is_protected(
+                folder.path)) {
+          continue;
+        }
+        if (ImGui::MenuItem(folder.path.string().c_str())) {
+          to_remove = folder.path;
+        }
+      }
+      ui::end_menu();
+      if (to_remove && context.remove_workspace_folder) {
+        context.remove_workspace_folder(*to_remove);
+      }
+    }
+  }
+}
+
+void edit_menu_items(MainMenuContext &context) {
+  auto &session = context.patch_session;
+  auto &history = context.history();
+  const ImGuiIO &io = ImGui::GetIO();
+  const bool mac_behavior = io.ConfigMacOSXBehaviors;
+  const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
+  const char *redo_shortcut = mac_behavior ? "Cmd+Shift+Z" : "Ctrl+Shift+Z";
+
+  std::string undo_label = "Undo";
+  if (history.can_undo()) {
+    std::string_view change = history.undo_label();
+    if (!change.empty()) {
+      undo_label.append(" ");
+      undo_label.append(change);
+    }
+  }
+
+  if (ImGui::MenuItem(undo_label.c_str(), undo_shortcut, false,
+                      history.can_undo())) {
+    if (context.undo) {
+      context.undo();
+    }
+  }
+
+  std::string redo_label = "Redo";
+  if (history.can_redo()) {
+    std::string_view change = history.redo_label();
+    if (!change.empty()) {
+      redo_label.append(" ");
+      redo_label.append(change);
+    }
+  }
+
+  if (ImGui::MenuItem(redo_label.c_str(), redo_shortcut, false,
+                      history.can_redo())) {
+    if (context.redo) {
+      context.redo();
+    }
+  }
+
+  ImGui::Separator();
+
+  // The items name their target the way the undo entries above do, which
+  // saves the menu a section heading.
+  OperatorCommandContext operator_commands{
+      session.current_patch().instrument, context.operator_edit(),
+      context.operator_clipboard, context.begin_patch_history,
+      context.commit_patch_history};
+  render_operator_command_items(operator_commands);
+}
+
+void view_menu_items(MainMenuContext &context) {
+  auto &ui_prefs = context.ui_prefs;
+
+  if (context.gui.supports_fullscreen()) {
+    bool fullscreen = context.gui.is_fullscreen();
+    if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
+      context.gui.set_fullscreen(!fullscreen);
+    }
+    ImGui::Separator();
+  }
+
+  panel_menu_item(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE,
+                  ui_prefs.show_patch_selector);
+  panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
+  panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
+                  ui_prefs.show_midi_keyboard);
+  panel_menu_item(WAVEFORM_ICON, WAVEFORM_TITLE, ui_prefs.show_waveform);
+  panel_menu_item(PREFERENCES_ICON, PREFERENCES_TITLE,
+                  ui_prefs.show_preferences);
+
+  ImGui::Separator();
+
+  if (ImGui::MenuItem("Reset to Default Layout")) {
+    context.gui.reset_layout();
+  }
+}
+
+/**
+ * The LFO's switch and rate. They are how the patch is played rather than
+ * the patch, so they mark nothing modified and are not saved with it
+ * (ym2612/playback.hpp).
+ */
+/// The LFO's switch and its rate, one width.
+void lfo_menu_items(ym2612::PlaybackSettings &playback) {
+  // The chip's eight rates.
+  static const char *const kRates[] = {"3.98 Hz", "5.56 Hz", "6.02 Hz",
+                                       "6.37 Hz", "6.88 Hz", "9.63 Hz",
+                                       "48.1 Hz", "72.2 Hz"};
+  const float width =
+      named_slider_fit_width("Frequency", "48.1 Hz") + ui::scale::px(48.0f);
+  ImGui::Checkbox("LFO Enabled", &playback.lfo_enable);
+  ImGui::BeginDisabled(!playback.lfo_enable);
+  int rate = std::clamp<int>(playback.lfo_frequency, 0, 7);
+  ImGui::SetNextItemWidth(width);
+  if (named_slider_int("Frequency", &rate, 0, 7, kRates[rate])) {
+    playback.lfo_frequency = static_cast<uint8_t>(rate);
+  }
+  ImGui::EndDisabled();
+}
+
 } // namespace
 
 void render_main_menu(MainMenuContext &context) {
@@ -313,8 +632,9 @@ void render_main_menu(MainMenuContext &context) {
   // A taller bar than the frame padding alone would give. It stays pushed
   // until the bar ends so the items centre in it and the menus open below it.
   const ImVec2 padding = ImGui::GetStyle().FramePadding;
+  const float item_spacing_y = ImGui::GetStyle().ItemSpacing.y;
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                      ImVec2(padding.x, padding.y + ui::scale::px(4.0f)));
+                      ImVec2(padding.x, padding.y + ui::scale::px(8.0f)));
   if (ImGui::BeginMainMenuBar()) {
     if (begin_app_menu()) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
@@ -338,103 +658,23 @@ void render_main_menu(MainMenuContext &context) {
         patches::save_controls(session, session.active_document());
     const bool is_user_patch = controls.saves_in_place;
     const bool save_disabled = !controls.save_enabled;
-    if (begin_bar_menu("File")) {
-      const bool mac_behavior = io.ConfigMacOSXBehaviors;
-      // The browser keeps Ctrl+N for a new window of its own.
-      const char *new_shortcut = megatoy::platform::is_web()
-                                     ? nullptr
-                                     : (mac_behavior ? "Cmd+N" : "Ctrl+N");
-      if (ImGui::MenuItem("New Patch", new_shortcut) && context.new_patch) {
-        context.new_patch();
-      }
-      ImGui::Separator();
-
-      const char *save_shortcut = mac_behavior ? "Cmd+S" : "Ctrl+S";
-#if defined(MEGATOY_PLATFORM_WEB)
-      // The two ways out of the editor, as the patch tree names them. The
-      // shortcuts offer the same two at the pointer, so neither row shows one.
-      if (is_user_patch) {
-        ImGui::BeginDisabled(save_disabled);
-        if (ImGui::MenuItem(controls.save_label, save_shortcut)) {
-          trigger_save(session, context.save_state);
-        }
-        ImGui::EndDisabled();
-      }
-      if (const auto extension = download_format_menu(session)) {
-        download_current_patch(session, *extension);
-      }
-      if (ImGui::MenuItem("Save to browser storage...")) {
-        request_save_to_storage(context.save_state);
-      }
-#else
-      const char *save_label = controls.save_label;
-      if (save_disabled)
-        ImGui::BeginDisabled(true);
-      if (ImGui::MenuItem(save_label, save_shortcut)) {
-        if (is_user_patch) {
-          trigger_save(session, context.save_state);
-        } else {
-          request_save_as(context.save_state);
-        }
-      }
-      if (save_disabled)
-        ImGui::EndDisabled();
-
-      const char *save_as_shortcut =
-          mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
-      if (controls.show_save_as &&
-          ImGui::MenuItem("Save As...", save_as_shortcut)) {
-        request_save_as(context.save_state);
-      }
-#endif
-
-      ImGui::Separator();
-      // The browser keeps Ctrl+W for closing its own tab.
-      const char *close_shortcut = megatoy::platform::is_web()
-                                       ? nullptr
-                                       : (mac_behavior ? "Cmd+W" : "Ctrl+W");
-      if (ImGui::MenuItem("Close Patch", close_shortcut) &&
-          context.close_patch) {
-        context.close_patch();
-      }
-
-      {
-        ImGui::Separator();
-        // In the browser a folder is copied in rather than referenced, so it
-        // is labelled for what it does.
-        const char *label = PreferenceManager::folder_add_is_import()
-                                ? "Import Folder into Workspace..."
-                                : "Add Folder to Workspace...";
-        if (ImGui::MenuItem(label)) {
-          context.open_add_folder_dialog = true;
-        }
-
-        const auto &folders = context.preferences.workspace().folders();
-        const bool has_removable_folder = std::any_of(
-            folders.begin(), folders.end(), [&](const auto &folder) {
-              return !context.preferences.workspace_folder_is_protected(
-                  folder.path);
-            });
-        const char *remove_label =
-            megatoy::platform::is_web() ? "Delete Folder" : "Remove Folder";
-        if (ui::begin_menu(remove_label, has_removable_folder)) {
-          std::optional<std::filesystem::path> to_remove;
-          for (const auto &folder : folders) {
-            if (context.preferences.workspace_folder_is_protected(
-                    folder.path)) {
-              continue;
-            }
-            if (ImGui::MenuItem(folder.path.string().c_str())) {
-              to_remove = folder.path;
-            }
-          }
-          ui::end_menu();
-          if (to_remove && context.remove_workspace_folder) {
-            context.remove_workspace_folder(*to_remove);
-          }
-        }
-      }
-
+    const LoadWindow load = load_window(context.audio_load.history(),
+                                        ui::scale::px(kLoadGraphWidth));
+    char reading[32];
+    format_load_reading(
+        reading, sizeof(reading), load,
+        audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
+    const BarFit fit = fit_bar(context, reading);
+    if (begin_bar_menu(kFileMenu.label(fit.centre))) {
+      file_menu_items(context, controls);
+      ui::end_menu();
+    }
+    if (begin_bar_menu(kEditMenu.label(fit.centre))) {
+      edit_menu_items(context);
+      ui::end_menu();
+    }
+    if (begin_bar_menu(kViewMenu.label(fit.centre))) {
+      view_menu_items(context);
       ui::end_menu();
     }
 
@@ -468,89 +708,45 @@ void render_main_menu(MainMenuContext &context) {
       request_save_as(context.save_state);
     }
 
-    if (begin_bar_menu("Edit")) {
-      auto &history = context.history();
-      const ImGuiIO &io = ImGui::GetIO();
-      const bool mac_behavior = io.ConfigMacOSXBehaviors;
-      const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
-      const char *redo_shortcut = mac_behavior ? "Cmd+Shift+Z" : "Ctrl+Shift+Z";
+    const float menus_end = ImGui::GetCursorPosX();
+    const float row_y = ImGui::GetCursorPosY();
+    const float load_start =
+        render_audio_load(context, load, reading, fit.graph_width);
 
-      std::string undo_label = "Undo";
-      if (history.can_undo()) {
-        std::string_view change = history.undo_label();
-        if (!change.empty()) {
-          undo_label.append(" ");
-          undo_label.append(change);
-        }
-      }
-
-      if (ImGui::MenuItem(undo_label.c_str(), undo_shortcut, false,
-                          history.can_undo())) {
-        if (context.undo) {
-          context.undo();
-        }
-      }
-
-      std::string redo_label = "Redo";
-      if (history.can_redo()) {
-        std::string_view change = history.redo_label();
-        if (!change.empty()) {
-          redo_label.append(" ");
-          redo_label.append(change);
-        }
-      }
-
-      if (ImGui::MenuItem(redo_label.c_str(), redo_shortcut, false,
-                          history.can_redo())) {
-        if (context.redo) {
-          context.redo();
-        }
-      }
-
-      ImGui::Separator();
-
-      // The items name their target the way the undo entries above do, which
-      // saves the menu a section heading.
-      OperatorCommandContext operator_commands{
-          session.current_patch().instrument, context.operator_edit(),
-          context.operator_clipboard, context.begin_patch_history,
-          context.commit_patch_history};
-      render_operator_command_items(operator_commands);
-
+    // The LFO menu, just left of the load area. Muted while off. The colour
+    // is let go only after the menu closes, so the window the menu opens
+    // keeps the stack it started with; its items take the ordinary colour
+    // back.
+    auto &playback = context.patch_session.playback();
+    const std::string lfo_label =
+        lfo_menu_label(fit.centre, playback.lfo_enable);
+    const float lfo_x =
+        std::max(menus_end, load_start - lfo_menu_advance(fit.centre));
+    ImGui::SetCursorPos(ImVec2(lfo_x, row_y));
+    const bool lfo_muted = !playback.lfo_enable;
+    const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+    if (lfo_muted) {
+      ImGui::PushStyleColor(ImGuiCol_Text,
+                            styles::color(styles::MegatoyCol::TextMuted));
+    }
+    if (begin_bar_menu(lfo_label.c_str())) {
+      // Its controls take the padding and spacing they have elsewhere, not
+      // the taller bar's.
+      ImGui::PushStyleColor(ImGuiCol_Text, text);
+      ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, padding);
+      ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, item_spacing_y);
+      lfo_menu_items(playback);
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor();
       ui::end_menu();
     }
-
-    if (begin_bar_menu("View")) {
-      auto &ui_prefs = context.ui_prefs;
-
-      if (context.gui.supports_fullscreen()) {
-        bool fullscreen = context.gui.is_fullscreen();
-        if (ImGui::MenuItem("Fullscreen", nullptr, fullscreen)) {
-          context.gui.set_fullscreen(!fullscreen);
-        }
-        ImGui::Separator();
-      }
-
-      panel_menu_item(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE,
-                      ui_prefs.show_patch_selector);
-      panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
-      panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
-                      ui_prefs.show_midi_keyboard);
-      panel_menu_item(MML_CONSOLE_ICON, MML_CONSOLE_TITLE,
-                      ui_prefs.show_mml_console);
-      panel_menu_item(WAVEFORM_ICON, WAVEFORM_TITLE, ui_prefs.show_waveform);
-      panel_menu_item(PREFERENCES_ICON, PREFERENCES_TITLE,
-                      ui_prefs.show_preferences);
-
-      ImGui::Separator();
-
-      if (ImGui::MenuItem("Reset to Default Layout")) {
-        context.gui.reset_layout();
-      }
-      ui::end_menu();
+    if (lfo_muted) {
+      ImGui::PopStyleColor();
     }
 
-    render_audio_load(context);
+    if (context.bar_centre) {
+      context.bar_centre(fit.centre, menus_end, lfo_x, row_y);
+    }
 
     ImGui::EndMainMenuBar();
   }

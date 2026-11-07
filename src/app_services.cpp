@@ -68,7 +68,7 @@ void announce_version_change(PreferenceManager &preferences) {
                                   ? "Welcome to megatoy " + current + "."
                                   : "Updated to megatoy " + current + ".";
   megatoy::status::info(message,
-                        {"What's new", [] { ui::open_changelog_dialog(); }});
+                        {"What's New", [] { ui::open_changelog_dialog(); }});
 }
 
 } // namespace

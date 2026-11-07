@@ -6,7 +6,7 @@
 namespace platform {
 
 /**
- * Chooses how long the native event loop may sleep before drawing again.
+ * Chooses how long the event loop may wait before drawing again.
  *
  * VSync already paces interactive and animated frames, so those must not add
  * another delay. Static UI is refreshed periodically for cursor blinking,

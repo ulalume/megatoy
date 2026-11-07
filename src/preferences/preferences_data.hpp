@@ -12,10 +12,12 @@
 struct UIPreferences {
   bool show_midi_keyboard = true;
   bool show_patch_selector = true;
-  bool show_mml_console = true;
   bool show_preferences = true;
   bool show_waveform = true;
   bool show_patch_lab = true;
+  /// The Patch Editor's Quick Edit and MML sections, open or closed.
+  bool show_quick_edit = false;
+  bool show_mml = false;
   int ym2612_chip_type = 0;
   /// 0 = Nuked-OPN2, 1 = ymfm, matching ym2612::CoreType.
   int ym2612_core = static_cast<int>(ym2612::CoreType::Ymfm);
@@ -57,7 +59,7 @@ struct UIPreferences {
   int midi_keyboard_scale = static_cast<int>(Scale::CHROMATIC);
   int midi_keyboard_key = static_cast<int>(Key::C);
   int midi_keyboard_typing_octave = 4;
-  int midi_keyboard_layout = static_cast<int>(ui::TypingKeyboardLayout::Qwerty);
+  int midi_keyboard_layout = static_cast<int>(ui::TypingKeyboardLayout::Auto);
   ui::TypingLayoutPreference custom_typing_layout_keys =
       ui::TypingLayoutPreference(ui::default_typing_layout_keys.begin(),
                                  ui::default_typing_layout_keys.end());
@@ -69,10 +71,11 @@ struct UIPreferences {
     // typing in the patch browser from dirtying the persistent store.
     return lhs.show_midi_keyboard == rhs.show_midi_keyboard &&
            lhs.show_patch_selector == rhs.show_patch_selector &&
-           lhs.show_mml_console == rhs.show_mml_console &&
            lhs.show_preferences == rhs.show_preferences &&
            lhs.show_waveform == rhs.show_waveform &&
            lhs.show_patch_lab == rhs.show_patch_lab &&
+           lhs.show_quick_edit == rhs.show_quick_edit &&
+           lhs.show_mml == rhs.show_mml &&
            lhs.ym2612_chip_type == rhs.ym2612_chip_type &&
            lhs.ym2612_core == rhs.ym2612_core &&
            lhs.audio_buffer_frames == rhs.audio_buffer_frames &&

@@ -16,16 +16,10 @@ constexpr int kMinAttack = 4;
 constexpr int kMaxDecay = 31 + 15 * 2;
 constexpr int kMaxShift = 127;
 constexpr double kDecibelsPerTotalLevel = 0.75;
-
-// Operators are stored in register order, so S1 comes first.
-constexpr std::size_t kFeedbackOperator = 0;
+constexpr int kSilentTotalLevel = 127;
 
 bool is_carrier(const ChannelInstrument &instrument, std::size_t index) {
   return index >= ym2612::algorithm_modulator_count[instrument.algorithm];
-}
-
-bool has_modulators(const ChannelInstrument &instrument) {
-  return !is_carrier(instrument, 0);
 }
 
 /// The enabled carrier `better` prefers over all others.
@@ -91,33 +85,51 @@ uint8_t moved(int value, int shift, int low, int high) {
   return static_cast<uint8_t>(std::clamp(value + shift, low, high));
 }
 
-void shift_volume(ChannelInstrument &instrument, int shift) {
-  // Carriers stay in balance: all of them stop when the first one reaches an
-  // end, since the mix between them is part of the sound.
-  int quietest = 0;
-  int loudest = 127;
+bool any_carrier_audible(const ChannelInstrument &instrument) {
   for (std::size_t i = 0; i < 4; ++i) {
     const auto &op = instrument.operators[i];
-    if (op.enable && is_carrier(instrument, i)) {
-      quietest = std::max<int>(quietest, op.total_level);
-      loudest = std::min<int>(loudest, op.total_level);
+    if (op.enable && is_carrier(instrument, i) &&
+        op.total_level < kSilentTotalLevel) {
+      return true;
     }
   }
-  const int amount = std::clamp(shift, quietest - 127, loudest);
+  return false;
+}
+
+/// Whether Volume moves operator `i`. A silent carrier adds nothing to the
+/// mix, so it stays silent -- unless every carrier is, when they all come up.
+bool moved_by_volume(const ChannelInstrument &instrument, std::size_t i,
+                     bool any_audible) {
+  const auto &op = instrument.operators[i];
+  return op.enable && is_carrier(instrument, i) &&
+         (!any_audible || op.total_level < kSilentTotalLevel);
+}
+
+void shift_volume(ChannelInstrument &instrument, int shift) {
+  const bool any_audible = any_carrier_audible(instrument);
+  // Carriers stay in balance: all of them stop when the first one reaches an
+  // end, since the mix between them is part of the sound. One that sounds
+  // stops short of silence, so turning the volume down and up again never
+  // wakes a carrier that was silent on purpose.
+  const int floor = any_audible ? kSilentTotalLevel - 1 : kSilentTotalLevel;
+  int quietest = 0;
+  int loudest = kSilentTotalLevel;
   for (std::size_t i = 0; i < 4; ++i) {
-    auto &op = instrument.operators[i];
-    if (op.enable && is_carrier(instrument, i)) {
+    if (moved_by_volume(instrument, i, any_audible)) {
+      quietest = std::max<int>(quietest, instrument.operators[i].total_level);
+      loudest = std::min<int>(loudest, instrument.operators[i].total_level);
+    }
+  }
+  const int amount = std::clamp(shift, std::min(0, quietest - floor), loudest);
+  for (std::size_t i = 0; i < 4; ++i) {
+    if (moved_by_volume(instrument, i, any_audible)) {
+      auto &op = instrument.operators[i];
       op.total_level = static_cast<uint8_t>(op.total_level - amount);
     }
   }
 }
 
 void shift_brightness(ChannelInstrument &instrument, int shift) {
-  // With every operator a carrier, feedback is what is left to add harmonics.
-  if (!has_modulators(instrument)) {
-    instrument.feedback = moved(instrument.feedback, shift, 0, 7);
-    return;
-  }
   for (std::size_t i = 0; i < 4; ++i) {
     auto &op = instrument.operators[i];
     if (op.enable && !is_carrier(instrument, i)) {
@@ -177,13 +189,6 @@ ChannelInstrument shifted(const ChannelInstrument &base, Tweak tweak,
 std::optional<int> tweak_value(const ChannelInstrument &instrument,
                                Tweak tweak) {
   if (tweak == Tweak::Brightness) {
-    if (!has_modulators(instrument)) {
-      const auto &op = instrument.operators[kFeedbackOperator];
-      if (!op.enable || op.total_level == 127) {
-        return std::nullopt;
-      }
-      return instrument.feedback;
-    }
     const auto *modulator = strongest_modulator(instrument);
     if (modulator == nullptr) {
       return std::nullopt;
@@ -212,8 +217,6 @@ std::optional<int> tweak_value(const ChannelInstrument &instrument,
 
 TweakRange tweak_range(const ChannelInstrument &instrument, Tweak tweak) {
   switch (tweak) {
-  case Tweak::Brightness:
-    return {0, has_modulators(instrument) ? 127 : 7};
   case Tweak::Attack:
     return {std::min(kMinAttack, tweak_value(instrument, tweak).value_or(31)),
             31};
@@ -248,6 +251,66 @@ ChannelInstrument with_tweak(const ChannelInstrument &base, Tweak tweak,
   return best;
 }
 
+std::array<TweakFields, 4> tweak_fields(const ChannelInstrument &instrument,
+                                        Tweak tweak) {
+  std::array<TweakFields, 4> fields{};
+  if (!tweak_value(instrument, tweak)) {
+    return fields;
+  }
+  const bool any_audible = any_carrier_audible(instrument);
+  for (std::size_t i = 0; i < 4; ++i) {
+    const auto &op = instrument.operators[i];
+    if (!op.enable) {
+      continue;
+    }
+    auto &field = fields[i];
+    switch (tweak) {
+    case Tweak::Volume:
+      field.total_level = moved_by_volume(instrument, i, any_audible);
+      break;
+    case Tweak::Brightness:
+      field.total_level = !is_carrier(instrument, i);
+      break;
+    case Tweak::Attack:
+      field.attack_rate = true;
+      break;
+    case Tweak::Decay:
+      field.decay_rate = true;
+      field.sustain_level = true;
+      break;
+    case Tweak::Release:
+      field.release_rate = true;
+      field.sustain_rate = op.sustain_rate != 0;
+      break;
+    }
+  }
+  return fields;
+}
+
+std::optional<TweakShape> tweak_shape(const ChannelInstrument &instrument) {
+  const auto *loudest = loudest_carrier(instrument);
+  if (loudest == nullptr) {
+    return std::nullopt;
+  }
+  const auto *fastest = fastest_carrier(instrument);
+  const auto *held = held_carrier(instrument);
+  const auto *released = longest_release(instrument);
+  const auto fraction = [](int value, int top) {
+    return static_cast<float>(value) / static_cast<float>(top);
+  };
+  TweakShape shape;
+  shape.level = 1.0f - fraction(loudest->total_level, kSilentTotalLevel);
+  shape.attack = 1.0f - fraction(fastest->attack_rate, 31);
+  // A decay rate of 0 never leaves the peak.
+  shape.decay =
+      held->decay_rate == 0 ? 1.0f : 1.0f - fraction(held->decay_rate, 31);
+  shape.sustain =
+      held->decay_rate == 0 ? 1.0f : 1.0f - fraction(held->sustain_level, 15);
+  shape.hold = fraction(held->sustain_rate, 31);
+  shape.release = 1.0f - fraction(released->release_rate, 15);
+  return shape;
+}
+
 std::string tweak_text(const ChannelInstrument &instrument, Tweak tweak) {
   const auto value = tweak_value(instrument, tweak);
   if (!value) {
@@ -256,8 +319,15 @@ std::string tweak_text(const ChannelInstrument &instrument, Tweak tweak) {
   char text[32];
   switch (tweak) {
   case Tweak::Volume:
-    std::snprintf(text, sizeof(text), "%.1f dB",
-                  (*value - 127) * kDecibelsPerTotalLevel);
+    std::snprintf(text, sizeof(text), "Carrier TL %d",
+                  loudest_carrier(instrument)->total_level);
+    return text;
+  case Tweak::Brightness:
+    std::snprintf(text, sizeof(text), "Modulator TL %d",
+                  strongest_modulator(instrument)->total_level);
+    return text;
+  case Tweak::Attack:
+    std::snprintf(text, sizeof(text), "AR %d", *value);
     return text;
   case Tweak::Decay: {
     const auto *op = held_carrier(instrument);
@@ -271,9 +341,21 @@ std::string tweak_text(const ChannelInstrument &instrument, Tweak tweak) {
                   op->sustain_rate);
     return text;
   }
-  default:
-    return std::to_string(*value);
   }
+  return {};
+}
+
+std::string tweak_change_text(const ChannelInstrument &from,
+                              const ChannelInstrument &to, Tweak tweak) {
+  const auto before = tweak_value(from, tweak);
+  const auto after = tweak_value(to, tweak);
+  if (tweak != Tweak::Volume || !before || !after) {
+    return tweak_text(to, tweak);
+  }
+  char text[32];
+  std::snprintf(text, sizeof(text), "%+.1f dB",
+                (*after - *before) * kDecibelsPerTotalLevel);
+  return text;
 }
 
 } // namespace patch_lab

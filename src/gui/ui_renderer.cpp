@@ -5,6 +5,7 @@
 #include "gui/components/folder_scan_dialog.hpp"
 #include "gui/components/status_toasts.hpp"
 #include "gui/components/view_patch_drop.hpp"
+#include "gui/layouts.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/web_storage_dialogs.hpp"
 #include "gui/window_title.hpp"
@@ -92,24 +93,29 @@ void render_all(AppContext &ctx) {
 #endif
   render_patch_editors(contexts.patch_editor,
                        ctx.app_state().ui_state().save_export_state);
-  static const std::string patch_browser =
-      panel_window_title(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE);
-  static const std::string preferences =
-      panel_window_title(PREFERENCES_ICON, PREFERENCES_TITLE);
-  static const std::string soft_keyboard =
-      panel_window_title(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE);
-  static const std::string mml_console =
-      panel_window_title(MML_CONSOLE_ICON, MML_CONSOLE_TITLE);
-  static const std::string patch_lab =
-      panel_window_title(PATCH_LAB_ICON, PATCH_LAB_TITLE);
-  static const std::string waveform =
-      panel_window_title(WAVEFORM_ICON, WAVEFORM_TITLE);
-  render_patch_selector(patch_browser.c_str(), contexts.patch_selector);
-  render_preferences_window(preferences.c_str(), contexts.preferences);
-  render_midi_keyboard(soft_keyboard.c_str(), contexts.midi_keyboard);
-  render_mml_console(mml_console.c_str(), contexts.mml_console);
-  render_patch_lab(patch_lab.c_str(), contexts.patch_lab, patch_lab_state());
-  render_waveform(waveform.c_str(), contexts.waveform);
+  // Each panel's title in full and as its icon alone, for a narrow window.
+  struct PanelTitle {
+    std::string full;
+    std::string icon;
+    PanelTitle(const char *icon_glyph, const char *title)
+        : full(panel_window_title(icon_glyph, title)),
+          icon(panel_window_title(icon_glyph, title, true)) {}
+    const char *get() const {
+      return (layouts::window_is_narrow() ? icon : full).c_str();
+    }
+  };
+  static const PanelTitle patch_browser(PATCH_BROWSER_ICON,
+                                        PATCH_BROWSER_TITLE);
+  static const PanelTitle preferences(PREFERENCES_ICON, PREFERENCES_TITLE);
+  static const PanelTitle soft_keyboard(SOFT_KEYBOARD_ICON,
+                                        SOFT_KEYBOARD_TITLE);
+  static const PanelTitle patch_lab(PATCH_LAB_ICON, PATCH_LAB_TITLE);
+  static const PanelTitle waveform(WAVEFORM_ICON, WAVEFORM_TITLE);
+  render_patch_selector(patch_browser.get(), contexts.patch_selector);
+  render_preferences_window(preferences.get(), contexts.preferences);
+  render_midi_keyboard(soft_keyboard.get(), contexts.midi_keyboard);
+  render_patch_lab(patch_lab.get(), contexts.patch_lab, patch_lab_state());
+  render_waveform(waveform.get(), contexts.waveform);
   if (const auto drop = take_view_patch_drop()) {
     if (const auto *entry =
             ctx.services.patch_session.find_entry(drop->entry_path)) {

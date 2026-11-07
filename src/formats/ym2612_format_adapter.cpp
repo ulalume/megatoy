@@ -79,12 +79,9 @@ ym2612::Patch from_library(const ym2612_format::Patch &patch) {
   ym2612::Patch out;
   out.name = patch.name;
 
-  out.global.dac_enable = patch.dac_enable;
-  out.global.lfo_enable = patch.lfo_enable;
-  out.global.lfo_frequency = patch.lfo_frequency;
-
-  out.channel.left_speaker = patch.left;
-  out.channel.right_speaker = patch.right;
+  // The DAC and LFO switches, the LFO frequency, the speakers and each
+  // operator's enable are left at their defaults whatever the file holds:
+  // they are how a patch is played, not the patch (ym2612/playback.hpp).
   out.channel.amplitude_modulation_sensitivity = patch.ams;
   out.channel.frequency_modulation_sensitivity = patch.fms;
 
@@ -106,7 +103,6 @@ ym2612::Patch from_library(const ym2612_format::Patch &patch) {
     target.ssg_type_envelope_control = source.ssg;
     target.ssg_enable = source.ssg_enable;
     target.amplitude_modulation_enable = source.am;
-    target.enable = source.enable;
   }
 
   // patch.macros / patch.operator_macros are intentionally dropped: megatoy

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ym2612/types.hpp"
+#include <array>
 #include <optional>
 #include <string>
 
@@ -36,8 +37,47 @@ TweakRange tweak_range(const ym2612::ChannelInstrument &instrument,
 ym2612::ChannelInstrument with_tweak(const ym2612::ChannelInstrument &base,
                                      Tweak tweak, int value);
 
-/// The value as the registers or the ear know it.
+/// The envelope fields of one operator that a tweak moves.
+struct TweakFields {
+  bool total_level = false;
+  bool attack_rate = false;
+  bool decay_rate = false;
+  bool sustain_level = false;
+  bool sustain_rate = false;
+  bool release_rate = false;
+};
+
+/// What moving `tweak` changes on each operator, in storage order; nothing
+/// when the tweak has no value.
+std::array<TweakFields, 4>
+tweak_fields(const ym2612::ChannelInstrument &instrument, Tweak tweak);
+
+/**
+ * The envelope the tweaks read, rough enough to sketch: each part from 0 to 1.
+ * `level` is how loud; `attack`, `decay` and `release` how long each takes;
+ * `sustain` how much is left once the decay is over, and `hold` how fast that
+ * fades while the key is held.
+ */
+struct TweakShape {
+  float level = 0.0f;
+  float attack = 0.0f;
+  float decay = 0.0f;
+  float sustain = 0.0f;
+  float hold = 0.0f;
+  float release = 0.0f;
+};
+
+/// None when no carrier is enabled.
+std::optional<TweakShape>
+tweak_shape(const ym2612::ChannelInstrument &instrument);
+
+/// The value as the registers know it, from the operator it is read from.
 std::string tweak_text(const ym2612::ChannelInstrument &instrument,
                        Tweak tweak);
+
+/// How far a drag from `from` has taken the tweak to `to`: in dB for Volume,
+/// which every sounding carrier moves by alike; as tweak_text() otherwise.
+std::string tweak_change_text(const ym2612::ChannelInstrument &from,
+                              const ym2612::ChannelInstrument &to, Tweak tweak);
 
 } // namespace patch_lab

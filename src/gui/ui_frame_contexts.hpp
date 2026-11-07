@@ -3,7 +3,6 @@
 #include "gui/components/confirmation_dialog.hpp"
 #include "gui/components/main_menu.hpp"
 #include "gui/components/midi_keyboard.hpp"
-#include "gui/components/mml_console.hpp"
 #include "gui/components/patch_drop.hpp"
 #include "gui/components/patch_editor.hpp"
 #include "gui/components/patch_lab_window.hpp"
@@ -29,7 +28,6 @@ struct FrameContexts {
   PatchSelectorContext patch_selector;
   PreferencesContext preferences;
   MidiKeyboardContext midi_keyboard;
-  MmlConsoleContext mml_console;
   PatchLabContext patch_lab;
   WaveformContext waveform;
 };

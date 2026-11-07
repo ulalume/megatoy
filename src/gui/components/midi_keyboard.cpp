@@ -3,16 +3,19 @@
 
 #include "core/types.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/menu_rows.hpp"
+#include "gui/frame_requests.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/keyboard_typing.hpp"
+#include "gui/input/touch.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "util.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
-#include <chord_detector.h>
 #include <cmath>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <optional>
 #include <string>
 #include <vector>
@@ -45,6 +48,18 @@ build_playback_sequence(const std::vector<Key> &scale_keys,
   return sequence;
 }
 
+/// Lets go of the keys the mouse and fingers hold, for a frame the keys are
+/// not drawn in and so cannot see them lift.
+void release_held_keys(MidiKeyboardContext &context) {
+  for (const auto &note : context.state.held_notes) {
+    if (context.key_off) {
+      context.key_off(note);
+    }
+  }
+  context.state.held_notes.clear();
+  context.state.fingers_on_keyboard.clear();
+}
+
 void stop_playback(MidiKeyboardContext &context) {
   auto &playback = context.state.playback;
   if (playback.note_active && context.key_off) {
@@ -57,13 +72,27 @@ void stop_playback(MidiKeyboardContext &context) {
   playback.sequence_snapshot.clear();
 }
 
+bool can_play_scale(const MidiKeyboardContext &context) {
+  return !context.state.playback_sequence.empty() && context.key_on &&
+         context.key_off;
+}
+
+/// The scale the keyboard is set to, as "C Major" or "Chromatic".
+std::string scale_title(const InputState &input) {
+  const auto &settings = input.midi_keyboard_settings;
+  const char *scale = scale_names[static_cast<int>(settings.scale)];
+  if (settings.scale == Scale::CHROMATIC) {
+    return scale;
+  }
+  return std::string(key_names[static_cast<int>(settings.key)]) + " " + scale;
+}
+
 void start_playback(MidiKeyboardContext &context) {
-  const auto &sequence = context.state.playback_sequence;
-  if (sequence.empty() || !context.key_on || !context.key_off) {
+  if (!can_play_scale(context)) {
     return;
   }
   stop_playback(context);
-  context.state.playback.sequence_snapshot = sequence;
+  context.state.playback.sequence_snapshot = context.state.playback_sequence;
   context.state.playback.playing = true;
   context.state.playback.timer = 0.0f;
   context.state.playback.next_index = 0;
@@ -79,6 +108,8 @@ void update_playback(MidiKeyboardContext &context, float delta_time) {
     stop_playback(context);
     return;
   }
+  // The next note is due on time, not at the next input.
+  keep_drawing();
 
   playback.timer -= delta_time;
   if (playback.timer > 0.0f) {
@@ -162,6 +193,7 @@ bool refresh_state(MidiKeyboardState &state, const InputState &input,
 
   state.playback_sequence =
       build_playback_sequence(state.scale_keys, input.keyboard_typing_octave);
+  state.typing_range_moved = true;
   state.initialized = true;
   return true;
 }
@@ -171,10 +203,48 @@ const char *typing_label(const MidiKeyboardState &state) {
                                           : state.typing_range_label.c_str();
 }
 
+/**
+ * The operators' switches, OP1 to OP4, as megamml's keyboard has them: lit
+ * while the operator sounds, an outline while it is muted. How the patch is
+ * played, not the patch (ym2612/playback.hpp).
+ */
+void render_operator_switches(std::array<bool, 4> &enabled) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "OP");
+  const float size = ImGui::GetFrameHeight();
+  for (std::size_t i = 0; i < enabled.size(); ++i) {
+    ImGui::SameLine(0.0f,
+                    i == 0 ? style.ItemInnerSpacing.x : ui::scale::px(1.0f));
+    const bool on = enabled[i];
+    if (!on) {
+      ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+      ImGui::PushStyleColor(ImGuiCol_Text,
+                            styles::color(styles::MegatoyCol::TextMuted));
+      ImGui::PushStyleColor(ImGuiCol_Border,
+                            styles::color(styles::MegatoyCol::EnvelopeGrid));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, ui::scale::px(1.0f));
+    }
+    const char label[] = {static_cast<char>('1' + i), '\0'};
+    ImGui::PushID(static_cast<int>(i));
+    if (ImGui::Button(label, ImVec2(size, size))) {
+      enabled[i] = !on;
+    }
+    ImGui::PopID();
+    if (!on) {
+      ImGui::PopStyleVar();
+      ImGui::PopStyleColor(3);
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("OP%d", static_cast<int>(i) + 1);
+    }
+  }
+}
+
 std::pair<ImGuiKey, ImGuiKey>
 octave_keys_for_layout(TypingKeyboardLayout layout,
                        const PreferenceManager::UIPreferences &prefs) {
-  const auto defaults = default_octave_keys(layout);
+  const auto defaults = keyboard_octave_keys();
   if (layout != TypingKeyboardLayout::Custom) {
     return defaults;
   }
@@ -256,6 +326,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       static_cast<int>(input.keyboard_typing_octave);
 
   if (!ui_prefs.show_midi_keyboard) {
+    release_held_keys(context);
     return;
   }
 
@@ -263,14 +334,26 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                            ImGuiCond_FirstUseEver);
   areas::keep_in_area(areas::Area::FooterRight, title);
   if (!ui::begin_window(title, &ui_prefs.show_midi_keyboard)) {
+    release_held_keys(context);
     ImGui::End();
     return;
   }
 
-  // Scale selector
+  // Key and scale read as one phrase, "C Major Scale".
+  ImGui::BeginDisabled(keyboard_settings.scale == Scale::CHROMATIC);
+  int current_key = static_cast<int>(keyboard_settings.key);
+  ImGui::SetNextItemWidth(ui::scale::px(40.0f));
+  if (ImGui::Combo("##Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
+    keyboard_settings.key = static_cast<Key>(current_key);
+    context.ui_prefs.midi_keyboard_key = current_key;
+    refresh_state(context.state, input, typing_layout, custom_layout);
+  }
+  ImGui::EndDisabled();
+
+  ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
   int current_scale = static_cast<int>(keyboard_settings.scale);
   ImGui::SetNextItemWidth(ui::scale::px(150.0f));
-  if (ImGui::Combo("Scale", &current_scale, scale_names,
+  if (ImGui::Combo("##Scale", &current_scale, scale_names,
                    IM_ARRAYSIZE(scale_names))) {
     keyboard_settings.scale = static_cast<Scale>(current_scale);
     context.ui_prefs.midi_keyboard_scale = current_scale;
@@ -281,46 +364,19 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     refresh_state(context.state, input, typing_layout, custom_layout);
   }
 
-  ImGui::SameLine(0, ui::scale::px(16.0f));
+  ImGui::SameLine();
 
-  if (keyboard_settings.scale == Scale::CHROMATIC)
-    ImGui::BeginDisabled();
-  // Key selector
-  int current_key = static_cast<int>(keyboard_settings.key);
-  ImGui::SetNextItemWidth(ui::scale::px(40.0f));
-  if (ImGui::Combo("Key", &current_key, key_names, IM_ARRAYSIZE(key_names))) {
-    keyboard_settings.key = static_cast<Key>(current_key);
-    context.ui_prefs.midi_keyboard_key = current_key;
-    refresh_state(context.state, input, typing_layout, custom_layout);
-  }
-  if (keyboard_settings.scale == Scale::CHROMATIC)
-    ImGui::EndDisabled();
+  render_operator_switches(context.operator_enable);
 
-  ImGui::SameLine(0, ui::scale::px(16.0f));
-  const bool can_start_playback = !context.state.playback_sequence.empty() &&
-                                  context.key_on && context.key_off;
-  const bool disable_controls =
-      !can_start_playback && !context.state.playback.playing;
-  if (disable_controls) {
-    ImGui::BeginDisabled();
+  // The slider takes the rest of the row, or a row of its own when too
+  // little is left.
+  ImGui::SameLine();
+  if (ImGui::GetContentRegionAvail().x < ui::scale::px(120.0f)) {
+    ImGui::NewLine();
   }
-  if (!context.state.playback.playing) {
-    if (ImGui::Button(ICON_FA_PLAY " Play")) {
-      start_playback(context);
-    }
-  } else {
-    if (ImGui::Button(ICON_FA_STOP " Stop")) {
-      stop_playback(context);
-    }
-  }
-  if (disable_controls) {
-    ImGui::EndDisabled();
-  }
-  ImGui::SameLine(0, ui::scale::px(32.0f));
-
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
-  ImGui::SetNextItemWidth(ui::scale::px(100.0f));
-  if (ImGui::SliderInt("Typing", &current_key_octave, 0, 7,
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+  if (ImGui::SliderInt("##Typing", &current_key_octave, 0, 7,
                        typing_label(context.state))) {
     input.keyboard_typing_octave = current_key_octave;
     context.ui_prefs.midi_keyboard_typing_octave = current_key_octave;
@@ -338,26 +394,11 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       }
       return label;
     };
-    const std::string tooltip = "Octave Down: " + key_label(octave_keys.first) +
-                                "\nOctave Up: " + key_label(octave_keys.second);
+    const std::string tooltip =
+        "Typing\nOctave Down: " + key_label(octave_keys.first) +
+        "\nOctave Up: " + key_label(octave_keys.second);
     ImGui::SetTooltip("%s", tooltip.c_str());
   }
-
-  ImGui::SameLine(0, ui::scale::px(16.0f));
-
-  std::vector<ym2612::Note> active_notes = context.active_notes
-                                               ? context.active_notes()
-                                               : std::vector<ym2612::Note>{};
-  std::string chord_name;
-  if (active_notes.size() >= 2) {
-    std::vector<int> midi_notes;
-    midi_notes.reserve(active_notes.size());
-    for (auto &note : active_notes) {
-      midi_notes.push_back(static_cast<int>(note.midi_note()));
-    }
-    chord_name = get_chord_name(midi_notes, false, true);
-  }
-  ImGui::Text("%s", chord_name.c_str());
 
   // Scrollable keyboard area
   const ImVec2 available_region = ImGui::GetContentRegionAvail();
@@ -380,9 +421,21 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     float x = cursor.x;
 
     // A press on any key sounds whichever key the pointer is over, so a drag
-    // plays each key it crosses.
+    // plays each key it crosses. On a touch screen the fingers play, each its
+    // own key, and the mouse SDL makes of the first one is left out.
+    const bool by_touch =
+        ImGui::GetIO().MouseSource == ImGuiMouseSource_TouchScreen;
     bool pointer_held = false;
     std::optional<ym2612::Note> under_pointer;
+    struct KeyRect {
+      ImRect rect;
+      ym2612::Note note;
+    };
+    std::vector<KeyRect> key_rects;
+    key_rects.reserve(notes.size());
+    // Where the keys typing plays begin and end.
+    float typed_min = FLT_MAX;
+    float typed_max = -FLT_MAX;
 
     for (auto note : notes) {
       bool is_key_mapped = context.state.reverse_mappings.find(note) !=
@@ -402,7 +455,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       ImGui::InvisibleButton("white_key",
                              ImVec2(key_max.x - key_min.x, key_height));
 
-      pointer_held |= ImGui::IsItemActive();
+      key_rects.push_back({ImRect(key_min, key_max), note});
+      pointer_held |= ImGui::IsItemActive() && !by_touch;
       if (ImGui::IsItemHovered(
               ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
         under_pointer = note;
@@ -420,7 +474,11 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
                          key_border_col, 0, 0, 1.0f);
 
       if (is_key_mapped) {
-        ImVec2 key_max_mapped(x + key_width, y + 2);
+        typed_min = std::min(typed_min, key_min.x);
+        typed_max = std::max(typed_max, key_max.x);
+        // A bar along the top of each key typing plays, and its key's name
+        // a little below it.
+        ImVec2 key_max_mapped(x + key_width, y + ui::scale::px(4.0f));
         draw_list->AddRectFilled(key_min, key_max_mapped,
                                  white_key_pressed_col);
         ImU32 text_color = is_white ? white_key_text_col : black_key_text_col;
@@ -437,7 +495,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         }
         ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
         ImVec2 text_pos(key_min.x + (key_width - text_size.x) * 0.5f,
-                        key_max_mapped.y);
+                        key_max_mapped.y + ui::scale::px(3.0f));
         draw_list->AddText(text_pos, text_color, key_text.c_str());
       }
       if (note.key == keyboard_settings.key) {
@@ -451,23 +509,165 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
       x += key_width;
     }
 
-    const auto wanted = pointer_held ? under_pointer : std::nullopt;
-    auto &sounding = context.state.pointer_note;
-    if (sounding != wanted) {
-      if (sounding && context.key_off &&
-          (!context.key_is_pressed || context.key_is_pressed(*sounding))) {
-        context.key_off(*sounding);
+    // Once the keys typing plays move, the keyboard scrolls to centre them
+    // unless all of them are in view already.
+    ImGuiWindow *keys_window = ImGui::GetCurrentWindow();
+    if (context.state.typing_range_moved && typed_min < typed_max) {
+      context.state.typing_range_moved = false;
+      const ImRect &shown = keys_window->InnerRect;
+      if (typed_min < shown.Min.x || typed_max > shown.Max.x) {
+        ImGui::SetScrollFromPosX(
+            (typed_min + typed_max) * 0.5f - keys_window->Pos.x, 0.5f);
+        keep_drawing();
       }
-      if (wanted && context.key_on &&
-          !(context.key_is_pressed && context.key_is_pressed(*wanted))) {
-        context.key_on(*wanted, 127);
-      }
-      sounding = wanted;
     }
+
+    std::vector<ym2612::Note> wanted;
+    if (pointer_held && under_pointer) {
+      wanted.push_back(*under_pointer);
+    }
+    const ImRect visible = keys_window->InnerClipRect;
+    auto &on_keyboard = context.state.fingers_on_keyboard;
+    std::erase_if(on_keyboard, [](const auto &entry) {
+      const auto fingers = touch::fingers();
+      return std::none_of(fingers.begin(), fingers.end(),
+                          [&](const auto &f) { return f.id == entry.first; });
+    });
+    // A finger plays only if it came down on the keyboard itself, not on a
+    // dialog or a window over it.
+    const auto lands_here = [&visible](ImVec2 pos) {
+      if (!visible.Contains(pos) || ImGui::GetTopMostPopupModal() != nullptr) {
+        return false;
+      }
+      ImGuiWindow *hovered = nullptr;
+      ImGuiWindow *under_moving = nullptr;
+      ImGui::FindHoveredWindowEx(pos, false, &hovered, &under_moving);
+      return hovered == ImGui::GetCurrentWindow();
+    };
+    for (const auto &finger : touch::fingers()) {
+      const auto [entry, first_seen] =
+          on_keyboard.try_emplace(finger.id, lands_here(finger.pos));
+      if (!entry->second) {
+        continue;
+      }
+      if (first_seen) {
+        touch::claim(finger.id);
+      }
+      if (!visible.Contains(finger.pos)) {
+        continue;
+      }
+      for (const auto &key : key_rects) {
+        if (key.rect.Contains(finger.pos)) {
+          if (std::find(wanted.begin(), wanted.end(), key.note) ==
+              wanted.end()) {
+            wanted.push_back(key.note);
+          }
+          break;
+        }
+      }
+    }
+
+    // Only what this keyboard turned on, and each of those let go for sure:
+    // the chip's own list of sounding notes lags a frame behind, so a quick
+    // slide would find a note it had just started not sounding yet.
+    auto &held = context.state.held_notes;
+    std::erase_if(held, [&](const ym2612::Note &note) {
+      if (std::find(wanted.begin(), wanted.end(), note) != wanted.end()) {
+        return false;
+      }
+      if (context.key_off) {
+        context.key_off(note);
+      }
+      return true;
+    });
+    for (const auto &note : wanted) {
+      // Not one another keyboard is already holding.
+      if (std::find(held.begin(), held.end(), note) == held.end() &&
+          !(context.key_is_pressed && context.key_is_pressed(note)) &&
+          context.key_on) {
+        context.key_on(note, 127);
+        held.push_back(note);
+      }
+    }
+  } else {
+    release_held_keys(context);
   }
   ImGui::EndChild();
 
   ImGui::End();
 };
 
-}; // namespace ui
+namespace {
+
+/// The switch's two faces at `fit`, under one ID so it stays the same item
+/// as it toggles.
+std::pair<const char *, const char *> scale_play_labels(BarCentreFit fit) {
+  if (fit == BarCentreFit::Icon) {
+    return {ICON_FA_PLAY "###scale_play", ICON_FA_STOP "###scale_play"};
+  }
+  return {ICON_FA_PLAY " Play###scale_play", ICON_FA_STOP " Stop###scale_play"};
+}
+
+float scale_play_switch_width(BarCentreFit fit) {
+  const auto [play, stop] = scale_play_labels(fit);
+  return std::max(ImGui::CalcTextSize(play, nullptr, true).x,
+                  ImGui::CalcTextSize(stop, nullptr, true).x);
+}
+
+std::string scale_play_note(const MidiKeyboardContext &context) {
+  return scale_title(context.input_state) + " Scale";
+}
+
+} // namespace
+
+BarCentreSize scale_play_size(const MidiKeyboardContext &context,
+                              BarCentreFit fit) {
+  const float width = scale_play_switch_width(fit);
+  if (fit != BarCentreFit::Full) {
+    return {width, width};
+  }
+  return {width, width + ImGui::GetStyle().ItemSpacing.x +
+                     ImGui::CalcTextSize(scale_play_note(context).c_str()).x};
+}
+
+void render_scale_play(MidiKeyboardContext &context, BarCentreFit fit,
+                       float left, float right, float row_y) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const auto [play, stop] = scale_play_labels(fit);
+  const float width = scale_play_switch_width(fit);
+  const float min_x = left + style.ItemSpacing.x;
+  const float max_x = right - style.ItemSpacing.x;
+  if (max_x - min_x < width) {
+    return;
+  }
+
+  const bool playing = context.state.playback.playing;
+  const float x = std::clamp(ImGui::GetWindowWidth() * 0.5f - width * 0.5f,
+                             min_x, max_x - width);
+  ImGui::SetCursorPos(ImVec2(x, row_y));
+  ImGui::BeginDisabled(!playing && !can_play_scale(context));
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, bar_item_spacing());
+  if (ImGui::Selectable(playing ? stop : play, false,
+                        ImGuiSelectableFlags_None, ImVec2(width, 0.0f))) {
+    if (playing) {
+      stop_playback(context);
+    } else {
+      start_playback(context);
+    }
+  }
+  ImGui::PopStyleVar();
+  ImGui::EndDisabled();
+
+  const std::string note = scale_play_note(context);
+  if (fit == BarCentreFit::Full &&
+      x + width + style.ItemSpacing.x + ImGui::CalcTextSize(note.c_str()).x <=
+          max_x) {
+    ImGui::SameLine();
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%s",
+                       note.c_str());
+  } else if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+    ImGui::SetTooltip("%s", note.c_str());
+  }
+}
+
+} // namespace ui

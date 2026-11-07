@@ -34,7 +34,7 @@ enum class MegatoyCol : int {
   /// dragged slider sets, the area under the release with and without RR's
   /// slider lit, the handles at rest and under the pointer or dragged, the
   /// grid and frame, the captions, the curves of sounding voices and their
-  /// cursors.
+  /// cursors, and a carrier's background and frame.
   EnvelopeBg,
   EnvelopeCurve,
   EnvelopeCurveActive,
@@ -46,6 +46,8 @@ enum class MegatoyCol : int {
   EnvelopeLabel,
   EnvelopeVoice,
   EnvelopeVoiceCursor,
+  EnvelopeBgCarrier,
+  EnvelopeFrameCarrier,
   /// The Waveform window: the two areas' background and border, the
   /// oscilloscope's grid, its left and right channels and both once the
   /// output clips, and the spectrum's bars, grid and labels.
@@ -70,8 +72,12 @@ enum class MegatoyCol : int {
   AboutBg,
   /// The outline around the icon in the About dialog.
   AboutIconBorder,
-  /// The border of the MML Console's text and Patch Lab's results.
+  /// The border of the Patch Editor's MML text and Patch Lab's results.
   PanelBorder,
+  /// The bar of a section that opens and closes, such as Quick Edit.
+  SectionHeader,
+  SectionHeaderHovered,
+  SectionHeaderActive,
   COUNT
 };
 

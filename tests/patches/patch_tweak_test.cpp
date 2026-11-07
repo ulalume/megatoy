@@ -7,6 +7,7 @@
 namespace {
 
 using patch_lab::Tweak;
+using patch_lab::tweak_fields;
 using patch_lab::tweak_range;
 using patch_lab::tweak_text;
 using patch_lab::tweak_value;
@@ -33,6 +34,9 @@ void test_brightness_moves_the_modulators_together() {
   base.operators[0].total_level = 30;
   base.operators[1].total_level = 50;
   CHECK(tweak_value(base, Tweak::Brightness) == 97);
+  CHECK(tweak_text(base, Tweak::Brightness) == "Modulator TL 30");
+  CHECK(tweak_text(base, Tweak::Attack) == "AR 31");
+  CHECK(patch_lab::tweak_change_text(base, base, Tweak::Attack) == "AR 31");
 
   const auto brighter = with_tweak(base, Tweak::Brightness, 107);
   CHECK(brighter.operators[0].total_level == 20);
@@ -51,25 +55,39 @@ void test_brightness_moves_the_modulators_together() {
   CHECK(with_tweak(base, Tweak::Brightness, 97) == base);
 }
 
-void test_brightness_without_modulators_moves_feedback() {
+void test_brightness_needs_a_modulator() {
   auto base = make_instrument(7);
   base.feedback = 2;
-  CHECK(tweak_range(base, Tweak::Brightness).max == 7);
-  CHECK(tweak_value(base, Tweak::Brightness) == 2);
+  CHECK(!tweak_value(base, Tweak::Brightness));
+  CHECK(with_tweak(base, Tweak::Brightness, 5) == base);
+  CHECK(tweak_text(base, Tweak::Brightness) == "-");
+  for (const auto &fields : tweak_fields(base, Tweak::Brightness)) {
+    CHECK(!fields.total_level);
+  }
+}
 
-  const auto brighter = with_tweak(base, Tweak::Brightness, 5);
-  CHECK(brighter.feedback == 5);
-  CHECK(brighter.operators[0].total_level == 20);
+void test_fields_are_the_ones_a_tweak_moves() {
+  auto base = make_instrument(4); // S1 and S3 modulate, S2 and S4 are carriers.
+  base.operators[3].enable = false;
+  base.operators[1].sustain_rate = 0;
 
-  // Feedback only reaches the output through S1.
-  auto silent = base;
-  silent.operators[0].total_level = 127;
-  CHECK(!tweak_value(silent, Tweak::Brightness));
-  auto disabled = base;
-  disabled.operators[0].enable = false;
-  CHECK(!tweak_value(disabled, Tweak::Brightness));
-  CHECK(with_tweak(disabled, Tweak::Brightness, 5) == disabled);
-  CHECK(tweak_text(disabled, Tweak::Brightness) == "-");
+  const auto volume = tweak_fields(base, Tweak::Volume);
+  CHECK(!volume[0].total_level && !volume[1].total_level);
+  CHECK(volume[2].total_level && !volume[3].total_level);
+  CHECK(!volume[2].attack_rate);
+
+  const auto brightness = tweak_fields(base, Tweak::Brightness);
+  CHECK(brightness[0].total_level && brightness[1].total_level);
+  CHECK(!brightness[2].total_level);
+
+  const auto decay = tweak_fields(base, Tweak::Decay);
+  CHECK(decay[0].decay_rate && decay[0].sustain_level);
+  CHECK(!decay[3].decay_rate);
+
+  // A held note stays held, so its sustain rate is not moved.
+  const auto release = tweak_fields(base, Tweak::Release);
+  CHECK(release[0].release_rate && release[0].sustain_rate);
+  CHECK(release[1].release_rate && !release[1].sustain_rate);
 }
 
 void test_volume_keeps_the_carriers_in_balance() {
@@ -77,19 +95,77 @@ void test_volume_keeps_the_carriers_in_balance() {
   base.operators[2].total_level = 10;
   base.operators[3].total_level = 40;
   CHECK(tweak_value(base, Tweak::Volume) == 117);
-  CHECK(tweak_text(base, Tweak::Volume) == "-7.5 dB");
+  CHECK(tweak_text(base, Tweak::Volume) == "Carrier TL 10");
 
   const auto loud = with_tweak(base, Tweak::Volume, 127);
   CHECK(loud.operators[2].total_level == 0);
   CHECK(loud.operators[3].total_level == 30);
   CHECK(loud.operators[0].total_level == 20);
-  CHECK(tweak_text(loud, Tweak::Volume) == "0.0 dB");
+  CHECK(tweak_text(loud, Tweak::Volume) == "Carrier TL 0");
+  CHECK(patch_lab::tweak_change_text(base, loud, Tweak::Volume) == "+7.5 dB");
+  CHECK(patch_lab::tweak_change_text(loud, base, Tweak::Volume) == "-7.5 dB");
+  CHECK(patch_lab::tweak_change_text(base, base, Tweak::Volume) == "+0.0 dB");
 
-  // Both stop once the quieter one is out of room.
+  // Both stop once the quieter one is out of room, short of silence.
   const auto quiet = with_tweak(base, Tweak::Volume, 0);
-  CHECK(quiet.operators[2].total_level == 97);
-  CHECK(quiet.operators[3].total_level == 127);
-  CHECK(tweak_value(quiet, Tweak::Volume) == 30);
+  CHECK(quiet.operators[2].total_level == 96);
+  CHECK(quiet.operators[3].total_level == 126);
+  CHECK(tweak_value(quiet, Tweak::Volume) == 31);
+}
+
+void test_volume_leaves_a_silent_carrier_silent() {
+  auto base = make_instrument(4);
+  base.operators[2].total_level = 0;
+  base.operators[3].total_level = 127;
+  CHECK(tweak_value(base, Tweak::Volume) == 127);
+
+  const auto quieter = with_tweak(base, Tweak::Volume, 100);
+  CHECK(quieter.operators[2].total_level == 27);
+  CHECK(quieter.operators[3].total_level == 127);
+  CHECK(tweak_value(quieter, Tweak::Volume) == 100);
+
+  // Down as far as it goes and up again, the silent one stays silent.
+  const auto bottom = with_tweak(base, Tweak::Volume, 0);
+  CHECK(bottom.operators[2].total_level == 126);
+  const auto back = with_tweak(bottom, Tweak::Volume, 127);
+  CHECK(back.operators[2].total_level == 0);
+  CHECK(back.operators[3].total_level == 127);
+  // Volume lights only the carrier it moves.
+  const auto fields = tweak_fields(base, Tweak::Volume);
+  CHECK(fields[2].total_level && !fields[3].total_level);
+
+  // With every carrier silent, they all come up together.
+  auto silent = base;
+  silent.operators[2].total_level = 127;
+  const auto louder = with_tweak(silent, Tweak::Volume, 27);
+  CHECK(louder.operators[2].total_level == 100);
+  CHECK(louder.operators[3].total_level == 100);
+}
+
+void test_shape_follows_the_carriers() {
+  auto base = make_instrument(4);
+  base.operators[2].total_level = 0;
+  base.operators[3].total_level = 64;
+  const auto shape = patch_lab::tweak_shape(base);
+  CHECK(shape.has_value());
+  CHECK(shape->level == 1.0f);
+  CHECK(shape->attack == 0.0f);
+
+  // Longer and quieter as the tweaks move that way.
+  const auto slower =
+      patch_lab::tweak_shape(with_tweak(base, Tweak::Attack, 10));
+  CHECK(slower->attack > shape->attack);
+  const auto quieter =
+      patch_lab::tweak_shape(with_tweak(base, Tweak::Volume, 60));
+  CHECK(quieter->level < shape->level);
+  const auto longer =
+      patch_lab::tweak_shape(with_tweak(base, Tweak::Release, 2));
+  CHECK(longer->release > shape->release);
+
+  auto none = base;
+  none.operators[2].enable = false;
+  none.operators[3].enable = false;
+  CHECK(!patch_lab::tweak_shape(none));
 }
 
 void test_attack_follows_the_fastest_carrier_and_keeps_sounding() {
@@ -191,6 +267,10 @@ void test_every_algorithm_reads_back_what_was_set() {
     }
     for (const auto tweak : {Tweak::Volume, Tweak::Brightness, Tweak::Attack,
                              Tweak::Decay, Tweak::Release}) {
+      if (tweak == Tweak::Brightness && algorithm == 7) {
+        CHECK(!tweak_value(base, tweak));
+        continue;
+      }
       CHECK(with_tweak(base, tweak, *tweak_value(base, tweak)) == base);
       const auto range = tweak_range(base, tweak);
       int last = *tweak_value(with_tweak(base, tweak, range.min), tweak);
@@ -207,8 +287,11 @@ void test_every_algorithm_reads_back_what_was_set() {
 
 int main() {
   test_brightness_moves_the_modulators_together();
-  test_brightness_without_modulators_moves_feedback();
+  test_brightness_needs_a_modulator();
+  test_fields_are_the_ones_a_tweak_moves();
   test_volume_keeps_the_carriers_in_balance();
+  test_volume_leaves_a_silent_carrier_silent();
+  test_shape_follows_the_carriers();
   test_attack_follows_the_fastest_carrier_and_keeps_sounding();
   test_decay_moves_rate_and_level_as_a_pair();
   test_release_moves_both_tails_and_leaves_a_held_note_held();

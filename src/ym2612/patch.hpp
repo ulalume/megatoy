@@ -19,31 +19,18 @@ struct Patch {
   std::string hash() const;
 };
 
-// JSON serialization helpers
-inline void to_json(nlohmann::json &j, const GlobalSettings &device) {
-  j = nlohmann::json{{"dac_enable", device.dac_enable},
-                     {"lfo_enable", device.lfo_enable},
-                     {"lfo_frequency", device.lfo_frequency}};
-}
-
-inline void from_json(const nlohmann::json &j, GlobalSettings &device) {
-  j.at("dac_enable").get_to(device.dac_enable);
-  j.at("lfo_enable").get_to(device.lfo_enable);
-  j.at("lfo_frequency").get_to(device.lfo_frequency);
-}
-
+// JSON serialization helpers. The DAC and LFO switches, the LFO frequency,
+// the speakers and each operator's enable are how a patch is played rather
+// than the patch (see ym2612/playback.hpp), so they are neither written nor
+// read: GIN as ym2612_format 0.4.0 defines it.
 inline void to_json(nlohmann::json &j, const ChannelSettings &channel) {
-  j = nlohmann::json{{"left_speaker", channel.left_speaker},
-                     {"right_speaker", channel.right_speaker},
-                     {"amplitude_modulation_sensitivity",
+  j = nlohmann::json{{"amplitude_modulation_sensitivity",
                       channel.amplitude_modulation_sensitivity},
                      {"frequency_modulation_sensitivity",
                       channel.frequency_modulation_sensitivity}};
 }
 
 inline void from_json(const nlohmann::json &j, ChannelSettings &channel) {
-  j.at("left_speaker").get_to(channel.left_speaker);
-  j.at("right_speaker").get_to(channel.right_speaker);
   j.at("amplitude_modulation_sensitivity")
       .get_to(channel.amplitude_modulation_sensitivity);
   j.at("frequency_modulation_sensitivity")
@@ -64,7 +51,6 @@ inline void to_json(nlohmann::json &j, const OperatorSettings &op) {
       {"ssg_type_envelope_control", op.ssg_type_envelope_control},
       {"ssg_enable", op.ssg_enable},
       {"amplitude_modulation_enable", op.amplitude_modulation_enable},
-      {"enable", op.enable},
   };
 }
 
@@ -81,11 +67,6 @@ inline void from_json(const nlohmann::json &j, OperatorSettings &op) {
   j.at("ssg_type_envelope_control").get_to(op.ssg_type_envelope_control);
   j.at("ssg_enable").get_to(op.ssg_enable);
   j.at("amplitude_modulation_enable").get_to(op.amplitude_modulation_enable);
-  if (j.contains("enable")) {
-    j.at("enable").get_to(op.enable);
-  } else {
-    op.enable = true;
-  }
 }
 
 inline void to_json(nlohmann::json &j, const ChannelInstrument &instrument) {
@@ -105,21 +86,18 @@ inline void from_json(const nlohmann::json &j, ChannelInstrument &instrument) {
 
 inline void to_json(nlohmann::json &j, const Patch &patch) {
   j = nlohmann::json{{"name", patch.name},
-                     {"device", patch.global},
                      {"channel", patch.channel},
                      {"instrument", patch.instrument}};
 }
 
 inline void from_json(const nlohmann::json &j, Patch &patch) {
   j.at("name").get_to(patch.name);
-  j.at("device").get_to(patch.global);
   j.at("channel").get_to(patch.channel);
   j.at("instrument").get_to(patch.instrument);
 }
 
 inline std::string Patch::hash() const {
   nlohmann::json patch_data;
-  patch_data["global"] = global;
   patch_data["channel"] = channel;
   patch_data["instrument"] = instrument;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/load_meter.hpp"
+#include "gui/components/bar_centre_fit.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/gui_manager.hpp"
 #include "gui/save_export_state.hpp"
@@ -42,6 +43,12 @@ struct MainMenuContext {
   std::function<void()> close_patch;
   /// Ask before a folder being added merges in the ones inside it.
   PreferenceManager::ConfirmReplace confirm_replace_folders;
+  /// The size of what sits in the middle of the bar, at each fit.
+  std::function<BarCentreSize(BarCentreFit fit)> bar_centre_size;
+  /// Draws it at `fit`, between the menus ending at `left` and the load
+  /// reading starting at `right`, on the menus' row.
+  std::function<void(BarCentreFit fit, float left, float right, float row_y)>
+      bar_centre;
 };
 
 void render_main_menu(MainMenuContext &context);

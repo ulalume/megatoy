@@ -34,7 +34,7 @@ constexpr ChangelogItem kItems_0_9_1[] = {
 
 constexpr ChangelogItem kItems_0_9_0[] = {
     {"Envelope graphs match the chip, on a millisecond axis", kEnvelopeDetails},
-    {"Added 10 built-in FM Patches", {}},
+    {"Added 10 built-in FM patches", {}},
 };
 
 constexpr ChangelogItem kItems_0_8_4[] = {
@@ -43,7 +43,7 @@ constexpr ChangelogItem kItems_0_8_4[] = {
 
 constexpr ChangelogItem kItems_0_8_3[] = {
     {"Interface scale option in Preferences", {}},
-    {"Added 7 built-in FM Patches", {}},
+    {"Added 7 built-in FM patches", {}},
 };
 
 constexpr std::string_view kOperatorDetails[] = {

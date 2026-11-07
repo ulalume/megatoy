@@ -4,13 +4,16 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
 #include "gui/save_export_actions.hpp"
+#include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
+#include "patch_editor_tools.hpp"
 #include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
@@ -167,9 +170,9 @@ void render_save_export_buttons(PatchEditorContext &context,
   const auto &repository = patch_session.repository();
   const auto relative_path =
       repository.to_relative_path(document.path()).generic_string();
-  ImGui::Text("%s",
-              display_preset_path(repository.display_path(relative_path))
-                  .c_str());
+  ImGui::TextColored(
+      styles::color(styles::MegatoyCol::TextMuted), "%s",
+      display_preset_path(repository.display_path(relative_path)).c_str());
   render_patch_metadata(context, document, ui);
 
   // Render popups in the same window/ID stack as the actions that open them.
@@ -179,32 +182,24 @@ void render_save_export_buttons(PatchEditorContext &context,
   }
 }
 
+/// The LFO section's sliders: one width for the two, wide enough for the
+/// longer name.
+float lfo_slider_width() {
+  return std::max(
+      hslider_width(),
+      named_slider_fit_width("Frequency Modulation Sensitivity", "0"));
+}
+
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
+  // The LFO's switch and rate are how the patch is played, set from the
+  // menu bar; what the patch holds is how far it follows the LFO.
   ImGui::SeparatorText("Low Frequency Oscillator");
-  bool lfo_enable = patch.global.lfo_enable;
-  if (ImGui::Checkbox("LFO", &lfo_enable)) {
-    track_instant_patch_history(context, "LFO",
-                                [&] { patch.global.lfo_enable = lfo_enable; });
-  }
 
-  ImGui::PushItemWidth(hslider_width());
-
-  int lfo_freq = patch.global.lfo_frequency;
-
-  if (!lfo_enable)
-    ImGui::BeginDisabled(true);
-  bool lfo_freq_changed = ImGui::SliderInt("LFO Frequency", &lfo_freq, 0, 7);
-
-  track_patch_history(context, "LFO Frequency", "global.lfo_frequency");
-  if (lfo_freq_changed) {
-    patch.global.lfo_frequency = static_cast<uint8_t>(lfo_freq);
-  }
-
-  ImGui::Spacing();
+  ImGui::PushItemWidth(lfo_slider_width());
 
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed =
-      ImGui::SliderInt("Amplitude Modulation Sensitivity", &ams, 0, 3);
+      named_slider_int("Amplitude Modulation Sensitivity", &ams, 0, 3);
   track_patch_history(context, "Amplitude Modulation Sensitivity",
                       "channel.am_sensitivity");
   if (ams_changed) {
@@ -213,14 +208,12 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
 
   int fms = patch.channel.frequency_modulation_sensitivity;
   bool fms_changed =
-      ImGui::SliderInt("Frequency Modulation Sensitivity", &fms, 0, 7);
+      named_slider_int("Frequency Modulation Sensitivity", &fms, 0, 7);
   track_patch_history(context, "Frequency Modulation Sensitivity",
                       "channel.fm_sensitivity");
   if (fms_changed) {
     patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(fms);
   }
-  if (!lfo_enable)
-    ImGui::EndDisabled();
 
   ImGui::PopItemWidth();
   ImGui::Spacing();
@@ -228,31 +221,23 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
 
 void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   ImGui::SeparatorText("Channel");
-  bool left_speaker = patch.channel.left_speaker;
-  if (ImGui::Checkbox("Left Speaker", &left_speaker)) {
-    track_instant_patch_history(context, "Left Speaker", [&] {
-      patch.channel.left_speaker = left_speaker;
-    });
-  }
-
-  ImGui::SameLine();
-
-  bool right_speaker = patch.channel.right_speaker;
-  if (ImGui::Checkbox("Right Speaker", &right_speaker)) {
-    track_instant_patch_history(context, "Right Speaker", [&] {
-      patch.channel.right_speaker = right_speaker;
-    });
-  }
-
   ImGui::PushItemWidth(hslider_width());
 
-  if (const auto *preview =
-          get_algorithm_preview_texture(patch.instrument.algorithm)) {
-    preview_image(*preview);
-  }
+  // The slider stands beside the diagram, as tall as it, at the spacing
+  // between any two items.
+  const float diagram_height = ui::scale::px(48.0f);
+  algorithm_diagram(patch.instrument.algorithm,
+                    ImVec2(ImGui::CalcItemWidth(), diagram_height));
+  ImGui::SameLine();
+  ImGui::PushStyleVarY(
+      ImGuiStyleVar_FramePadding,
+      std::max((diagram_height - ImGui::GetFontSize()) * 0.5f, 0.0f));
 
   int algorithm = patch.instrument.algorithm;
-  bool algorithm_changed = ImGui::SliderInt("Algorithm", &algorithm, 0, 7);
+  ImGui::SetNextItemWidth(
+      std::min(ImGui::CalcItemWidth(), ImGui::GetContentRegionAvail().x));
+  bool algorithm_changed = named_slider_int("Algorithm", &algorithm, 0, 7);
+  ImGui::PopStyleVar();
   track_patch_history(context, "Algorithm", "instrument.algorithm");
   if (algorithm_changed) {
     patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
@@ -266,18 +251,11 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
                              const EnvelopeVoices &voices) {
 
   const auto avail_width = ImGui::GetContentRegionAvail().x;
-  bool space_for_feedbacks[4] = {false};
   const float column_min_width = ui::scale::px(250.0f);
   if (avail_width > column_min_width * 4) {
     ImGui::Columns(4, "operation_columns", false);
-    space_for_feedbacks[0] = true;
-    space_for_feedbacks[1] = true;
-    space_for_feedbacks[2] = true;
-    space_for_feedbacks[3] = true;
   } else if (avail_width > column_min_width * 2) {
     ImGui::Columns(2, "operation_columns", false);
-    space_for_feedbacks[0] = true;
-    space_for_feedbacks[1] = true;
   } else {
     ImGui::Columns(1, "operation_columns", false);
   }
@@ -289,7 +267,7 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
   echo_selection_highlights(context);
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_state(slot),
-                           space_for_feedbacks[slot], voices);
+                           voices);
 
     ImGui::Spacing();
     ImGui::NextColumn();
@@ -609,8 +587,12 @@ void render_document_window(PatchEditorContext &context,
     render_save_export_buttons(context, document, ui, state, is_active);
     ImGui::Spacing();
 
+    // Side by side while each of the two even columns holds the LFO's
+    // sliders.
     const auto available_width = ImGui::GetContentRegionAvail().x;
-    ImGui::Columns(available_width > ui::scale::px(800.0f) ? 2 : 1,
+    const float column_width =
+        lfo_slider_width() + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    ImGui::Columns(available_width >= column_width * 2.0f ? 2 : 1,
                    "##lfo_channel_columns", false);
     render_lfo_section(context, patch);
     ImGui::NextColumn();
@@ -619,8 +601,10 @@ void render_document_window(PatchEditorContext &context,
     // Only the active document is what the chip is playing.
     render_operator_section(context, patch,
                             is_active ? frame.voices : EnvelopeVoices{});
+    render_patch_editor_tools(context, patch);
     handle_operator_deselect(context);
     handle_operator_shortcuts(context, patch);
+    scroll_reveal::step();
     ImGui::PopID();
   }
   view_patch_drop_target();

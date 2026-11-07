@@ -15,7 +15,6 @@ void test_every_view_has_its_area() {
   CHECK(area_of(ui::patch_editor_window_title("bass", 3)) == Area::Main);
   CHECK(area_of(ui::WAVEFORM_TITLE) == Area::FooterLeft);
   CHECK(area_of(ui::SOFT_KEYBOARD_TITLE) == Area::FooterRight);
-  CHECK(area_of(ui::MML_CONSOLE_TITLE) == Area::FooterRight);
   CHECK(area_of(ui::PATCH_LAB_TITLE) == Area::FooterRight);
   CHECK(area_of(ui::panel_window_title(
             ui::WAVEFORM_ICON, ui::WAVEFORM_TITLE)) == Area::FooterLeft);

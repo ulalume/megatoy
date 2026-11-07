@@ -242,7 +242,7 @@ MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
       [&ctx](const ym2612::Note &note) {
         return ctx.services.audio_manager.notes().published_contains(note);
       },
-      [&ctx]() { return ctx.services.audio_manager.notes().published_notes(); },
+      ctx.services.patch_session.playback().operator_enable,
   };
 }
 
@@ -282,22 +282,13 @@ PreferencesContext make_preferences_context(AppContext &ctx) {
   };
 }
 
-MmlConsoleContext make_mml_console_context(AppContext &ctx) {
-  auto &ui_state = ctx.app_state().ui_state();
-  return {
-      ui_state.prefs,
-      [&ctx]() -> const ym2612::Patch & {
-        return ctx.services.patch_session.current_patch();
-      },
-  };
-}
-
 WaveformContext make_waveform_context(AppContext &ctx) {
   return {
       ctx.app_state().ui_state().prefs,
       ctx.services.audio_manager.scope_buffer(),
       ctx.services.spectrum_analyzer,
       ctx.services.audio_manager.sample_rate(),
+      [&ctx]() { return ctx.services.audio_manager.notes().published_notes(); },
   };
 }
 
@@ -311,9 +302,15 @@ FrameContexts::FrameContexts(AppContext &ctx)
       patch_selector(make_patch_selector_context(ctx)),
       preferences(make_preferences_context(ctx)),
       midi_keyboard(make_midi_keyboard_context(ctx)),
-      mml_console(make_mml_console_context(ctx)),
       patch_lab(make_patch_lab_context(ctx)),
       waveform(make_waveform_context(ctx)) {
+  main_menu.bar_centre_size = [this](BarCentreFit fit) {
+    return scale_play_size(midi_keyboard, fit);
+  };
+  main_menu.bar_centre = [this](BarCentreFit fit, float left, float right,
+                                float row_y) {
+    render_scale_play(midi_keyboard, fit, left, right, row_y);
+  };
   patch_editor.begin_history = [&ctx, this](const std::string &label,
                                             const std::string &merge_key) {
     patch_actions::activate_document(ctx, patch_editor.document);

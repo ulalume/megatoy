@@ -10,7 +10,7 @@
 #include "patch_selector.hpp"
 #include "patches/patch_lab.hpp"
 #include "patches/patch_lab_sources.hpp"
-#include "patches/patch_tweak.hpp"
+#include "side_list.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chrono>
@@ -269,61 +269,11 @@ void remember_result(PatchLabState &state, std::string label,
                                                .patch = patch});
 }
 
-void render_tweak_slider(PatchLabContext &context, PatchLabState &state,
-                         const char *label, patch_lab::Tweak tweak) {
-  auto &instrument = context.session.current_patch().instrument;
-  const auto value = patch_lab::tweak_value(instrument, tweak);
-  const auto range =
-      patch_lab::tweak_range(state.tweak_base.value_or(instrument), tweak);
-  const auto text = patch_lab::tweak_text(instrument, tweak);
-
-  // Rates run like the operator editor's sliders: toward the end that
-  // sounds longer.
-  const bool longer_first = tweak == patch_lab::Tweak::Attack ||
-                            tweak == patch_lab::Tweak::Decay ||
-                            tweak == patch_lab::Tweak::Release;
-  int shown = value.value_or(range.min);
-  ImGui::BeginDisabled(!value);
-  // No typing: a slider that moves two registers has no one number to type.
-  const bool changed =
-      ImGui::SliderInt(label, &shown, longer_first ? range.max : range.min,
-                       longer_first ? range.min : range.max, text.c_str(),
-                       ImGuiSliderFlags_NoInput);
-  ImGui::EndDisabled();
-
-  if (ImGui::IsItemActivated()) {
-    state.tweak_base = instrument;
-    // Empty merge key: each drag is its own undo step.
-    context.begin_history(std::string("Tweak ") + label, {});
-  }
-  if (changed && state.tweak_base) {
-    instrument = patch_lab::with_tweak(*state.tweak_base, tweak, shown);
-  }
-  if (ImGui::IsItemDeactivated()) {
-    state.tweak_base.reset();
-  }
-  if (ImGui::IsItemDeactivatedAfterEdit()) {
-    context.commit_history();
-  }
-}
-
-void render_tweak_section(PatchLabContext &context, PatchLabState &state) {
-  ImGui::TextWrapped("Shapes the current patch as a whole.");
-  ImGui::Spacing();
-
-  render_tweak_slider(context, state, "Volume", patch_lab::Tweak::Volume);
-  render_tweak_slider(context, state, "Brightness",
-                      patch_lab::Tweak::Brightness);
-  render_tweak_slider(context, state, "Attack", patch_lab::Tweak::Attack);
-  render_tweak_slider(context, state, "Decay", patch_lab::Tweak::Decay);
-  render_tweak_slider(context, state, "Release", patch_lab::Tweak::Release);
-}
-
 void render_random_section(PatchLabContext &context, PatchLabState &state) {
-  ImGui::TextWrapped("Generates a new patch each time.");
+  ImGui::TextWrapped("Makes a new patch from scratch.");
   ImGui::Spacing();
 
-  if (ImGui::Button("Apply to current patch")) {
+  if (ImGui::Button("Generate")) {
     state.random_template_iterations =
         std::clamp(state.random_template_iterations, 0, 8);
     patch_lab::RandomOptions options;
@@ -333,84 +283,12 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
     auto result = patch_lab::random_patch(options);
     const auto key = "patch_lab.random: " + std::to_string(result.seed);
     remember_result(state, "Random", result.patch);
-    apply_patch_result(context, "Patch Lab Randomize", key, result.patch);
-  }
-}
-
-void render_merge_section(PatchLabContext &context, PatchLabState &state,
-                          const std::vector<EntryDisplay> &entries) {
-  ImGui::TextWrapped(
-      "Mixes two patches, taking each parameter from one of them at random.");
-  ImGui::Spacing();
-
-  render_source_slots(context, state, entries);
-
-  ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
-  if (ImGui::Button("Merge into current patch")) {
-    ym2612::Patch patch_a;
-    ym2612::Patch patch_b;
-    if (auto error = load_sources(context, state, patch_a, patch_b)) {
-      state.merge_error = std::move(*error);
-    } else {
-      auto result = patch_lab::merge(patch_a, patch_b);
-      remember_result(state, "Mix", result.patch);
-      apply_patch_result(context, "Patch Lab Merge", result.patch.hash(),
-                         result.patch);
-      state.merge_error.clear();
-    }
-  }
-  ImGui::EndDisabled();
-
-  if (!state.merge_error.empty()) {
-    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%s",
-                       state.merge_error.c_str());
-  }
-}
-
-void render_morph_section(PatchLabContext &context, PatchLabState &state,
-                          const std::vector<EntryDisplay> &entries) {
-  ImGui::TextWrapped(
-      "Blends between two patches.");
-  ImGui::Spacing();
-
-  render_source_slots(context, state, entries);
-
-  ImGui::SliderFloat("Blend", &state.morph_mix, 0.0f, 1.0f);
-  ImGui::Checkbox("Interpolate algorithm", &state.morph_interpolate_algorithm);
-
-  ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
-  if (ImGui::Button("Morph into current patch")) {
-    ym2612::Patch patch_a;
-    ym2612::Patch patch_b;
-    if (auto error = load_sources(context, state, patch_a, patch_b)) {
-      state.morph_error = std::move(*error);
-    } else {
-      patch_lab::MorphOptions options;
-      options.mix = state.morph_mix;
-      options.interpolate_algorithm = state.morph_interpolate_algorithm;
-
-      auto result = patch_lab::morph(patch_a, patch_b, options);
-      const int percentage =
-          static_cast<int>(std::lround(state.morph_mix * 100.0f));
-      remember_result(state, "Morph " + std::to_string(percentage) + "%",
-                      result.patch);
-      apply_patch_result(context, "Patch Lab Morph", result.patch.hash(),
-                         result.patch);
-      state.morph_error.clear();
-    }
-  }
-  ImGui::EndDisabled();
-
-  if (!state.morph_error.empty()) {
-    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%s",
-                       state.morph_error.c_str());
+    apply_patch_result(context, "Patch Lab Random", key, result.patch);
   }
 }
 
 void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
-  ImGui::TextWrapped(
-      "Perturbs the current patch; adjust variation depth and probability, "
-      "and optionally lock the algorithm.");
+  ImGui::TextWrapped("Varies the current patch at random.");
   ImGui::Spacing();
 
   state.mutate_amount = std::clamp(state.mutate_amount, 0, 12);
@@ -421,7 +299,7 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::Checkbox("Allow algorithm change",
                   &state.mutate_allow_algorithm_change);
 
-  if (ImGui::Button("Mutate Current Patch")) {
+  if (ImGui::Button("Generate")) {
     patch_lab::MutateOptions options;
     options.amount = state.mutate_amount;
     options.probability = state.mutate_probability;
@@ -431,6 +309,84 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
     patch_lab::mutate_in_place(before, options);
     remember_result(state, "Mutate", before);
     apply_patch_result(context, "Patch Lab Mutate", before.hash(), before);
+  }
+}
+
+/// A radio button with a line under it saying what it does.
+bool described_radio(const char *label, bool active, const char *description) {
+  const bool clicked = ImGui::RadioButton(label, active);
+  ImGui::Indent(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x);
+  ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%s",
+                     description);
+  ImGui::Unindent(ImGui::GetFrameHeight() +
+                  ImGui::GetStyle().ItemInnerSpacing.x);
+  return clicked;
+}
+
+ym2612::Patch mixed(const PatchLabState &state, const ym2612::Patch &a,
+                    const ym2612::Patch &b) {
+  if (state.mix_mode == PatchLabState::MixMode::Pick) {
+    return patch_lab::merge(a, b).patch;
+  }
+  patch_lab::MorphOptions options;
+  options.mix = state.blend;
+  options.interpolate_algorithm = state.blend_interpolate_algorithm;
+  return patch_lab::morph(a, b, options).patch;
+}
+
+void render_mix_section(PatchLabContext &context, PatchLabState &state,
+                        const std::vector<EntryDisplay> &entries) {
+  ImGui::TextWrapped("Makes a patch from two others.");
+  ImGui::Spacing();
+
+  render_source_slots(context, state, entries);
+  ImGui::Spacing();
+
+  using MixMode = PatchLabState::MixMode;
+  if (described_radio("Pick", state.mix_mode == MixMode::Pick,
+                      "Each parameter from A or B, at random")) {
+    state.mix_mode = MixMode::Pick;
+  }
+  if (described_radio("Blend", state.mix_mode == MixMode::Blend,
+                      "In between A and B")) {
+    state.mix_mode = MixMode::Blend;
+  }
+  if (state.mix_mode == MixMode::Blend) {
+    const float indent =
+        ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x;
+    ImGui::Indent(indent);
+    // Its own id: the radio button above is "Blend" too.
+    ImGui::SliderFloat("Blend##amount", &state.blend, 0.0f, 1.0f);
+    ImGui::Checkbox("Interpolate algorithm",
+                    &state.blend_interpolate_algorithm);
+    ImGui::Unindent(indent);
+  }
+
+  ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
+  if (ImGui::Button("Generate")) {
+    ym2612::Patch patch_a;
+    ym2612::Patch patch_b;
+    if (auto error = load_sources(context, state, patch_a, patch_b)) {
+      state.mix_error = std::move(*error);
+    } else {
+      const auto patch = mixed(state, patch_a, patch_b);
+      const std::string label =
+          state.mix_mode == MixMode::Pick
+              ? "Pick"
+              : "Blend " +
+                    std::to_string(
+                        static_cast<int>(std::lround(state.blend * 100.0f))) +
+                    "%";
+      remember_result(state, label, patch);
+      apply_patch_result(context, "Patch Lab Mix", patch.hash(), patch);
+      state.mix_error.clear();
+    }
+  }
+  ImGui::EndDisabled();
+
+  if (!state.mix_error.empty()) {
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%s",
+                       state.mix_error.c_str());
   }
 }
 
@@ -474,38 +430,33 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     return;
   }
 
+  static constexpr const char *kPages[] = {
+      ICON_FA_DICE " Random", ICON_FA_VIRUS " Mutate", ICON_FA_SHUFFLE " Mix"};
+  const int page =
+      side_list("##patch_lab_pages", kPages);
+
   const float available = ImGui::GetContentRegionAvail().x;
-  const float left_width = std::max(320.0f, available * 0.62f);
-  if (ImGui::BeginChild("##PatchLabControls", ImVec2(left_width, 0), false)) {
-    if (ui::begin_tab_bar("##Patch Lab Operators",
-                          ImGuiTabBarFlags_SaveSettings)) {
-      auto &repository = context.session.repository();
-      if (ui::begin_tab_item(ICON_FA_SLIDERS " Tweak")) {
-        render_tweak_section(context, state);
-        ImGui::EndTabItem();
-      }
-      if (ui::begin_tab_item(ICON_FA_DICE " Random")) {
-        render_random_section(context, state);
-        ImGui::EndTabItem();
-      }
-      if (ui::begin_tab_item(ICON_FA_SHUFFLE " Mix")) {
-        const auto &entries = current_entries(state, repository);
-        render_merge_section(context, state, entries);
-        ImGui::EndTabItem();
-      }
-      if (ui::begin_tab_item(ICON_FA_FLASK_VIAL " Morph")) {
-        const auto &entries = current_entries(state, repository);
-        render_morph_section(context, state, entries);
-        ImGui::EndTabItem();
-      }
-      if (ui::begin_tab_item(ICON_FA_VIRUS " Mutate")) {
-        render_mutate_section(context, state);
-        ImGui::EndTabItem();
-      }
-      ImGui::EndTabBar();
+  const float controls_width =
+      std::max(ui::scale::px(320.0f), available * 0.6f);
+  // One child per page, so each keeps its own scroll.
+  ImGui::PushID(page);
+  if (ImGui::BeginChild("##PatchLabControls", ImVec2(controls_width, 0),
+                        false)) {
+    switch (page) {
+    case 0:
+      render_random_section(context, state);
+      break;
+    case 1:
+      render_mutate_section(context, state);
+      break;
+    default:
+      render_mix_section(context, state,
+                         current_entries(state, context.session.repository()));
+      break;
     }
   }
   ImGui::EndChild();
+  ImGui::PopID();
   ImGui::SameLine();
   ImGui::PushStyleColor(ImGuiCol_Border,
                         styles::color(styles::MegatoyCol::PanelBorder));

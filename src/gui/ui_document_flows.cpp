@@ -124,9 +124,6 @@ bool *panel_switch(UIPreferences &prefs, std::string_view name) {
   if (name == SOFT_KEYBOARD_TITLE) {
     return &prefs.show_midi_keyboard;
   }
-  if (name == MML_CONSOLE_TITLE) {
-    return &prefs.show_mml_console;
-  }
   if (name == WAVEFORM_TITLE) {
     return &prefs.show_waveform;
   }

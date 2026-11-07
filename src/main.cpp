@@ -6,8 +6,8 @@
 #include "audio/audio_command.hpp"
 #include "core/status.hpp"
 #include "drop_actions.hpp"
-#include "gui/components/envelope_image.hpp"
 #include "gui/envelope/envelope_curve.hpp"
+#include "gui/frame_requests.hpp"
 #include "gui/input/history_shortcuts.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
@@ -16,11 +16,15 @@
 #include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
+#include "gui/input/touch.hpp"
 #include "platform/web/web_folder_import.hpp"
 #include "platform/web/web_platform_services.hpp"
 #include "system/path_service.hpp"
+#include <emscripten.h>
+#include <emscripten/html5.h>
 #else
 #include "platform/native/desktop_platform_services.hpp"
+#include <SDL3/SDL.h>
 #endif
 #include "runtime_context.hpp"
 #include <algorithm>
@@ -57,6 +61,48 @@ void handle_file_drop(void *user_pointer, int count, const char **paths) {
   }
 }
 
+void draw_frame(RuntimeContext &runtime);
+
+#if defined(MEGATOY_PLATFORM_WEB)
+/// Set as the page shows again; the next frame looks at the sound.
+bool page_shown_again = false;
+
+/**
+ * A phone stops a page's sound while it is hidden and may not let the same
+ * player start again; a new one starts at the next touch. Fingers down as
+ * the page hid are never heard lifting.
+ */
+bool on_visibility_change(int, const EmscriptenVisibilityChangeEvent *event,
+                          void *) {
+  if (event->hidden) {
+    ui::touch::release_all();
+  } else {
+    page_shown_again = true;
+  }
+  return false;
+}
+
+/// SDL keeps the browser's player for the next device; without it, the
+/// device opened next makes a new one.
+void drop_sound_player() {
+  EM_ASM({
+    var sdl = Module['SDL3'];
+    if (sdl && sdl.audioContext) {
+      sdl.audioContext.close();
+      sdl.audioContext = undefined;
+    }
+  });
+}
+
+bool sound_is_running() {
+  return EM_ASM_INT({
+    const sdl = Module['SDL3'];
+    const context = sdl && sdl.audioContext;
+    return context && context.state == 'running' ? 1 : 0;
+  });
+}
+#endif
+
 bool run_frame(RuntimeContext &runtime) {
   auto &services = runtime.app_context->services;
   auto &app_state = runtime.app_context->state;
@@ -73,28 +119,78 @@ bool run_frame(RuntimeContext &runtime) {
     }
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  services.gui_manager.poll_events();
-#else
   constexpr std::uint64_t kSignalTailFrames = AppServices::SampleRate / 10;
-  // A sounding voice moves along its envelope graph frame by frame, whether
-  // or not the waveform is shown.
-  const bool display_is_live =
-      (app_state.ui_state().prefs.show_waveform &&
-       services.audio_manager.scope_buffer().signal_within(
-           kSignalTailFrames)) ||
-      ui::envelope_voices_moving();
-  const auto before_wait = platform::FrameScheduler::Clock::now();
+  // The waveform moves while there is sound; anything else that moves on its
+  // own asked for the next frame while the last was drawn.
+  const auto display_is_live = [&] {
+    return (app_state.ui_state().prefs.show_waveform &&
+            services.audio_manager.scope_buffer().signal_within(
+                kSignalTailFrames)) ||
+           ui::drawing_wanted();
+  };
+
+#if defined(MEGATOY_PLATFORM_WEB)
+  // The browser calls this at every display refresh. A frame not due yet is
+  // skipped, and the canvas keeps showing the last one.
+  const bool received_event = services.gui_manager.poll_events();
+  if (std::exchange(page_shown_again, false) && !sound_is_running()) {
+    drop_sound_player();
+    services.audio_manager.reopen_device();
+  }
+  const auto frame_started = platform::FrameScheduler::Clock::now();
+  if (runtime.frame_scheduler
+          .wait_before_frame(frame_started, false,
+                             received_event || display_is_live())
+          .count() > 0) {
+    return true;
+  }
+#else
   const auto wait = runtime.frame_scheduler.wait_before_frame(
-      before_wait, services.gui_manager.is_minimized(), display_is_live);
+      platform::FrameScheduler::Clock::now(),
+      services.gui_manager.is_minimized(), display_is_live());
   const bool received_event =
       services.gui_manager.poll_events(static_cast<int>(wait.count()));
   const auto frame_started = platform::FrameScheduler::Clock::now();
+#endif
   if (received_event) {
     runtime.frame_scheduler.note_interaction(frame_started);
   }
   runtime.frame_scheduler.note_frame_started(frame_started);
+
+  draw_frame(runtime);
+  return true;
+}
+
+#if !defined(MEGATOY_PLATFORM_WEB)
+/**
+ * Draws a frame while the window is being resized. macOS keeps the main loop
+ * waiting in its own until the resize ends, and SDL calls this from there,
+ * on the main thread, for each step of it.
+ */
+bool draw_while_resizing(void *runtime, SDL_Event *event) {
+  if (event->type == SDL_EVENT_WINDOW_EXPOSED && event->window.data1 == 1) {
+    draw_frame(*static_cast<RuntimeContext *>(runtime));
+  }
+  return true;
+}
 #endif
+
+/// Everything of a frame after its events are in. Not again inside itself:
+/// a resize step can arrive from an event loop a frame runs, such as a
+/// native dialog's.
+void draw_frame(RuntimeContext &runtime) {
+  static bool drawing = false;
+  if (drawing) {
+    return;
+  }
+  drawing = true;
+  struct Done {
+    bool &flag;
+    ~Done() { flag = false; }
+  } done{drawing};
+
+  auto &services = runtime.app_context->services;
+  auto &app_state = runtime.app_context->state;
 
   runtime.midi->poll();
   if (auto ports = runtime.midi->take_changed_ports()) {
@@ -149,7 +245,6 @@ bool run_frame(RuntimeContext &runtime) {
   }
   services.preference_manager.set_ui_preferences(app_state.ui_state().prefs);
   services.gui_manager.end_frame();
-  return true;
 }
 
 } // namespace
@@ -207,6 +302,7 @@ int main(int argc, char *argv[]) {
       });
   platform::web::install_drop_import(
       megatoy::system::PathService::web_storage_root());
+  emscripten_set_visibilitychange_callback(nullptr, true, on_visibility_change);
 #endif
 
   MEGATOY_APP_STORAGE MidiInputManager midi(
@@ -241,6 +337,9 @@ int main(int argc, char *argv[]) {
 
   MEGATOY_APP_STORAGE RuntimeContext runtime{&app_context, &midi, true};
 
+#if !defined(MEGATOY_PLATFORM_WEB)
+  SDL_AddEventWatch(draw_while_resizing, &runtime);
+#endif
   platform::run_main_loop(runtime, run_frame);
 #if defined(MEGATOY_PLATFORM_WEB)
   // The loop is registered and the app lives in static storage; the page
