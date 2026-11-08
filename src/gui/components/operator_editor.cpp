@@ -842,19 +842,23 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   // SSG Type Envelope Control (0-7)
-  // As tall as a frame, and as wide as the four cycles need.
+  // The diagram, as tall as a frame, takes what the checkbox leaves of the
+  // row, down to twice its height; the checkbox is named while the name
+  // fits as well, and the slider below names it anyway.
   const float ssg_height = ImGui::GetFrameHeight();
+  const float row_room = block_left + content_width - frame_padding() -
+                         ImGui::GetCursorPosX() - style.ItemSpacing.x -
+                         ImGui::GetFrameHeight();
+  const float ssg_name_width =
+      style.ItemInnerSpacing.x + ImGui::CalcTextSize("SSG-EG").x;
+  const float ssg_least_width = ssg_height * 2.0f;
+  const bool ssg_named = row_room - ssg_name_width >= ssg_least_width;
   ssg_diagram(op.ssg_enable, op.ssg_type_envelope_control,
-              ImVec2(ui::scale::px(72.0f) + ssg_height - ui::scale::px(18.0f),
+              ImVec2(std::max(ssg_named ? row_room - ssg_name_width : row_room,
+                              ssg_least_width),
                      ssg_height));
   ImGui::SameLine();
 
-  // Named while the name fits before the panel's edge; the slider below
-  // names it anyway.
-  const bool ssg_named = ImGui::GetCursorPosX() + ImGui::GetFrameHeight() +
-                             style.ItemInnerSpacing.x +
-                             ImGui::CalcTextSize("SSG-EG").x <=
-                         block_left + content_width - frame_padding();
   operator_checkbox(widget, ssg_named ? "SSG-EG" : "##SSG-EG", "SSG-EG",
                     &ym2612::OperatorSettings::ssg_enable);
   if (!ssg_named && ImGui::IsItemHovered()) {
