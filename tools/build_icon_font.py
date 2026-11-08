@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Builds assets/fonts/megatoy-icons.otf from the SVGs in tools/icons.
+"""Builds assets/fonts/megatoy-icons.otf, every icon megatoy draws.
 
-Each SVG is one filled glyph on Font Awesome's grid: a 512-high viewBox with
-the baseline at y = 448. Also writes src/gui/fonts/megatoy_icons.hpp and the
-instrument icon table, src/patches/instrument_icon_table.inc, from the
-icon groups of ym2612-patches' vocabulary.json. Requires fontTools.
+The font holds the UI icons tools/icons/manifest.json lists, in its order,
+and the instrument icons of ym2612-patches' vocabulary.json, by group; each
+is tools/icons/<name>.svg, one filled glyph on Font Awesome's grid: a
+512-high viewBox with the baseline at y = 448 (import_icons.py brings them
+in). Also writes src/gui/fonts/megatoy_icons.hpp, naming the UI icons
+ICON_MEGATOY_<NAME>, and the instrument icon table,
+src/patches/instrument_icon_table.inc. Requires fontTools.
 
 Usage: build_icon_font.py <ym2612-patches>/vocabulary.json
 """
@@ -29,15 +32,17 @@ INSTRUMENT_GROUPS = [
 # Shown for a patch without an icon.
 INSTRUMENT_NONE = 'music-note'
 
-# Code points below Font Awesome's range (ICON_MIN_FA = 0xe005): megatoy's
-# own UI icons, each named in the header as ICON_MEGATOY_<NAME>.
+root = Path(__file__).resolve().parent.parent
+icons = root / 'tools' / 'icons'
+
+# The UI icons, from U+E000 in the manifest's order.
+UI_FIRST = 0xE000
 UI_GLYPHS = {
-    'piano': 0xE000,
-    'refresh': 0xE001,
-    'plus': 0xE002,
-}
+    icon['name']: UI_FIRST + i
+    for i, icon in enumerate(
+        json.loads((icons / 'manifest.json').read_text())['ui'])}
 GLYPHS = dict(UI_GLYPHS)
-# The instrument icons, in a block Font Awesome's font leaves empty.
+# The instrument icons, in a block of their own.
 INSTRUMENT_FIRST = 0xE900
 INSTRUMENTS = [INSTRUMENT_NONE] + [
     name for _, names in INSTRUMENT_GROUPS for name in names]
@@ -49,8 +54,6 @@ UNITS_PER_EM = 512
 ASCENT = 448
 DESCENT = -64
 
-root = Path(__file__).resolve().parent.parent
-icons = root / 'tools' / 'icons'
 output = root / 'assets' / 'fonts' / 'megatoy-icons.otf'
 header = root / 'src' / 'gui' / 'fonts' / 'megatoy_icons.hpp'
 table = root / 'src' / 'patches' / 'instrument_icon_table.inc'

@@ -15,7 +15,6 @@
 #include "patch_selector.hpp"
 #include "patches/patch_lab.hpp"
 #include "patches/patch_lab_sources.hpp"
-#include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -105,7 +104,7 @@ bool render_source_list(const patches::PatchSession &session,
   std::snprintf(filter_buffer, sizeof(filter_buffer), "%s",
                 filter_text.c_str());
   if (ImGui::InputTextWithHint("##filter",
-                               ICON_FA_MAGNIFYING_GLASS " Search...",
+                               ICON_MEGATOY_MAGNIFYING_GLASS " Search...",
                                filter_buffer, sizeof(filter_buffer))) {
     filter_text = filter_buffer;
   }
@@ -524,8 +523,8 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
 }
 
 /// The pages' names and icons, in the order the list shows them.
-constexpr const char *kPageIcons[] = {ICON_FA_DICE, ICON_FA_VIRUS,
-                                      ICON_FA_SHUFFLE};
+constexpr const char *kPageIcons[] = {ICON_MEGATOY_DICE, ICON_MEGATOY_VIRUS,
+                                      ICON_MEGATOY_SHUFFLE};
 constexpr const char *kPageNames[] = {"Random", "Mutate", "Mix"};
 
 /// Puts back the page and settings `result` was made with, and its patch.

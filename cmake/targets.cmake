@@ -236,7 +236,6 @@ target_include_directories(megatoy_core PUBLIC
   ${stb_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_BINARY_DIR}
-  ${iconfontcppheaders_SOURCE_DIR}
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

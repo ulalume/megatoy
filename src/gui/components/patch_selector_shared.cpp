@@ -12,7 +12,7 @@
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
 
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
 #include <cstring>
 #include <imgui.h>
@@ -223,7 +223,7 @@ void render_filter_bar(PatchSelectorContext &context) {
   // The clear button sits over the box's right end and has to win the hover.
   ImGui::SetNextItemAllowOverlap();
   if (ImGui::InputTextWithHint("##SharedSearch",
-                               ICON_FA_MAGNIFYING_GLASS " Search...",
+                               ICON_MEGATOY_MAGNIFYING_GLASS " Search...",
                                search_buffer, sizeof(search_buffer))) {
     prefs.metadata_search_query = std::string(search_buffer);
   }
@@ -235,7 +235,8 @@ void render_filter_bar(PatchSelectorContext &context) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_Text,
                           ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    if (ImGui::Button(ICON_FA_XMARK "##clear_search", ImVec2(size, size))) {
+    if (ImGui::Button(ICON_MEGATOY_XMARK "##clear_search",
+                      ImVec2(size, size))) {
       prefs.metadata_search_query.clear();
     }
     ImGui::PopStyleColor(2);

@@ -4,6 +4,7 @@
 #include "core/types.hpp"
 #include "gui/areas.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/fonts/megatoy_icons.hpp"
 #include "gui/frame_requests.hpp"
 #include "gui/input/key_name_utils.hpp"
 #include "gui/input/keyboard_typing.hpp"
@@ -11,7 +12,6 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "util.hpp"
-#include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <cmath>
 #include <imgui.h>
@@ -674,9 +674,11 @@ namespace {
 /// as it toggles.
 std::pair<const char *, const char *> scale_play_labels(BarCentreFit fit) {
   if (fit == BarCentreFit::Icon) {
-    return {ICON_FA_PLAY "###scale_play", ICON_FA_STOP "###scale_play"};
+    return {ICON_MEGATOY_PLAY "###scale_play",
+            ICON_MEGATOY_STOP "###scale_play"};
   }
-  return {ICON_FA_PLAY " Play###scale_play", ICON_FA_STOP " Stop###scale_play"};
+  return {ICON_MEGATOY_PLAY " Play###scale_play",
+          ICON_MEGATOY_STOP " Stop###scale_play"};
 }
 
 float scale_play_switch_width(BarCentreFit fit) {

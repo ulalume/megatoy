@@ -10,7 +10,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
 #include <chord_detector.h>
 #include <cmath>
@@ -353,7 +353,7 @@ void render_waveform(const char *title, WaveformContext &context) {
   draw_spectrum(spectrum_panel, context.spectrum, context.sample_rate);
   end_panel(spectrum_panel);
 
-  draw_centred_glyph(ICON_FA_XMARK, close_min, close_max,
+  draw_centred_glyph(ICON_MEGATOY_XMARK, close_min, close_max,
                      close_hovered
                          ? ImGui::GetColorU32(ImGuiCol_Text)
                          : styles::color_u32(styles::MegatoyCol::TextMuted));

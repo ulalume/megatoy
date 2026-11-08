@@ -14,13 +14,13 @@
 #include "gui/components/common.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/components/preferences.hpp"
+#include "gui/fonts/megatoy_icons.hpp"
 #include "gui/image/app_icon.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
-#include <IconsFontAwesome7.h>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -331,11 +331,12 @@ struct BarMenu {
     return fit == BarCentreFit::Icon ? icon : full;
   }
 };
-constexpr BarMenu kFileMenu{ICON_FA_FILE " File###File",
-                            ICON_FA_FILE "###File"};
-constexpr BarMenu kEditMenu{ICON_FA_PEN_TO_SQUARE " Edit###Edit",
-                            ICON_FA_PEN_TO_SQUARE "###Edit"};
-constexpr BarMenu kViewMenu{ICON_FA_EYE " View###View", ICON_FA_EYE "###View"};
+constexpr BarMenu kFileMenu{ICON_MEGATOY_FILE " File###File",
+                            ICON_MEGATOY_FILE "###File"};
+constexpr BarMenu kEditMenu{ICON_MEGATOY_PEN_TO_SQUARE " Edit###Edit",
+                            ICON_MEGATOY_PEN_TO_SQUARE "###Edit"};
+constexpr BarMenu kViewMenu{ICON_MEGATOY_EYE " View###View",
+                            ICON_MEGATOY_EYE "###View"};
 
 /// How far a menu in the bar takes the next one along.
 float bar_menu_advance(const char *label) {
@@ -349,10 +350,10 @@ float bar_menu_advance(const char *label) {
  * keeps its size as it switches.
  */
 std::string lfo_menu_label(bool short_label, bool on) {
-  const char *on_label =
-      short_label ? ICON_FA_WAVE_SQUARE " On" : ICON_FA_WAVE_SQUARE " LFO On";
-  const char *off_label =
-      short_label ? ICON_FA_WAVE_SQUARE " Off" : ICON_FA_WAVE_SQUARE " LFO Off";
+  const char *on_label = short_label ? ICON_MEGATOY_WAVE_SQUARE " On"
+                                     : ICON_MEGATOY_WAVE_SQUARE " LFO On";
+  const char *off_label = short_label ? ICON_MEGATOY_WAVE_SQUARE " Off"
+                                      : ICON_MEGATOY_WAVE_SQUARE " LFO Off";
   const float widest = std::max(ImGui::CalcTextSize(on_label).x,
                                 ImGui::CalcTextSize(off_label).x);
   std::string label = on ? on_label : off_label;

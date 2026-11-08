@@ -1,6 +1,6 @@
 #include "star_rating.hpp"
 
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
 #include <imgui.h>
 
@@ -8,11 +8,12 @@ namespace ui {
 
 const std::array<std::string_view, 6> kStarLabels = {
     "-",
-    ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
-    ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR ICON_FA_STAR,
+    ICON_MEGATOY_STAR,
+    ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
+    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
+    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
+    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR
+        ICON_MEGATOY_STAR,
 };
 
 float star_rating_width() {

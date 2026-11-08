@@ -10,7 +10,7 @@
 #include "patch_selector_shared.hpp"
 #include "patch_tree_view.hpp"
 
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
@@ -38,8 +38,8 @@ const char *add_folder_label() {
 
 /// The labelled button, under the prompt shown while there are no folders.
 void render_add_folder_button(PatchSelectorContext &context) {
-  const std::string label = std::string(ICON_FA_FOLDER_PLUS " ") +
-                            add_folder_label();
+  const std::string label =
+      std::string(ICON_MEGATOY_FOLDER_PLUS " ") + add_folder_label();
   if (ImGui::Button(label.c_str())) {
     context.add_folder();
   }
@@ -54,7 +54,8 @@ float render_add_folder_icon(PatchSelectorContext &context) {
   const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
   ImGui::SetCursorScreenPos(ImVec2(right - size, row.y));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-  if (ImGui::Button(ICON_FA_FOLDER_PLUS "##add_folder", ImVec2(size, size))) {
+  if (ImGui::Button(ICON_MEGATOY_FOLDER_PLUS "##add_folder",
+                    ImVec2(size, size))) {
     context.add_folder();
   }
   ImGui::PopStyleColor();

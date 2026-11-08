@@ -16,7 +16,7 @@
 #if defined(MEGATOY_PLATFORM_WEB)
 #include <emscripten.h>
 #endif
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -63,7 +63,6 @@ constexpr License kLicenses[] = {
     {"kissfft", "BSD-3-Clause", "kissfft-BSD-3-Clause.txt"},
     {"efsw", "MIT", "efsw-MIT.txt"},
     {"miniz", "MIT", "miniz-MIT.txt"},
-    {"IconFontCppHeaders", "zlib", "iconfontcppheaders-zlib.txt"},
     {"Font Awesome Free", "CC BY / OFL / MIT", "font-awesome-license.txt"},
     {"IconOven", "MIT", "iconoven-MIT.txt"},
     {"chord_detector", "MIT", "chord-detector-MIT.txt"},
@@ -382,7 +381,7 @@ void render_licenses(AboutModalState &state) {
 
   if (state.license_open) {
     // Back to the list, at the top left, beside the component's name.
-    if (ImGui::Button(ICON_FA_ARROW_LEFT "##back_to_licenses")) {
+    if (ImGui::Button(ICON_MEGATOY_ARROW_LEFT "##back_to_licenses")) {
       state.license_open = false;
     }
     ImGui::SetItemTooltip("All licenses");

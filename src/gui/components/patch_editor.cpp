@@ -8,6 +8,7 @@
 #include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
+#include "gui/fonts/megatoy_icons.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -20,7 +21,6 @@
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
 #include "view_patch_drop.hpp"
-#include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <filesystem>
 #include <imgui.h>
@@ -533,7 +533,7 @@ void render_disk_change_bar(PatchEditorContext &context,
                             UIState::DocumentUi &ui) {
   ImGui::AlignTextToFramePadding();
   ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
-                     ICON_FA_TRIANGLE_EXCLAMATION
+                     ICON_MEGATOY_TRIANGLE_EXCLAMATION
                      " The file was changed outside megatoy.");
   ImGui::SameLine();
   if (ImGui::Button("Reload")) {

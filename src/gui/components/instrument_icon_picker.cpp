@@ -7,7 +7,7 @@
 #include "gui/ui_scale.hpp"
 #include "patches/instrument_icons.hpp"
 
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
@@ -148,8 +148,9 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
     keep_drawing();
   }
   ImGui::SetNextItemWidth(width);
-  ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " Filter...",
-                           filter, sizeof(filter));
+  ImGui::InputTextWithHint("##filter",
+                           ICON_MEGATOY_MAGNIFYING_GLASS " Filter...", filter,
+                           sizeof(filter));
 
   std::optional<std::string> picked;
   // As tall as a list row.
