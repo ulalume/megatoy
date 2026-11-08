@@ -539,6 +539,9 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         const ImU32 text_color =
             is_white ? white_key_text_col : black_key_text_col;
         const auto mapped = context.state.reverse_mappings.find(note);
+        // How far down the key's typing name reaches, to keep its note name
+        // off it.
+        float key_name_bottom = key_min.y;
         if (mapped != context.state.reverse_mappings.end()) {
           typed_min = std::min(typed_min, key_min.x);
           typed_max = std::max(typed_max, key_max.x);
@@ -560,14 +563,19 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
           draw_list->AddText(
               ImVec2(key_min.x + (key_width - text_size.x) * 0.5f, text_top),
               text_color, key_text.c_str());
+          key_name_bottom = text_top + text_size.y;
         }
+        // The note's name at the key's foot, left out where the keys are too
+        // short for it to clear the typing name.
         if (note.key == keyboard_settings.key) {
           const std::string key_text = note.name();
           const ImVec2 text_size = ImGui::CalcTextSize(key_text.c_str());
-          draw_list->AddText(
-              ImVec2(key_min.x + (key_width - text_size.x) * 0.5f,
-                     key_max.y - text_size.y - 5.0f),
-              text_color, key_text.c_str());
+          const float top = key_max.y - text_size.y - 5.0f;
+          if (top >= key_name_bottom + ui::scale::px(2.0f)) {
+            draw_list->AddText(
+                ImVec2(key_min.x + (key_width - text_size.x) * 0.5f, top),
+                text_color, key_text.c_str());
+          }
         }
       }
     }
