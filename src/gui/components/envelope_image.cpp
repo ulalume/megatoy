@@ -484,56 +484,78 @@ constexpr float kHandleScale = 1.5f;
 constexpr float kHandleGap = 2.0f;
 
 /**
- * Moves each handle that would overlap one before it along the axis, to the
- * nearest place clear of all of them, inside the plot; one with no such
- * place stays. Only where a dot is drawn and grabbed moves: a drag reads
- * what the handle stands for, not where it is drawn.
+ * Moves handles that would overlap along the axis until they stand a gap
+ * apart, inside the plot. The attack, decay and sustain handles follow one
+ * another in time and keep that order, pushed right and, at the plot's right
+ * edge, back left; the release handle, on a line of its own, goes to the
+ * nearest place clear of them. Only where a dot is drawn and grabbed moves:
+ * a drag reads what the handle stands for, not where it is drawn.
  */
 void spread_handles(ui::envelope::EnvelopeHandles &handles) {
+  auto &items = handles.items;
   const float least = handles.metrics.radius * 2.0f + ui::scale::px(kHandleGap);
   const float left = handles.plot.min.x + handles.metrics.radius;
   const float right = handles.plot.max.x - handles.metrics.radius;
-  for (int i = 1; i < ui::envelope::kHandleCount; ++i) {
-    auto &item = handles.items[i];
-    if (!item.shown) {
-      continue;
+  // How far apart along the axis two handles have to be at their heights,
+  // or nothing where they cannot meet.
+  const auto apart = [&](const ui::envelope::EnvelopeHandle &a,
+                         const ui::envelope::EnvelopeHandle &b) {
+    const float dy = a.pos.y - b.pos.y;
+    return a.shown && b.shown && std::abs(dy) < least
+               ? std::sqrt(least * least - dy * dy)
+               : 0.0f;
+  };
+
+  std::vector<ui::envelope::EnvelopeHandle *> chain;
+  for (const auto index :
+       {ui::envelope::kAttackHandle, ui::envelope::kDecayHandle,
+        ui::envelope::kSustainHandle}) {
+    if (items[index].shown) {
+      chain.push_back(&items[index]);
     }
-    // How far apart along the axis it has to be from each handle before it
-    // at its height, or nothing where the two cannot meet.
-    std::array<float, ui::envelope::kHandleCount> apart{};
-    for (int j = 0; j < i; ++j) {
-      const float dy = item.pos.y - handles.items[j].pos.y;
-      apart[j] = handles.items[j].shown && std::abs(dy) < least
-                     ? std::sqrt(least * least - dy * dy)
-                     : 0.0f;
-    }
-    const auto clear_at = [&](float x) {
-      for (int j = 0; j < i; ++j) {
-        if (std::abs(x - handles.items[j].pos.x) < apart[j] - 0.01f) {
-          return false;
-        }
-      }
-      return x >= left && x <= right;
-    };
-    if (clear_at(item.pos.x)) {
-      continue;
-    }
-    // Beside each handle it meets, on either side: the nearest clear one.
-    float best = item.pos.x;
-    float best_distance = -1.0f;
-    for (int j = 0; j < i; ++j) {
-      for (const float x : {handles.items[j].pos.x + apart[j],
-                            handles.items[j].pos.x - apart[j]}) {
-        const float distance = std::abs(x - item.pos.x);
-        if (apart[j] > 0.0f && clear_at(x) &&
-            (best_distance < 0.0f || distance < best_distance)) {
-          best = x;
-          best_distance = distance;
-        }
-      }
-    }
-    item.pos.x = best;
   }
+  for (std::size_t k = 1; k < chain.size(); ++k) {
+    chain[k]->pos.x = std::max(
+        chain[k]->pos.x, chain[k - 1]->pos.x + apart(*chain[k], *chain[k - 1]));
+  }
+  for (std::size_t k = chain.size(); k-- > 0;) {
+    const float limit =
+        k + 1 < chain.size()
+            ? chain[k + 1]->pos.x - apart(*chain[k], *chain[k + 1])
+            : right;
+    chain[k]->pos.x = std::max(std::min(chain[k]->pos.x, limit), left);
+  }
+
+  auto &release = items[ui::envelope::kReleaseHandle];
+  if (!release.shown) {
+    return;
+  }
+  const auto clear_at = [&](float x) {
+    for (const auto *other : chain) {
+      if (std::abs(x - other->pos.x) < apart(release, *other) - 0.01f) {
+        return false;
+      }
+    }
+    return x >= left && x <= right;
+  };
+  if (clear_at(release.pos.x)) {
+    return;
+  }
+  // Beside each handle it meets, on either side: the nearest clear one.
+  float best = release.pos.x;
+  float best_distance = -1.0f;
+  for (const auto *other : chain) {
+    const float gap = apart(release, *other);
+    for (const float x : {other->pos.x + gap, other->pos.x - gap}) {
+      const float distance = std::abs(x - release.pos.x);
+      if (gap > 0.0f && clear_at(x) &&
+          (best_distance < 0.0f || distance < best_distance)) {
+        best = x;
+        best_distance = distance;
+      }
+    }
+  }
+  release.pos.x = best;
 }
 
 ui::envelope::EnvelopeHandles
