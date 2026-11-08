@@ -7,11 +7,13 @@ is tools/icons/<name>.svg, one filled glyph on Font Awesome's grid: a
 512-high viewBox with the baseline at y = 448 (import_icons.py brings them
 in). Also writes src/gui/fonts/megatoy_icons.hpp, naming the UI icons
 ICON_MEGATOY_<NAME>, and the instrument icon table,
-src/patches/instrument_icon_table.inc. Requires fontTools.
+src/patches/instrument_icon_table.inc. Requires the packages in
+tools/requirements.txt.
 
 Usage: build_icon_font.py <ym2612-patches>/vocabulary.json
 """
 import json
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -31,6 +33,10 @@ INSTRUMENT_GROUPS = [
     for group in json.loads(Path(sys.argv[1]).read_text())['icon']]
 # Shown for a patch without an icon.
 INSTRUMENT_NONE = 'music-note'
+
+# The font's timestamps, fixed so a rebuild from the same icons is the same
+# file.
+os.environ.setdefault('SOURCE_DATE_EPOCH', '0')
 
 root = Path(__file__).resolve().parent.parent
 icons = root / 'tools' / 'icons'
@@ -98,6 +104,7 @@ def write_header():
 
 // Icons drawn for megatoy: assets/fonts/megatoy-icons.otf, built from
 // tools/icons by tools/build_icon_font.py, which writes this file.
+// clang-format off
 #define ICON_MIN_MEGATOY {min(UI_GLYPHS.values()):#x}
 #define ICON_MAX_MEGATOY {max(UI_GLYPHS.values()):#x}
 {ui_lines}#define ICON_MIN_MEGATOY_INSTRUMENT {INSTRUMENT_FIRST:#x}

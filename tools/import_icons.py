@@ -16,8 +16,8 @@ tools/icons/<name>.svg for each icon whose "from" is
 
 Icons already there are left alone unless --force. The second form outlines
 every 24x24 stroke SVG in SOURCE_DIR into tools/icons/<name>.svg, as the
-instrument icons drawn for megatoy were. Requires fontTools, picosvg and
-skia-pathops.
+instrument icons drawn for megatoy were. Requires the packages in
+tools/requirements.txt.
 """
 import argparse
 import json

@@ -1,0 +1,4 @@
+# For import_icons.py and build_icon_font.py: pip install -r tools/requirements.txt
+fonttools==4.68.0
+picosvg==0.23.0
+skia-pathops==0.9.2
