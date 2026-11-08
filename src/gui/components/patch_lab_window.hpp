@@ -35,17 +35,38 @@ struct PatchLabSource {
 };
 
 struct PatchLabState {
+  /// How Mix makes its patch: each parameter from one source, or in between.
+  enum class MixMode { Pick, Blend };
+  /// The pages, in the order the list down the left shows them.
+  enum class Page { Random, Mutate, Mix };
+
   struct SessionResult {
     std::uint64_t id = 0;
-    std::string label;
+    Page page = Page::Random;
+    /// What it was made with, shown above when it was made; empty when the
+    /// page has nothing to set.
+    std::string settings;
     std::string created_at;
     ym2612::Patch patch;
+    // The page's settings it was made with, put back when it is chosen.
+    int mutate_amount = 0;
+    float mutate_probability = 0.0f;
+    bool mutate_allow_algorithm_change = false;
+    MixMode mix_mode = MixMode::Pick;
+    float blend = 0.0f;
+    bool blend_interpolate_algorithm = false;
+    PatchLabSource source_a;
+    PatchLabSource source_b;
   };
+
+  Page page = Page::Random;
 
   // Generated patches live only for this app session. New results are
   // inserted at the front so the most recent experiment is always visible.
   std::vector<SessionResult> results;
   std::uint64_t next_result_id = 1;
+  /// The result last made or chosen, while its page is shown.
+  std::optional<std::uint64_t> chosen_result;
 
   // Randomize
   int random_template_iterations = 4;
@@ -59,8 +80,6 @@ struct PatchLabState {
   std::uint64_t entries_revision = 0;
   std::string mix_error;
 
-  /// How Mix makes its patch: each parameter from one source, or in between.
-  enum class MixMode { Pick, Blend };
   MixMode mix_mode = MixMode::Pick;
   float blend = 0.5f;
   bool blend_interpolate_algorithm = true;

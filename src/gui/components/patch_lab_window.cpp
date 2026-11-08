@@ -9,10 +9,10 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "imgui_internal.h"
+#include "named_slider.hpp"
 #include "patch_selector.hpp"
 #include "patches/patch_lab.hpp"
 #include "patches/patch_lab_sources.hpp"
-#include "side_list.hpp"
 #include <IconsFontAwesome7.h>
 #include <algorithm>
 #include <chrono>
@@ -300,8 +300,13 @@ void apply_patch_result(PatchLabContext &context,
   context.commit_history();
 }
 
-void remember_result(PatchLabState &state, std::string label,
-                     const ym2612::Patch &patch) {
+/**
+ * Keeps a result with the settings it was made with, at the front of the
+ * list, as the chosen one. A patch the list already holds moves there rather
+ * than being listed twice.
+ */
+void remember_result(PatchLabState &state, PatchLabState::Page page,
+                     std::string settings, const ym2612::Patch &patch) {
   const auto now = std::chrono::system_clock::now();
   const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
   std::tm local_time{};
@@ -313,10 +318,41 @@ void remember_result(PatchLabState &state, std::string label,
   char time_text[9]{};
   std::strftime(time_text, sizeof(time_text), "%H:%M:%S", &local_time);
 
-  state.results.insert(state.results.begin(), {.id = state.next_result_id++,
-                                               .label = std::move(label),
-                                               .created_at = time_text,
-                                               .patch = patch});
+  const auto hash = patch.hash();
+  std::erase_if(state.results, [&](const auto &result) {
+    return result.patch.hash() == hash;
+  });
+  PatchLabState::SessionResult result{
+      .id = state.next_result_id++,
+      .page = page,
+      .settings = std::move(settings),
+      .created_at = time_text,
+      .patch = patch,
+      .mutate_amount = state.mutate_amount,
+      .mutate_probability = state.mutate_probability,
+      .mutate_allow_algorithm_change = state.mutate_allow_algorithm_change,
+      .mix_mode = state.mix_mode,
+      .blend = state.blend,
+      .blend_interpolate_algorithm = state.blend_interpolate_algorithm,
+      .source_a = state.source_a,
+      .source_b = state.source_b};
+  state.chosen_result = result.id;
+  state.results.insert(state.results.begin(), std::move(result));
+}
+
+/// A share as a whole percentage.
+int percent(float share) {
+  return static_cast<int>(std::lround(share * 100.0f));
+}
+
+/// A slider over 0 to 1 shown in whole percent, its name inside it.
+bool named_percent_slider(const char *label, float &share) {
+  int value = percent(share);
+  if (!named_slider_int(label, &value, 0, 100, "%d%%")) {
+    return false;
+  }
+  share = static_cast<float>(value) / 100.0f;
+  return true;
 }
 
 void render_random_section(PatchLabContext &context, PatchLabState &state) {
@@ -332,7 +368,7 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
 
     auto result = patch_lab::random_patch(options);
     const auto key = "patch_lab.random: " + std::to_string(result.seed);
-    remember_result(state, "Random", result.patch);
+    remember_result(state, PatchLabState::Page::Random, {}, result.patch);
     apply_patch_result(context, "Patch Lab Random", key, result.patch);
   }
 }
@@ -344,8 +380,10 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
   state.mutate_amount = std::clamp(state.mutate_amount, 0, 12);
   state.mutate_probability = std::clamp(state.mutate_probability, 0.0f, 1.0f);
 
-  ImGui::SliderInt("Variation depth", &state.mutate_amount, 0, 12);
-  ImGui::SliderFloat("Probability", &state.mutate_probability, 0.0f, 1.0f);
+  ImGui::PushItemWidth(-FLT_MIN);
+  named_slider_int("Variation Depth", &state.mutate_amount, 0, 12);
+  named_percent_slider("Probability", state.mutate_probability);
+  ImGui::PopItemWidth();
   ImGui::Checkbox("Allow algorithm change",
                   &state.mutate_allow_algorithm_change);
 
@@ -357,7 +395,10 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
 
     auto before = context.session.current_patch();
     patch_lab::mutate_in_place(before, options);
-    remember_result(state, "Mutate", before);
+    remember_result(state, PatchLabState::Page::Mutate,
+                    "Depth " + std::to_string(state.mutate_amount) + ", " +
+                        std::to_string(percent(state.mutate_probability)) + "%",
+                    before);
     apply_patch_result(context, "Patch Lab Mutate", before.hash(), before);
   }
 }
@@ -406,7 +447,8 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
         ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x;
     ImGui::Indent(indent);
     // Its own id: the radio button above is "Blend" too.
-    ImGui::SliderFloat("Blend##amount", &state.blend, 0.0f, 1.0f);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    named_percent_slider("Blend##amount", state.blend);
     ImGui::Checkbox("Interpolate algorithm",
                     &state.blend_interpolate_algorithm);
     ImGui::Unindent(indent);
@@ -420,14 +462,11 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
       state.mix_error = std::move(*error);
     } else {
       const auto patch = mixed(state, patch_a, patch_b);
-      const std::string label =
+      const std::string settings =
           state.mix_mode == MixMode::Pick
               ? "Pick"
-              : "Blend " +
-                    std::to_string(
-                        static_cast<int>(std::lround(state.blend * 100.0f))) +
-                    "%";
-      remember_result(state, label, patch);
+              : "Blend " + std::to_string(percent(state.blend)) + "%";
+      remember_result(state, PatchLabState::Page::Mix, settings, patch);
       apply_patch_result(context, "Patch Lab Mix", patch.hash(), patch);
       state.mix_error.clear();
     }
@@ -440,27 +479,128 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
   }
 }
 
-void render_result_list(PatchLabContext &context, PatchLabState &state) {
-  ImGui::SeparatorText("Results");
-  if (state.results.empty()) {
-    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
-                       "Generated patches appear here.");
-    return;
-  }
+/// The pages' names and icons, in the order the list shows them.
+constexpr const char *kPageIcons[] = {ICON_FA_DICE, ICON_FA_VIRUS,
+                                      ICON_FA_SHUFFLE};
+constexpr const char *kPageNames[] = {"Random", "Mutate", "Mix"};
 
-  for (const auto &result : state.results) {
-    ImGui::PushID(static_cast<int>(result.id));
-    const std::string display_label = result.label + "  " + result.created_at;
-    if (ImGui::Selectable(display_label.c_str())) {
-      apply_patch_result(context, "Apply Patch Lab Result",
-                         "patch_lab.result:" + std::to_string(result.id),
-                         result.patch);
-    }
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Apply to current patch");
-    }
-    ImGui::PopID();
+/// Puts back the page and settings `result` was made with, and its patch.
+void choose_result(PatchLabContext &context, PatchLabState &state,
+                   const PatchLabState::SessionResult &result) {
+  state.page = result.page;
+  state.chosen_result = result.id;
+  if (result.page == PatchLabState::Page::Mutate) {
+    state.mutate_amount = result.mutate_amount;
+    state.mutate_probability = result.mutate_probability;
+    state.mutate_allow_algorithm_change = result.mutate_allow_algorithm_change;
+  } else if (result.page == PatchLabState::Page::Mix) {
+    state.mix_mode = result.mix_mode;
+    state.blend = result.blend;
+    state.blend_interpolate_algorithm = result.blend_interpolate_algorithm;
+    state.source_a = result.source_a;
+    state.source_b = result.source_b;
   }
+  apply_patch_result(context, "Apply Patch Lab Result",
+                     "patch_lab.result:" + std::to_string(result.id),
+                     result.patch);
+}
+
+/// How wide the list down the left is: room for a page's name, and for a
+/// result's settings at their longest.
+float lab_list_width() {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  float text = ImGui::CalcTextSize("Depth 12, 100%").x;
+  for (std::size_t i = 0; i < std::size(kPageNames); ++i) {
+    text = std::max(text, ImGui::CalcTextSize(kPageNames[i]).x);
+  }
+  return ImGui::GetFontSize() + style.ItemInnerSpacing.x + text +
+         style.FramePadding.x * 2.0f + style.WindowPadding.x * 2.0f;
+}
+
+/// A row of the list: the icon, then a line of text, and under it a second
+/// one, muted, when there is one.
+bool lab_list_row(const char *icon, const char *text, const char *muted_text,
+                  bool selected) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float line = ImGui::GetTextLineHeight();
+  const float gap = ui::scale::px(2.0f);
+  const ImVec2 row = ImGui::GetCursorScreenPos();
+  const bool two_lines = text != nullptr && muted_text != nullptr;
+  const bool clicked = ImGui::Selectable(
+      "##row", selected, 0, ImVec2(0.0f, two_lines ? line * 2.0f + gap : line));
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const float inset = style.FramePadding.x;
+  const ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
+  const ImU32 muted_color =
+      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  draw_list->AddText(ImVec2(row.x + inset, row.y), text_color, icon);
+  const float text_x =
+      row.x + inset + ImGui::GetFontSize() + style.ItemInnerSpacing.x;
+  if (text != nullptr) {
+    draw_list->AddText(ImVec2(text_x, row.y), text_color, text);
+  }
+  if (muted_text != nullptr) {
+    draw_list->AddText(ImVec2(text_x, two_lines ? row.y + line + gap : row.y),
+                       muted_color, muted_text);
+  }
+  return clicked;
+}
+
+/// The pages down the left, and under them the results made on them, each
+/// with its page's icon, what it was made with and when; choosing one puts
+/// back its page and settings.
+void render_lab_list(PatchLabContext &context, PatchLabState &state) {
+  if (ImGui::BeginChild("##patch_lab_list", ImVec2(lab_list_width(), 0.0f))) {
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
+    // A row's highlight reaches half the spacing above it, the first one's
+    // too.
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + list_row_spacing() * 0.5f);
+    for (std::size_t i = 0; i < std::size(kPageNames); ++i) {
+      const auto page = static_cast<PatchLabState::Page>(i);
+      ImGui::PushID(static_cast<int>(i));
+      if (lab_list_row(kPageIcons[i], kPageNames[i], nullptr,
+                       state.page == page && !state.chosen_result)) {
+        state.page = page;
+        state.chosen_result.reset();
+      }
+      ImGui::PopID();
+    }
+    ImGui::PopStyleVar();
+
+    ImGui::SeparatorText("Results");
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + list_row_spacing() * 0.5f);
+    if (state.results.empty()) {
+      ImGui::PushStyleColor(ImGuiCol_Text,
+                            styles::color(styles::MegatoyCol::TextMuted));
+      ImGui::TextWrapped("Generated patches appear here.");
+      ImGui::PopStyleColor();
+    }
+    const PatchLabState::SessionResult *chosen = nullptr;
+    for (const auto &result : state.results) {
+      ImGui::PushID(static_cast<int>(result.id));
+      const bool has_settings = !result.settings.empty();
+      if (lab_list_row(kPageIcons[static_cast<std::size_t>(result.page)],
+                       has_settings ? result.settings.c_str() : nullptr,
+                       result.created_at.c_str(),
+                       state.chosen_result == result.id)) {
+        chosen = &result;
+      }
+      ImGui::PopID();
+    }
+    ImGui::PopStyleVar();
+    if (chosen != nullptr) {
+      choose_result(context, state, *chosen);
+    }
+  }
+  ImGui::EndChild();
+
+  const float gap = ImGui::GetStyle().ItemSpacing.x;
+  const float x = ImGui::GetItemRectMax().x + gap;
+  ImGui::GetWindowDrawList()->AddLine(ImVec2(x, ImGui::GetItemRectMin().y),
+                                      ImVec2(x, ImGui::GetItemRectMax().y),
+                                      ImGui::GetColorU32(ImGuiCol_Separator));
+  ImGui::SameLine(0.0f, gap * 2.0f);
 }
 
 } // namespace
@@ -480,26 +620,18 @@ void render_patch_lab(const char *title, PatchLabContext &context,
     return;
   }
 
-  static constexpr const char *kPages[] = {
-      ICON_FA_DICE " Random", ICON_FA_VIRUS " Mutate", ICON_FA_SHUFFLE " Mix"};
-  const int page =
-      side_list("##patch_lab_pages", kPages);
-
-  const float available = ImGui::GetContentRegionAvail().x;
-  const float controls_width =
-      std::max(ui::scale::px(320.0f), available * 0.6f);
+  render_lab_list(context, state);
   // One child per page, so each keeps its own scroll.
-  ImGui::PushID(page);
-  if (ImGui::BeginChild("##PatchLabControls", ImVec2(controls_width, 0),
-                        false)) {
-    switch (page) {
-    case 0:
+  ImGui::PushID(static_cast<int>(state.page));
+  if (ImGui::BeginChild("##PatchLabControls", ImVec2(0, 0), false)) {
+    switch (state.page) {
+    case PatchLabState::Page::Random:
       render_random_section(context, state);
       break;
-    case 1:
+    case PatchLabState::Page::Mutate:
       render_mutate_section(context, state);
       break;
-    default:
+    case PatchLabState::Page::Mix:
       render_mix_section(context, state,
                          current_entries(state, context.session.repository()));
       break;
@@ -507,16 +639,6 @@ void render_patch_lab(const char *title, PatchLabContext &context,
   }
   ImGui::EndChild();
   ImGui::PopID();
-  ImGui::SameLine();
-  ImGui::PushStyleColor(ImGuiCol_Border,
-                        styles::color(styles::MegatoyCol::PanelBorder));
-  const bool results_open =
-      ImGui::BeginChild("##PatchLabResults", ImVec2(0, 0), true);
-  ImGui::PopStyleColor();
-  if (results_open) {
-    render_result_list(context, state);
-  }
-  ImGui::EndChild();
 
   ImGui::End();
 }
