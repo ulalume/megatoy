@@ -316,16 +316,16 @@ void render_directory_row(PatchSelectorContext &context,
         heading
             ? ImGui::GetColorU32(ImGuiCol_Text)
             : ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
-    float name_x = row_min.x + style.FramePadding.x + name_offset();
+    // Every row's name stands at the same distance past its arrow or icon.
+    const float name_x = row_min.x + style.FramePadding.x + name_offset();
     if (heading) {
-      // Where the node's arrow and name would stand.
+      // Where a node's arrow stands.
       const ImVec2 icon_min(row_min.x + style.FramePadding.x, row_min.y);
       draw_centred_glyph(
           row.is_open ? ICON_MEGATOY_FOLDER_OPEN : ICON_MEGATOY_FOLDER,
           icon_min,
           ImVec2(icon_min.x + ImGui::GetFontSize(), row_min.y + row_height()),
           color);
-      name_x = row_min.x + ImGui::GetFontSize() + style.FramePadding.x * 2.0f;
     }
     draw_list->AddText(ImVec2(name_x, text_y), color, display_name.c_str());
     if (!item.telling_parents.empty()) {
