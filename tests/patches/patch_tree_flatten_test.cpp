@@ -302,6 +302,30 @@ void test_search_key_ignores_surrounding_spaces() {
   CHECK(search_key("").empty());
 }
 
+void test_a_star_word_asks_for_a_rating() {
+  using patches::parse_search;
+  const auto rated = parse_search("Bass *4 Lead");
+  CHECK(rated.min_stars == 4);
+  CHECK(rated.text_lower == "bass lead");
+  CHECK(parse_search("*2").text_lower.empty());
+  CHECK(parse_search("*2").min_stars == 2);
+  CHECK(parse_search("*1 *5 x").min_stars == 5);
+  CHECK(parse_search("*1 *5 x").text_lower == "x");
+  // Not rating words.
+  CHECK(parse_search("*6").min_stars == 0);
+  CHECK(parse_search("*45").text_lower == "*45");
+  CHECK(parse_search("a*4").min_stars == 0);
+  CHECK(parse_search("*").text_lower == "*");
+}
+
+void test_a_star_word_is_changed_or_put_in_front() {
+  using patches::with_star_word;
+  CHECK(with_star_word("", 3) == "*3 ");
+  CHECK(with_star_word("bass", 3) == "*3 bass");
+  CHECK(with_star_word("bass *3 lead", 5) == "bass *5 lead");
+  CHECK(with_star_word("*1 *2", 4) == "*4 *4");
+}
+
 int main() {
   test_closed_tree_lists_visible_top_level_only();
   test_a_filter_opens_the_directories_down_to_each_match();
@@ -315,6 +339,8 @@ int main() {
   test_matching_patches_stand_in_one_list();
   test_directories_above_an_entry();
   test_search_key_ignores_surrounding_spaces();
+  test_a_star_word_asks_for_a_rating();
+  test_a_star_word_is_changed_or_put_in_front();
 
   std::cout << "All patch tree flatten tests passed\n";
   return 0;
