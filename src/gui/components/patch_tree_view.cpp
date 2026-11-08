@@ -168,6 +168,27 @@ float row_margin() { return ui::list_row_spacing(); }
 
 float row_height() { return ImGui::GetTextLineHeight() + row_margin(); }
 
+/// How much larger than the text a patch's instrument icon is drawn.
+constexpr float kPatchIconScale = 1.5f;
+
+/// A patch's row: a folder's and more above and below, for its larger icon.
+float patch_row_height() { return row_height() + ui::scale::px(8.0f); }
+
+float row_height_of(const patches::TreeRow &row) {
+  return row.is_directory ? row_height() : patch_row_height();
+}
+
+/// How wide a patch's icon is drawn.
+float patch_icon_width() {
+  return std::round(ImGui::GetFontSize() * kPatchIconScale);
+}
+
+/// How far a name starts past a patch's icon or a folder's arrow, the two
+/// standing at one place: the icon's width and the frame padding after it.
+float name_offset() {
+  return patch_icon_width() + ImGui::GetStyle().FramePadding.x;
+}
+
 /// Text after what is already on the row, `drop` below the row's top. A folder
 /// row's text is already placed by its frame padding, so it takes none.
 void row_trailing_text(const char *text, const ImVec4 &color, float drop) {
@@ -178,24 +199,23 @@ void row_trailing_text(const char *text, const ImVec4 &color, float drop) {
   ImGui::PopStyleVar();
 }
 
-bool row_selectable(const char *label, bool selected = false) {
+bool row_selectable(const char *label, float height, bool selected = false) {
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
   const bool clicked =
       ImGui::Selectable(label, selected, ImGuiSelectableFlags_AllowDoubleClick,
-                        ImVec2(0.0f, row_height()));
+                        ImVec2(0.0f, height));
   ImGui::PopStyleVar(2);
   return clicked;
 }
 
-/// A patch's instrument icon and name, over a selectable that spans the row.
+/// A patch's instrument icon, larger than the text, and its name, over a
+/// selectable that spans the row.
 bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
   const std::string_view icon_id = item.metadata
                                        ? std::string_view(item.metadata->icon)
                                        : std::string_view();
-  const char *icon = patches::instrument_icons::glyph(icon_id);
-  // The name starts where a folder's does past its arrow.
-  const float name_x = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.x;
+  const float height = patch_row_height();
   const ImVec2 pos = ImGui::GetCursorScreenPos();
   // Sized to the icon and name, which the next item follows, while the
   // highlight still spans the row.
@@ -204,14 +224,15 @@ bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   const bool clicked = ImGui::Selectable(
       "##name", selected, flags,
-      ImVec2(name_x + ImGui::CalcTextSize(item.name.c_str()).x, row_height()));
+      ImVec2(name_offset() + ImGui::CalcTextSize(item.name.c_str()).x, height));
   ImGui::PopStyleVar();
-  const ImVec2 text(pos.x,
-                    pos.y + (row_height() - ImGui::GetTextLineHeight()) * 0.5f);
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  draw_list->AddText(text, instrument_icon_color(icon_id), icon);
-  draw_list->AddText(ImVec2(text.x + name_x, text.y),
-                     ImGui::GetColorU32(ImGuiCol_Text), item.name.c_str());
+  draw_instrument_icon(icon_id, pos,
+                       ImVec2(pos.x + patch_icon_width(), pos.y + height),
+                       kPatchIconScale);
+  ImGui::GetWindowDrawList()->AddText(
+      ImVec2(pos.x + name_offset(),
+             pos.y + (height - ImGui::GetTextLineHeight()) * 0.5f),
+      ImGui::GetColorU32(ImGuiCol_Text), item.name.c_str());
   return clicked;
 }
 
@@ -265,10 +286,28 @@ void render_directory_row(PatchSelectorContext &context,
     ImGui::PushStyleColor(ImGuiCol_Text,
                           styles::color(styles::MegatoyCol::TextMuted));
   }
-  const bool open = ImGui::TreeNodeEx(display_name.c_str(),
-                                      ImGuiTreeNodeFlags_SpanFullWidth |
-                                          ImGuiTreeNodeFlags_FramePadding |
-                                          ImGuiTreeNodeFlags_NoTreePushOnOpen);
+  // A folder's name stands where a patch's does past its larger icon, so it
+  // is drawn here rather than by the node.
+  const ImVec2 row_min = ImGui::GetCursorScreenPos();
+  const bool open = ImGui::TreeNodeEx(
+      heading ? display_name.c_str() : "##folder",
+      ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding |
+          ImGuiTreeNodeFlags_NoTreePushOnOpen);
+  if (!heading) {
+    const ImU32 muted = ImGui::GetColorU32(ImGuiCol_Text);
+    const float text_y =
+        row_min.y + (row_height() - ImGui::GetTextLineHeight()) * 0.5f;
+    const float name_x =
+        row_min.x + ImGui::GetStyle().FramePadding.x + name_offset();
+    draw_list->AddText(ImVec2(name_x, text_y), muted, display_name.c_str());
+    if (!item.telling_parents.empty()) {
+      draw_list->AddText(
+          ImVec2(name_x + ImGui::CalcTextSize(display_name.c_str()).x +
+                     ImGui::GetStyle().ItemSpacing.x,
+                 text_y),
+          muted, item.telling_parents.c_str());
+    }
+  }
   ImGui::PopStyleColor(heading ? 2 : 1);
   if (heading) {
     using styles::MegatoyCol;
@@ -290,7 +329,7 @@ void render_directory_row(PatchSelectorContext &context,
   if (open != row.is_open && !filtering) {
     cache.set_open(item.relative_path, open);
   }
-  if (!item.telling_parents.empty()) {
+  if (heading && !item.telling_parents.empty()) {
     row_trailing_text(item.telling_parents.c_str(),
                       styles::color(styles::MegatoyCol::TextMuted), 0.0f);
   }
@@ -319,7 +358,8 @@ void render_patch_row(PatchSelectorContext &context,
   ImGui::SameLine();
   ImGui::PushStyleColor(ImGuiCol_Text,
                         styles::color(styles::MegatoyCol::TextMuted));
-  const bool format_clicked = row_selectable(item.format.c_str());
+  const bool format_clicked =
+      row_selectable(item.format.c_str(), patch_row_height());
   ImGui::PopStyleColor();
   entry_context_menu(context, item);
   show_patch_tooltip(context.repository, item);
@@ -330,7 +370,8 @@ void render_patch_row(PatchSelectorContext &context,
       stars > 0) {
     row_trailing_text(
         kStarLabels[static_cast<std::size_t>(std::min(stars, 5))].data(),
-        styles::color(styles::MegatoyCol::TextMuted), row_margin() * 0.5f);
+        styles::color(styles::MegatoyCol::TextMuted),
+        (patch_row_height() - ImGui::GetTextLineHeight()) * 0.5f);
   }
 
   // A click previews the patch, a double click keeps it open.
@@ -419,10 +460,9 @@ void draw_drop_frame(const ImVec2 &min, const ImVec2 &max) {
 
 /// Scrolls the row at `row_top` into view: only as far as it takes for a row
 /// partly in view, otherwise to the middle.
-void scroll_to_row(float row_top) {
-  if (const auto scroll = patches::scroll_for_row(0, row_top, row_height(),
-                                                  ImGui::GetWindowHeight(),
-                                                  ImGui::GetScrollY())) {
+void scroll_to_row(float row_top, float height) {
+  if (const auto scroll = patches::scroll_for_row(
+          0, row_top, height, ImGui::GetWindowHeight(), ImGui::GetScrollY())) {
     ImGui::SetScrollY(*scroll);
   }
 }
@@ -442,7 +482,7 @@ std::vector<float> row_tops(const std::vector<patches::TreeRow> &rows) {
       y += gap;
     }
     tops.push_back(y);
-    y += row_height();
+    y += row_height_of(rows[i]);
   }
   tops.push_back(y);
   return tops;
@@ -477,7 +517,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
     });
     if (row != rows.end()) {
       scroll_to_row(ImGui::GetCursorPosY() +
-                    tops[static_cast<std::size_t>(row - rows.begin())]);
+                        tops[static_cast<std::size_t>(row - rows.begin())],
+                    row_height_of(*row));
     }
   }
 
@@ -486,7 +527,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
   const float left = origin.x;
   const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
   const ImRect clip = ImGui::GetCurrentWindow()->ClipRect;
-  const float height = row_height();
+  // The tallest a row stands, to find the first one in view.
+  const float height = patch_row_height();
   const bool can_drop = static_cast<bool>(context.move_patch);
   std::optional<DropHover> hover;
   const auto first = static_cast<std::size_t>(
@@ -514,7 +556,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
     DropHover held;
     if (can_drop &&
         row_drop_target(context, rows, index,
-                        ImRect(left, top, right, top + height), held)) {
+                        ImRect(left, top, right, top + row_height_of(row)),
+                        held)) {
       hover = held;
     }
   }
@@ -525,9 +568,10 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
   // even the rows out of view.
   if (hover) {
     const std::size_t last = patches::last_row_under(rows, hover->folder);
-    draw_drop_frame(ImVec2(left + row_indent(rows[hover->folder]),
-                           origin.y + tops[hover->folder]),
-                    ImVec2(right, origin.y + tops[last] + height));
+    draw_drop_frame(
+        ImVec2(left + row_indent(rows[hover->folder]),
+               origin.y + tops[hover->folder]),
+        ImVec2(right, origin.y + tops[last] + row_height_of(rows[last])));
   }
 
   return true;
