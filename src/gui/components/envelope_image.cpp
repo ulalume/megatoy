@@ -478,9 +478,9 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   return out;
 }
 
-/// How much larger the handles are drawn and grabbed than twice the
-/// library's size, and the least room left between two of them.
-constexpr float kHandleScale = 1.5f;
+/// How far from a handle a press takes it, and the least room left between
+/// two of them, before the interface's scale.
+constexpr float kHandleGrab = 10.5f;
 constexpr float kHandleGap = 2.0f;
 
 /**
@@ -779,13 +779,12 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   if (!wanted) {
     return {};
   }
-  // The dots drawn half as large again as a pixel wider all round than
-  // twice the library's size, the grab box grown to cover them, and none
+  // Larger dots than the library's, with a grab box to cover them, and none
   // drawn over another.
   const ui::envelope::HandleMetrics unscaled;
   const ui::envelope::HandleMetrics metrics{
-      ui::scale::px((unscaled.radius * 2.0f + 1.0f) * kHandleScale),
-      ui::scale::px((unscaled.grab + 1.0f) * kHandleScale),
+      ui::scale::px(kEnvelopeHandleRadius),
+      ui::scale::px(kHandleGrab),
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
   };

@@ -2,6 +2,7 @@
 
 #include "formats/ym2612_format_adapter.hpp"
 #include "gui/clipboard.hpp"
+#include "gui/components/envelope_image.hpp"
 #include "gui/components/named_slider.hpp"
 #include "gui/components/section_header.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -98,8 +99,9 @@ SliderState render_quick_edit_slider(PatchEditorContext &context,
 }
 
 constexpr int kTweakCount = 5;
-/// The sketch's handles' radius, before the interface's scale.
-constexpr float kSketchHandleRadius = 6.0f;
+/// How far from a sketch handle a press takes it, before the interface's
+/// scale.
+constexpr float kSketchHandleReach = kEnvelopeHandleRadius * 2.0f;
 
 /// Where the sketch draws the envelope's corners, from its rough shape.
 struct SketchPoints {
@@ -219,7 +221,7 @@ void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
   if (!pointer.over && !pointer.held) {
     return;
   }
-  const float radius = ui::scale::px(kSketchHandleRadius);
+  const float radius = ui::scale::px(kEnvelopeHandleRadius);
   for (const auto &[handle, at] :
        {std::pair{SketchHandle::Peak, p.peak},
         std::pair{SketchHandle::Knee, p.knee},
@@ -254,7 +256,7 @@ SketchPointer drag_quick_edit_sketch(PatchEditorContext &context,
     held = SketchHandle::None;
     const SketchPoints p = sketch_points(*shape, min, size);
     const ImVec2 mouse = ImGui::GetIO().MousePos;
-    float best = ui::scale::px(kSketchHandleRadius * 3.0f);
+    float best = ui::scale::px(kSketchHandleReach);
     for (const auto &[handle, at] :
          {std::pair{SketchHandle::Peak, p.peak},
           std::pair{SketchHandle::Knee, p.knee},
@@ -335,7 +337,7 @@ SketchPointer drag_quick_edit_sketch(PatchEditorContext &context,
   const SketchPoints p = sketch_points(*shape, min, size);
   const ImVec2 mouse = ImGui::GetIO().MousePos;
   SketchHandle near = SketchHandle::None;
-  float best = ui::scale::px(kSketchHandleRadius * 3.0f);
+  float best = ui::scale::px(kSketchHandleReach);
   for (const auto &[handle, at] :
        {std::pair{SketchHandle::Peak, p.peak},
         std::pair{SketchHandle::Knee, p.knee},
