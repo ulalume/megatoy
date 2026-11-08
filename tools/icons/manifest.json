@@ -99,6 +99,14 @@
     {
       "name": "xmark",
       "from": "fontawesome:xmark"
+    },
+    {
+      "name": "folder",
+      "from": "fontawesome:folder"
+    },
+    {
+      "name": "folder-open",
+      "from": "fontawesome:folder-open"
     }
   ]
 }
