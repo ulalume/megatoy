@@ -10,6 +10,7 @@
 namespace {
 
 using patches::flatten_visible_rows;
+using patches::matching_patch_rows;
 using patches::TreeRow;
 
 patches::PatchEntry make_file(const std::string &name,
@@ -246,6 +247,27 @@ void test_empty_tree_is_handled() {
 
 } // namespace
 
+void test_matching_patches_stand_in_one_list() {
+  const auto tree = make_tree();
+
+  // No directory rows, every patch at one depth.
+  const auto by_query = matching_patch_rows(tree, "zap", 0);
+  CHECK(paths_of(by_query) == std::vector<std::string>({"banks/fx/zap.opm"}));
+  CHECK(!by_query[0].is_directory);
+  CHECK(by_query[0].depth == 1);
+
+  // A folder's name lists what it holds.
+  CHECK(paths_of(matching_patch_rows(tree, "banks", 0)) ==
+        std::vector<std::string>({"banks/lead.dmp", "banks/fx/zap.opm"}));
+
+  // The star filter alone lists every patch rated that high.
+  CHECK(paths_of(matching_patch_rows(tree, "", 2)) ==
+        std::vector<std::string>({"banks/lead.dmp", "banks/fx/zap.opm"}));
+  CHECK(paths_of(matching_patch_rows(tree, "banks", 5)) ==
+        std::vector<std::string>({"banks/lead.dmp"}));
+  CHECK(matching_patch_rows(tree, "nothing", 0).empty());
+}
+
 void test_directories_above_an_entry() {
   patches::PatchEntry inner;
   inner.name = "inner";
@@ -290,6 +312,7 @@ int main() {
   test_a_directory_holding_nothing_is_listed_only_without_filters();
   test_a_directory_holding_only_an_empty_one_is_listed();
   test_empty_tree_is_handled();
+  test_matching_patches_stand_in_one_list();
   test_directories_above_an_entry();
   test_search_key_ignores_surrounding_spaces();
 

@@ -38,6 +38,18 @@ flatten_visible_rows(const std::vector<patches::PatchEntry> &tree,
                      const std::unordered_set<std::string> &open_directories);
 
 /**
+ * The patches that pass both filters, as one list in the tree's order with
+ * no directory rows, each at depth 1. A patch matches the query by itself or
+ * through a directory above it that does, so searching a folder's name lists
+ * what it holds.
+ *
+ * The returned rows point into `tree`, as flatten_visible_rows()'s do.
+ */
+std::vector<TreeRow>
+matching_patch_rows(const std::vector<patches::PatchEntry> &tree,
+                    const std::string &query_lower, int min_star_rating);
+
+/**
  * The directories the entry at `relative_path` is listed under, outermost
  * first. Empty optional when no entry has that path.
  */

@@ -58,8 +58,13 @@ struct PatchTreeCache {
       search_query = query_lower;
       star_filter = min_star_rating;
       built_open_revision = open_revision;
-      rows = patches::flatten_visible_rows(source, query_lower, min_star_rating,
-                                           open_directories);
+      // While filtering, the patches that match stand in one list, out of
+      // their folders.
+      rows = query_lower.empty() && min_star_rating == 0
+                 ? patches::flatten_visible_rows(
+                       source, query_lower, min_star_rating, open_directories)
+                 : patches::matching_patch_rows(source, query_lower,
+                                                min_star_rating);
     }
     return rows;
   }

@@ -97,6 +97,33 @@ flatten_visible_rows(const std::vector<patches::PatchEntry> &tree,
   return rows;
 }
 
+namespace {
+
+void collect_matches(const std::vector<patches::PatchEntry> &items,
+                     const std::string &query_lower, int min_star_rating,
+                     bool matched_above, std::vector<TreeRow> &out) {
+  for (const auto &item : items) {
+    const bool matched = matched_above || query_lower.empty() ||
+                         entry_matches_query(item, query_lower);
+    if (item.is_directory) {
+      collect_matches(item.children, query_lower, min_star_rating, matched,
+                      out);
+    } else if (matched && entry_passes_star_filter(item, min_star_rating)) {
+      out.push_back(TreeRow{&item, 1, false, false});
+    }
+  }
+}
+
+} // namespace
+
+std::vector<TreeRow>
+matching_patch_rows(const std::vector<patches::PatchEntry> &tree,
+                    const std::string &query_lower, int min_star_rating) {
+  std::vector<TreeRow> rows;
+  collect_matches(tree, query_lower, min_star_rating, false, rows);
+  return rows;
+}
+
 std::optional<std::vector<std::string>>
 directories_above(const std::vector<patches::PatchEntry> &tree,
                   const std::string &relative_path) {
