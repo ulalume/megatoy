@@ -5,14 +5,20 @@
 #include "gui/ui_scale.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/types.hpp"
+#include <cmath>
 #include <imgui.h>
 
 namespace ui {
 
-/// A vertical slider is narrower than a horizontal one is tall, and they
-/// stand as far apart as horizontal ones do.
-inline float vslider_width() { return ImGui::GetFontSize() + scale::px(8.0f); }
-inline float vslider_gap() { return ImGui::GetStyle().ItemSpacing.y; }
+/// The vertical sliders stand a pixel apart, and share out among them the
+/// room six of them a text height and 8 px wide, at the spacing between
+/// items, would take, on whole pixels.
+inline float vslider_gap() { return scale::px(1.0f); }
+inline float vslider_width() {
+  const float room = (ImGui::GetFontSize() + scale::px(8.0f)) * 6.0f +
+                     ImGui::GetStyle().ItemSpacing.y * 5.0f;
+  return std::floor((room - vslider_gap() * 5.0f) / 6.0f);
+}
 /// As tall as the column beside the sliders: five rows of controls, the
 /// spacing between them and one extra break.
 inline float vslider_height() {
