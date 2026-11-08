@@ -1,6 +1,8 @@
 #include "patch_tree_view.hpp"
+#include "gui/components/centred_glyph.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/fonts/megatoy_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "patches/instrument_icons.hpp"
 
@@ -288,9 +290,12 @@ void render_directory_row(PatchSelectorContext &context,
   if (heading) {
     draw_list->ChannelsSplit(2);
     draw_list->ChannelsSetCurrent(1);
+    // The node's own arrow is left unseen: a heading shows a folder, open or
+    // closed, in its place.
     const ImVec4 none(0.0f, 0.0f, 0.0f, 0.0f);
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, none);
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, none);
+    ImGui::PushStyleColor(ImGuiCol_Text, none);
   } else {
     ImGui::PushStyleColor(ImGuiCol_Text,
                           styles::color(styles::MegatoyCol::TextMuted));
@@ -298,26 +303,40 @@ void render_directory_row(PatchSelectorContext &context,
   // A folder's name stands where a patch's does past its larger icon, so it
   // is drawn here rather than by the node.
   const ImVec2 row_min = ImGui::GetCursorScreenPos();
-  const bool open = ImGui::TreeNodeEx(
-      heading ? display_name.c_str() : "##folder",
-      ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding |
-          ImGuiTreeNodeFlags_NoTreePushOnOpen);
-  if (!heading) {
-    const ImU32 muted = ImGui::GetColorU32(ImGuiCol_Text);
+  const bool open =
+      ImGui::TreeNodeEx("##folder", ImGuiTreeNodeFlags_SpanFullWidth |
+                                        ImGuiTreeNodeFlags_FramePadding |
+                                        ImGuiTreeNodeFlags_NoTreePushOnOpen);
+  ImGui::PopStyleColor(heading ? 3 : 1);
+  {
+    const ImGuiStyle &style = ImGui::GetStyle();
     const float text_y =
         row_min.y + (row_height() - ImGui::GetTextLineHeight()) * 0.5f;
-    const float name_x =
-        row_min.x + ImGui::GetStyle().FramePadding.x + name_offset();
-    draw_list->AddText(ImVec2(name_x, text_y), muted, display_name.c_str());
+    const ImU32 color =
+        heading
+            ? ImGui::GetColorU32(ImGuiCol_Text)
+            : ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+    float name_x = row_min.x + style.FramePadding.x + name_offset();
+    if (heading) {
+      // Where the node's arrow and name would stand.
+      const ImVec2 icon_min(row_min.x + style.FramePadding.x, row_min.y);
+      draw_centred_glyph(
+          row.is_open ? ICON_MEGATOY_FOLDER_OPEN : ICON_MEGATOY_FOLDER,
+          icon_min,
+          ImVec2(icon_min.x + ImGui::GetFontSize(), row_min.y + row_height()),
+          color);
+      name_x = row_min.x + ImGui::GetFontSize() + style.FramePadding.x * 2.0f;
+    }
+    draw_list->AddText(ImVec2(name_x, text_y), color, display_name.c_str());
     if (!item.telling_parents.empty()) {
       draw_list->AddText(
           ImVec2(name_x + ImGui::CalcTextSize(display_name.c_str()).x +
-                     ImGui::GetStyle().ItemSpacing.x,
+                     style.ItemSpacing.x,
                  text_y),
-          muted, item.telling_parents.c_str());
+          ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)),
+          item.telling_parents.c_str());
     }
   }
-  ImGui::PopStyleColor(heading ? 2 : 1);
   if (heading) {
     using styles::MegatoyCol;
     const auto col = ImGui::IsItemActive()    ? MegatoyCol::SectionHeaderActive
@@ -337,10 +356,6 @@ void render_directory_row(PatchSelectorContext &context,
   handle_row_keys(context, item);
   if (open != row.is_open && !filtering) {
     cache.set_open(item.relative_path, open);
-  }
-  if (heading && !item.telling_parents.empty()) {
-    row_trailing_text(item.telling_parents.c_str(),
-                      styles::color(styles::MegatoyCol::TextMuted), 0.0f);
   }
   ImGui::PopID();
 }
