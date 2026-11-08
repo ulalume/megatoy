@@ -247,14 +247,17 @@ void render_document_header(PatchEditorContext &context,
   }
 }
 
-/// The LFO section's sliders' names, in full or as AMS and FMS.
+/// The LFO and Channel sections' sliders' names, in full or as AMS, FMS and
+/// ALG.
 struct LfoNames {
   const char *ams;
   const char *fms;
+  const char *algorithm;
 };
 constexpr LfoNames kLfoFullNames{"Amplitude Modulation Sensitivity",
-                                 "Frequency Modulation Sensitivity"};
-constexpr LfoNames kLfoShortNames{"AMS", "FMS"};
+                                 "Frequency Modulation Sensitivity",
+                                 "Algorithm"};
+constexpr LfoNames kLfoShortNames{"AMS", "FMS", "ALG"};
 
 /// The LFO section's sliders: one width for the two, wide enough for the
 /// longer name.
@@ -313,7 +316,8 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::Spacing();
 }
 
-void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
+void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
+                            const LfoNames &names) {
   ImGui::SeparatorText("Channel");
   ImGui::PushItemWidth(hslider_width());
 
@@ -330,7 +334,10 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   int algorithm = patch.instrument.algorithm;
   ImGui::SetNextItemWidth(
       std::min(ImGui::CalcItemWidth(), ImGui::GetContentRegionAvail().x));
-  bool algorithm_changed = named_slider_int("Algorithm", &algorithm, 0, 7);
+  bool algorithm_changed = named_slider_int(names.algorithm, &algorithm, 0, 7);
+  if (names.algorithm != kLfoFullNames.algorithm) {
+    ImGui::SetItemTooltip("%s", kLfoFullNames.algorithm);
+  }
   ImGui::PopStyleVar();
   track_patch_history(context, "Algorithm", "instrument.algorithm");
   if (algorithm_changed) {
@@ -684,15 +691,15 @@ void render_document_window(PatchEditorContext &context,
     ImGui::Spacing();
 
     // Side by side while each of the two even columns holds the LFO's
-    // sliders, named in full or else as AMS and FMS; one above the other,
-    // in full, after that.
+    // sliders, named in full or else as AMS, FMS and ALG; one above the
+    // other, in full, after that.
     // The Channel column needs the diagram and the Algorithm slider named
-    // beside it.
+    // beside it, which is shortened with the LFO's.
     const auto available_width = ImGui::GetContentRegionAvail().x;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const float channel_width =
-        hslider_width() + spacing + named_slider_fit_width("Algorithm", "0");
     const auto fits_beside = [&](const LfoNames &names) {
+      const float channel_width = hslider_width() + spacing +
+                                  named_slider_fit_width(names.algorithm, "0");
       const float column =
           std::max(lfo_slider_width(names), channel_width) + spacing * 2.0f;
       return available_width >= column * 2.0f;
@@ -700,10 +707,11 @@ void render_document_window(PatchEditorContext &context,
     const bool full_beside = fits_beside(kLfoFullNames);
     const bool beside = full_beside || fits_beside(kLfoShortNames);
     ImGui::Columns(beside ? 2 : 1, "##lfo_channel_columns", false);
-    render_lfo_section(context, patch,
-                       beside && !full_beside ? kLfoShortNames : kLfoFullNames);
+    const LfoNames &names =
+        beside && !full_beside ? kLfoShortNames : kLfoFullNames;
+    render_lfo_section(context, patch, names);
     ImGui::NextColumn();
-    render_channel_section(context, patch);
+    render_channel_section(context, patch, names);
     ImGui::Columns(1);
     // Only the active document is what the chip is playing.
     render_operator_section(context, patch,
