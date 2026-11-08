@@ -10,6 +10,7 @@
 #include "ym2612/operator_edit.hpp"
 #include "ym2612/playback.hpp"
 #include <algorithm>
+#include <cmath>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
@@ -97,15 +98,88 @@ SliderState render_quick_edit_slider(PatchEditorContext &context,
 }
 
 constexpr int kTweakCount = 5;
+/// The sketch's handles' radius, before the interface's scale.
+constexpr float kSketchHandleRadius = 6.0f;
+
+/// Where the sketch draws the envelope's corners, from its rough shape.
+struct SketchPoints {
+  float left, right, top, floor;
+  ImVec2 peak;     ///< The end of the attack.
+  ImVec2 knee;     ///< The end of the decay.
+  ImVec2 held_end; ///< The held line at the right.
+  ImVec2 release;  ///< Where the release reaches the floor.
+  /// How far each part reaches across, or rises, from none to all of it.
+  float attack_span, decay_span, level_span, release_span;
+};
+
+SketchPoints sketch_points(const patch_lab::TweakShape &shape,
+                           const ImVec2 &min, const ImVec2 &size) {
+  SketchPoints p;
+  const float pad = ui::scale::px(4.0f);
+  p.left = min.x + pad;
+  p.right = min.x + size.x - pad;
+  p.top = min.y + pad;
+  p.floor = min.y + size.y - pad;
+  const float width = p.right - p.left;
+  const float height = p.floor - p.top;
+  p.attack_span = width * 0.22f;
+  p.decay_span = width * 0.28f;
+  p.level_span = height * 0.85f;
+  p.release_span = width * 0.9f;
+  // Never flat on the floor, so a quiet patch still has a shape to show.
+  const float peak_y = p.floor - height * 0.15f - p.level_span * shape.level;
+  const float attack_end =
+      p.left + width * 0.02f + p.attack_span * shape.attack;
+  const float decay_end =
+      attack_end + width * 0.03f + p.decay_span * shape.decay;
+  const float sustain = p.floor - (p.floor - peak_y) * shape.sustain;
+  p.peak = ImVec2(attack_end, peak_y);
+  p.knee = ImVec2(decay_end, sustain);
+  p.held_end = ImVec2(p.right, sustain + (p.floor - sustain) * shape.hold);
+  p.release = ImVec2(std::min(p.right, p.left + width * 0.04f +
+                                           p.release_span * shape.release),
+                     p.floor);
+  return p;
+}
+
+/// The sketch's handles: the peak (attack across, volume up), the knee
+/// (decay) and the release's end (release).
+enum class SketchHandle { None, Peak, Knee, Release };
+
+/// The sketch's handle under the pointer or held, and whether the sketch is
+/// pointed at at all, which shows its handles.
+struct SketchPointer {
+  SketchHandle handle = SketchHandle::None;
+  bool held = false;
+  bool over = false;
+};
+
+/// What a sketch handle moves, lit while it is pointed at.
+bool handle_moves(SketchHandle handle, patch_lab::Tweak tweak) {
+  switch (handle) {
+  case SketchHandle::Peak:
+    return tweak == patch_lab::Tweak::Attack ||
+           tweak == patch_lab::Tweak::Volume;
+  case SketchHandle::Knee:
+    return tweak == patch_lab::Tweak::Decay;
+  case SketchHandle::Release:
+    return tweak == patch_lab::Tweak::Release;
+  case SketchHandle::None:
+    break;
+  }
+  return false;
+}
 
 /**
  * A sketch of the envelope the sliders move, drawn the way an operator's
  * graph is: the held line, and the release as an area from the start. Not
- * to scale; it shows which way each slider takes the shape.
+ * to scale; it shows which way each slider takes the shape. Its corners are
+ * handles too, dragged as the operator graph's are.
  */
 void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
                             const SliderState (&lit)[kTweakCount],
-                            const ImVec2 &min, const ImVec2 &size) {
+                            const SketchPointer &pointer, const ImVec2 &min,
+                            const ImVec2 &size) {
   const ImVec2 max(min.x + size.x, min.y + size.y);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   draw_list->AddRectFilled(min, max,
@@ -116,6 +190,7 @@ void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
   if (!shape) {
     return;
   }
+  const SketchPoints p = sketch_points(*shape, min, size);
 
   const auto is_lit = [&lit](patch_lab::Tweak tweak) {
     return lit[static_cast<int>(tweak)] != SliderState::None;
@@ -126,35 +201,153 @@ void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
                                  : styles::MegatoyCol::EnvelopeCurve);
   };
 
-  const float pad = ui::scale::px(4.0f);
-  const float left = min.x + pad;
-  const float right = max.x - pad;
-  const float top = min.y + pad;
-  const float floor = max.y - pad;
-  const float width = right - left;
-  const float height = floor - top;
-  // Never flat on the floor, so a quiet patch still has a shape to show.
-  const float peak = floor - height * (0.15f + 0.85f * shape->level);
-  const float attack_end = left + width * (0.02f + 0.22f * shape->attack);
-  const float decay_end = attack_end + width * (0.03f + 0.28f * shape->decay);
-  const float sustain = floor - (floor - peak) * shape->sustain;
-  const float held_end = sustain + (floor - sustain) * shape->hold;
-  const float release_end =
-      std::min(right, left + width * (0.04f + 0.9f * shape->release));
-
   draw_list->AddTriangleFilled(
-      ImVec2(left, peak), ImVec2(release_end, floor), ImVec2(left, floor),
+      ImVec2(p.left, p.peak.y), p.release, ImVec2(p.left, p.floor),
       styles::color_u32(is_lit(patch_lab::Tweak::Release)
                             ? styles::MegatoyCol::EnvelopeReleaseActive
                             : styles::MegatoyCol::EnvelopeRelease));
 
   const float thickness = ui::scale::px(1.5f);
-  draw_list->AddLine(ImVec2(left, floor), ImVec2(attack_end, peak),
+  draw_list->AddLine(ImVec2(p.left, p.floor), p.peak,
                      curve_color(patch_lab::Tweak::Attack), thickness);
-  draw_list->AddLine(ImVec2(attack_end, peak), ImVec2(decay_end, sustain),
-                     curve_color(patch_lab::Tweak::Decay), thickness);
-  draw_list->AddLine(ImVec2(decay_end, sustain), ImVec2(right, held_end),
-                     curve_color(patch_lab::Tweak::Volume), thickness);
+  draw_list->AddLine(p.peak, p.knee, curve_color(patch_lab::Tweak::Decay),
+                     thickness);
+  draw_list->AddLine(p.knee, p.held_end, curve_color(patch_lab::Tweak::Volume),
+                     thickness);
+
+  // The handles, while the sketch is pointed at, as the operator graph's.
+  if (!pointer.over && !pointer.held) {
+    return;
+  }
+  const float radius = ui::scale::px(kSketchHandleRadius);
+  for (const auto &[handle, at] :
+       {std::pair{SketchHandle::Peak, p.peak},
+        std::pair{SketchHandle::Knee, p.knee},
+        std::pair{SketchHandle::Release, p.release}}) {
+    draw_list->AddCircleFilled(
+        at, radius,
+        styles::color_u32(handle == pointer.handle
+                              ? styles::MegatoyCol::EnvelopeHandleActive
+                              : styles::MegatoyCol::EnvelopeHandle));
+  }
+}
+
+/**
+ * The sketch as something to drag: a press near a handle takes it, and the
+ * pointer's travel from the press moves what it stands for, from the
+ * instrument as it was, by the sketch's own scale.
+ */
+SketchPointer drag_quick_edit_sketch(PatchEditorContext &context,
+                                     ym2612::ChannelInstrument &instrument,
+                                     const ImVec2 &min, const ImVec2 &size) {
+  static SketchHandle held = SketchHandle::None;
+  auto &base = context.document_ui(context.document).quick_edit_base;
+  ImGui::InvisibleButton("##quick_edit_sketch", size);
+  SketchPointer pointer;
+  pointer.over = ImGui::IsItemHovered();
+  const auto shape = patch_lab::tweak_shape(instrument);
+  if (!shape) {
+    return pointer;
+  }
+
+  if (ImGui::IsItemActivated()) {
+    held = SketchHandle::None;
+    const SketchPoints p = sketch_points(*shape, min, size);
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    float best = ui::scale::px(kSketchHandleRadius * 3.0f);
+    for (const auto &[handle, at] :
+         {std::pair{SketchHandle::Peak, p.peak},
+          std::pair{SketchHandle::Knee, p.knee},
+          std::pair{SketchHandle::Release, p.release}}) {
+      const float distance = std::hypot(mouse.x - at.x, mouse.y - at.y);
+      if (distance <= best) {
+        best = distance;
+        held = handle;
+      }
+    }
+    if (held != SketchHandle::None) {
+      base = instrument;
+      // Empty merge key: each drag is its own undo step.
+      context.begin_history("Quick Edit Envelope", {});
+    }
+  }
+
+  if (held != SketchHandle::None && ImGui::IsItemActive() && base) {
+    const SketchPoints p =
+        sketch_points(*patch_lab::tweak_shape(*base), min, size);
+    const ImVec2 moved = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f);
+    // A tweak moved by `px` of travel over `span` pixels for its whole range;
+    // `sign` turns travel right or down into the value's direction.
+    const auto step = [&](ym2612::ChannelInstrument from,
+                          patch_lab::Tweak tweak, float px, float span,
+                          float sign) {
+      const auto value = patch_lab::tweak_value(*base, tweak);
+      if (!value || span <= 0.0f) {
+        return from;
+      }
+      const auto range = patch_lab::tweak_range(*base, tweak);
+      const int target = std::clamp(
+          *value + static_cast<int>(std::lround(sign * px / span *
+                                                static_cast<float>(range.max))),
+          range.min, range.max);
+      return patch_lab::with_tweak(from, tweak, target);
+    };
+    auto edited = *base;
+    switch (held) {
+    case SketchHandle::Peak:
+      // Right is a longer attack, a lower rate; up is louder.
+      edited =
+          step(edited, patch_lab::Tweak::Attack, moved.x, p.attack_span, -1.0f);
+      edited =
+          step(edited, patch_lab::Tweak::Volume, moved.y, p.level_span, -1.0f);
+      break;
+    case SketchHandle::Knee:
+      // Right or up is a gentler decay, down or left a steeper and deeper one.
+      edited = step(edited, patch_lab::Tweak::Decay, moved.y - moved.x,
+                    p.decay_span + p.level_span, 1.0f);
+      break;
+    case SketchHandle::Release:
+      edited = step(edited, patch_lab::Tweak::Release, moved.x, p.release_span,
+                    -1.0f);
+      break;
+    case SketchHandle::None:
+      break;
+    }
+    instrument = edited;
+  }
+
+  if (ImGui::IsItemDeactivated()) {
+    if (held != SketchHandle::None) {
+      base.reset();
+      context.commit_history();
+    }
+    held = SketchHandle::None;
+  }
+  if (held != SketchHandle::None) {
+    pointer.handle = held;
+    pointer.held = true;
+    return pointer;
+  }
+  if (!pointer.over) {
+    return pointer;
+  }
+  // Under the pointer: the nearest handle within reach.
+  const SketchPoints p = sketch_points(*shape, min, size);
+  const ImVec2 mouse = ImGui::GetIO().MousePos;
+  SketchHandle near = SketchHandle::None;
+  float best = ui::scale::px(kSketchHandleRadius * 3.0f);
+  for (const auto &[handle, at] :
+       {std::pair{SketchHandle::Peak, p.peak},
+        std::pair{SketchHandle::Knee, p.knee},
+        std::pair{SketchHandle::Release, p.release}}) {
+    const float distance = std::hypot(mouse.x - at.x, mouse.y - at.y);
+    if (distance <= best) {
+      best = distance;
+      near = handle;
+    }
+  }
+  pointer.handle = near;
+  return pointer;
 }
 
 void render_quick_edit_section(PatchEditorContext &context,
@@ -164,20 +357,22 @@ void render_quick_edit_section(PatchEditorContext &context,
   }
   const float available = ImGui::GetContentRegionAvail().x;
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
+  auto &instrument = patch.instrument;
   // Beside the sliders while they keep a useful width, above them otherwise.
   const bool beside = available > ui::scale::px(420.0f);
   ImVec2 sketch_size(std::min(available * 0.4f, ui::scale::px(240.0f)), 0.0f);
   ImVec2 sketch_min;
+  SketchPointer pointer;
   if (beside) {
     ImGui::PushItemWidth(available - sketch_size.x - spacing);
   } else {
     // Drawn once the sliders have said which of them is pointed at.
     sketch_size = ImVec2(available, ImGui::GetFrameHeight() * 3.0f);
     sketch_min = ImGui::GetCursorScreenPos();
-    ImGui::Dummy(sketch_size);
+    pointer =
+        drag_quick_edit_sketch(context, instrument, sketch_min, sketch_size);
     ImGui::PushItemWidth(available);
   }
-  auto &instrument = patch.instrument;
   static constexpr std::pair<const char *, patch_lab::Tweak> kSliders[] = {
       {"Volume", patch_lab::Tweak::Volume},
       {"Brightness", patch_lab::Tweak::Brightness},
@@ -199,9 +394,22 @@ void render_quick_edit_section(PatchEditorContext &context,
     sketch_size.y = ImGui::GetItemRectSize().y;
     ImGui::SameLine(0.0f, spacing);
     sketch_min = ImGui::GetCursorScreenPos();
-    ImGui::Dummy(sketch_size);
+    pointer =
+        drag_quick_edit_sketch(context, instrument, sketch_min, sketch_size);
   }
-  draw_quick_edit_sketch(instrument, lit, sketch_min, sketch_size);
+  // What the handle pointed at moves is lit, on the sketch and on the
+  // operators, as its sliders would.
+  if (pointer.handle != SketchHandle::None) {
+    const SliderState state =
+        pointer.held ? SliderState::Active : SliderState::Hover;
+    for (const auto &[label, tweak] : kSliders) {
+      if (handle_moves(pointer.handle, tweak)) {
+        lit[static_cast<int>(tweak)] = state;
+        light_tweak_fields(context, instrument, tweak, state);
+      }
+    }
+  }
+  draw_quick_edit_sketch(instrument, lit, pointer, sketch_min, sketch_size);
   section_end("Quick Edit");
 }
 
