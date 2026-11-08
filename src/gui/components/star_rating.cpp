@@ -25,38 +25,47 @@ const std::array<std::string_view, 6> kStarLabels = {
         ICON_MEGATOY_STAR,
 };
 
-float star_rating_width() {
+float stars_width() {
   return ImGui::CalcTextSize(ICON_MEGATOY_STAR).x * 5.0f +
-         scale::px(kStarGap) * 4.0f + ImGui::GetStyle().FramePadding.x * 2.0f;
+         scale::px(kStarGap) * 4.0f;
+}
+
+void draw_stars(ImVec2 min, float height, int filled) {
+  const float star = ImGui::CalcTextSize(ICON_MEGATOY_STAR).x;
+  const float step = star + scale::px(kStarGap);
+  const ImU32 lit = ImGui::GetColorU32(ImGuiCol_Text);
+  const ImU32 faint =
+      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  for (int i = 0; i < 5; ++i) {
+    const float left = min.x + step * i;
+    draw_centred_glyph(i < filled ? ICON_MEGATOY_STAR
+                                  : ICON_MEGATOY_STAR_OUTLINE,
+                       ImVec2(left, min.y), ImVec2(left + star, min.y + height),
+                       i < filled ? lit : faint);
+  }
+}
+
+float star_rating_width() {
+  return stars_width() + ImGui::GetStyle().FramePadding.x * 2.0f;
 }
 
 bool star_rating_slider(const char *id, int &rating, const char *name) {
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const float star = ImGui::CalcTextSize(ICON_MEGATOY_STAR).x;
-  const float step = star + scale::px(kStarGap);
-  const ImVec2 min = ImGui::GetCursorScreenPos();
-  const ImVec2 max(min.x + star_rating_width(),
-                   min.y + ImGui::GetFrameHeight());
-  ImGui::InvisibleButton(id, ImVec2(max.x - min.x, max.y - min.y));
+  const float left =
+      ImGui::GetCursorScreenPos().x + ImGui::GetStyle().FramePadding.x;
+  const float step =
+      ImGui::CalcTextSize(ICON_MEGATOY_STAR).x + scale::px(kStarGap);
+  ImGui::InvisibleButton(id,
+                         ImVec2(star_rating_width(), ImGui::GetFrameHeight()));
   ImGui::SetItemTooltip("%s", name);
 
   const int before = std::clamp(rating, 0, 5);
   rating = before;
   if (ImGui::IsItemActive()) {
-    const float x = ImGui::GetIO().MousePos.x - (min.x + style.FramePadding.x);
+    const float x = ImGui::GetIO().MousePos.x - left;
     rating = x < 0.0f ? 0 : std::clamp(static_cast<int>(x / step) + 1, 1, 5);
   }
-
-  const ImU32 filled = ImGui::GetColorU32(ImGuiCol_Text);
-  const ImU32 faint =
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
-  for (int i = 0; i < 5; ++i) {
-    const float left = min.x + style.FramePadding.x + step * i;
-    draw_centred_glyph(i < rating ? ICON_MEGATOY_STAR
-                                  : ICON_MEGATOY_STAR_OUTLINE,
-                       ImVec2(left, min.y), ImVec2(left + star, max.y),
-                       i < rating ? filled : faint);
-  }
+  draw_stars(ImVec2(left, ImGui::GetItemRectMin().y), ImGui::GetFrameHeight(),
+             rating);
   return rating != before;
 }
 

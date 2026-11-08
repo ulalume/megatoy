@@ -85,14 +85,13 @@ void render_tree(PatchSelectorContext &context) {
     ImGuiWindow *tree = ImGui::GetCurrentWindow();
     tree->WorkRect.Max.x = tree->InnerRect.Max.x;
     ImGui::PushClipRect(tree->InnerRect.Min, tree->InnerRect.Max, false);
-    const std::string query_lower =
-        patches::search_key(context.prefs.metadata_search_query);
+    const auto search =
+        patches::parse_search(context.prefs.metadata_search_query);
     const bool rendered =
-        render_patch_tree(context.repository.tree(), context, query_lower,
-                          context.prefs.metadata_star_filter);
+        render_patch_tree(context.repository.tree(), context, search.text_lower,
+                          search.min_stars);
     ImGui::PopClipRect();
-    if (!rendered &&
-        (!query_lower.empty() || context.prefs.metadata_star_filter > 0)) {
+    if (!rendered && (!search.text_lower.empty() || search.min_stars > 0)) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                          "No results for current filters");
     }

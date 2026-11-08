@@ -5,15 +5,18 @@
 #include "common.hpp"
 #include "file_manager.hpp"
 #include "gui/save_export_actions.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_tree_view.hpp"
 #include "patches/instrument_icons.hpp"
 #include "patches/patch_entry_actions.hpp"
+#include "patches/patch_filter.hpp"
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
 
 #include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
+#include <cfloat>
 #include <cstring>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -204,6 +207,70 @@ void entry_context_menu(PatchSelectorContext &context,
   ui::end_popup();
 }
 
+namespace {
+
+/**
+ * Below the search box, while it is typed in or the pointer is on the menu:
+ * a row for each rating, from one star to five. The rating picked, if any.
+ */
+std::optional<int> render_star_menu(const ImRect &box, bool typing,
+                                    int current) {
+  static bool open = false;
+  open = open || typing;
+  if (!open) {
+    return std::nullopt;
+  }
+  const ImGuiStyle &style = ImGui::GetStyle();
+  ImGui::SetNextWindowPos(ImVec2(box.Min.x, box.Max.y + style.ItemSpacing.y));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(box.GetWidth(), 0.0f),
+                                      ImVec2(box.GetWidth(), FLT_MAX));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                        ImGui::GetStyleColorVec4(ImGuiCol_PopupBg));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, style.PopupRounding);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.PopupBorderSize);
+  ImGui::Begin("##star_search", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoSavedSettings |
+                   ImGuiWindowFlags_NoFocusOnAppearing |
+                   ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking |
+                   ImGuiWindowFlags_AlwaysAutoResize);
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor();
+  ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+
+  std::optional<int> picked;
+  const ImU32 muted =
+      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
+  for (int stars = 1; stars <= 5; ++stars) {
+    ImGui::PushID(stars);
+    if (ImGui::Selectable("##stars", stars == current)) {
+      picked = stars;
+    }
+    const ImRect row(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+    draw_stars(row.Min, row.GetHeight(), stars);
+    // What the box is given for the row, its digit level with the stars.
+    const char word[3] = {'*', static_cast<char>('0' + stars), '\0'};
+    const ImFontGlyph *digit = ImGui::GetFontBaked()->FindGlyph(word[1]);
+    const float y =
+        digit ? IM_ROUND((row.Min.y + row.Max.y - digit->Y0 - digit->Y1) * 0.5f)
+              : row.Min.y;
+    ImGui::GetWindowDrawList()->AddText(
+        ImVec2(row.Max.x - ImGui::CalcTextSize(word).x, y), muted, word);
+    ImGui::PopID();
+  }
+  ImGui::PopStyleVar();
+
+  const bool held =
+      ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) ||
+      ImGui::IsWindowFocused();
+  ImGui::End();
+  open = typing || held;
+  return picked;
+}
+
+} // namespace
+
 void render_filter_bar(PatchSelectorContext &context) {
   auto &prefs = context.prefs;
   char search_buffer[128];
@@ -211,27 +278,39 @@ void render_filter_bar(PatchSelectorContext &context) {
                sizeof(search_buffer));
   search_buffer[sizeof(search_buffer) - 1] = '\0';
 
-  // The search box takes what the star filter leaves of the row, up to where
-  // the caller has narrowed it to.
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const float row_end = ImGui::GetCurrentWindow()->WorkRect.Max.x;
-  const float search_width = std::max(
-      row_end - ImGui::GetCursorScreenPos().x - star_rating_width() -
-          style.ItemSpacing.x,
-      ui::scale::px(60.0f));
-  ImGui::SetNextItemWidth(search_width);
+  // Back into the box once a rating is picked from its menu, typing on
+  // after its text rather than over it.
+  static bool refocus = false;
+  static bool to_end = false;
+  if (refocus) {
+    ImGui::SetKeyboardFocusHere();
+    refocus = false;
+    to_end = true;
+  }
+  const auto place_cursor = [](ImGuiInputTextCallbackData *data) {
+    if (to_end) {
+      data->ClearSelection();
+      data->CursorPos = data->BufTextLen;
+      to_end = false;
+    }
+    return 0;
+  };
+  // The search box takes the row, up to where the caller has narrowed it to.
+  ImGui::SetNextItemWidth(ImGui::GetCurrentWindow()->WorkRect.Max.x -
+                          ImGui::GetCursorScreenPos().x);
   // The clear button sits over the box's right end and has to win the hover.
   ImGui::SetNextItemAllowOverlap();
-  if (ImGui::InputTextWithHint("##SharedSearch",
-                               ICON_MEGATOY_MAGNIFYING_GLASS " Search...",
-                               search_buffer, sizeof(search_buffer))) {
+  if (ImGui::InputTextWithHint(
+          "##SharedSearch", ICON_MEGATOY_MAGNIFYING_GLASS " Search...",
+          search_buffer, sizeof(search_buffer),
+          ImGuiInputTextFlags_CallbackAlways, place_cursor)) {
     prefs.metadata_search_query = std::string(search_buffer);
   }
+  const bool typing = ImGui::IsItemActive();
+  const ImRect box(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
   if (!prefs.metadata_search_query.empty()) {
-    const ImVec2 box_min = ImGui::GetItemRectMin();
-    const ImVec2 box_max = ImGui::GetItemRectMax();
-    const float size = box_max.y - box_min.y;
-    ImGui::SetCursorScreenPos(ImVec2(box_max.x - size, box_min.y));
+    const float size = box.GetHeight();
+    ImGui::SetCursorScreenPos(ImVec2(box.Max.x - size, box.Min.y));
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_Text,
                           ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
@@ -242,8 +321,13 @@ void render_filter_bar(PatchSelectorContext &context) {
     ImGui::PopStyleColor(2);
   }
 
-  ImGui::SameLine();
-  star_rating_slider("##Rating", prefs.metadata_star_filter, "Rating");
+  if (const auto stars = render_star_menu(
+          box, typing,
+          patches::parse_search(prefs.metadata_search_query).min_stars)) {
+    prefs.metadata_search_query =
+        patches::with_star_word(prefs.metadata_search_query, *stars);
+    refocus = true;
+  }
 }
 
 } // namespace ui::selector_detail

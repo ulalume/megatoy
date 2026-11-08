@@ -54,7 +54,6 @@ struct UIPreferences {
 
   // Patch selector view settings
   std::string metadata_search_query;
-  int metadata_star_filter = 0;
 
   int midi_keyboard_scale = static_cast<int>(Scale::CHROMATIC);
   int midi_keyboard_key = static_cast<int>(Key::C);
