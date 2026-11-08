@@ -29,10 +29,14 @@ INSTRUMENT_GROUPS = [
 # Shown for a patch without an icon.
 INSTRUMENT_NONE = 'music-note'
 
-# Code points below Font Awesome's range (ICON_MIN_FA = 0xe005).
-GLYPHS = {
+# Code points below Font Awesome's range (ICON_MIN_FA = 0xe005): megatoy's
+# own UI icons, each named in the header as ICON_MEGATOY_<NAME>.
+UI_GLYPHS = {
     'piano': 0xE000,
+    'refresh': 0xE001,
+    'plus': 0xE002,
 }
+GLYPHS = dict(UI_GLYPHS)
 # The instrument icons, in a block Font Awesome's font leaves empty.
 INSTRUMENT_FIRST = 0xE900
 INSTRUMENTS = [INSTRUMENT_NONE] + [
@@ -83,14 +87,17 @@ def utf8(code):
 
 
 def write_header():
+    ui_lines = ''.join(
+        f'#define ICON_MEGATOY_{name.upper().replace("-", "_")} '
+        f'"{utf8(code)}" // U+{code:04x}\n'
+        for name, code in UI_GLYPHS.items())
     header.write_text(f'''#pragma once
 
 // Icons drawn for megatoy: assets/fonts/megatoy-icons.otf, built from
 // tools/icons by tools/build_icon_font.py, which writes this file.
-#define ICON_MIN_MEGATOY 0xe000
-#define ICON_MAX_MEGATOY 0xe000
-#define ICON_MEGATOY_PIANO "{utf8(GLYPHS['piano'])}" // U+e000
-#define ICON_MIN_MEGATOY_INSTRUMENT {INSTRUMENT_FIRST:#x}
+#define ICON_MIN_MEGATOY {min(UI_GLYPHS.values()):#x}
+#define ICON_MAX_MEGATOY {max(UI_GLYPHS.values()):#x}
+{ui_lines}#define ICON_MIN_MEGATOY_INSTRUMENT {INSTRUMENT_FIRST:#x}
 #define ICON_MAX_MEGATOY_INSTRUMENT {INSTRUMENT_LAST:#x}
 ''')
 
