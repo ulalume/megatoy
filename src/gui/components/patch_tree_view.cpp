@@ -226,8 +226,12 @@ bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
       "##name", selected, flags,
       ImVec2(name_offset() + ImGui::CalcTextSize(item.name.c_str()).x, height));
   ImGui::PopStyleVar();
-  draw_instrument_icon(icon_id, pos,
-                       ImVec2(pos.x + patch_icon_width(), pos.y + height),
+  // Centred under a folder's arrow, which stands a text height wide; the
+  // larger icon reaches out to either side of it.
+  const float icon_left =
+      pos.x - (patch_icon_width() - ImGui::GetFontSize()) * 0.5f;
+  draw_instrument_icon(icon_id, ImVec2(icon_left, pos.y),
+                       ImVec2(icon_left + patch_icon_width(), pos.y + height),
                        kPatchIconScale);
   ImGui::GetWindowDrawList()->AddText(
       ImVec2(pos.x + name_offset(),
