@@ -29,6 +29,7 @@ using ym2612_eg::graph::Point;
 using ym2612_eg::graph::kAttackHandle;
 using ym2612_eg::graph::kDecayHandle;
 using ym2612_eg::graph::kFullScale;
+using ym2612_eg::graph::kHandleCount;
 using ym2612_eg::graph::kReleaseHandle;
 using ym2612_eg::graph::kSustainHandle;
 

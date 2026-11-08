@@ -478,6 +478,64 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   return out;
 }
 
+/// How much larger the handles are drawn and grabbed than twice the
+/// library's size, and the least room left between two of them.
+constexpr float kHandleScale = 1.5f;
+constexpr float kHandleGap = 2.0f;
+
+/**
+ * Moves each handle that would overlap one before it along the axis, to the
+ * nearest place clear of all of them, inside the plot; one with no such
+ * place stays. Only where a dot is drawn and grabbed moves: a drag reads
+ * what the handle stands for, not where it is drawn.
+ */
+void spread_handles(ui::envelope::EnvelopeHandles &handles) {
+  const float least = handles.metrics.radius * 2.0f + ui::scale::px(kHandleGap);
+  const float left = handles.plot.min.x + handles.metrics.radius;
+  const float right = handles.plot.max.x - handles.metrics.radius;
+  for (int i = 1; i < ui::envelope::kHandleCount; ++i) {
+    auto &item = handles.items[i];
+    if (!item.shown) {
+      continue;
+    }
+    // How far apart along the axis it has to be from each handle before it
+    // at its height, or nothing where the two cannot meet.
+    std::array<float, ui::envelope::kHandleCount> apart{};
+    for (int j = 0; j < i; ++j) {
+      const float dy = item.pos.y - handles.items[j].pos.y;
+      apart[j] = handles.items[j].shown && std::abs(dy) < least
+                     ? std::sqrt(least * least - dy * dy)
+                     : 0.0f;
+    }
+    const auto clear_at = [&](float x) {
+      for (int j = 0; j < i; ++j) {
+        if (std::abs(x - handles.items[j].pos.x) < apart[j] - 0.01f) {
+          return false;
+        }
+      }
+      return x >= left && x <= right;
+    };
+    if (clear_at(item.pos.x)) {
+      continue;
+    }
+    // Beside each handle it meets, on either side: the nearest clear one.
+    float best = item.pos.x;
+    float best_distance = -1.0f;
+    for (int j = 0; j < i; ++j) {
+      for (const float x : {handles.items[j].pos.x + apart[j],
+                            handles.items[j].pos.x - apart[j]}) {
+        const float distance = std::abs(x - item.pos.x);
+        if (apart[j] > 0.0f && clear_at(x) &&
+            (best_distance < 0.0f || distance < best_distance)) {
+          best = x;
+          best_distance = distance;
+        }
+      }
+    }
+    item.pos.x = best;
+  }
+}
+
 ui::envelope::EnvelopeHandles
 render_envelope_image(const ym2612::OperatorSettings &op,
                       const UIState::EnvelopeState &slider_state, ImVec2 size,
@@ -699,16 +757,19 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   if (!wanted) {
     return {};
   }
-  // The dots drawn a pixel wider all round than twice the library's size,
-  // and the grab box grown to cover them.
+  // The dots drawn half as large again as a pixel wider all round than
+  // twice the library's size, the grab box grown to cover them, and none
+  // drawn over another.
   const ui::envelope::HandleMetrics unscaled;
   const ui::envelope::HandleMetrics metrics{
-      ui::scale::px(unscaled.radius * 2.0f + 1.0f),
-      ui::scale::px(unscaled.grab + 1.0f),
+      ui::scale::px((unscaled.radius * 2.0f + 1.0f) * kHandleScale),
+      ui::scale::px((unscaled.grab + 1.0f) * kHandleScale),
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
   };
-  return ui::envelope::handle_layout(curve, plot, metrics);
+  auto handles = ui::envelope::handle_layout(curve, plot, metrics);
+  spread_handles(handles);
+  return handles;
 }
 
 void draw_envelope_handle(const ui::envelope::EnvelopeHandles &handles,
