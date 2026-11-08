@@ -3,6 +3,7 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/centred_glyph.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -340,6 +341,34 @@ void remember_result(PatchLabState &state, PatchLabState::Page page,
   state.results.insert(state.results.begin(), std::move(result));
 }
 
+/// How much larger than the text the Generate button draws its icon.
+constexpr float kGenerateIconScale = 1.5f;
+
+/// A page's Generate button: twice a button's height across the page, its
+/// icon larger and its name beside it, the two centred.
+bool generate_button() {
+  const float height = ImGui::GetFrameHeight() * 2.0f;
+  const bool clicked = ImGui::Button("##generate", ImVec2(-FLT_MIN, height));
+  const ImVec2 min = ImGui::GetItemRectMin();
+  const ImVec2 max = ImGui::GetItemRectMax();
+  const char *label = "Generate";
+  const ImVec2 label_size = ImGui::CalcTextSize(label);
+  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * kGenerateIconScale);
+  const ImVec2 icon_size = ImGui::CalcTextSize(ICON_FA_ARROWS_ROTATE);
+  const float gap = ImGui::GetStyle().ItemInnerSpacing.x * 2.0f;
+  const float left =
+      std::round((min.x + max.x - (icon_size.x + gap + label_size.x)) * 0.5f);
+  const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+  draw_centred_glyph(ICON_FA_ARROWS_ROTATE, ImVec2(left, min.y),
+                     ImVec2(left + icon_size.x, max.y), color);
+  ImGui::PopFont();
+  ImGui::GetWindowDrawList()->AddText(
+      ImVec2(left + icon_size.x + gap,
+             std::round((min.y + max.y - label_size.y) * 0.5f)),
+      color, label);
+  return clicked;
+}
+
 /// A share as a whole percentage.
 int percent(float share) {
   return static_cast<int>(std::lround(share * 100.0f));
@@ -359,7 +388,7 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::TextWrapped("Makes a new patch from scratch.");
   ImGui::Spacing();
 
-  if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Generate")) {
+  if (generate_button()) {
     state.random_template_iterations =
         std::clamp(state.random_template_iterations, 0, 8);
     patch_lab::RandomOptions options;
@@ -387,7 +416,7 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::Checkbox("Allow algorithm change",
                   &state.mutate_allow_algorithm_change);
 
-  if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Generate")) {
+  if (generate_button()) {
     patch_lab::MutateOptions options;
     options.amount = state.mutate_amount;
     options.probability = state.mutate_probability;
@@ -455,7 +484,7 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
   }
 
   ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
-  if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Generate")) {
+  if (generate_button()) {
     ym2612::Patch patch_a;
     ym2612::Patch patch_b;
     if (auto error = load_sources(context, state, patch_a, patch_b)) {
@@ -517,10 +546,10 @@ float lab_list_width() {
          style.FramePadding.x * 2.0f + style.WindowPadding.x * 2.0f;
 }
 
-/// A row of the list: the icon, then a line of text, and under it a second
-/// one, muted, when there is one.
-bool lab_list_row(const char *icon, const char *text, const char *muted_text,
-                  bool selected) {
+/// A row of the list: the icon, muted where `muted_icon`, then a line of
+/// text, and under it a second one, muted, when there is one.
+bool lab_list_row(const char *icon, bool muted_icon, const char *text,
+                  const char *muted_text, bool selected) {
   const ImGuiStyle &style = ImGui::GetStyle();
   const float line = ImGui::GetTextLineHeight();
   const float gap = ui::scale::px(2.0f);
@@ -533,7 +562,8 @@ bool lab_list_row(const char *icon, const char *text, const char *muted_text,
   const ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
   const ImU32 muted_color =
       ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
-  draw_list->AddText(ImVec2(row.x + inset, row.y), text_color, icon);
+  draw_list->AddText(ImVec2(row.x + inset, row.y),
+                     muted_icon ? muted_color : text_color, icon);
   const float text_x =
       row.x + inset + ImGui::GetFontSize() + style.ItemInnerSpacing.x;
   if (text != nullptr) {
@@ -561,7 +591,7 @@ void render_lab_list(PatchLabContext &context, PatchLabState &state) {
     for (std::size_t i = 0; i < std::size(kPageNames); ++i) {
       const auto page = static_cast<PatchLabState::Page>(i);
       ImGui::PushID(static_cast<int>(i));
-      if (lab_list_row(kPageIcons[i], kPageNames[i], nullptr,
+      if (lab_list_row(kPageIcons[i], false, kPageNames[i], nullptr,
                        state.page == page && !state.chosen_result)) {
         state.page = page;
         state.chosen_result.reset();
@@ -585,7 +615,8 @@ void render_lab_list(PatchLabContext &context, PatchLabState &state) {
     for (const auto &result : state.results) {
       ImGui::PushID(static_cast<int>(result.id));
       const bool has_settings = !result.settings.empty();
-      if (lab_list_row(kPageIcons[static_cast<std::size_t>(result.page)],
+      // A result's icon is muted, so it stands apart from the pages'.
+      if (lab_list_row(kPageIcons[static_cast<std::size_t>(result.page)], true,
                        has_settings ? result.settings.c_str() : nullptr,
                        result.created_at.c_str(),
                        state.chosen_result == result.id)) {
