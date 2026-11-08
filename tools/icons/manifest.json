@@ -107,6 +107,10 @@
     {
       "name": "folder-open",
       "from": "fontawesome:folder-open"
+    },
+    {
+      "name": "star-outline",
+      "from": "fontawesome-regular:star"
     }
   ]
 }

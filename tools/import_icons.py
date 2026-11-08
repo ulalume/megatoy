@@ -12,6 +12,8 @@ tools/icons/<name>.svg for each icon whose "from" is
   fontawesome:<id>  Font Awesome Free Solid's glyph, as it is in the font,
                     read from OTF (fetched from Font Awesome's repository
                     when not given);
+  fontawesome-regular:<id>
+                    the same from Font Awesome Free Regular, an outline;
   custom            drawn for megatoy and kept as it is.
 
 Icons already there are left alone unless --force. The second form outlines
@@ -41,7 +43,7 @@ ASCENT = 448
 
 ICONIFY = 'https://api.iconify.design/iconoven/{}.svg'
 FONT_AWESOME = ('https://raw.githubusercontent.com/FortAwesome/Font-Awesome/'
-                '7.x/otfs/Font%20Awesome%207%20Free-Solid-900.otf')
+                '7.x/otfs/Font%20Awesome%207%20Free-{}.otf')
 
 icons = Path(__file__).resolve().parent / 'icons'
 
@@ -79,17 +81,19 @@ def iconoven(icon_id):
 
 
 class FontAwesome:
-    """Font Awesome Free Solid's glyphs by name, read from its font."""
+    """A Font Awesome Free style's glyphs by name, read from its font."""
 
-    def __init__(self, path):
+    def __init__(self, style, path=None):
+        self.style = style
         self.path = path
         self.font = None
 
     def glyph(self, icon_id):
         if self.font is None:
             if self.path is None:
-                download = Path(tempfile.gettempdir()) / 'fa7-solid.otf'
-                download.write_bytes(fetch(FONT_AWESOME))
+                download = (Path(tempfile.gettempdir()) /
+                            f'fa7-{self.style.lower()}.otf')
+                download.write_bytes(fetch(FONT_AWESOME.format(self.style)))
                 self.path = download
             self.font = TTFont(self.path)
         glyphs = self.font.getGlyphSet()
@@ -102,7 +106,10 @@ class FontAwesome:
 
 def import_manifest(force, fontawesome_path):
     manifest = json.loads((icons / 'manifest.json').read_text())
-    fontawesome = FontAwesome(fontawesome_path)
+    fontawesome = {
+        'fontawesome': FontAwesome('Solid-900', fontawesome_path),
+        'fontawesome-regular': FontAwesome('Regular-400'),
+    }
     for icon in manifest['ui']:
         target = icons / f'{icon["name"]}.svg'
         kind, _, icon_id = icon['from'].partition(':')
@@ -114,8 +121,8 @@ def import_manifest(force, fontawesome_path):
             continue
         if kind == 'iconoven':
             target.write_text(iconoven(icon_id))
-        elif kind == 'fontawesome':
-            target.write_text(fontawesome.glyph(icon_id))
+        elif kind in fontawesome:
+            target.write_text(fontawesome[kind].glyph(icon_id))
         else:
             sys.exit(f'{icon["name"]}: unknown source {icon["from"]}')
         print(target)
