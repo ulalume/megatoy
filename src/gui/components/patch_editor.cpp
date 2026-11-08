@@ -259,6 +259,9 @@ constexpr LfoNames kLfoFullNames{"Amplitude Modulation Sensitivity",
                                  "Algorithm"};
 constexpr LfoNames kLfoShortNames{"AMS", "FMS", "ALG"};
 
+/// The narrowest the algorithm diagram is drawn, where the names are short.
+constexpr float kMinAlgorithmDiagramWidth = 112.0f;
+
 /// The LFO section's sliders: one width for the two, wide enough for the
 /// longer name.
 float lfo_slider_width(const LfoNames &names) {
@@ -322,10 +325,18 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::PushItemWidth(hslider_width());
 
   // The slider stands beside the diagram, as tall as it, at the spacing
-  // between any two items.
+  // between any two items. With the names short, the diagram narrows down
+  // to its least to leave the slider its own.
   const float diagram_height = ui::scale::px(48.0f);
+  float diagram_width = ImGui::CalcItemWidth();
+  if (names.algorithm != kLfoFullNames.algorithm) {
+    diagram_width = std::clamp(
+        ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x -
+            named_slider_fit_width(names.algorithm, "0"),
+        ui::scale::px(kMinAlgorithmDiagramWidth), diagram_width);
+  }
   algorithm_diagram(patch.instrument.algorithm,
-                    ImVec2(ImGui::CalcItemWidth(), diagram_height));
+                    ImVec2(diagram_width, diagram_height));
   ImGui::SameLine();
   ImGui::PushStyleVarY(
       ImGuiStyleVar_FramePadding,
@@ -698,7 +709,11 @@ void render_document_window(PatchEditorContext &context,
     const auto available_width = ImGui::GetContentRegionAvail().x;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
     const auto fits_beside = [&](const LfoNames &names) {
-      const float channel_width = hslider_width() + spacing +
+      const float diagram_width =
+          names.algorithm == kLfoFullNames.algorithm
+              ? hslider_width()
+              : ui::scale::px(kMinAlgorithmDiagramWidth);
+      const float channel_width = diagram_width + spacing +
                                   named_slider_fit_width(names.algorithm, "0");
       const float column =
           std::max(lfo_slider_width(names), channel_width) + spacing * 2.0f;
