@@ -6,7 +6,6 @@
 #include "gui/ui_scale.hpp"
 #include <algorithm>
 #include <imgui.h>
-#include <imgui_internal.h>
 
 namespace ui {
 namespace {
@@ -48,12 +47,6 @@ bool star_rating_slider(const char *id, int &rating, const char *name) {
     rating = x < 0.0f ? 0 : std::clamp(static_cast<int>(x / step) + 1, 1, 5);
   }
 
-  ImGui::RenderFrame(
-      min, max,
-      ImGui::GetColorU32(ImGui::IsItemActive()    ? ImGuiCol_FrameBgActive
-                         : ImGui::IsItemHovered() ? ImGuiCol_FrameBgHovered
-                                                  : ImGuiCol_FrameBg),
-      true, style.FrameRounding);
   const ImU32 filled = ImGui::GetColorU32(ImGuiCol_Text);
   const ImU32 faint =
       ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
