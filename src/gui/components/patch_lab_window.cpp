@@ -555,6 +555,9 @@ void render_lab_list(PatchLabContext &context, PatchLabState &state) {
     // A row's highlight reaches half the spacing above it, the first one's
     // too.
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + list_row_spacing() * 0.5f);
+    // The pages and the results each in their own ID scope: a result's id
+    // can be a page's index.
+    ImGui::PushID("pages");
     for (std::size_t i = 0; i < std::size(kPageNames); ++i) {
       const auto page = static_cast<PatchLabState::Page>(i);
       ImGui::PushID(static_cast<int>(i));
@@ -565,6 +568,7 @@ void render_lab_list(PatchLabContext &context, PatchLabState &state) {
       }
       ImGui::PopID();
     }
+    ImGui::PopID();
     ImGui::PopStyleVar();
 
     ImGui::SeparatorText("Results");
@@ -577,6 +581,7 @@ void render_lab_list(PatchLabContext &context, PatchLabState &state) {
       ImGui::PopStyleColor();
     }
     const PatchLabState::SessionResult *chosen = nullptr;
+    ImGui::PushID("results");
     for (const auto &result : state.results) {
       ImGui::PushID(static_cast<int>(result.id));
       const bool has_settings = !result.settings.empty();
@@ -588,6 +593,7 @@ void render_lab_list(PatchLabContext &context, PatchLabState &state) {
       }
       ImGui::PopID();
     }
+    ImGui::PopID();
     ImGui::PopStyleVar();
     if (chosen != nullptr) {
       choose_result(context, state, *chosen);
