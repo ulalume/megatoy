@@ -323,7 +323,7 @@ void render_random_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::TextWrapped("Makes a new patch from scratch.");
   ImGui::Spacing();
 
-  if (ImGui::Button("Generate")) {
+  if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Generate")) {
     state.random_template_iterations =
         std::clamp(state.random_template_iterations, 0, 8);
     patch_lab::RandomOptions options;
@@ -349,7 +349,7 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::Checkbox("Allow algorithm change",
                   &state.mutate_allow_algorithm_change);
 
-  if (ImGui::Button("Generate")) {
+  if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Generate")) {
     patch_lab::MutateOptions options;
     options.amount = state.mutate_amount;
     options.probability = state.mutate_probability;
@@ -413,7 +413,7 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
   }
 
   ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
-  if (ImGui::Button("Generate")) {
+  if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Generate")) {
     ym2612::Patch patch_a;
     ym2612::Patch patch_b;
     if (auto error = load_sources(context, state, patch_a, patch_b)) {
