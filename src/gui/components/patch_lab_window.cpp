@@ -6,6 +6,7 @@
 #include "gui/components/centred_glyph.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/fonts/megatoy_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -158,8 +159,20 @@ bool render_source_list(const patches::PatchSession &session,
   return changed;
 }
 
-/// How much larger than the text a slot draws its patch's icon.
-constexpr float kSlotIconScale = 1.75f;
+/// How much larger than the text Patch Lab's large buttons, Generate and the
+/// Mix sources, draw their icons.
+constexpr float kLargeButtonIconScale = 1.5f;
+
+/// How tall Patch Lab's large buttons stand.
+float large_button_height() { return ImGui::GetFrameHeight() * 2.0f; }
+
+/// Where an icon `icon_width` wide, a gap and a name `name_width` wide start
+/// so the three stand centred between `left` and `right`.
+float centred_start(float left, float right, float icon_width,
+                    float name_width) {
+  const float gap = ImGui::GetStyle().ItemInnerSpacing.x * 2.0f;
+  return std::round((left + right - (icon_width + gap + name_width)) * 0.5f);
+}
 
 /// A slot for one source: a click lists what it can take, and a patch
 /// dragged from the browser drops into it.
@@ -177,9 +190,7 @@ void render_source_slot(const char *id,
 
   ImGui::PushID(id);
   const ImGuiStyle &style = ImGui::GetStyle();
-  const ImVec2 size(width, ImGui::GetTextLineHeight() * 2.0f +
-                               style.FramePadding.y * 2.0f +
-                               style.ItemInnerSpacing.y);
+  const ImVec2 size(width, large_button_height());
   const bool clicked = ImGui::InvisibleButton("##slot", size);
   const ImVec2 min = ImGui::GetItemRectMin();
   const ImVec2 max = ImGui::GetItemRectMax();
@@ -206,35 +217,42 @@ void render_source_slot(const char *id,
   }
   const bool open = ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None);
 
+  // A frame, as the editor's diagrams are, filled only under the pointer.
   auto *draw_list = ImGui::GetWindowDrawList();
-  const ImGuiCol background = held || open ? ImGuiCol_FrameBgActive
-                              : hovered    ? ImGuiCol_FrameBgHovered
-                                           : ImGuiCol_FrameBg;
-  draw_list->AddRectFilled(min, max, ImGui::GetColorU32(background),
-                           style.FrameRounding);
-  draw_list->AddRect(min, max, ImGui::GetColorU32(ImGuiCol_Border),
-                     style.FrameRounding);
+  if (held || open || hovered) {
+    draw_list->AddRectFilled(min, max,
+                             ImGui::GetColorU32(held
+                                                    ? ImGuiCol_FrameBgActive
+                                                    : ImGuiCol_FrameBgHovered));
+  }
+  draw_list->AddRect(min, max,
+                     styles::color_u32(styles::MegatoyCol::PreviewBorder));
 
-  const ImVec2 inner_min(min.x + style.FramePadding.x,
-                         min.y + style.FramePadding.y);
-  const ImVec2 inner_max(max.x - style.FramePadding.x,
-                         max.y - style.FramePadding.y);
-  const ImU32 dim = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+  // The icon, as large as Generate's, and the name beside it, centred.
+  const float icon_width =
+      std::round(ImGui::GetFontSize() * kLargeButtonIconScale);
   if (source.empty()) {
-    ImGui::PushStyleColor(ImGuiCol_Text, dim);
-    ImGui::RenderTextClipped(inner_min, inner_max, ICON_FA_PLUS, nullptr,
-                             nullptr, ImVec2(0.5f, 0.5f));
-    ImGui::PopStyleColor();
+    ImGui::PushFont(nullptr,
+                    ImGui::GetStyle().FontSizeBase * kLargeButtonIconScale);
+    draw_centred_glyph(ICON_MEGATOY_PLUS, min, max,
+                       ImGui::GetColorU32(ImGuiCol_TextDisabled));
+    ImGui::PopFont();
   } else {
-    // The icon at the left, as large as the slot's two lines allow.
-    const float icon_size = inner_max.y - inner_min.y;
-    draw_instrument_icon(icon, inner_min,
-                         ImVec2(inner_min.x + icon_size, inner_max.y),
-                         kSlotIconScale);
-    const float text_x = inner_min.x + icon_size + style.ItemInnerSpacing.x;
-    const float top = (min.y + max.y - ImGui::GetTextLineHeight()) * 0.5f;
-    ImGui::RenderTextEllipsis(draw_list, ImVec2(text_x, top), inner_max,
-                              inner_max.x, name.c_str(), nullptr, nullptr);
+    const float gap = style.ItemInnerSpacing.x * 2.0f;
+    const float room =
+        std::max(width - style.FramePadding.x * 2.0f - icon_width - gap, 0.0f);
+    const float name_width =
+        std::min(ImGui::CalcTextSize(name.c_str()).x, room);
+    const float left = centred_start(min.x, max.x, icon_width, name_width);
+    draw_instrument_icon(icon, ImVec2(left, min.y),
+                         ImVec2(left + icon_width, max.y),
+                         kLargeButtonIconScale);
+    const float text_x = left + icon_width + gap;
+    const float top =
+        std::round((min.y + max.y - ImGui::GetTextLineHeight()) * 0.5f);
+    ImGui::RenderTextEllipsis(
+        draw_list, ImVec2(text_x, top), ImVec2(text_x + name_width, max.y),
+        text_x + name_width, name.c_str(), nullptr, nullptr);
   }
   if (hovered) {
     if (source.empty()) {
@@ -341,29 +359,26 @@ void remember_result(PatchLabState &state, PatchLabState::Page page,
   state.results.insert(state.results.begin(), std::move(result));
 }
 
-/// How much larger than the text the Generate button draws its icon.
-constexpr float kGenerateIconScale = 1.5f;
-
 /// A page's Generate button: twice a button's height across the page, its
 /// icon larger and its name beside it, the two centred.
 bool generate_button() {
-  const float height = ImGui::GetFrameHeight() * 2.0f;
-  const bool clicked = ImGui::Button("##generate", ImVec2(-FLT_MIN, height));
+  const bool clicked =
+      ImGui::Button("##generate", ImVec2(-FLT_MIN, large_button_height()));
   const ImVec2 min = ImGui::GetItemRectMin();
   const ImVec2 max = ImGui::GetItemRectMax();
   const char *label = "Generate";
   const ImVec2 label_size = ImGui::CalcTextSize(label);
-  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * kGenerateIconScale);
-  const ImVec2 icon_size = ImGui::CalcTextSize(ICON_FA_ARROWS_ROTATE);
-  const float gap = ImGui::GetStyle().ItemInnerSpacing.x * 2.0f;
-  const float left =
-      std::round((min.x + max.x - (icon_size.x + gap + label_size.x)) * 0.5f);
+  const float icon_width =
+      std::round(ImGui::GetFontSize() * kLargeButtonIconScale);
+  const float left = centred_start(min.x, max.x, icon_width, label_size.x);
   const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
-  draw_centred_glyph(ICON_FA_ARROWS_ROTATE, ImVec2(left, min.y),
-                     ImVec2(left + icon_size.x, max.y), color);
+  ImGui::PushFont(nullptr,
+                  ImGui::GetStyle().FontSizeBase * kLargeButtonIconScale);
+  draw_centred_glyph(ICON_MEGATOY_REFRESH, ImVec2(left, min.y),
+                     ImVec2(left + icon_width, max.y), color);
   ImGui::PopFont();
   ImGui::GetWindowDrawList()->AddText(
-      ImVec2(left + icon_size.x + gap,
+      ImVec2(left + icon_width + ImGui::GetStyle().ItemInnerSpacing.x * 2.0f,
              std::round((min.y + max.y - label_size.y) * 0.5f)),
       color, label);
   return clicked;
