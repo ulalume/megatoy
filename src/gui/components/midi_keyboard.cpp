@@ -33,11 +33,13 @@ constexpr float kBlackKeyWidth = 0.6f;
 constexpr float kBlackKeyHeight = 0.6f;
 
 /// The families each column of the scale list starts at, for one to three
-/// columns, so the columns stand about as tall as each other.
-constexpr int kScaleColumnGroups[3][3] = {{-1}, {-1, 3}, {-1, 2, 4}};
+/// columns, so the columns stand about as tall as each other. Chromatic
+/// stands on a row of its own above them.
+constexpr int kScaleColumnGroups[3][3] = {{0}, {0, 3}, {0, 2, 4}};
 
 /// The scales from `first` to `last` of the list, each family under its
-/// name, as rows `width` wide. Returns whether one was picked into `scale`.
+/// name, as rows `width` wide, or across the list for 0. Returns whether one
+/// was picked into `scale`.
 bool scale_rows(std::size_t first, std::size_t last, Scale &scale,
                 float width) {
   const auto &infos = scale_infos();
@@ -67,9 +69,9 @@ bool scale_rows(std::size_t first, std::size_t last, Scale &scale,
 }
 
 /**
- * The scale list: Chromatic, then each family under its name, in as many
- * columns as the viewport has room for, up to three. Returns whether a
- * scale was picked into `scale`.
+ * The scale list: Chromatic on a row of its own, then each family under its
+ * name, in as many columns as the viewport has room for, up to three.
+ * Returns whether a scale was picked into `scale`.
  */
 bool scale_combo(const char *id, Scale &scale) {
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -105,9 +107,10 @@ bool scale_combo(const char *id, Scale &scale) {
     starts.push_back(static_cast<std::size_t>(at - infos.begin()));
   }
   starts.push_back(infos.size());
-  bool picked = false;
+  // Chromatic, across the list.
+  bool picked = scale_rows(0, starts.front(), scale, 0.0f);
   if (columns == 1) {
-    picked = scale_rows(0, infos.size(), scale, width);
+    picked |= scale_rows(starts.front(), infos.size(), scale, width);
   } else {
     ImGui::PushStyleVarX(ImGuiStyleVar_CellPadding, style.ItemSpacing.x * 0.5f);
     if (ImGui::BeginTable("##scale_columns", columns,
