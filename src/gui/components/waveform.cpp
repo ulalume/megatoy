@@ -291,9 +291,13 @@ void render_waveform(const char *title, WaveformContext &context) {
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(420.0f, 240.0f)),
                            ImGuiCond_FirstUseEver);
-  // The graphs run to the window's edges.
+  // The graphs run to the window's edges, and what shows past them is the
+  // colour between the areas.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                        ImGui::GetStyleColorVec4(ImGuiCol_Border));
   const bool visible = ui::begin_window(title, &ui_prefs.show_waveform);
+  ImGui::PopStyleColor();
   ImGui::PopStyleVar();
   if (!visible) {
     ImGui::End();
