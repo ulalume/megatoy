@@ -82,6 +82,8 @@ enum class MegatoyCol : int {
   /// the focus and in the others.
   TabBarLine,
   TabBarLineDimmed,
+  /// A button among a dock's tabs, such as a folded view's.
+  TabButton,
   /// Behind the patch browser's search row.
   BrowserHeaderBg,
   /// The room between the areas, dragged to resize them, at rest; pointed

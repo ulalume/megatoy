@@ -3,6 +3,7 @@
 #include "gui/ui_scale.hpp"
 
 #include <imgui.h>
+#include <initializer_list>
 
 namespace ui {
 
@@ -37,26 +38,51 @@ inline float tab_bar_height() {
   return ImGui::GetFontSize() + window_tab_padding().y * 2.0f;
 }
 
-/// How far above the line under a dock's tabs those not shown stop, before
-/// the interface's scale.
+/// How far below the room above them a dock's tabs start, shown or not, and
+/// how far above the line under them those not shown stop, before the
+/// interface's scale. The tabs not shown stand in the middle of the bar.
+inline constexpr float kTabInsetAbove = 2.0f;
 inline constexpr float kTabRoomBelow = 2.0f;
 
-/// How tall the shown tab of a dock is drawn, down to the line under it: the
-/// bar less the room above the tabs and the line.
+/// The height of a dock's tab bar between the room above its tabs and the
+/// line under them.
 inline float tab_height() {
   return tab_bar_height() - scale::px(kTabRoomAbove + kTabLineWidth);
 }
 
-/// How tall the other tabs are drawn, stopping kTabRoomBelow above the line.
+/// How tall the tabs not shown are drawn: kTabInsetAbove below the room
+/// above them, kTabRoomBelow above the line.
 inline float unshown_tab_height() {
-  return tab_height() - scale::px(kTabRoomBelow);
+  return tab_height() - scale::px(kTabInsetAbove + kTabRoomBelow);
+}
+
+/// The number of colours push_clear_tab_bar_colors() pushes.
+inline constexpr int kClearTabBarColorCount = 8;
+
+/**
+ * Makes ImGui's own drawing of a dock's tab bar clear while pushed: its
+ * background, the tabs' fills and the line under them. megatoy draws them
+ * itself, under ImGui's labels (tab_bar_lines). ImGui draws a dock's tab bar
+ * as the dock space is laid out and as its windows begin, so both are called
+ * with this pushed. Popped with ImGui::PopStyleColor(kClearTabBarColorCount).
+ */
+inline void push_clear_tab_bar_colors() {
+  const ImVec4 clear(0.0f, 0.0f, 0.0f, 0.0f);
+  for (const ImGuiCol col :
+       {ImGuiCol_Tab, ImGuiCol_TabHovered, ImGuiCol_TabSelected,
+        ImGuiCol_TabDimmed, ImGuiCol_TabDimmedSelected, ImGuiCol_TitleBg,
+        ImGuiCol_TitleBgActive, ImGuiCol_TitleBgCollapsed}) {
+    ImGui::PushStyleColor(col, clear);
+  }
 }
 
 /// ImGui::Begin for one of the app's own windows, the ones that dock.
 inline bool begin_window(const char *title, bool *open,
                          ImGuiWindowFlags flags = 0) {
   push_window_tab_padding();
+  push_clear_tab_bar_colors();
   const bool visible = ImGui::Begin(title, open, flags);
+  ImGui::PopStyleColor(kClearTabBarColorCount);
   ImGui::PopStyleVar();
   return visible;
 }

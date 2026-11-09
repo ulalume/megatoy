@@ -2,7 +2,6 @@
 
 #include "gui/app_window.hpp"
 #include "gui/components/centred_glyph.hpp"
-#include "gui/tab_bar_lines.hpp"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -35,11 +34,11 @@ inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
   // As wide as the tabs beside it are tall, its fill drawn with theirs.
   const float width = unshown_tab_height();
   push_window_tab_padding();
-  push_clear_tab_fills();
+  push_clear_tab_bar_colors();
   ImGui::SetNextItemWidth(width);
   ImGui::TabItemButton(id,
                        ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
-  ImGui::PopStyleColor(kClearTabFillCount);
+  ImGui::PopStyleColor(kClearTabBarColorCount);
   ImGui::PopStyleVar();
   draw_centred_glyph(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
   FoldedTabButton button;

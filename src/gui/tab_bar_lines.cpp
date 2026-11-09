@@ -64,39 +64,42 @@ void draw_tab_bar(ImDrawList *draw_list, const ImGuiDockNode &node,
       ImGui::GetColorU32(focused ? ImGuiCol_TitleBgActive : ImGuiCol_TitleBg));
 
   const float line = style.TabBarBorderSize;
-  const float top = bar.BarRect.Min.y + scale::px(kTabRoomAbove);
+  const float top =
+      bar.BarRect.Min.y + scale::px(kTabRoomAbove + kTabInsetAbove);
   const float shown_bottom = bar.BarRect.Max.y - line;
   const float bottom = shown_bottom - scale::px(kTabRoomBelow);
-  bool shown_pointed_at = false;
   draw_list->PushClipRect(bar.BarRect.Min, bar.BarRect.Max, true);
   for (const ImGuiTabItem &tab : bar.Tabs) {
     if (tab.Width <= 0.0f) {
       continue;
     }
+    // The shown tab keeps its colour under the pointer; its close button
+    // lights up instead, as ImGui draws it.
     const bool shown = tab.ID != 0 && tab.ID == bar.VisibleTabId;
-    const bool pointed = is_pointed_at(tab.ID);
-    shown_pointed_at = shown_pointed_at || (shown && pointed);
-    const ImGuiCol col =
-        pointed ? ImGuiCol_TabHovered
-        : shown ? (focused ? ImGuiCol_TabSelected : ImGuiCol_TabDimmedSelected)
-        : focused ? ImGuiCol_Tab
-                  : ImGuiCol_TabDimmed;
+    const bool pointed = !shown && is_pointed_at(tab.ID);
+    // A button among the tabs, such as a folded view's, keeps a fill of its
+    // own.
+    const bool button = (tab.Flags & ImGuiTabItemFlags_Button) != 0;
+    const ImU32 color =
+        pointed  ? ImGui::GetColorU32(ImGuiCol_TabHovered)
+        : button ? styles::color_u32(styles::MegatoyCol::TabButton)
+                 : ImGui::GetColorU32(
+                       shown ? (focused ? ImGuiCol_TabSelected
+                                        : ImGuiCol_TabDimmedSelected)
+                             : (focused ? ImGuiCol_Tab : ImGuiCol_TabDimmed));
     const float left = tab_left(bar, tab);
     draw_list->AddRectFilled(
         ImVec2(left, top),
-        ImVec2(left + tab.Width, shown ? shown_bottom : bottom),
-        ImGui::GetColorU32(col), style.TabRounding,
+        ImVec2(left + tab.Width, shown ? shown_bottom : bottom), color,
+        style.TabRounding,
         shown ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll);
   }
   draw_list->PopClipRect();
 
   if (line > 0.0f) {
-    // The line takes the shown tab's colour while it is pointed at.
     const ImU32 color =
-        shown_pointed_at
-            ? ImGui::GetColorU32(ImGuiCol_TabHovered)
-            : styles::color_u32(focused ? styles::MegatoyCol::TabBarLine
-                                        : styles::MegatoyCol::TabBarLineDimmed);
+        styles::color_u32(focused ? styles::MegatoyCol::TabBarLine
+                                  : styles::MegatoyCol::TabBarLineDimmed);
     draw_list->AddRectFilled(ImVec2(bar.SeparatorMinX, shown_bottom),
                              ImVec2(bar.SeparatorMaxX, bar.BarRect.Max.y),
                              color);
@@ -105,15 +108,6 @@ void draw_tab_bar(ImDrawList *draw_list, const ImGuiDockNode &node,
 }
 
 } // namespace
-
-void push_clear_tab_fills() {
-  const ImVec4 clear(0.0f, 0.0f, 0.0f, 0.0f);
-  for (const ImGuiCol col :
-       {ImGuiCol_Tab, ImGuiCol_TabHovered, ImGuiCol_TabSelected,
-        ImGuiCol_TabDimmed, ImGuiCol_TabDimmedSelected}) {
-    ImGui::PushStyleColor(col, clear);
-  }
-}
 
 ImGuiID dock_space_over_viewport(ImGuiID dockspace_id,
                                  const ImGuiViewport *viewport) {
@@ -136,15 +130,11 @@ ImGuiID dock_space_over_viewport(ImGuiID dockspace_id,
                    ImGuiWindowFlags_NoNavFocus);
   ImGui::PopStyleVar(3);
 
-  // ImGui draws the tab bars' background, the tabs' fills and the line under
-  // them clear; they are drawn here, under the dock space's own window.
-  const ImVec4 clear(0.0f, 0.0f, 0.0f, 0.0f);
-  push_clear_tab_fills();
-  ImGui::PushStyleColor(ImGuiCol_TitleBg, clear);
-  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, clear);
-  ImGui::PushStyleColor(ImGuiCol_TitleBgCollapsed, clear);
+  // ImGui draws the tab bars clear; they are drawn here, under the dock
+  // space's own window, from the bars as they were laid out last.
+  push_clear_tab_bar_colors();
   dockspace_id = ImGui::DockSpace(dockspace_id);
-  ImGui::PopStyleColor(kClearTabFillCount + 3);
+  ImGui::PopStyleColor(kClearTabBarColorCount);
 
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   for_each_tab_bar([&](const ImGuiDockNode &node, const ImGuiTabBar &bar) {
@@ -161,31 +151,6 @@ void keep_tab_bar_lit() {
 }
 
 void finish_tab_bars() {
-  // ImGui sets a label at the middle of the bar; the tabs not shown stand
-  // between the room above them and the room below, which differ.
-  const float shift = (scale::px(kTabRoomAbove - kTabRoomBelow) -
-                       GImGui->Style.TabBarBorderSize) *
-                      0.5f;
-  for_each_tab_bar([&](const ImGuiDockNode &node, const ImGuiTabBar &bar) {
-    if (shift == 0.0f) {
-      return;
-    }
-    const float top = bar.BarRect.Min.y;
-    const float bottom = bar.BarRect.Max.y;
-    for (ImDrawVert &vert : node.HostWindow->DrawList->VtxBuffer) {
-      if (vert.pos.y < top - 1.0f || vert.pos.y > bottom) {
-        continue;
-      }
-      for (const ImGuiTabItem &tab : bar.Tabs) {
-        const float left = tab_left(bar, tab);
-        if (vert.pos.x >= left - 1.0f &&
-            vert.pos.x <= left + tab.Width + 1.0f) {
-          vert.pos.y += shift;
-          break;
-        }
-      }
-    }
-  });
   lit_before().swap(lit_now());
   lit_now().clear();
 }
