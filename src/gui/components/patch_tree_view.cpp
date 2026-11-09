@@ -74,8 +74,7 @@ struct PatchTreeCache {
       // their folders.
       rows =
           query_lower.empty() && !shown_stars.active()
-              ? patches::flatten_visible_rows(source, query_lower, shown_stars,
-                                              open_directories)
+              ? patches::flatten_visible_rows(source, open_directories)
               : patches::matching_patch_rows(source, query_lower, shown_stars);
       ++rows_build;
     }
@@ -338,11 +337,8 @@ float row_indent(const patches::TreeRow &row) {
   return row.is_directory ? indent : indent + ImGui::GetStyle().FramePadding.x;
 }
 
-/// While filtering, every directory leading to a match is shown open, and a
-/// toggle is not kept: what was open before comes back with the filter off.
 void render_directory_row(PatchSelectorContext &context,
-                          const patches::TreeRow &row, PatchTreeCache &cache,
-                          bool filtering) {
+                          const patches::TreeRow &row, PatchTreeCache &cache) {
   const auto &item = *row.entry;
 
   ImGui::PushID(item.relative_path.c_str());
@@ -427,7 +423,7 @@ void render_directory_row(PatchSelectorContext &context,
                          item.relative_path != kBuiltinPresetRoot);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
-  if (open != row.is_open && !filtering) {
+  if (open != row.is_open) {
     cache.set_open(item.relative_path, open);
   }
   ImGui::PopID();
@@ -630,8 +626,7 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
       ImGui::Indent(offset);
     }
     if (row.is_directory) {
-      render_directory_row(context, row, cache,
-                           !query_lower.empty() || shown_stars.active());
+      render_directory_row(context, row, cache);
     } else {
       render_patch_row(context, row);
     }
