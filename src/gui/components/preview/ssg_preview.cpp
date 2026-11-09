@@ -1,6 +1,5 @@
 #include "ssg_preview.hpp"
 
-#include "gui/components/common.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 
@@ -82,7 +81,8 @@ void ssg_diagram(bool enabled, int envelope_type, ImVec2 size) {
   };
 
   const ImU32 line = styles::color_u32(styles::MegatoyCol::EnvelopeCurve);
-  const ImU32 fill = color_with_alpha(line, 0.4f);
+  // Filled as the sliders' bars are.
+  const ImU32 fill = ImGui::GetColorU32(ImGuiCol_SliderGrab);
   // Without anti-aliasing, so neighbouring pieces of the fill meet without a
   // seam and the outline sits on whole pixels.
   const ImDrawListFlags flags = draw_list->Flags;
