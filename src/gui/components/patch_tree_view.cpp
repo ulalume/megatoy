@@ -197,43 +197,78 @@ float name_offset() {
   return patch_icon_width() + ImGui::GetStyle().FramePadding.x;
 }
 
-/// Text after what is already on the row, `drop` below the row's top. A folder
-/// row's text is already placed by its frame padding, so it takes none.
-void row_trailing_text(const char *text, const ImVec4 &color, float drop) {
-  ImGui::SameLine();
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + drop);
-  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-  ImGui::TextColored(color, "%s", text);
-  ImGui::PopStyleVar();
+/// How much larger than the text the star of a rating too wide for its row
+/// is drawn, with the count inside it.
+constexpr float kRatingBadgeScale = 1.4f;
+/// The count's size inside that star, against the text's.
+constexpr float kRatingBadgeDigitScale = 0.7f;
+
+/// The width a patch's rating takes on its row: its stars, or the one star
+/// with the count in it, by `compact`.
+float rating_width(int stars, bool compact) {
+  if (compact) {
+    return std::round(ImGui::GetFontSize() * kRatingBadgeScale);
+  }
+  return ImGui::CalcTextSize(
+             kStarLabels[static_cast<std::size_t>(stars)].data())
+      .x;
 }
 
-bool row_selectable(const char *label, float height, bool selected = false) {
-  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
-  const bool clicked =
-      ImGui::Selectable(label, selected, ImGuiSelectableFlags_AllowDoubleClick,
-                        ImVec2(0.0f, height));
-  ImGui::PopStyleVar(2);
-  return clicked;
+/// A patch's rating, its right end at `right`, centred on `centre_y`.
+void draw_rating(int stars, bool compact, float right, float centre_y) {
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImU32 muted =
+      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  const float width = rating_width(stars, compact);
+  if (!compact) {
+    draw_list->AddText(
+        ImVec2(right - width, centre_y - ImGui::GetTextLineHeight() * 0.5f),
+        muted, kStarLabels[static_cast<std::size_t>(stars)].data());
+    return;
+  }
+  const ImVec2 min(right - width, centre_y - width * 0.5f);
+  const ImVec2 max(right, centre_y + width * 0.5f);
+  const ImGuiStyle &style = ImGui::GetStyle();
+  ImGui::PushFont(nullptr, style.FontSizeBase * kRatingBadgeScale);
+  draw_centred_glyph(ICON_MEGATOY_STAR, min, max, muted);
+  ImGui::PopFont();
+  // The count in the background's colour, a little low: a star's middle
+  // stands below the middle of its outline.
+  const char digit[2] = {static_cast<char>('0' + stars), '\0'};
+  const float drop = width * 0.06f;
+  ImGui::PushFont(nullptr, style.FontSizeBase * kRatingBadgeDigitScale);
+  draw_centred_glyph(digit, ImVec2(min.x, min.y + drop),
+                     ImVec2(max.x, max.y + drop),
+                     ImGui::GetColorU32(ImGuiCol_WindowBg));
+  ImGui::PopFont();
 }
 
-/// A patch's instrument icon, larger than the text, and its name, over a
-/// selectable that spans the row.
-bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
+/**
+ * A patch's row, one selectable spanning it: the instrument icon, larger
+ * than the text, the name and the dimmed format, and the rating at the
+ * right end. A rating whose stars leave the name and format no room is one
+ * star with the count in it, and a name that still does not fit is cut
+ * short.
+ */
+bool patch_row_selectable(const patches::PatchEntry &item, bool selected) {
   const std::string_view icon_id = item.metadata
                                        ? std::string_view(item.metadata->icon)
                                        : std::string_view();
+  const int stars =
+      std::clamp(item.metadata ? item.metadata->star_rating : 0, 0, 5);
+  const ImGuiStyle &style = ImGui::GetStyle();
   const float height = patch_row_height();
   const ImVec2 pos = ImGui::GetCursorScreenPos();
-  // Sized to the icon and name, which the next item follows, while the
-  // highlight still spans the row.
-  ImGuiSelectableFlags flags = ImGuiSelectableFlags_AllowDoubleClick;
-  flags |= ImGuiSelectableFlags_SpanAvailWidth;
+  const float right =
+      pos.x + ImGui::GetContentRegionAvail().x - style.FramePadding.x;
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-  const bool clicked = ImGui::Selectable(
-      "##name", selected, flags,
-      ImVec2(name_offset() + ImGui::CalcTextSize(item.name.c_str()).x, height));
+  const bool clicked =
+      ImGui::Selectable("##patch", selected,
+                        ImGuiSelectableFlags_AllowDoubleClick |
+                            ImGuiSelectableFlags_SpanAvailWidth,
+                        ImVec2(0.0f, height));
   ImGui::PopStyleVar();
+
   // Centred under a folder's arrow, which stands a text height wide; the
   // larger icon reaches out to either side of it.
   const float icon_left =
@@ -241,10 +276,42 @@ bool patch_name_selectable(const patches::PatchEntry &item, bool selected) {
   draw_instrument_icon(icon_id, ImVec2(icon_left, pos.y),
                        ImVec2(icon_left + patch_icon_width(), pos.y + height),
                        kPatchIconScale);
-  ImGui::GetWindowDrawList()->AddText(
-      ImVec2(pos.x + name_offset(),
-             pos.y + (height - ImGui::GetTextLineHeight()) * 0.5f),
-      ImGui::GetColorU32(ImGuiCol_Text), item.name.c_str());
+
+  const float centre_y = pos.y + height * 0.5f;
+  const float text_y = centre_y - ImGui::GetTextLineHeight() * 0.5f;
+  const float name_x = pos.x + name_offset();
+  const float gap = style.ItemSpacing.x;
+  const ImVec2 name_size = ImGui::CalcTextSize(item.name.c_str());
+  const float format_width = ImGui::CalcTextSize(item.format.c_str()).x;
+  const float text_end = name_x + name_size.x + gap + format_width;
+  bool compact = false;
+  float limit = right;
+  if (stars > 0) {
+    compact = text_end + gap + rating_width(stars, false) > right;
+    limit = right - rating_width(stars, compact) - gap;
+    draw_rating(stars, compact, right, centre_y);
+  }
+
+  // The format keeps its place after the name, which gives way to it.
+  const float name_room = std::max(limit - gap - format_width - name_x, 0.0f);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  if (name_size.x <= name_room) {
+    draw_list->AddText(ImVec2(name_x, text_y),
+                       ImGui::GetColorU32(ImGuiCol_Text), item.name.c_str());
+  } else {
+    ImGui::RenderTextEllipsis(draw_list, ImVec2(name_x, text_y),
+                              ImVec2(name_x + name_room, text_y + name_size.y),
+                              name_x + name_room, item.name.c_str(), nullptr,
+                              &name_size);
+  }
+  const float format_x = name_x + std::min(name_size.x, name_room) + gap;
+  draw_list->PushClipRect(ImVec2(format_x, pos.y),
+                          ImVec2(limit, pos.y + height), true);
+  draw_list->AddText(
+      ImVec2(format_x, text_y),
+      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)),
+      item.format.c_str());
+  draw_list->PopClipRect();
   return clicked;
 }
 
@@ -374,35 +441,13 @@ void render_patch_row(PatchSelectorContext &context,
   const bool is_current =
       item.relative_path == context.session.current_patch_selection_path();
 
-  // Name and dimmed format label, either of which loads the patch. The
-  // context menu attaches to whichever was drawn last, so it is registered
-  // after each selectable. The name's selectable spans the
-  // row, so it alone carries the current patch's highlight.
-  const bool name_clicked = patch_name_selectable(item, is_current);
+  const bool clicked = patch_row_selectable(item, is_current);
   entry_context_menu(context, item);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
-
-  ImGui::SameLine();
-  ImGui::PushStyleColor(ImGuiCol_Text,
-                        styles::color(styles::MegatoyCol::TextMuted));
-  const bool format_clicked =
-      row_selectable(item.format.c_str(), patch_row_height());
-  ImGui::PopStyleColor();
-  entry_context_menu(context, item);
-  entry_drag_source(context, item, row.depth);
-  handle_row_keys(context, item);
-
-  if (const int stars = item.metadata ? item.metadata->star_rating : 0;
-      stars > 0) {
-    row_trailing_text(
-        kStarLabels[static_cast<std::size_t>(std::min(stars, 5))].data(),
-        styles::color(styles::MegatoyCol::TextMuted),
-        (patch_row_height() - ImGui::GetTextLineHeight()) * 0.5f);
-  }
 
   // A click previews the patch, a double click keeps it open.
-  if ((name_clicked || format_clicked) && context.open_patch) {
+  if (clicked && context.open_patch) {
     context.open_patch(item,
                        ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left));
   }
