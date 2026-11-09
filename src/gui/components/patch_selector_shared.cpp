@@ -16,7 +16,6 @@
 
 #include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
-#include <cfloat>
 #include <cstring>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -203,7 +202,7 @@ void entry_context_menu(PatchSelectorContext &context,
 namespace {
 
 /**
- * Below the search box, while it is typed in or the menu is in use: the
+ * Beside the search box, while it is typed in or the menu is in use: the
  * stars, dragged as the editor's rating is to show the patches rated that
  * many or more. Writes the pick into `query` as it changes, and sets
  * `refocus` once it is let go.
@@ -215,10 +214,18 @@ void render_star_menu(const ImRect &box, bool typing, std::string &query,
   if (!open) {
     return;
   }
+  // Beside the box, level with it, so the list below stays in sight; below
+  // it where the screen has no room to its right.
   const ImGuiStyle &style = ImGui::GetStyle();
-  ImGui::SetNextWindowPos(ImVec2(box.Min.x, box.Max.y + style.ItemSpacing.y));
-  ImGui::SetNextWindowSizeConstraints(ImVec2(box.GetWidth(), 0.0f),
-                                      ImVec2(box.GetWidth(), FLT_MAX));
+  const float width = star_rating_width() + style.WindowPadding.x * 2.0f;
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  const float right = box.Max.x + style.ItemSpacing.x;
+  if (right + width <= viewport->WorkPos.x + viewport->WorkSize.x) {
+    ImGui::SetNextWindowPos(ImVec2(right, (box.Min.y + box.Max.y) * 0.5f),
+                            ImGuiCond_Always, ImVec2(0.0f, 0.5f));
+  } else {
+    ImGui::SetNextWindowPos(ImVec2(box.Min.x, box.Max.y + style.ItemSpacing.y));
+  }
   ImGui::PushStyleColor(ImGuiCol_WindowBg,
                         ImGui::GetStyleColorVec4(ImGuiCol_PopupBg));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, style.PopupRounding);
