@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gui/styles/megatoy_style.hpp"
+
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -22,10 +24,10 @@ inline float named_slider_fit_width(const char *label, const char *value_text) {
 }
 
 /**
- * A horizontal slider with its name inside it, at the left, and its value at
- * the right, rather than the name beside it. `label` is read as ImGui reads
- * one: the name is what comes before "##", the ID all of it. `format` gives
- * the value's text, as for ImGui::SliderInt.
+ * A horizontal slider with its name inside it, muted, at the left, and its
+ * value at the right, rather than the name beside it. `label` is read as ImGui
+ * reads one: the name is what comes before "##", the ID all of it. `format`
+ * gives the value's text, as for ImGui::SliderInt.
  */
 inline bool named_slider_int(const char *label, int *value, int min, int max,
                              const char *format = "%d",
@@ -62,17 +64,22 @@ inline bool named_slider_int(const char *label, int *value, int min, int max,
       max_corner.x - style.FramePadding.x - ImGui::CalcTextSize(value_text).x;
   draw_list->AddText(ImVec2(value_x, text_y), color, value_text);
 
+  // The name muted beside the value.
   const char *name_end = ImGui::FindRenderedTextEnd(label);
   const float name_right = value_x - style.ItemInnerSpacing.x;
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::TextMuted));
   ImGui::RenderTextEllipsis(
       draw_list, ImVec2(min_corner.x + style.FramePadding.x, text_y),
       ImVec2(name_right, max_corner.y), name_right, label, name_end, nullptr);
+  ImGui::PopStyleColor();
   return changed;
 }
 
 /**
- * A vertical slider with its value inside at the top and its name inside at
- * the bottom, both centred. `label` is read as for named_slider_int().
+ * A vertical slider with its value inside at the top and its name, muted,
+ * inside at the bottom, both centred. `label` is read as for
+ * named_slider_int().
  */
 inline bool named_vslider_int(const char *label, const ImVec2 &size, int *value,
                               int min, int max) {
@@ -98,9 +105,11 @@ inline bool named_vslider_int(const char *label, const ImVec2 &size, int *value,
 
   const char *name_end = ImGui::FindRenderedTextEnd(label);
   const ImVec2 name_size = ImGui::CalcTextSize(label, name_end);
-  draw_list->AddText(ImVec2(IM_ROUND(centre_x - name_size.x * 0.5f),
-                            max_corner.y - style.FramePadding.y - name_size.y),
-                     color, label, name_end);
+  draw_list->AddText(
+      ImVec2(IM_ROUND(centre_x - name_size.x * 0.5f),
+             max_corner.y - style.FramePadding.y - name_size.y),
+      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)), label,
+      name_end);
   return changed;
 }
 
