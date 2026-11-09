@@ -347,11 +347,14 @@ SketchPointer drag_quick_edit_sketch(PatchEditorContext &context,
   return pointer;
 }
 
-void render_quick_edit_section(PatchEditorContext &context,
-                               ym2612::Patch &patch) {
+/// Draws the section; returns how tall its contents are, under the header,
+/// or 0 while it is closed.
+float render_quick_edit_section(PatchEditorContext &context,
+                                ym2612::Patch &patch) {
   if (!section_header("Quick Edit", context.prefs.show_quick_edit)) {
-    return;
+    return 0.0f;
   }
+  const float top = ImGui::GetCursorPosY();
   const float available = ImGui::GetContentRegionAvail().x;
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   auto &instrument = patch.instrument;
@@ -380,10 +383,12 @@ void render_quick_edit_section(PatchEditorContext &context,
   static_assert(std::size(kSliders) == kTweakCount);
   SliderState lit[kTweakCount]{};
   ImGui::BeginGroup();
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::scale::px(1.0f));
   for (const auto &[label, tweak] : kSliders) {
     lit[static_cast<int>(tweak)] =
         render_quick_edit_slider(context, instrument, label, tweak);
   }
+  ImGui::PopStyleVar();
   ImGui::EndGroup();
   ImGui::PopItemWidth();
 
@@ -408,13 +413,17 @@ void render_quick_edit_section(PatchEditorContext &context,
   }
   draw_quick_edit_sketch(instrument, lit, pointer, sketch_min, sketch_size);
   section_end("Quick Edit");
+  return ImGui::GetCursorPosY() - top;
 }
 
-void render_mml_section(PatchEditorContext &context,
-                        const ym2612::Patch &patch) {
+/// Draws the section, its contents `height` tall, or as tall as the text
+/// when `height` is 0.
+void render_mml_section(PatchEditorContext &context, const ym2612::Patch &patch,
+                        float height) {
   if (!section_header("MML", context.prefs.show_mml)) {
     return;
   }
+  const float top = ImGui::GetCursorPosY();
   // As it is saved, so the comment names the LFO's rate. Made again only
   // when that changes, not every frame.
   const ym2612::Patch saved =
@@ -431,10 +440,16 @@ void render_mml_section(PatchEditorContext &context,
   }
   ImGui::PushStyleColor(ImGuiCol_Border,
                         styles::color(styles::MegatoyCol::PanelBorder));
-  const bool visible =
-      ImGui::BeginChild("##mml", ImVec2(0, 0),
-                        ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
-                        ImGuiWindowFlags_HorizontalScrollbar);
+  const float child_height =
+      height > 0.0f ? std::max(height - (ImGui::GetCursorPosY() - top) -
+                                   ImGui::GetStyle().ItemSpacing.y,
+                               ImGui::GetFrameHeight())
+                    : 0.0f;
+  const bool visible = ImGui::BeginChild(
+      "##mml", ImVec2(0, child_height),
+      ImGuiChildFlags_Borders |
+          (height > 0.0f ? ImGuiChildFlags_None : ImGuiChildFlags_AutoResizeY),
+      ImGuiWindowFlags_HorizontalScrollbar);
   ImGui::PopStyleColor();
   if (visible) {
     ImGui::TextUnformatted(mml.c_str());
@@ -451,9 +466,10 @@ void render_patch_editor_tools(PatchEditorContext &context,
   const bool side_by_side =
       ImGui::GetContentRegionAvail().x > ui::scale::px(800.0f);
   ImGui::Columns(side_by_side ? 2 : 1, "##tools_columns", false);
-  render_quick_edit_section(context, patch);
+  const float quick_edit_height = render_quick_edit_section(context, patch);
   ImGui::NextColumn();
-  render_mml_section(context, patch);
+  // Beside Quick Edit, as tall as it.
+  render_mml_section(context, patch, side_by_side ? quick_edit_height : 0.0f);
   ImGui::Columns(1);
 }
 

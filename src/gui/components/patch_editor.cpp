@@ -261,6 +261,10 @@ constexpr LfoNames kLfoFullNames{"Amplitude Modulation Sensitivity",
                                  "Algorithm", false};
 constexpr LfoNames kLfoShortNames{"AMS", "FMS", "ALG", true};
 
+/// The space between the LFO section's two sliders, before the interface's
+/// scale.
+constexpr float kLfoSliderGap = 1.0f;
+
 /// The narrowest the algorithm diagram is drawn, where the names are short.
 constexpr float kMinAlgorithmDiagramWidth = 112.0f;
 
@@ -298,6 +302,7 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
   };
 
   ImGui::PushItemWidth(lfo_slider_width(names));
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::scale::px(kLfoSliderGap));
 
   int ams = patch.channel.amplitude_modulation_sensitivity;
   bool ams_changed = named_slider_int(names.ams, &ams, 0, 3);
@@ -317,6 +322,7 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
     patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(fms);
   }
 
+  ImGui::PopStyleVar();
   ImGui::PopItemWidth();
   ImGui::Spacing();
 }
@@ -327,9 +333,11 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::PushItemWidth(hslider_width());
 
   // The slider stands beside the diagram, as tall as it, at the spacing
-  // between any two items. With the names short, the diagram narrows down
-  // to its least to leave the slider its own.
-  const float diagram_height = ui::scale::px(48.0f);
+  // between any two items, and the two as tall as the LFO's sliders. With
+  // the names short, the diagram narrows down to its least to leave the
+  // slider its own.
+  const float diagram_height =
+      ImGui::GetFrameHeight() * 2.0f + ui::scale::px(kLfoSliderGap);
   float diagram_width = ImGui::CalcItemWidth();
   if (names.short_names) {
     diagram_width = std::clamp(
