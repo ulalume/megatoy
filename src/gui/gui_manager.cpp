@@ -260,6 +260,7 @@ void GuiManager::begin_frame(bool waveform_shown) {
   ui::layouts::fit_footer_to_width();
   ui::layouts::fit_footer_to_waveform(waveform_shown);
   ui::layouts::fit_sidebar_to_width();
+  ui::areas::close_empty_main_group();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
