@@ -12,6 +12,7 @@
 #include "gui/save_export_actions.hpp"
 #include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/tab_bar_lines.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
@@ -656,6 +657,9 @@ void render_document_window(PatchEditorContext &context,
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
           (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
   ImGui::PopStyleColor(was_active ? 3 : 1);
+  if (was_active) {
+    keep_tab_bar_line_lit();
+  }
   if (preview) {
     pop_preview_label_style();
   }

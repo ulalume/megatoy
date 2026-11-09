@@ -9,6 +9,7 @@
 #include "gui/mac_window_menu.hpp"
 #endif
 #include "gui/styles/theme.hpp"
+#include "gui/tab_bar_lines.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "platform/platform_config.hpp"
@@ -310,6 +311,8 @@ void GuiManager::end_frame() {
   if (web_ini_loaded_) {
     ui::save_web_layout_ini();
   }
+
+  ui::draw_tab_bar_lines();
 
   // Rendering
   ImGui::Render();
