@@ -410,7 +410,9 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     ImGui::SetTooltip("%s", tooltip.c_str());
   }
 
-  // Scrollable keyboard area
+  // Scrollable keyboard area, a pixel below the controls.
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
+                       ImGui::GetStyle().ItemSpacing.y + ui::scale::px(1.0f));
   const ImVec2 available_region = ImGui::GetContentRegionAvail();
 
   if (ImGui::BeginChild("KeyboardScroll", ImVec2(0, available_region.y), false,

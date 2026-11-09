@@ -840,6 +840,9 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   } else {
     ImGui::Spacing();
   }
+  // The rows a pixel apart, the SSG-EG ones and the rest a spacing apart.
+  const float group_gap = style.ItemSpacing.y;
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::scale::px(1.0f));
 
   // SSG Type Envelope Control (0-7)
   // The diagram, as tall as a frame, takes what the checkbox leaves of the
@@ -875,7 +878,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndDisabled();
   }
 
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, group_gap - ui::scale::px(2.0f)));
 
   operator_slider(widget, ym2612::OperatorField::KeyScale, "Key Scale", nullptr,
                   nullptr, nullptr);
@@ -893,6 +896,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                       op, ym2612::OperatorField::Detune)],
                   nullptr);
 
+  ImGui::PopStyleVar();
   if (beside_rates) {
     ImGui::PopItemWidth();
     ImGui::EndGroup();
