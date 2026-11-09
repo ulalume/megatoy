@@ -497,7 +497,7 @@ void file_menu_items(MainMenuContext &context,
     // In the browser a folder is copied in rather than referenced, so it
     // is labelled for what it does.
     const char *label = PreferenceManager::folder_add_is_import()
-                            ? "Import Folder into Workspace..."
+                            ? "Import Folder..."
                             : "Add Folder to Workspace...";
     if (ImGui::MenuItem(label)) {
       context.open_add_folder_dialog = true;
