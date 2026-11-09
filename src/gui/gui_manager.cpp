@@ -8,6 +8,7 @@
 #if defined(__APPLE__)
 #include "gui/mac_window_menu.hpp"
 #endif
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
 #include "gui/tab_bar_lines.hpp"
 #include "gui/ui_scale.hpp"
@@ -264,7 +265,11 @@ void GuiManager::begin_frame() {
   ImGuiID dockspace_id = viewport->ID;
 
   ui::push_window_tab_padding();
+  // ImGui draws the room between the areas at rest in the border colour.
+  ImGui::PushStyleColor(
+      ImGuiCol_Border, ui::styles::color(ui::styles::MegatoyCol::AreaSplitter));
   ImGui::DockSpaceOverViewport(dockspace_id, viewport);
+  ImGui::PopStyleColor();
   ImGui::PopStyleVar();
 
   // An arrangement saved before the areas were fixed may have views where

@@ -114,6 +114,15 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
   }
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,
                        window_tab_padding().y - ui::scale::px(1.0f));
+  // The row stands on a band of its own, across the window and down to
+  // where the tree starts.
+  const float header_top = ImGui::GetCursorScreenPos().y;
+  window->DrawList->AddRectFilled(
+      ImVec2(window->Pos.x, header_top),
+      ImVec2(window->Pos.x + window->Size.x,
+             header_top + ImGui::GetFrameHeight() +
+                 ImGui::GetStyle().ItemSpacing.y),
+      styles::color_u32(styles::MegatoyCol::BrowserHeaderBg));
   const float work_right = window->WorkRect.Max.x;
   if (context.add_folder) {
     window->WorkRect.Max.x -= render_add_folder_icon(context);
@@ -216,15 +225,30 @@ void render_folded_patch_selector(PatchSelectorContext &context) {
   ImGui::EndPopup();
 }
 
+/// The closed patch browser as the same button, a click on which brings
+/// the sidebar back.
+void render_closed_patch_selector(bool &show) {
+  static bool pressed = false;
+  const auto button = folded_tab_button(
+      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID),
+      "##folded_patch_browser", PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE);
+  if (folded_tab_button_clicked(button, pressed)) {
+    show = true;
+  }
+}
+
 } // namespace
 
 void render_patch_selector(const char *title, PatchSelectorContext &context) {
   auto &prefs = context.prefs;
-  if (!prefs.show_patch_selector) {
-    return;
-  }
+  // Folded on a narrow screen, opened over the editor from its button;
+  // closed on a wide one, brought back as the sidebar from it.
   if (layouts::window_is_narrow()) {
     render_folded_patch_selector(context);
+    return;
+  }
+  if (!prefs.show_patch_selector) {
+    render_closed_patch_selector(prefs.show_patch_selector);
     return;
   }
 

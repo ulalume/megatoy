@@ -264,15 +264,8 @@ void render_folded_waveform(bool &show_waveform) {
   const auto button =
       folded_tab_button(folded_waveform_node(), "##folded_waveform",
                         WAVEFORM_ICON, WAVEFORM_TITLE);
-  const bool hovered = button && button->hovered;
-  if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-    pressed = true;
-  }
-  if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-    if (pressed && hovered) {
-      show_waveform = true;
-    }
-    pressed = false;
+  if (folded_tab_button_clicked(button, pressed)) {
+    show_waveform = true;
   }
 }
 
@@ -295,7 +288,7 @@ void render_waveform(const char *title, WaveformContext &context) {
   // colour between the areas.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::PushStyleColor(ImGuiCol_WindowBg,
-                        ImGui::GetStyleColorVec4(ImGuiCol_Border));
+                        styles::color(styles::MegatoyCol::AreaSplitter));
   const bool visible = ui::begin_window(title, &ui_prefs.show_waveform);
   ImGui::PopStyleColor();
   ImGui::PopStyleVar();

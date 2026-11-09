@@ -51,4 +51,23 @@ inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
   return button;
 }
 
+/**
+ * Whether a press on the button has just been let go over it. `pressed`
+ * keeps, from one frame to the next, that the press began on it.
+ */
+inline bool
+folded_tab_button_clicked(const std::optional<FoldedTabButton> &button,
+                          bool &pressed) {
+  const bool hovered = button && button->hovered;
+  if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    pressed = true;
+  }
+  if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+    return false;
+  }
+  const bool clicked = pressed && hovered;
+  pressed = false;
+  return clicked;
+}
+
 } // namespace ui

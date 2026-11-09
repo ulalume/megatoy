@@ -188,36 +188,35 @@ void render_star_menu(const ImRect &box, bool typing, std::string &query,
   if (!open) {
     return;
   }
-  // Beside the box, level with it, so the list below stays in sight; below
-  // it where the screen has no room to its right.
+  // Against the box's right end and as tall, so the list below stays in
+  // sight; below it where the screen has no room to its right. The stars
+  // take all of it, the room around them included.
   const ImGuiStyle &style = ImGui::GetStyle();
-  const float width = star_rating_width();
+  const float padding = style.FramePadding.x + style.WindowPadding.x;
+  const ImVec2 size(star_rating_width(padding), box.GetHeight());
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
-  const float right = box.Max.x + style.ItemSpacing.x;
-  if (right + width <= viewport->WorkPos.x + viewport->WorkSize.x) {
-    ImGui::SetNextWindowPos(ImVec2(right, (box.Min.y + box.Max.y) * 0.5f),
-                            ImGuiCond_Always, ImVec2(0.0f, 0.5f));
-  } else {
-    ImGui::SetNextWindowPos(ImVec2(box.Min.x, box.Max.y + style.ItemSpacing.y));
-  }
+  ImGui::SetNextWindowPos(box.Max.x + size.x <=
+                                  viewport->WorkPos.x + viewport->WorkSize.x
+                              ? ImVec2(box.Max.x, box.Min.y)
+                              : ImVec2(box.Min.x, box.Max.y));
+  ImGui::SetNextWindowSize(size);
   ImGui::PushStyleColor(ImGuiCol_WindowBg,
                         ImGui::GetStyleColorVec4(ImGuiCol_PopupBg));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, style.PopupRounding);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.PopupBorderSize);
-  // Nothing around the stars: all of the menu is the stars' row.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0.0f, 0.0f));
   ImGui::Begin("##star_search", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                    ImGuiWindowFlags_NoSavedSettings |
                    ImGuiWindowFlags_NoFocusOnAppearing |
-                   ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking |
-                   ImGuiWindowFlags_AlwaysAutoResize);
-  ImGui::PopStyleVar(3);
+                   ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking);
+  ImGui::PopStyleVar(4);
   ImGui::PopStyleColor();
   ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
   int stars = patches::least_stars(patches::parse_search(query).stars);
-  if (star_rating_slider("##stars", stars, "Rating")) {
+  if (star_rating_slider("##stars", stars, "Rating", padding)) {
     query = patches::with_least_stars(query, stars);
   }
   refocus = refocus || ImGui::IsItemDeactivated();

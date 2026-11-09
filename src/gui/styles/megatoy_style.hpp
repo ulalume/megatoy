@@ -82,6 +82,12 @@ enum class MegatoyCol : int {
   /// the focus and in the others.
   TabBarLine,
   TabBarLineDimmed,
+  /// Behind the patch browser's search row.
+  BrowserHeaderBg,
+  /// The room between the areas, dragged to resize them, at rest; pointed
+  /// at and dragged it takes ImGuiCol_ResizeGripHovered and
+  /// ImGuiCol_ResizeGripActive.
+  AreaSplitter,
   COUNT
 };
 

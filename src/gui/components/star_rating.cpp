@@ -45,17 +45,25 @@ void draw_stars(ImVec2 min, float height, int filled) {
   }
 }
 
-float star_rating_width() {
-  return stars_width() + ImGui::GetStyle().FramePadding.x * 2.0f;
+namespace {
+
+float padding_or_frame(float padding) {
+  return padding < 0.0f ? ImGui::GetStyle().FramePadding.x : padding;
 }
 
-bool star_rating_slider(const char *id, int &rating, const char *name) {
-  const float left =
-      ImGui::GetCursorScreenPos().x + ImGui::GetStyle().FramePadding.x;
+} // namespace
+
+float star_rating_width(float padding) {
+  return stars_width() + padding_or_frame(padding) * 2.0f;
+}
+
+bool star_rating_slider(const char *id, int &rating, const char *name,
+                        float padding) {
+  const float left = ImGui::GetCursorScreenPos().x + padding_or_frame(padding);
   const float step =
       ImGui::CalcTextSize(ICON_MEGATOY_STAR).x + scale::px(kStarGap);
-  ImGui::InvisibleButton(id,
-                         ImVec2(star_rating_width(), ImGui::GetFrameHeight()));
+  ImGui::InvisibleButton(
+      id, ImVec2(star_rating_width(padding), ImGui::GetFrameHeight()));
   ImGui::SetItemTooltip("%s", name);
 
   const int before = std::clamp(rating, 0, 5);
