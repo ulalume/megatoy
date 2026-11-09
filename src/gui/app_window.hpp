@@ -37,10 +37,19 @@ inline float tab_bar_height() {
   return ImGui::GetFontSize() + window_tab_padding().y * 2.0f;
 }
 
-/// How tall a dock's tabs are drawn: the bar less the room above them and the
-/// line under them.
+/// How far above the line under a dock's tabs those not shown stop, before
+/// the interface's scale.
+inline constexpr float kTabRoomBelow = 2.0f;
+
+/// How tall the shown tab of a dock is drawn, down to the line under it: the
+/// bar less the room above the tabs and the line.
 inline float tab_height() {
   return tab_bar_height() - scale::px(kTabRoomAbove + kTabLineWidth);
+}
+
+/// How tall the other tabs are drawn, stopping kTabRoomBelow above the line.
+inline float unshown_tab_height() {
+  return tab_height() - scale::px(kTabRoomBelow);
 }
 
 /// ImGui::Begin for one of the app's own windows, the ones that dock.

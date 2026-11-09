@@ -268,7 +268,7 @@ void GuiManager::begin_frame(bool waveform_shown) {
   // ImGui draws the room between the areas at rest in the border colour.
   ImGui::PushStyleColor(
       ImGuiCol_Border, ui::styles::color(ui::styles::MegatoyCol::AreaSplitter));
-  ImGui::DockSpaceOverViewport(dockspace_id, viewport);
+  ui::dock_space_over_viewport(dockspace_id, viewport);
   ImGui::PopStyleColor();
   ImGui::PopStyleVar();
 
@@ -317,7 +317,7 @@ void GuiManager::end_frame() {
     ui::save_web_layout_ini();
   }
 
-  ui::draw_tab_bars();
+  ui::finish_tab_bars();
 
   // Rendering
   ImGui::Render();

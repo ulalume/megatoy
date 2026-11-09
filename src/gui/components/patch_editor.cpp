@@ -638,14 +638,7 @@ void render_document_window(PatchEditorContext &context,
   if (preview) {
     push_preview_label_style();
   }
-  // ImGui dims a tab whose node does not have the keys, which the active
-  // document's often lacks: a click in the browser keeps them there. Its tab
-  // stays lit regardless, so it can be told from the others.
   const bool was_active = id == session.active_document_id();
-  if (was_active) {
-    ImGui::PushStyleColor(ImGuiCol_TabDimmedSelected,
-                          ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
-  }
   ImGui::PushStyleColor(ImGuiCol_WindowBg,
                         styles::color(styles::MegatoyCol::PatchEditorBg));
   // Marked unsaved, a document's tab stays in place when its close button
@@ -654,9 +647,12 @@ void render_document_window(PatchEditorContext &context,
       title.c_str(), session.can_close_document(id) ? &open : nullptr,
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
           (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
-  ImGui::PopStyleColor(was_active ? 2 : 1);
+  ImGui::PopStyleColor();
+  // A tab bar is dimmed while its node does not have the keys, which the
+  // active document's often lacks: a click in the browser keeps them there.
+  // Its bar stays lit regardless, so it can be told from the others.
   if (was_active) {
-    keep_tab_bar_line_lit();
+    keep_tab_bar_lit();
   }
   if (preview) {
     pop_preview_label_style();

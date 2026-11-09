@@ -4,6 +4,7 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 
+#include <algorithm>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <vector>
@@ -11,108 +12,28 @@
 namespace ui {
 namespace {
 
-/// How far below the other tabs' tops the shown tab's starts, before the
-/// interface's scale.
-constexpr float kShownTabDrop = 2.0f;
-
-std::vector<ImGuiID> &lit_nodes() {
+/// The nodes kept lit this frame, and those kept lit the frame before, which
+/// the tab bars are drawn from: they are drawn before the windows say.
+std::vector<ImGuiID> &lit_now() {
+  static std::vector<ImGuiID> nodes;
+  return nodes;
+}
+std::vector<ImGuiID> &lit_before() {
   static std::vector<ImGuiID> nodes;
   return nodes;
 }
 
-bool is_lit(ImGuiID node) {
-  for (const ImGuiID lit : lit_nodes()) {
-    if (lit == node) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/// `bar`'s shown tab, or nothing.
-const ImGuiTabItem *shown_tab(const ImGuiTabBar &bar) {
-  for (const ImGuiTabItem &tab : bar.Tabs) {
-    if (tab.ID != 0 && tab.ID == bar.VisibleTabId) {
-      return &tab;
-    }
-  }
-  return nullptr;
-}
-
-bool is_pointed_at(const ImGuiTabItem &tab) {
+bool is_pointed_at(ImGuiID id) {
   const ImGuiContext &g = *GImGui;
-  return g.HoveredId == tab.ID || g.ActiveId == tab.ID;
+  return id != 0 && (g.HoveredId == id || g.HoveredIdPreviousFrame == id ||
+                     g.ActiveId == id);
 }
 
-/**
- * Draws `bar`'s tabs at the bottom of it, kTabRoomAbove short of its top,
- * the shown one kShownTabDrop shorter still. ImGui draws each tab as tall as
- * its bar, so the vertices of its fill, found by the colours ImGui fills a
- * tab with, are pressed down to that height, and its label and icons are
- * moved down to stay in the middle of it.
- */
-void fit_tabs(const ImGuiTabBar &bar, ImDrawList *draw_list) {
+/// The dock nodes whose tab bars show this frame.
+template <typename Visit> void for_each_tab_bar(Visit visit) {
   const ImGuiContext &g = *GImGui;
-  const float top = bar.BarRect.Min.y;
-  const float bottom = bar.BarRect.Max.y - g.Style.TabBarBorderSize;
-  const float height = bottom - top;
-  const float room = ui::scale::px(kTabRoomAbove);
-  const float shown_room = room + ui::scale::px(kShownTabDrop);
-  if (height <= shown_room) {
-    return;
-  }
-  constexpr ImU32 kRgb = ~IM_COL32_A_MASK;
-  const ImU32 fills[] = {ImGui::GetColorU32(ImGuiCol_Tab) & kRgb,
-                         ImGui::GetColorU32(ImGuiCol_TabHovered) & kRgb,
-                         ImGui::GetColorU32(ImGuiCol_TabSelected) & kRgb,
-                         ImGui::GetColorU32(ImGuiCol_TabDimmed) & kRgb,
-                         ImGui::GetColorU32(ImGuiCol_TabDimmedSelected) & kRgb};
-  // The bar's own background, which runs under the tabs, stays.
-  const ImU32 title_bars[] = {ImGui::GetColorU32(ImGuiCol_TitleBg) & kRgb,
-                              ImGui::GetColorU32(ImGuiCol_TitleBgActive) &
-                                  kRgb};
-  for (ImDrawVert &vert : draw_list->VtxBuffer) {
-    if (vert.pos.y < top - 1.0f || vert.pos.y > bottom) {
-      continue;
-    }
-    const ImU32 rgb = vert.col & kRgb;
-    if (rgb == title_bars[0] || rgb == title_bars[1]) {
-      continue;
-    }
-    for (const ImGuiTabItem &tab : bar.Tabs) {
-      const float left = bar.BarRect.Min.x + tab.Offset - bar.ScrollingAnim;
-      if (vert.pos.x < left - 1.0f || vert.pos.x > left + tab.Width + 1.0f) {
-        continue;
-      }
-      bool fill = false;
-      for (const ImU32 colour : fills) {
-        fill = fill || rgb == colour;
-      }
-      if (fill) {
-        const float drop =
-            tab.ID != 0 && tab.ID == bar.VisibleTabId ? shown_room : room;
-        vert.pos.y = bottom - (bottom - vert.pos.y) * (height - drop) / height;
-      } else {
-        vert.pos.y += room * 0.5f;
-      }
-      break;
-    }
-  }
-}
-
-} // namespace
-
-void keep_tab_bar_line_lit() {
-  if (const ImGuiDockNode *node = ImGui::GetCurrentWindow()->DockNode) {
-    lit_nodes().push_back(node->ID);
-  }
-}
-
-void draw_tab_bars() {
-  const ImGuiContext &g = *GImGui;
-  const float thickness = g.Style.TabBarBorderSize;
   for (int i = 0; i < g.DockContext.Nodes.Data.Size; ++i) {
-    const auto *node =
+    auto *node =
         static_cast<ImGuiDockNode *>(g.DockContext.Nodes.Data[i].val_p);
     if (node == nullptr || node->TabBar == nullptr ||
         node->HostWindow == nullptr || !node->IsVisible ||
@@ -120,29 +41,153 @@ void draw_tab_bars() {
         node->LastFrameActive != g.FrameCount) {
       continue;
     }
-    const ImGuiTabBar &bar = *node->TabBar;
-    ImDrawList *draw_list = node->HostWindow->DrawList;
-    fit_tabs(bar, draw_list);
-    const ImGuiTabItem *shown = shown_tab(bar);
-    if (thickness <= 0.0f) {
+    visit(*node, *node->TabBar);
+  }
+}
+
+float tab_left(const ImGuiTabBar &bar, const ImGuiTabItem &tab) {
+  return bar.BarRect.Min.x + tab.Offset - bar.ScrollingAnim;
+}
+
+/// One node's bar: its background, its tabs and the line under them.
+void draw_tab_bar(ImDrawList *draw_list, const ImGuiDockNode &node,
+                  const ImGuiTabBar &bar) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const bool focused =
+      node.IsFocused || std::find(lit_before().begin(), lit_before().end(),
+                                  node.ID) != lit_before().end();
+  const ImRect bar_rect(ImVec2(node.Pos.x, bar.BarRect.Min.y),
+                        ImVec2(node.Pos.x + node.Size.x, bar.BarRect.Max.y));
+  draw_list->PushClipRect(bar_rect.Min, bar_rect.Max, true);
+  draw_list->AddRectFilled(
+      bar_rect.Min, bar_rect.Max,
+      ImGui::GetColorU32(focused ? ImGuiCol_TitleBgActive : ImGuiCol_TitleBg));
+
+  const float line = style.TabBarBorderSize;
+  const float top = bar.BarRect.Min.y + scale::px(kTabRoomAbove);
+  const float shown_bottom = bar.BarRect.Max.y - line;
+  const float bottom = shown_bottom - scale::px(kTabRoomBelow);
+  bool shown_pointed_at = false;
+  draw_list->PushClipRect(bar.BarRect.Min, bar.BarRect.Max, true);
+  for (const ImGuiTabItem &tab : bar.Tabs) {
+    if (tab.Width <= 0.0f) {
       continue;
     }
+    const bool shown = tab.ID != 0 && tab.ID == bar.VisibleTabId;
+    const bool pointed = is_pointed_at(tab.ID);
+    shown_pointed_at = shown_pointed_at || (shown && pointed);
+    const ImGuiCol col =
+        pointed ? ImGuiCol_TabHovered
+        : shown ? (focused ? ImGuiCol_TabSelected : ImGuiCol_TabDimmedSelected)
+        : focused ? ImGuiCol_Tab
+                  : ImGuiCol_TabDimmed;
+    const float left = tab_left(bar, tab);
+    draw_list->AddRectFilled(
+        ImVec2(left, top),
+        ImVec2(left + tab.Width, shown ? shown_bottom : bottom),
+        ImGui::GetColorU32(col), style.TabRounding,
+        shown ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll);
+  }
+  draw_list->PopClipRect();
+
+  if (line > 0.0f) {
     // The line takes the shown tab's colour while it is pointed at.
-    const bool focused =
-        (bar.Flags & ImGuiTabBarFlags_IsFocused) != 0 || is_lit(node->ID);
     const ImU32 color =
-        shown != nullptr && is_pointed_at(*shown)
+        shown_pointed_at
             ? ImGui::GetColorU32(ImGuiCol_TabHovered)
             : styles::color_u32(focused ? styles::MegatoyCol::TabBarLine
                                         : styles::MegatoyCol::TabBarLineDimmed);
-    const float y = bar.BarRect.Max.y;
-    draw_list->PushClipRect(node->Pos, ImVec2(node->Pos.x + node->Size.x,
-                                              node->Pos.y + node->Size.y));
-    draw_list->AddRectFilled(ImVec2(bar.SeparatorMinX, y - thickness),
-                             ImVec2(bar.SeparatorMaxX, y), color);
-    draw_list->PopClipRect();
+    draw_list->AddRectFilled(ImVec2(bar.SeparatorMinX, shown_bottom),
+                             ImVec2(bar.SeparatorMaxX, bar.BarRect.Max.y),
+                             color);
   }
-  lit_nodes().clear();
+  draw_list->PopClipRect();
+}
+
+} // namespace
+
+void push_clear_tab_fills() {
+  const ImVec4 clear(0.0f, 0.0f, 0.0f, 0.0f);
+  for (const ImGuiCol col :
+       {ImGuiCol_Tab, ImGuiCol_TabHovered, ImGuiCol_TabSelected,
+        ImGuiCol_TabDimmed, ImGuiCol_TabDimmedSelected}) {
+    ImGui::PushStyleColor(col, clear);
+  }
+}
+
+ImGuiID dock_space_over_viewport(ImGuiID dockspace_id,
+                                 const ImGuiViewport *viewport) {
+  // As ImGui::DockSpaceOverViewport, but for what is drawn in the window
+  // under the dock space once it is laid out.
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImGui::SetNextWindowViewport(viewport->ID);
+  char label[32];
+  ImFormatString(label, IM_COUNTOF(label), "WindowOverViewport_%08X",
+                 viewport->ID);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin(label, nullptr,
+               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+                   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoDocking |
+                   ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNavFocus);
+  ImGui::PopStyleVar(3);
+
+  // ImGui draws the tab bars' background, the tabs' fills and the line under
+  // them clear; they are drawn here, under the dock space's own window.
+  const ImVec4 clear(0.0f, 0.0f, 0.0f, 0.0f);
+  push_clear_tab_fills();
+  ImGui::PushStyleColor(ImGuiCol_TitleBg, clear);
+  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, clear);
+  ImGui::PushStyleColor(ImGuiCol_TitleBgCollapsed, clear);
+  dockspace_id = ImGui::DockSpace(dockspace_id);
+  ImGui::PopStyleColor(kClearTabFillCount + 3);
+
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  for_each_tab_bar([&](const ImGuiDockNode &node, const ImGuiTabBar &bar) {
+    draw_tab_bar(draw_list, node, bar);
+  });
+  ImGui::End();
+  return dockspace_id;
+}
+
+void keep_tab_bar_lit() {
+  if (const ImGuiDockNode *node = ImGui::GetCurrentWindow()->DockNode) {
+    lit_now().push_back(node->ID);
+  }
+}
+
+void finish_tab_bars() {
+  // ImGui sets a label at the middle of the bar; the tabs not shown stand
+  // between the room above them and the room below, which differ.
+  const float shift = (scale::px(kTabRoomAbove - kTabRoomBelow) -
+                       GImGui->Style.TabBarBorderSize) *
+                      0.5f;
+  for_each_tab_bar([&](const ImGuiDockNode &node, const ImGuiTabBar &bar) {
+    if (shift == 0.0f) {
+      return;
+    }
+    const float top = bar.BarRect.Min.y;
+    const float bottom = bar.BarRect.Max.y;
+    for (ImDrawVert &vert : node.HostWindow->DrawList->VtxBuffer) {
+      if (vert.pos.y < top - 1.0f || vert.pos.y > bottom) {
+        continue;
+      }
+      for (const ImGuiTabItem &tab : bar.Tabs) {
+        const float left = tab_left(bar, tab);
+        if (vert.pos.x >= left - 1.0f &&
+            vert.pos.x <= left + tab.Width + 1.0f) {
+          vert.pos.y += shift;
+          break;
+        }
+      }
+    }
+  });
+  lit_before().swap(lit_now());
+  lit_now().clear();
 }
 
 } // namespace ui
