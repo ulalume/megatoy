@@ -657,6 +657,12 @@ void view_menu_items(MainMenuContext &context) {
   ImGui::Separator();
 
   if (ImGui::MenuItem("Reset to Default Layout")) {
+    // The views the layout has a place for are shown again, as at first.
+    const UIPreferences defaults;
+    ui_prefs.show_patch_selector = defaults.show_patch_selector;
+    ui_prefs.show_patch_lab = defaults.show_patch_lab;
+    ui_prefs.show_midi_keyboard = defaults.show_midi_keyboard;
+    ui_prefs.show_waveform = defaults.show_waveform;
     context.gui.reset_layout();
   }
 }
