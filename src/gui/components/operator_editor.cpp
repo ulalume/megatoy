@@ -119,12 +119,14 @@ void draw_operator_fill(const OperatorEditState &state, int slot,
   if ((fill & IM_COL32_A_MASK) == 0) {
     return;
   }
-  ImGui::GetWindowDrawList()->AddRectFilled(frame_min, frame_max, fill);
+  ImGui::GetWindowDrawList()->AddRectFilled(frame_min, frame_max, fill,
+                                            ImGui::GetStyle().TabRounding);
 }
 
 /**
- * The frame, its top border broken where the header sits across it, from
- * `gap_from_x` to `gap_to_x`, as a section's line is by its title.
+ * The frame, rounded as the tabs are, its top border broken where the header
+ * sits across it, from `gap_from_x` to `gap_to_x`, as a section's line is by
+ * its title.
  *
  * The half-pixel inset is what AddRect does internally; without it the line
  * falls between two pixels and blurs.
@@ -136,17 +138,18 @@ void draw_operator_frame(const ImVec2 &min, const ImVec2 &max, float gap_from_x,
   const float top = min.y + 0.5f;
   const float right = max.x - 0.5f;
   const float bottom = max.y - 0.5f;
+  const float r = std::min(ImGui::GetStyle().TabRounding,
+                           std::min(right - left, bottom - top) * 0.5f);
 
-  if (gap_from_x > left) {
-    draw_list->AddLine(ImVec2(left, top),
-                       ImVec2(std::min(gap_from_x, right), top), color);
-  }
-  if (gap_to_x < right) {
-    draw_list->AddLine(ImVec2(gap_to_x, top), ImVec2(right, top), color);
-  }
-  draw_list->AddLine(ImVec2(left, top), ImVec2(left, bottom), color);
-  draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
-  draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
+  // From the header's right end round the frame to its left end.
+  draw_list->PathLineTo(ImVec2(std::clamp(gap_to_x, left + r, right - r), top));
+  draw_list->PathArcToFast(ImVec2(right - r, top + r), r, 9, 12);
+  draw_list->PathArcToFast(ImVec2(right - r, bottom - r), r, 0, 3);
+  draw_list->PathArcToFast(ImVec2(left + r, bottom - r), r, 3, 6);
+  draw_list->PathArcToFast(ImVec2(left + r, top + r), r, 6, 9);
+  draw_list->PathLineTo(
+      ImVec2(std::clamp(gap_from_x, left + r, right - r), top));
+  draw_list->PathStroke(color, ImDrawFlags_None, 1.0f);
 }
 
 struct FieldLabels {
