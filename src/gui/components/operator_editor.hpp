@@ -19,10 +19,14 @@ inline float vslider_width() {
                      ImGui::GetStyle().ItemSpacing.y * 5.0f;
   return std::floor((room - vslider_gap() * 5.0f) / 6.0f);
 }
-/// As tall as the column beside the sliders: five rows of controls, the
-/// spacing between them and one extra break.
+/// The room between the rows of the column beside the sliders.
+inline float side_row_gap() { return scale::px(1.0f); }
+/// As tall as the column beside the sliders: five rows of controls, three of
+/// them side_row_gap() under the one above, and the SSG-EG ones and the rest
+/// the spacing between items apart.
 inline float vslider_height() {
-  return (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y) * 5.0f;
+  return ImGui::GetFrameHeight() * 5.0f + side_row_gap() * 3.0f +
+         ImGui::GetStyle().ItemSpacing.y;
 }
 /// Room for a handle dragged through attenuation.
 inline float envelope_graph_height() { return ui::scale::px(128.0f); }

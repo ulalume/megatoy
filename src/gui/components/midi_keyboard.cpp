@@ -378,19 +378,40 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
 
   render_operator_switches(context.operator_enable);
 
-  // The slider takes the rest of the row, or a row of its own when too
-  // little is left.
+  // The octave buttons and the slider take the rest of the row, a pixel
+  // apart, or a row of their own when too little is left.
+  const float octave_gap = ui::scale::px(1.0f);
+  const float octave_button = ImGui::GetFrameHeight();
   ImGui::SameLine();
-  if (ImGui::GetContentRegionAvail().x < ui::scale::px(120.0f)) {
+  if (ImGui::GetContentRegionAvail().x <
+      (octave_button + octave_gap) * 2.0f + ui::scale::px(120.0f)) {
     ImGui::NewLine();
   }
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
+  const auto set_typing_octave = [&](int octave) {
+    input.keyboard_typing_octave = static_cast<uint8_t>(octave);
+    context.ui_prefs.midi_keyboard_typing_octave = octave;
+    refresh_state(context.state, input, typing_layout, custom_layout);
+  };
+  ImGui::BeginDisabled(current_key_octave <= 0);
+  if (ImGui::ArrowButton("##octave_down", ImGuiDir_Left)) {
+    set_typing_octave(current_key_octave - 1);
+  }
+  ImGui::EndDisabled();
+  ImGui::SetItemTooltip("Octave Down");
+  ImGui::SameLine(0.0f, octave_gap);
+  ImGui::BeginDisabled(current_key_octave >= 7);
+  if (ImGui::ArrowButton("##octave_up", ImGuiDir_Right)) {
+    set_typing_octave(current_key_octave + 1);
+  }
+  ImGui::EndDisabled();
+  ImGui::SetItemTooltip("Octave Up");
+  ImGui::SameLine(0.0f, octave_gap);
+  current_key_octave = static_cast<int>(input.keyboard_typing_octave);
   ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
   if (ImGui::SliderInt("##Typing", &current_key_octave, 0, 7,
                        typing_label(context.state))) {
-    input.keyboard_typing_octave = current_key_octave;
-    context.ui_prefs.midi_keyboard_typing_octave = current_key_octave;
-    refresh_state(context.state, input, typing_layout, custom_layout);
+    set_typing_octave(current_key_octave);
   }
   if (ImGui::IsItemHovered()) {
     const auto key_label = [](ImGuiKey key) {
