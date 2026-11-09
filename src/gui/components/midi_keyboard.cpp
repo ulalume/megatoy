@@ -393,42 +393,38 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     context.ui_prefs.midi_keyboard_typing_octave = octave;
     refresh_state(context.state, input, typing_layout, custom_layout);
   };
+  // Each button names the key that does the same.
+  const auto key_label = [](ImGuiKey key) {
+    if (key == ImGuiKey_None) {
+      return std::string("Unassigned");
+    }
+    std::string label = short_key_name(key);
+    if (label.empty() || label == "??") {
+      const char *fallback = ImGui::GetKeyName(key);
+      label = (fallback && fallback[0] != '\0') ? fallback : "Unknown";
+    }
+    return label;
+  };
   ImGui::BeginDisabled(current_key_octave <= 0);
   if (ImGui::ArrowButton("##octave_down", ImGuiDir_Left)) {
     set_typing_octave(current_key_octave - 1);
   }
   ImGui::EndDisabled();
-  ImGui::SetItemTooltip("Octave Down");
+  ImGui::SetItemTooltip("Octave Down: %s",
+                        key_label(octave_keys.first).c_str());
   ImGui::SameLine(0.0f, octave_gap);
   ImGui::BeginDisabled(current_key_octave >= 7);
   if (ImGui::ArrowButton("##octave_up", ImGuiDir_Right)) {
     set_typing_octave(current_key_octave + 1);
   }
   ImGui::EndDisabled();
-  ImGui::SetItemTooltip("Octave Up");
+  ImGui::SetItemTooltip("Octave Up: %s", key_label(octave_keys.second).c_str());
   ImGui::SameLine(0.0f, octave_gap);
   current_key_octave = static_cast<int>(input.keyboard_typing_octave);
   ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
   if (ImGui::SliderInt("##Typing", &current_key_octave, 0, 7,
                        typing_label(context.state))) {
     set_typing_octave(current_key_octave);
-  }
-  if (ImGui::IsItemHovered()) {
-    const auto key_label = [](ImGuiKey key) {
-      if (key == ImGuiKey_None) {
-        return std::string("Unassigned");
-      }
-      std::string label = short_key_name(key);
-      if (label.empty() || label == "??") {
-        const char *fallback = ImGui::GetKeyName(key);
-        label = (fallback && fallback[0] != '\0') ? fallback : "Unknown";
-      }
-      return label;
-    };
-    const std::string tooltip =
-        "Typing\nOctave Down: " + key_label(octave_keys.first) +
-        "\nOctave Up: " + key_label(octave_keys.second);
-    ImGui::SetTooltip("%s", tooltip.c_str());
   }
 
   // Scrollable keyboard area, a pixel below the controls.
