@@ -265,6 +265,11 @@ bool patch_row_selectable(const patches::PatchEntry &item, bool selected) {
   const ImVec2 pos = ImGui::GetCursorScreenPos();
   const float right =
       pos.x + ImGui::GetContentRegionAvail().x - style.FramePadding.x;
+  // The highlight reaches out to the left as far as a folder row's does
+  // past the padding, the contents staying where they are.
+  const ImGuiWindow *window = ImGui::GetCurrentWindow();
+  ImGui::SetCursorScreenPos(
+      ImVec2(pos.x - (window->WindowPadding.x - ui::scale::px(1.0f)), pos.y));
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
   const bool clicked =
       ImGui::Selectable("##patch", selected,

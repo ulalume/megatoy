@@ -85,11 +85,12 @@ void render_tree(PatchSelectorContext &context) {
       ImGuiChildFlags_AlwaysUseWindowPadding);
   ImGui::PopStyleVar();
   if (visible) {
-    // Folder and file rows alike run to a pixel short of the area's edge:
+    // Folder and file rows alike run to a pixel short of the area's edges:
     // a file row's highlight would otherwise stop half a spacing past a
-    // folder row's.
+    // folder row's. Their contents stay in by the padding.
     ImGuiWindow *tree = ImGui::GetCurrentWindow();
     const float right = tree->InnerRect.Max.x - ui::scale::px(1.0f);
+    tree->WorkRect.Min.x = tree->InnerRect.Min.x + ui::scale::px(1.0f);
     tree->WorkRect.Max.x = right;
     ImGui::PushClipRect(tree->InnerRect.Min,
                         ImVec2(right, tree->InnerRect.Max.y), false);
