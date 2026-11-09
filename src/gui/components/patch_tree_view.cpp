@@ -39,7 +39,7 @@ struct PatchTreeCache {
   const std::vector<patches::PatchEntry> *tree = nullptr;
   std::uint64_t repository_revision = 0;
   std::string search_query;
-  int star_filter = 0;
+  patches::StarFilter star_filter;
   std::uint64_t built_open_revision = 0;
 
   /// Bumped on every expand/collapse, so the rows rebuild on the next frame.
@@ -51,22 +51,22 @@ struct PatchTreeCache {
 
   const std::vector<patches::TreeRow> &
   get(const std::vector<patches::PatchEntry> &source, std::uint64_t revision,
-      const std::string &query_lower, int min_star_rating) {
+      const std::string &query_lower, patches::StarFilter shown_stars) {
     if (tree != &source || repository_revision != revision ||
-        search_query != query_lower || star_filter != min_star_rating ||
+        search_query != query_lower || star_filter != shown_stars ||
         built_open_revision != open_revision) {
       tree = &source;
       repository_revision = revision;
       search_query = query_lower;
-      star_filter = min_star_rating;
+      star_filter = shown_stars;
       built_open_revision = open_revision;
       // While filtering, the patches that match stand in one list, out of
       // their folders.
-      rows = query_lower.empty() && min_star_rating == 0
-                 ? patches::flatten_visible_rows(
-                       source, query_lower, min_star_rating, open_directories)
-                 : patches::matching_patch_rows(source, query_lower,
-                                                min_star_rating);
+      rows =
+          query_lower.empty() && !shown_stars.active()
+              ? patches::flatten_visible_rows(source, query_lower, shown_stars,
+                                              open_directories)
+              : patches::matching_patch_rows(source, query_lower, shown_stars);
     }
     return rows;
   }
@@ -522,14 +522,15 @@ void follow_tree_directory(const std::string &from, const std::string &to) {
 
 bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
                        PatchSelectorContext &context,
-                       const std::string &query_lower, int min_star_rating) {
+                       const std::string &query_lower,
+                       patches::StarFilter shown_stars) {
   PatchTreeCache &cache = tree_cache();
   const auto &selection = context.session.current_patch_selection_path();
   const bool reveal =
       cache.reveal(tree, selection, context.repository.revision(),
-                   !query_lower.empty() || min_star_rating > 0);
-  const auto &rows = cache.get(tree, context.repository.revision(), query_lower,
-                               min_star_rating);
+                   !query_lower.empty() || shown_stars.active());
+  const auto &rows =
+      cache.get(tree, context.repository.revision(), query_lower, shown_stars);
   if (rows.empty()) {
     return false;
   }
@@ -570,7 +571,7 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
     }
     if (row.is_directory) {
       render_directory_row(context, row, cache,
-                           !query_lower.empty() || min_star_rating > 0);
+                           !query_lower.empty() || shown_stars.active());
     } else {
       render_patch_row(context, row);
     }

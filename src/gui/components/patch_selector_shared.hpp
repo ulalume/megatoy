@@ -8,6 +8,7 @@
 #include "patches/patch_filter.hpp"
 
 #include <array>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -29,6 +30,11 @@ void entry_context_menu(PatchSelectorContext &context,
                         bool allow_remove_folder = false);
 
 /// The search box and star filter row above the tree.
+/// The entry whose icon the browser's icon picker is to be opened for.
+std::optional<std::string> &icon_picker_target();
+/// The icon picker, a popup opened at the pointer for icon_picker_target().
+void render_icon_picker(PatchSelectorContext &context);
+
 void render_filter_bar(PatchSelectorContext &context);
 
 } // namespace ui::selector_detail

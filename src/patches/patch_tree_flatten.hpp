@@ -3,6 +3,7 @@
 // Turns the workspace tree into the flat row list the tree view draws. Pure
 // data transform -- deliberately free of ImGui so it can be unit tested.
 
+#include "patches/patch_filter.hpp"
 #include "patches/patch_repository.hpp"
 
 #include <optional>
@@ -34,7 +35,7 @@ struct TreeRow {
  */
 std::vector<TreeRow>
 flatten_visible_rows(const std::vector<patches::PatchEntry> &tree,
-                     const std::string &query_lower, int min_star_rating,
+                     const std::string &query_lower, StarFilter shown_stars,
                      const std::unordered_set<std::string> &open_directories);
 
 /**
@@ -47,7 +48,7 @@ flatten_visible_rows(const std::vector<patches::PatchEntry> &tree,
  */
 std::vector<TreeRow>
 matching_patch_rows(const std::vector<patches::PatchEntry> &tree,
-                    const std::string &query_lower, int min_star_rating);
+                    const std::string &query_lower, StarFilter shown_stars);
 
 /**
  * The directories the entry at `relative_path` is listed under, outermost

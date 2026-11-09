@@ -73,7 +73,7 @@ void test_scroll() {
 
 void test_drop_rows() {
   const auto tree = make_tree();
-  const auto rows = flatten_visible_rows(tree, "", 0, {"root", "root/sub"});
+  const auto rows = flatten_visible_rows(tree, "", {}, {"root", "root/sub"});
   CHECK(rows.size() == 4);
   CHECK(drop_folder_index(rows, 0) == 0);
   CHECK(drop_folder_index(rows, 1) == 1);
@@ -92,7 +92,7 @@ void test_drop_rows() {
   CHECK(drop_folder_index(mixed, 3) == 0);
   CHECK(last_row_under(mixed, 0) == 3);
   CHECK(last_row_under(mixed, 4) == 4);
-  const auto closed = flatten_visible_rows(tree, "", 0, {});
+  const auto closed = flatten_visible_rows(tree, "", {}, {});
   CHECK(closed.size() == 2);
   CHECK(drop_folder_index(closed, 0) == 0);
   CHECK(last_row_under(closed, 0) == 0);

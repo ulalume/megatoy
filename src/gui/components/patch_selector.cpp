@@ -87,11 +87,10 @@ void render_tree(PatchSelectorContext &context) {
     ImGui::PushClipRect(tree->InnerRect.Min, tree->InnerRect.Max, false);
     const auto search =
         patches::parse_search(context.prefs.metadata_search_query);
-    const bool rendered =
-        render_patch_tree(context.repository.tree(), context, search.text_lower,
-                          search.min_stars);
+    const bool rendered = render_patch_tree(context.repository.tree(), context,
+                                            search.text_lower, search.stars);
     ImGui::PopClipRect();
-    if (!rendered && (!search.text_lower.empty() || search.min_stars > 0)) {
+    if (!rendered && (!search.text_lower.empty() || search.stars.active())) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                          "No results for current filters");
     }
@@ -149,6 +148,7 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
     }
   }
 
+  render_icon_picker(context);
   if (context.pending_icon) {
     const auto icon = std::move(*context.pending_icon);
     context.pending_icon.reset();

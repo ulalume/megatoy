@@ -3,6 +3,8 @@
 #include "patches/instrument_icons.hpp"
 
 #include <cctype>
+#include <cstddef>
+#include <utility>
 
 namespace patches {
 
@@ -28,8 +30,8 @@ namespace {
 
 bool is_space(char ch) { return ch == ' ' || ch == '\t'; }
 
-/// Calls `found(at, stars)` for each "*1".."*5" word of `query`, `at` being
-/// where it starts.
+/// Calls `found(at, length, shown)` for each rating word of `query`, `at`
+/// being where it starts.
 template <typename Found>
 void for_each_star_word(const std::string &query, Found found) {
   std::size_t i = 0;
@@ -41,44 +43,73 @@ void for_each_star_word(const std::string &query, Found found) {
     while (i < query.size() && !is_space(query[i])) {
       ++i;
     }
-    if (i - start == 2 && query[start] == '*' && query[start + 1] >= '1' &&
+    const std::size_t length = i - start;
+    if ((length == 2 || (length == 3 && query[start + 2] == '+')) &&
+        query[start] == '*' && query[start + 1] >= '1' &&
         query[start + 1] <= '5') {
-      found(start, query[start + 1] - '0');
+      const int stars = query[start + 1] - '0';
+      found(start, length,
+            length == 3 ? at_least(stars) : StarFilter{1u << stars});
     }
   }
+}
+
+/// `query` without its rating words, each taken with the spaces after it,
+/// and where the first stood.
+std::pair<std::string, std::size_t>
+without_star_words(const std::string &query) {
+  std::string rest;
+  std::size_t from = 0;
+  std::size_t first = std::string::npos;
+  for_each_star_word(query,
+                     [&](std::size_t at, std::size_t length, StarFilter) {
+                       if (first == std::string::npos) {
+                         first = rest.size() + (at - from);
+                       }
+                       rest.append(query, from, at - from);
+                       from = at + length;
+                       while (from < query.size() && is_space(query[from])) {
+                         ++from;
+                       }
+                     });
+  rest.append(query, from);
+  return {rest, first};
 }
 
 } // namespace
 
+StarFilter at_least(int stars) {
+  if (stars <= 0) {
+    return {};
+  }
+  return StarFilter{(0x3Fu >> stars) << stars};
+}
+
+int least_stars(StarFilter filter) {
+  for (int stars = 1; stars <= 5; ++stars) {
+    if (at_least(stars) == filter) {
+      return stars;
+    }
+  }
+  return 0;
+}
+
 SearchQuery parse_search(const std::string &query) {
   SearchQuery out;
-  // The rest, each rating word left out with the spaces after it.
-  std::string rest;
-  std::size_t from = 0;
-  for_each_star_word(query, [&](std::size_t at, int stars) {
-    rest.append(query, from, at - from);
-    from = at + 2;
-    while (from < query.size() && is_space(query[from])) {
-      ++from;
-    }
-    out.min_stars = stars;
+  for_each_star_word(query, [&](std::size_t, std::size_t, StarFilter shown) {
+    out.stars.ratings |= shown.ratings;
   });
-  rest.append(query, from);
-  out.text_lower = search_key(rest);
+  out.text_lower = search_key(without_star_words(query).first);
   return out;
 }
 
-std::string with_star_word(const std::string &query, int stars) {
-  std::string out = query;
-  bool changed = false;
-  for_each_star_word(query, [&](std::size_t at, int) {
-    out[at + 1] = static_cast<char>('0' + stars);
-    changed = true;
-  });
-  if (changed) {
-    return out;
+std::string with_least_stars(const std::string &query, int stars) {
+  auto [rest, first] = without_star_words(query);
+  if (stars <= 0) {
+    return rest;
   }
-  return "*" + std::to_string(stars) + " " + query;
+  const std::string word = "*" + std::to_string(stars) + "+ ";
+  return rest.insert(first == std::string::npos ? 0 : first, word);
 }
 
 bool contains_case_insensitive(const std::string &haystack,
@@ -89,12 +120,12 @@ bool contains_case_insensitive(const std::string &haystack,
   return to_lower(haystack).find(needle_lower) != std::string::npos;
 }
 
-bool entry_passes_star_filter(const PatchEntry &entry, int min_star_rating) {
-  if (min_star_rating <= 0) {
+bool entry_passes_star_filter(const PatchEntry &entry, StarFilter filter) {
+  if (!filter.active()) {
     return true;
   }
   const int rating = entry.metadata ? entry.metadata->star_rating : 0;
-  return rating >= min_star_rating;
+  return rating >= 0 && rating <= 5 && ((filter.ratings >> rating) & 1u) != 0;
 }
 
 bool entry_matches_query(const PatchEntry &entry,
