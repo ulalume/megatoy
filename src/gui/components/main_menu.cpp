@@ -284,7 +284,7 @@ bool begin_bar_menu(const char *label) {
 }
 
 /// The text logo beside the app's icon, a bar item's height.
-constexpr float kBarLogoHeight = 12.0f;
+constexpr float kBarLogoHeight = 14.0f;
 
 const Picture &bar_logo() {
   static const Picture logo = load_picture("images/text_logo_small.png");
