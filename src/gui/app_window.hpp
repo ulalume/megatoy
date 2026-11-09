@@ -38,10 +38,8 @@ inline float tab_bar_height() {
   return ImGui::GetFontSize() + window_tab_padding().y * 2.0f;
 }
 
-/// How far below the room above them a dock's tabs start, shown or not, and
-/// how far above the line under them those not shown stop, before the
-/// interface's scale. The tabs not shown stand in the middle of the bar.
-inline constexpr float kTabInsetAbove = 2.0f;
+/// How far above the line under a dock's tabs those not shown stop, before
+/// the interface's scale.
 inline constexpr float kTabRoomBelow = 2.0f;
 
 /// The height of a dock's tab bar between the room above its tabs and the
@@ -50,10 +48,10 @@ inline float tab_height() {
   return tab_bar_height() - scale::px(kTabRoomAbove + kTabLineWidth);
 }
 
-/// How tall the tabs not shown are drawn: kTabInsetAbove below the room
-/// above them, kTabRoomBelow above the line.
+/// How tall the tabs not shown are drawn, stopping kTabRoomBelow above the
+/// line.
 inline float unshown_tab_height() {
-  return tab_height() - scale::px(kTabInsetAbove + kTabRoomBelow);
+  return tab_height() - scale::px(kTabRoomBelow);
 }
 
 /// The number of colours push_clear_tab_bar_colors() pushes.

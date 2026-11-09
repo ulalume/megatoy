@@ -64,8 +64,7 @@ void draw_tab_bar(ImDrawList *draw_list, const ImGuiDockNode &node,
       ImGui::GetColorU32(focused ? ImGuiCol_TitleBgActive : ImGuiCol_TitleBg));
 
   const float line = style.TabBarBorderSize;
-  const float top =
-      bar.BarRect.Min.y + scale::px(kTabRoomAbove + kTabInsetAbove);
+  const float top = bar.BarRect.Min.y + scale::px(kTabRoomAbove);
   const float shown_bottom = bar.BarRect.Max.y - line;
   const float bottom = shown_bottom - scale::px(kTabRoomBelow);
   draw_list->PushClipRect(bar.BarRect.Min, bar.BarRect.Max, true);
@@ -151,6 +150,30 @@ void keep_tab_bar_lit() {
 }
 
 void finish_tab_bars() {
+  // ImGui sets a label in the middle of the bar; the tabs not shown stand
+  // between the room above them and the room and line below, which differ,
+  // and their labels, the shown one's too, are moved to their middle.
+  const float shift = (scale::px(kTabRoomAbove - kTabRoomBelow) -
+                       GImGui->Style.TabBarBorderSize) *
+                      0.5f;
+  if (shift != 0.0f) {
+    for_each_tab_bar([&](const ImGuiDockNode &node, const ImGuiTabBar &bar) {
+      for (ImDrawVert &vert : node.HostWindow->DrawList->VtxBuffer) {
+        if (vert.pos.y < bar.BarRect.Min.y - 1.0f ||
+            vert.pos.y > bar.BarRect.Max.y) {
+          continue;
+        }
+        for (const ImGuiTabItem &tab : bar.Tabs) {
+          const float left = tab_left(bar, tab);
+          if (vert.pos.x >= left - 1.0f &&
+              vert.pos.x <= left + tab.Width + 1.0f) {
+            vert.pos.y += shift;
+            break;
+          }
+        }
+      }
+    });
+  }
   lit_before().swap(lit_now());
   lit_now().clear();
 }
