@@ -102,6 +102,12 @@ void check_keyboard_typing(
     const std::map<ImGuiKey, ym2612::Note> key_mappings) {
   auto &input = context.input_state;
 
+  // A key pressed with Command, Control or Option is a shortcut's, such as
+  // Command+S, and plays nothing. On macOS its release is not even told
+  // while Command is held, so a note it started would sound on.
+  const ImGuiIO &io = ImGui::GetIO();
+  const bool shortcut = io.KeyCtrl || io.KeySuper || io.KeyAlt;
+
   const ImGuiKey octave_down = context.octave_down_key;
   const ImGuiKey octave_up = context.octave_up_key;
 
@@ -116,13 +122,13 @@ void check_keyboard_typing(
   bool up_was_pressed =
       octave_up != ImGuiKey_None ? key_pressed_last_frame[octave_up] : false;
 
-  if (down_pressed_now && !down_was_pressed) {
+  if (down_pressed_now && !down_was_pressed && !shortcut) {
     if (input.keyboard_typing_octave > 0) {
       input.keyboard_typing_octave--;
     }
   }
 
-  if (up_pressed_now && !up_was_pressed) {
+  if (up_pressed_now && !up_was_pressed && !shortcut) {
     if (input.keyboard_typing_octave < 7) {
       input.keyboard_typing_octave++;
     }
@@ -153,7 +159,7 @@ void check_keyboard_typing(
     bool key_pressed_now = ImGui::IsKeyDown(imgui_key);
     bool key_was_pressed = key_pressed_last_frame[imgui_key];
 
-    if (key_pressed_now && !key_was_pressed) {
+    if (key_pressed_now && !key_was_pressed && !shortcut) {
       if (context.key_on) {
         context.key_on(note, 127);
       }
