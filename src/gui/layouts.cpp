@@ -13,7 +13,7 @@ namespace ui::layouts {
 namespace {
 
 constexpr float kEditorMinWidth = 300.0f;
-constexpr float kBrowserMinWidth = 230.0f;
+constexpr float kBrowserMinWidth = 180.0f;
 
 /// The most of the window's height the footer takes when it grows.
 constexpr float kFooterMaxShare = 0.6f;

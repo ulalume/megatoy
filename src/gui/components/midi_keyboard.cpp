@@ -339,7 +339,11 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(400, 180)),
                            ImGuiCond_FirstUseEver);
   areas::keep_in_area(areas::Area::FooterRight, title);
-  if (!ui::begin_window(title, &ui_prefs.show_midi_keyboard)) {
+  // Its contents run to the window's edges, as the waveform's do.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  const bool visible = ui::begin_window(title, &ui_prefs.show_midi_keyboard);
+  ImGui::PopStyleVar();
+  if (!visible) {
     release_held_keys(context);
     ImGui::End();
     return;
