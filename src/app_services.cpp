@@ -133,7 +133,7 @@ void AppServices::initialize_app(AppState &state) {
   const auto &prefs = state.ui_state().prefs;
   auto &input = state.input_state();
   const auto clamp_scale = [](int value) {
-    value = std::clamp(value, 0, static_cast<int>(Scale::RYUKYU));
+    value = std::clamp(value, 0, kScaleCount - 1);
     return static_cast<Scale>(value);
   };
   const auto clamp_key = [](int value) {

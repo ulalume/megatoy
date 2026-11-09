@@ -13,6 +13,7 @@
 #include "gui/ui_scale.hpp"
 #include "util.hpp"
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -30,6 +31,92 @@ constexpr float playback_step_duration = 0.35f;
 constexpr float kMinWhiteKeyWidth = 24.0f;
 constexpr float kBlackKeyWidth = 0.6f;
 constexpr float kBlackKeyHeight = 0.6f;
+
+/// The viewport width from which the scale list stands in two columns,
+/// before the interface's scale.
+constexpr float kTwoColumnScaleListWidth = 640.0f;
+
+/// The scales from `first` to `last` of the list, each family under its
+/// name, as rows `width` wide. Returns whether one was picked into `scale`.
+bool scale_rows(std::size_t first, std::size_t last, Scale &scale,
+                float width) {
+  const auto &infos = scale_infos();
+  bool picked = false;
+  int group = -1;
+  for (std::size_t i = first; i < last; ++i) {
+    const ScaleInfo &info = infos[i];
+    if (info.group != group && info.group >= 0) {
+      ImGui::SeparatorText(kScaleGroups[info.group]);
+    }
+    group = info.group;
+    const std::string label =
+        info.alias != nullptr ? std::string(info.name) + " (" + info.alias + ")"
+                              : std::string(info.name);
+    const bool selected = info.scale == scale;
+    ImGui::PushID(static_cast<int>(i));
+    if (ImGui::Selectable(label.c_str(), selected, 0, ImVec2(width, 0.0f))) {
+      scale = info.scale;
+      picked = true;
+    }
+    if (selected) {
+      ImGui::SetItemDefaultFocus();
+    }
+    ImGui::PopID();
+  }
+  return picked;
+}
+
+/**
+ * The scale list: Chromatic, then each family under its name. Where the
+ * viewport is wide it stands in two columns, the families up to Japanese in
+ * the first. Returns whether a scale was picked into `scale`.
+ */
+bool scale_combo(const char *id, Scale &scale) {
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowSizeConstraints(
+      ImVec2(ImGui::CalcItemWidth(), 0.0f),
+      ImVec2(FLT_MAX, viewport->WorkSize.y * 0.9f));
+  if (!ImGui::BeginCombo(id, scale_name(scale))) {
+    return false;
+  }
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
+  const auto &infos = scale_infos();
+  // Every row as wide as the widest name.
+  float width = 0.0f;
+  for (const ScaleInfo &info : infos) {
+    const std::string label =
+        info.alias != nullptr ? std::string(info.name) + " (" + info.alias + ")"
+                              : std::string(info.name);
+    width = std::max(width, ImGui::CalcTextSize(label.c_str()).x);
+  }
+  bool picked = false;
+  if (viewport->WorkSize.x >= scale::px(kTwoColumnScaleListWidth)) {
+    const auto second =
+        std::find_if(infos.begin(), infos.end(),
+                     [](const ScaleInfo &info) { return info.group == 3; });
+    const auto split = static_cast<std::size_t>(second - infos.begin());
+    ImGui::PushStyleVarX(ImGuiStyleVar_CellPadding,
+                         ImGui::GetStyle().ItemSpacing.x * 0.5f);
+    if (ImGui::BeginTable("##scale_columns", 2,
+                          ImGuiTableFlags_SizingFixedFit)) {
+      ImGui::TableSetupColumn("##first", ImGuiTableColumnFlags_WidthFixed,
+                              width);
+      ImGui::TableSetupColumn("##second", ImGuiTableColumnFlags_WidthFixed,
+                              width);
+      ImGui::TableNextColumn();
+      picked |= scale_rows(0, split, scale, width);
+      ImGui::TableNextColumn();
+      picked |= scale_rows(split, infos.size(), scale, width);
+      ImGui::EndTable();
+    }
+    ImGui::PopStyleVar();
+  } else {
+    picked = scale_rows(0, infos.size(), scale, width);
+  }
+  ImGui::PopStyleVar();
+  ImGui::EndCombo();
+  return picked;
+}
 
 std::vector<ym2612::Note>
 build_playback_sequence(const std::vector<Key> &scale_keys,
@@ -86,7 +173,7 @@ bool can_play_scale(const MidiKeyboardContext &context) {
 /// The scale the keyboard is set to, as "C Major" or "Chromatic".
 std::string scale_title(const InputState &input) {
   const auto &settings = input.midi_keyboard_settings;
-  const char *scale = scale_names[static_cast<int>(settings.scale)];
+  const char *scale = scale_name(settings.scale);
   if (settings.scale == Scale::CHROMATIC) {
     return scale;
   }
@@ -289,7 +376,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   const auto octave_keys = octave_keys_for_layout(typing_layout, ui_prefs);
 
   const auto clamp_scale = [](int value) {
-    return std::clamp(value, 0, static_cast<int>(Scale::RYUKYU));
+    return std::clamp(value, 0, kScaleCount - 1);
   };
   const auto clamp_key = [](int value) {
     return std::clamp(value, 0, static_cast<int>(Key::B));
@@ -361,12 +448,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   ImGui::EndDisabled();
 
   ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
-  int current_scale = static_cast<int>(keyboard_settings.scale);
   ImGui::SetNextItemWidth(ui::scale::px(150.0f));
-  if (ui::combo("##Scale", &current_scale, scale_names,
-                IM_ARRAYSIZE(scale_names))) {
-    keyboard_settings.scale = static_cast<Scale>(current_scale);
-    context.ui_prefs.midi_keyboard_scale = current_scale;
+  if (scale_combo("##Scale", keyboard_settings.scale)) {
+    context.ui_prefs.midi_keyboard_scale =
+        static_cast<int>(keyboard_settings.scale);
     if (keyboard_settings.scale == Scale::CHROMATIC) {
       keyboard_settings.key = Key::C;
       context.ui_prefs.midi_keyboard_key = static_cast<int>(Key::C);
