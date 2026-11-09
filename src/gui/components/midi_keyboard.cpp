@@ -427,7 +427,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     // The chromatic scale is laid out as a piano's: white keys side by side,
     // black keys shorter and narrower over the line between two. Any other
     // scale lays its notes side by side alike.
-    if (keyboard_settings.scale == Scale::CHROMATIC) {
+    const bool piano = keyboard_settings.scale == Scale::CHROMATIC;
+    if (piano) {
       const auto whites = static_cast<float>(
           std::count_if(notes.begin(), notes.end(), [](const auto &note) {
             return ui::is_white_key(note.key);
@@ -481,9 +482,8 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     }
     // Black keys lie over white ones, so they take the pointer first.
     std::stable_partition(
-        key_rects.begin(), key_rects.end(), [&](const KeyRect &key) {
-          return !key.white && keyboard_settings.scale == Scale::CHROMATIC;
-        });
+        key_rects.begin(), key_rects.end(),
+        [&](const KeyRect &key) { return !key.white && piano; });
 
     // A press on any key sounds whichever key the pointer is over, so a drag
     // plays each key it crosses. On a touch screen the fingers play, each its
@@ -524,7 +524,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
         const ImU32 col =
             is_white ? (is_pressed ? white_key_pressed_col : white_key_col)
                      : (is_pressed ? black_key_pressed_col : black_key_col);
-        if (!is_white && keyboard_settings.scale == Scale::CHROMATIC) {
+        if (!is_white && piano) {
           // Over the white keys, so the colour, translucent, goes on the
           // window's background rather than on them.
           draw_list->AddRectFilled(key_min, key_max,
@@ -555,7 +555,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
             key_text = fallback ? fallback : "";
           }
           float text_top = bar_max.y + ui::scale::px(3.0f);
-          if (is_white && keyboard_settings.scale == Scale::CHROMATIC) {
+          if (is_white && piano) {
             text_top =
                 key_min.y + key_height * kBlackKeyHeight + ui::scale::px(3.0f);
           }

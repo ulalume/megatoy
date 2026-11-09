@@ -24,6 +24,9 @@ std::span<const Group> groups();
 /// The glyph shown for a patch without an icon.
 const char *none_glyph();
 
+/// The icon `id` names, or none for an empty or unknown id.
+const Icon *find(std::string_view id);
+
 /// The glyph of `id`, or the none glyph for an empty or unknown id.
 const char *glyph(std::string_view id);
 

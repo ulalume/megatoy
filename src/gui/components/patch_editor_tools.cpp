@@ -11,6 +11,7 @@
 #include "ym2612/operator_edit.hpp"
 #include "ym2612/playback.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -156,6 +157,28 @@ struct SketchPointer {
   bool over = false;
 };
 
+/// The sketch's handles where `p` puts them.
+std::array<std::pair<SketchHandle, ImVec2>, 3>
+sketch_handles(const SketchPoints &p) {
+  return {{{SketchHandle::Peak, p.peak},
+           {SketchHandle::Knee, p.knee},
+           {SketchHandle::Release, p.release}}};
+}
+
+/// The handle nearest `mouse` within reach, or none.
+SketchHandle nearest_sketch_handle(const SketchPoints &p, ImVec2 mouse) {
+  SketchHandle near = SketchHandle::None;
+  float best = ui::scale::px(kSketchHandleReach);
+  for (const auto &[handle, at] : sketch_handles(p)) {
+    const float distance = std::hypot(mouse.x - at.x, mouse.y - at.y);
+    if (distance <= best) {
+      best = distance;
+      near = handle;
+    }
+  }
+  return near;
+}
+
 /// What a sketch handle moves, lit while it is pointed at.
 bool handle_moves(SketchHandle handle, patch_lab::Tweak tweak) {
   switch (handle) {
@@ -222,10 +245,7 @@ void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
     return;
   }
   const float radius = ui::scale::px(kEnvelopeHandleRadius);
-  for (const auto &[handle, at] :
-       {std::pair{SketchHandle::Peak, p.peak},
-        std::pair{SketchHandle::Knee, p.knee},
-        std::pair{SketchHandle::Release, p.release}}) {
+  for (const auto &[handle, at] : sketch_handles(p)) {
     draw_list->AddCircleFilled(
         at, radius,
         styles::color_u32(handle == pointer.handle
@@ -253,20 +273,8 @@ SketchPointer drag_quick_edit_sketch(PatchEditorContext &context,
   }
 
   if (ImGui::IsItemActivated()) {
-    held = SketchHandle::None;
-    const SketchPoints p = sketch_points(*shape, min, size);
-    const ImVec2 mouse = ImGui::GetIO().MousePos;
-    float best = ui::scale::px(kSketchHandleReach);
-    for (const auto &[handle, at] :
-         {std::pair{SketchHandle::Peak, p.peak},
-          std::pair{SketchHandle::Knee, p.knee},
-          std::pair{SketchHandle::Release, p.release}}) {
-      const float distance = std::hypot(mouse.x - at.x, mouse.y - at.y);
-      if (distance <= best) {
-        best = distance;
-        held = handle;
-      }
-    }
+    held = nearest_sketch_handle(sketch_points(*shape, min, size),
+                                 ImGui::GetIO().MousePos);
     if (held != SketchHandle::None) {
       base = instrument;
       // Empty merge key: each drag is its own undo step.
@@ -334,21 +342,8 @@ SketchPointer drag_quick_edit_sketch(PatchEditorContext &context,
     return pointer;
   }
   // Under the pointer: the nearest handle within reach.
-  const SketchPoints p = sketch_points(*shape, min, size);
-  const ImVec2 mouse = ImGui::GetIO().MousePos;
-  SketchHandle near = SketchHandle::None;
-  float best = ui::scale::px(kSketchHandleReach);
-  for (const auto &[handle, at] :
-       {std::pair{SketchHandle::Peak, p.peak},
-        std::pair{SketchHandle::Knee, p.knee},
-        std::pair{SketchHandle::Release, p.release}}) {
-    const float distance = std::hypot(mouse.x - at.x, mouse.y - at.y);
-    if (distance <= best) {
-      best = distance;
-      near = handle;
-    }
-  }
-  pointer.handle = near;
+  pointer.handle = nearest_sketch_handle(sketch_points(*shape, min, size),
+                                         ImGui::GetIO().MousePos);
   return pointer;
 }
 

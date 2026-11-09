@@ -89,18 +89,17 @@ const std::vector<ListRow> &list_rows() {
 
 } // namespace
 
-ImU32 instrument_icon_color(std::string_view id) {
-  return patches::instrument_icons::known(id)
-             ? ImGui::GetColorU32(ImGuiCol_Text)
-             : ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
-}
-
 void draw_instrument_icon(std::string_view id, ImVec2 min, ImVec2 max,
                           float scale) {
-  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * scale);
-  draw_centred_glyph(patches::instrument_icons::glyph(id), min, max,
-                     instrument_icon_color(id));
-  ImGui::PopFont();
+  // Muted, with the none glyph, for a patch without an icon.
+  const auto *icon = patches::instrument_icons::find(id);
+  draw_centred_glyph(
+      icon != nullptr ? icon->glyph : patches::instrument_icons::none_glyph(),
+      min, max,
+      icon != nullptr
+          ? ImGui::GetColorU32(ImGuiCol_Text)
+          : ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)),
+      scale);
 }
 
 std::optional<std::string> instrument_icon_list(const std::string &current) {
@@ -200,15 +199,17 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
       ImGui::SetCursorScreenPos(
           ImVec2(origin.x + icons_x + column * (cell + gap),
                  icons_top + line * (cell + gap)));
-      const std::string id(shown[i]->id);
-      ImGui::PushID(id.c_str());
+      const std::string_view id = shown[i]->id;
+      ImGui::PushID(id.data(), id.data() + id.size());
       if (ImGui::Selectable("##icon", id == current, 0, ImVec2(cell, cell))) {
-        picked = id;
+        picked = std::string(id);
       }
       draw_instrument_icon(id, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
                            kLargeIconScale);
-      ImGui::SetItemTooltip(
-          "%s", patches::instrument_icons::display_name(id).c_str());
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip)) {
+        ImGui::SetTooltip("%s",
+                          patches::instrument_icons::display_name(id).c_str());
+      }
       ImGui::PopID();
     }
     y += height + row_gap;

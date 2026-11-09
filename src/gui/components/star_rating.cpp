@@ -13,23 +13,14 @@ namespace {
 /// The room between two stars, before the interface's scale.
 constexpr float kStarGap = 2.0f;
 
-} // namespace
-
-const std::array<std::string_view, 6> kStarLabels = {
-    "-",
-    ICON_MEGATOY_STAR,
-    ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
-    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
-    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
-    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR
-        ICON_MEGATOY_STAR,
-};
-
+/// Five stars side by side.
 float stars_width() {
   return ImGui::CalcTextSize(ICON_MEGATOY_STAR).x * 5.0f +
          scale::px(kStarGap) * 4.0f;
 }
 
+/// Five stars from `min`, centred in `height`: `filled` of them filled and
+/// the rest outlined and faint.
 void draw_stars(ImVec2 min, float height, int filled) {
   const float star = ImGui::CalcTextSize(ICON_MEGATOY_STAR).x;
   const float step = star + scale::px(kStarGap);
@@ -44,6 +35,18 @@ void draw_stars(ImVec2 min, float height, int filled) {
                        i < filled ? lit : faint);
   }
 }
+
+} // namespace
+
+const std::array<std::string_view, 6> kStarLabels = {
+    "-",
+    ICON_MEGATOY_STAR,
+    ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
+    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
+    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR,
+    ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR ICON_MEGATOY_STAR
+        ICON_MEGATOY_STAR,
+};
 
 namespace {
 

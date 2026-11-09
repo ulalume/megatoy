@@ -40,17 +40,22 @@ current_entries(PatchLabState &state,
 }
 
 /// The instrument icon of a browser entry, or "" for none.
-std::string entry_icon(const patches::PatchEntry *entry) {
-  return entry != nullptr && entry->metadata ? entry->metadata->icon
-                                             : std::string();
+std::string_view entry_icon(const patches::PatchEntry *entry) {
+  return entry != nullptr && entry->metadata
+             ? std::string_view(entry->metadata->icon)
+             : std::string_view();
 }
 
-/// A row of the source list: the icon, then the label.
-bool icon_selectable(const std::string &icon, const std::string &label,
+/// A row of the source list: the icon, then the label. Drawn only where it
+/// shows, as the list holds every patch.
+bool icon_selectable(std::string_view icon, const std::string &label,
                      bool selected) {
   const ImVec2 pos = ImGui::GetCursorScreenPos();
   const float icon_width = ImGui::GetFontSize() * 1.25f;
   const bool clicked = ImGui::Selectable("##row", selected);
+  if (!ImGui::IsItemVisible()) {
+    return clicked;
+  }
   const float line = ImGui::GetTextLineHeight();
   draw_instrument_icon(icon, pos, ImVec2(pos.x + icon_width, pos.y + line));
   ImGui::GetWindowDrawList()->AddText(
@@ -127,12 +132,12 @@ bool render_source_list(const patches::PatchSession &session,
       }
       if (item.kind == SourceRowKind::Document) {
         ImGui::PushID(static_cast<int>(item.document->id()));
-        const std::string icon =
+        const std::string_view icon =
             entry_icon(session.document_entry(*item.document));
         if (icon_selectable(icon, item.label, false)) {
           source = {.patch = item.document->patch(),
                     .label = item.label,
-                    .icon = icon};
+                    .icon = std::string(icon)};
           changed = true;
         }
         ImGui::PopID();
@@ -231,11 +236,9 @@ void render_source_slot(const char *id,
   const float icon_width =
       std::round(ImGui::GetFontSize() * kLargeButtonIconScale);
   if (source.empty()) {
-    ImGui::PushFont(nullptr,
-                    ImGui::GetStyle().FontSizeBase * kLargeButtonIconScale);
     draw_centred_glyph(ICON_MEGATOY_PLUS, min, max,
-                       ImGui::GetColorU32(ImGuiCol_TextDisabled));
-    ImGui::PopFont();
+                       ImGui::GetColorU32(ImGuiCol_TextDisabled),
+                       kLargeButtonIconScale);
   } else {
     const float gap = style.ItemInnerSpacing.x * 2.0f;
     const float room =
@@ -371,11 +374,9 @@ bool generate_button() {
       std::round(ImGui::GetFontSize() * kLargeButtonIconScale);
   const float left = centred_start(min.x, max.x, icon_width, label_size.x);
   const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
-  ImGui::PushFont(nullptr,
-                  ImGui::GetStyle().FontSizeBase * kLargeButtonIconScale);
   draw_centred_glyph(ICON_MEGATOY_REFRESH, ImVec2(left, min.y),
-                     ImVec2(left + icon_width, max.y), color);
-  ImGui::PopFont();
+                     ImVec2(left + icon_width, max.y), color,
+                     kLargeButtonIconScale);
   ImGui::GetWindowDrawList()->AddText(
       ImVec2(left + icon_width + ImGui::GetStyle().ItemInnerSpacing.x * 2.0f,
              std::round((min.y + max.y - label_size.y) * 0.5f)),

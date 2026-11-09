@@ -130,7 +130,7 @@ void entry_context_menu(PatchSelectorContext &context,
   // with it.
   if (begin_group(actions.rate)) {
     if (ImGui::MenuItem("Icon...")) {
-      icon_picker_target() = entry.relative_path;
+      context.pending_icon_picker = entry.relative_path;
     }
     if (ui::begin_menu("Rating")) {
       const int rating = entry.metadata ? entry.metadata->star_rating : 0;
@@ -230,16 +230,11 @@ void render_star_menu(const ImRect &box, bool typing, std::string &query,
 
 } // namespace
 
-std::optional<std::string> &icon_picker_target() {
-  static std::optional<std::string> target;
-  return target;
-}
-
 void render_icon_picker(PatchSelectorContext &context) {
   static std::string picking;
-  if (auto &target = icon_picker_target()) {
-    picking = std::move(*target);
-    target.reset();
+  if (context.pending_icon_picker) {
+    picking = std::move(*context.pending_icon_picker);
+    context.pending_icon_picker.reset();
     ImGui::OpenPopup("##icon_picker");
   }
   if (!ImGui::BeginPopup("##icon_picker")) {

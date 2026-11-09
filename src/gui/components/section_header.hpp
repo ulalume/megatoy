@@ -9,6 +9,18 @@
 
 namespace ui {
 
+/// The bar of a section header over `min`..`max`, lit while the item just
+/// drawn there is pointed at or pressed.
+inline void draw_section_header_bar(ImDrawList *draw_list, ImVec2 min,
+                                    ImVec2 max) {
+  const auto col =
+      ImGui::IsItemActive()    ? styles::MegatoyCol::SectionHeaderActive
+      : ImGui::IsItemHovered() ? styles::MegatoyCol::SectionHeaderHovered
+                               : styles::MegatoyCol::SectionHeader;
+  draw_list->AddRectFilled(min, max, styles::color_u32(col),
+                           ImGui::GetStyle().FrameRounding);
+}
+
 /// A bar that opens and closes the section under it, as wide as the items
 /// around it. Returns whether the section is open. Opened, it scrolls into
 /// view once section_end() follows its contents.
@@ -23,14 +35,9 @@ inline bool section_header(const char *label, bool &open) {
     opened = open;
   }
   scroll_reveal::section_header_drawn(ImGui::GetItemID(), min.y, opened);
-  const auto col =
-      ImGui::IsItemActive()    ? styles::MegatoyCol::SectionHeaderActive
-      : ImGui::IsItemHovered() ? styles::MegatoyCol::SectionHeaderHovered
-                               : styles::MegatoyCol::SectionHeader;
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  const ImVec2 max(min.x + size.x, min.y + size.y);
-  draw_list->AddRectFilled(min, max, styles::color_u32(col),
-                           style.FrameRounding);
+  draw_section_header_bar(draw_list, min,
+                          ImVec2(min.x + size.x, min.y + size.y));
   const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
   const float font_size = ImGui::GetFontSize();
   ImGui::RenderArrow(

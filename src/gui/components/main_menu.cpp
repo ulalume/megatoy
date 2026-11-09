@@ -389,11 +389,11 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   };
   // The room the middle leaves before a load area `load_width` wide: it sits
   // centred in the bar, but never over the menus.
-  // The LFO menu stands just left of the load area.
-  const auto room = [&](BarCentreFit fit, float load_width,
-                        bool lfo_short = false) {
-    const float right_start = width - load_width - style.FramePadding.x * 2.0f -
-                              lfo_menu_advance(lfo_short);
+  // The LFO menu stands just left of the load area, named in full.
+  const float lfo_width = lfo_menu_advance(false);
+  const auto room = [&](BarCentreFit fit, float load_width) {
+    const float right_start =
+        width - load_width - style.FramePadding.x * 2.0f - lfo_width;
     if (!context.bar_centre_size) {
       return right_start - menus_end(fit);
     }

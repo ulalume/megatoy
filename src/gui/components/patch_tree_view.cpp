@@ -2,6 +2,7 @@
 #include "gui/components/centred_glyph.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/components/section_header.hpp"
 #include "gui/fonts/megatoy_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "patches/instrument_icons.hpp"
@@ -47,6 +48,14 @@ struct PatchTreeCache {
   std::uint64_t open_revision = 1;
   std::unordered_set<std::string> open_directories;
   std::vector<patches::TreeRow> rows;
+  /// Bumped whenever `rows` is rebuilt.
+  std::uint64_t rows_build = 0;
+  /// Where each row starts, kept while the rows and the sizes they were laid
+  /// out with stay.
+  std::vector<float> tops;
+  std::uint64_t tops_build = 0;
+  float tops_line = 0.0f;
+  float tops_gap = 0.0f;
 
   patches::TreeRevealState reveal_state;
 
@@ -68,6 +77,7 @@ struct PatchTreeCache {
               ? patches::flatten_visible_rows(source, query_lower, shown_stars,
                                               open_directories)
               : patches::matching_patch_rows(source, query_lower, shown_stars);
+      ++rows_build;
     }
     return rows;
   }
@@ -228,19 +238,14 @@ void draw_rating(int stars, bool compact, float right, float centre_y) {
   }
   const ImVec2 min(right - width, centre_y - width * 0.5f);
   const ImVec2 max(right, centre_y + width * 0.5f);
-  const ImGuiStyle &style = ImGui::GetStyle();
-  ImGui::PushFont(nullptr, style.FontSizeBase * kRatingBadgeScale);
-  draw_centred_glyph(ICON_MEGATOY_STAR, min, max, muted);
-  ImGui::PopFont();
+  draw_centred_glyph(ICON_MEGATOY_STAR, min, max, muted, kRatingBadgeScale);
   // The count in the background's colour, a little low: a star's middle
   // stands below the middle of its outline.
   const char digit[2] = {static_cast<char>('0' + stars), '\0'};
   const float drop = width * 0.06f;
-  ImGui::PushFont(nullptr, style.FontSizeBase * kRatingBadgeDigitScale);
-  draw_centred_glyph(digit, ImVec2(min.x, min.y + drop),
-                     ImVec2(max.x, max.y + drop),
-                     ImGui::GetColorU32(ImGuiCol_WindowBg));
-  ImGui::PopFont();
+  draw_centred_glyph(
+      digit, ImVec2(min.x, min.y + drop), ImVec2(max.x, max.y + drop),
+      ImGui::GetColorU32(ImGuiCol_WindowBg), kRatingBadgeDigitScale);
 }
 
 /**
@@ -406,19 +411,15 @@ void render_directory_row(PatchSelectorContext &context,
     }
   }
   if (heading) {
-    using styles::MegatoyCol;
-    const auto col = ImGui::IsItemActive()    ? MegatoyCol::SectionHeaderActive
-                     : ImGui::IsItemHovered() ? MegatoyCol::SectionHeaderHovered
-                                              : MegatoyCol::SectionHeader;
     draw_list->ChannelsSetCurrent(0);
-    draw_list->AddRectFilled(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
-                             styles::color_u32(col),
-                             ImGui::GetStyle().FrameRounding);
+    draw_section_header_bar(draw_list, ImGui::GetItemRectMin(),
+                            ImGui::GetItemRectMax());
     draw_list->ChannelsMerge();
   }
   // On the desktop a top folder is a place on disk, named in full.
-  if (heading && !megatoy::platform::is_web()) {
-    ImGui::SetItemTooltip("%s", item.full_path.string().c_str());
+  if (heading && !megatoy::platform::is_web() &&
+      ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip)) {
+    ImGui::SetTooltip("%s", item.full_path.string().c_str());
   }
   ImGui::PopStyleVar(2);
   entry_context_menu(context, item,
@@ -544,9 +545,12 @@ void scroll_to_row(float row_top, float height) {
  * A top folder's heading after other rows stands a gap below them, as an
  * editor section does below the one before.
  */
-std::vector<float> row_tops(const std::vector<patches::TreeRow> &rows) {
+void row_tops(const std::vector<patches::TreeRow> &rows,
+              std::vector<float> &tops) {
   const float gap = ImGui::GetStyle().ItemSpacing.y;
-  std::vector<float> tops;
+  const float folder_height = row_height();
+  const float patch_height = patch_row_height();
+  tops.clear();
   tops.reserve(rows.size() + 1);
   float y = 0.0f;
   for (std::size_t i = 0; i < rows.size(); ++i) {
@@ -554,10 +558,9 @@ std::vector<float> row_tops(const std::vector<patches::TreeRow> &rows) {
       y += gap;
     }
     tops.push_back(y);
-    y += row_height_of(rows[i]);
+    y += rows[i].is_directory ? folder_height : patch_height;
   }
   tops.push_back(y);
-  return tops;
 }
 
 void open_tree_directory(const std::string &relative_path) {
@@ -583,7 +586,16 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
     return false;
   }
 
-  const std::vector<float> tops = row_tops(rows);
+  const float line = ImGui::GetTextLineHeight();
+  const float gap = ImGui::GetStyle().ItemSpacing.y;
+  if (cache.tops_build != cache.rows_build || cache.tops_line != line ||
+      cache.tops_gap != gap) {
+    row_tops(rows, cache.tops);
+    cache.tops_build = cache.rows_build;
+    cache.tops_line = line;
+    cache.tops_gap = gap;
+  }
+  const std::vector<float> &tops = cache.tops;
   if (reveal) {
     const auto row = std::find_if(rows.begin(), rows.end(), [&](const auto &r) {
       return r.entry->relative_path == selection;

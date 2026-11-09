@@ -11,11 +11,8 @@ namespace ui {
 /// editor's header and the icon list.
 inline constexpr float kLargeIconScale = 2.0f;
 
-/// The colour an icon is drawn in: muted for a patch without one.
-ImU32 instrument_icon_color(std::string_view id);
-
 /// Draws the glyph of `id` centred in the rectangle, at `scale` times the
-/// text's size, in its colour.
+/// text's size: muted, and the none glyph, for an empty or unknown id.
 void draw_instrument_icon(std::string_view id, ImVec2 min, ImVec2 max,
                           float scale = 1.0f);
 

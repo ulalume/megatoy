@@ -8,11 +8,12 @@ namespace patches::instrument_icons {
 namespace {
 #include "patches/instrument_icon_table.inc"
 
-const Icon *find(std::string_view id) {
+/// The group holding `id`, or none.
+const Group *find_group(std::string_view id) {
   for (const auto &group : kGroups) {
     for (const auto &icon : group.icons) {
       if (icon.id == id) {
-        return &icon;
+        return &group;
       }
     }
   }
@@ -36,6 +37,17 @@ bool contains(std::string_view text, std::string_view filter) {
 std::span<const Group> groups() { return kGroups; }
 
 const char *none_glyph() { return kNoneGlyph; }
+
+const Icon *find(std::string_view id) {
+  if (const Group *group = find_group(id)) {
+    for (const auto &icon : group->icons) {
+      if (icon.id == id) {
+        return &icon;
+      }
+    }
+  }
+  return nullptr;
+}
 
 const char *glyph(std::string_view id) {
   const Icon *icon = find(id);
@@ -68,14 +80,8 @@ std::string display_name(std::string_view id) {
 }
 
 std::string_view group_name(std::string_view id) {
-  for (const auto &group : kGroups) {
-    for (const auto &icon : group.icons) {
-      if (icon.id == id) {
-        return group.name;
-      }
-    }
-  }
-  return {};
+  const Group *group = find_group(id);
+  return group != nullptr ? group->name : std::string_view();
 }
 
 bool matches(std::string_view id, std::string_view filter) {

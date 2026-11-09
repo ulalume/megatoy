@@ -254,11 +254,12 @@ struct LfoNames {
   const char *ams;
   const char *fms;
   const char *algorithm;
+  bool short_names;
 };
 constexpr LfoNames kLfoFullNames{"Amplitude Modulation Sensitivity",
                                  "Frequency Modulation Sensitivity",
-                                 "Algorithm"};
-constexpr LfoNames kLfoShortNames{"AMS", "FMS", "ALG"};
+                                 "Algorithm", false};
+constexpr LfoNames kLfoShortNames{"AMS", "FMS", "ALG", true};
 
 /// The narrowest the algorithm diagram is drawn, where the names are short.
 constexpr float kMinAlgorithmDiagramWidth = 112.0f;
@@ -279,7 +280,7 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
   // one being touched.
   // A short name is told in full there too.
   const bool lfo_on = context.session.playback().lfo_enable;
-  const bool short_names = names.ams != kLfoFullNames.ams;
+  const bool short_names = names.short_names;
   const auto tell = [&](const char *full_name) {
     const bool touched = ImGui::IsItemHovered() || ImGui::IsItemActive();
     if (!touched) {
@@ -330,7 +331,7 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
   // to its least to leave the slider its own.
   const float diagram_height = ui::scale::px(48.0f);
   float diagram_width = ImGui::CalcItemWidth();
-  if (names.algorithm != kLfoFullNames.algorithm) {
+  if (names.short_names) {
     diagram_width = std::clamp(
         ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x -
             named_slider_fit_width(names.algorithm, "0"),
@@ -347,7 +348,7 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::SetNextItemWidth(
       std::min(ImGui::CalcItemWidth(), ImGui::GetContentRegionAvail().x));
   bool algorithm_changed = named_slider_int(names.algorithm, &algorithm, 0, 7);
-  if (names.algorithm != kLfoFullNames.algorithm) {
+  if (names.short_names) {
     ImGui::SetItemTooltip("%s", kLfoFullNames.algorithm);
   }
   ImGui::PopStyleVar();
@@ -711,9 +712,8 @@ void render_document_window(PatchEditorContext &context,
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
     const auto fits_beside = [&](const LfoNames &names) {
       const float diagram_width =
-          names.algorithm == kLfoFullNames.algorithm
-              ? hslider_width()
-              : ui::scale::px(kMinAlgorithmDiagramWidth);
+          !names.short_names ? hslider_width()
+                             : ui::scale::px(kMinAlgorithmDiagramWidth);
       const float channel_width = diagram_width + spacing +
                                   named_slider_fit_width(names.algorithm, "0");
       const float column =

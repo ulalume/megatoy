@@ -258,18 +258,12 @@ void validate_next_file() {
   }
 
   const auto relative = request.staged_files[request.validation_index++];
+  // A patch's metadata goes in as it is, unvalidated.
   if (import_pipeline::is_patch_metadata(relative)) {
     request.metadata_files.push_back(relative);
-    request.current_files.store(request.validation_index,
-                                std::memory_order_relaxed);
-    if (request.validation_index >= request.staged_files.size()) {
-      finish_validation();
-    }
-    return;
-  }
-  const auto result =
-      import_pipeline::validate_file(request.staging_path / relative);
-  if (result.valid) {
+  } else if (const auto result = import_pipeline::validate_file(
+                 request.staging_path / relative);
+             result.valid) {
     request.validated_files.push_back(relative);
     if (result.warmed_container) {
       request.warmed_containers.emplace_back(relative, result.warmed_container);

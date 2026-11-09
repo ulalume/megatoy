@@ -261,7 +261,8 @@ bool is_patch_metadata(const std::filesystem::path &relative) {
     return false;
   }
   return std::any_of(relative.begin(), relative.end(), [](const auto &part) {
-    return part == patches::sidecar::kDirectory || part == ".megatoy";
+    return part == patches::sidecar::kDirectory ||
+           part == patches::sidecar::kLegacyDirectory;
   });
 }
 
