@@ -89,8 +89,8 @@ void draw_tab_bar(ImDrawList *draw_list, const ImGuiDockNode &node,
     const float left = tab_left(bar, tab);
     draw_list->AddRectFilled(
         ImVec2(left, top),
-        ImVec2(left + tab.Width, shown ? shown_bottom : bottom), color,
-        style.TabRounding,
+        ImVec2(left + tab.Width, shown || button ? shown_bottom : bottom),
+        color, style.TabRounding,
         shown ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll);
   }
   draw_list->PopClipRect();
@@ -167,7 +167,10 @@ void finish_tab_bars() {
           const float left = tab_left(bar, tab);
           if (vert.pos.x >= left - 1.0f &&
               vert.pos.x <= left + tab.Width + 1.0f) {
-            vert.pos.y += shift;
+            // A button's icon is set in the middle of its own fill.
+            if ((tab.Flags & ImGuiTabItemFlags_Button) == 0) {
+              vert.pos.y += shift;
+            }
             break;
           }
         }

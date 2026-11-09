@@ -3,6 +3,7 @@
 #include "gui/app_window.hpp"
 #include "gui/components/centred_glyph.hpp"
 
+#include <cmath>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <optional>
@@ -31,8 +32,9 @@ inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
   if (node == nullptr || !ImGui::DockNodeBeginAmendTabBar(node)) {
     return std::nullopt;
   }
-  // As wide as the tabs beside it are tall, its fill drawn with theirs.
-  const float width = unshown_tab_height();
+  // Half again as wide as the tabs beside it are tall, its fill drawn with
+  // theirs.
+  const float width = std::round(unshown_tab_height() * 1.5f);
   push_window_tab_padding();
   push_clear_tab_bar_colors();
   ImGui::SetNextItemWidth(width);
@@ -40,7 +42,13 @@ inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
                        ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
   ImGui::PopStyleColor(kClearTabBarColorCount);
   ImGui::PopStyleVar();
-  draw_centred_glyph(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+  // The icon in the middle of the fill, which is as tall as the shown tab's.
+  const ImRect &bar = node->TabBar->BarRect;
+  draw_centred_glyph(
+      icon,
+      ImVec2(ImGui::GetItemRectMin().x, bar.Min.y + scale::px(kTabRoomAbove)),
+      ImVec2(ImGui::GetItemRectMax().x,
+             bar.Max.y - ImGui::GetStyle().TabBarBorderSize));
   FoldedTabButton button;
   button.hovered = ImGui::IsItemHovered();
   button.under_pointer =
