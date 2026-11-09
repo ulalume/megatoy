@@ -312,7 +312,7 @@ void GuiManager::end_frame() {
     ui::save_web_layout_ini();
   }
 
-  ui::draw_tab_bar_lines();
+  ui::draw_tab_bars();
 
   // Rendering
   ImGui::Render();

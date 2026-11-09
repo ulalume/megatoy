@@ -82,9 +82,6 @@ enum class MegatoyCol : int {
   /// the focus and in the others.
   TabBarLine,
   TabBarLineDimmed,
-  /// A line along the top of the tab under the pointer, as the shown tab's
-  /// TabSelectedOverline; none by default.
-  TabHoveredOverline,
   COUNT
 };
 

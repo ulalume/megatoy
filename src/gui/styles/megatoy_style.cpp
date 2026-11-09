@@ -70,7 +70,6 @@ void derive_widget_colors() {
   set(MegatoyCol::SectionHeaderActive, imgui[ImGuiCol_HeaderActive]);
   set(MegatoyCol::TabBarLine, imgui[ImGuiCol_TabSelected]);
   set(MegatoyCol::TabBarLineDimmed, imgui[ImGuiCol_TabDimmedSelected]);
-  set(MegatoyCol::TabHoveredOverline, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 }
 
 const ImVec4 &color(MegatoyCol col) {

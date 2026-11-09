@@ -7,11 +7,11 @@ namespace ui {
 void keep_tab_bar_line_lit();
 
 /**
- * Draws the line under each dock node's tabs in its own colour, over
- * ImGui's, which takes the shown tab's, and a line along the top of the tab
- * under the pointer, which ImGui has none for. Called once the windows are
- * drawn.
+ * Finishes each dock node's tabs, once the windows are drawn: starts the
+ * shown tab a little below the others' tops, and draws the line under the
+ * tabs in its own colour over ImGui's, which takes the shown tab's, or in
+ * the shown tab's while it is pointed at.
  */
-void draw_tab_bar_lines();
+void draw_tab_bars();
 
 } // namespace ui

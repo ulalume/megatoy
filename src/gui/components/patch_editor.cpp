@@ -644,9 +644,6 @@ void render_document_window(PatchEditorContext &context,
   if (was_active) {
     ImGui::PushStyleColor(ImGuiCol_TabDimmedSelected,
                           ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
-    ImGui::PushStyleColor(
-        ImGuiCol_TabDimmedSelectedOverline,
-        ImGui::GetStyleColorVec4(ImGuiCol_TabSelectedOverline));
   }
   ImGui::PushStyleColor(ImGuiCol_WindowBg,
                         styles::color(styles::MegatoyCol::PatchEditorBg));
@@ -656,7 +653,7 @@ void render_document_window(PatchEditorContext &context,
       title.c_str(), session.can_close_document(id) ? &open : nullptr,
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
           (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
-  ImGui::PopStyleColor(was_active ? 3 : 1);
+  ImGui::PopStyleColor(was_active ? 2 : 1);
   if (was_active) {
     keep_tab_bar_line_lit();
   }

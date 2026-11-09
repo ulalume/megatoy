@@ -43,6 +43,9 @@ void apply_style(ThemeId id, float scale) {
   style.FramePadding = ImVec2(4, 6);
   style.DockingSeparatorSize = 8;
   style.TabBarBorderSize = 2;
+  style.TabRounding = 10;
+  // Tabs are told apart by their fill alone.
+  style.TabBarOverlineSize = 0;
 
   apply_theme(id);
 

@@ -1,6 +1,7 @@
 #include "gui/tab_bar_lines.hpp"
 
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -8,6 +9,10 @@
 
 namespace ui {
 namespace {
+
+/// How far below the other tabs' tops the shown tab's starts, before the
+/// interface's scale.
+constexpr float kShownTabDrop = 2.0f;
 
 std::vector<ImGuiID> &lit_nodes() {
   static std::vector<ImGuiID> nodes;
@@ -23,36 +28,53 @@ bool is_lit(ImGuiID node) {
   return false;
 }
 
-/// The line along the top of `bar`'s tab under the pointer, drawn where
-/// ImGui draws the shown tab's.
-void draw_hovered_overline(const ImGuiTabBar &bar, ImDrawList *draw_list) {
+/// `bar`'s shown tab, or nothing.
+const ImGuiTabItem *shown_tab(const ImGuiTabBar &bar) {
+  for (const ImGuiTabItem &tab : bar.Tabs) {
+    if (tab.ID != 0 && tab.ID == bar.VisibleTabId) {
+      return &tab;
+    }
+  }
+  return nullptr;
+}
+
+bool is_pointed_at(const ImGuiTabItem &tab) {
   const ImGuiContext &g = *GImGui;
-  const ImU32 color = styles::color_u32(styles::MegatoyCol::TabHoveredOverline);
-  if ((color & IM_COL32_A_MASK) == 0 || g.Style.TabBarOverlineSize <= 0.0f) {
+  return g.HoveredId == tab.ID || g.ActiveId == tab.ID;
+}
+
+/**
+ * Starts the fill of `bar`'s shown tab kShownTabDrop lower, its bottom where
+ * it was: ImGui draws it as it draws the others, so its vertices are found
+ * by the colours ImGui fills a shown tab with, inside the tab, and moved.
+ * The label, drawn in other colours, stays.
+ */
+void drop_shown_tab(const ImGuiTabBar &bar, const ImGuiTabItem &tab,
+                    ImDrawList *draw_list) {
+  const ImGuiContext &g = *GImGui;
+  const float left = bar.BarRect.Min.x + tab.Offset - bar.ScrollingAnim;
+  const float right = left + tab.Width;
+  const float top = bar.BarRect.Min.y;
+  const float bottom = bar.BarRect.Max.y - g.Style.TabBarBorderSize;
+  const float height = bottom - top;
+  const float drop = ui::scale::px(kShownTabDrop);
+  if (height <= drop) {
     return;
   }
-  for (const ImGuiTabItem &tab : bar.Tabs) {
-    if (tab.ID == 0 || (g.HoveredId != tab.ID && g.ActiveId != tab.ID)) {
+  constexpr ImU32 kRgb = ~IM_COL32_A_MASK;
+  const ImU32 fills[] = {ImGui::GetColorU32(ImGuiCol_TabSelected) & kRgb,
+                         ImGui::GetColorU32(ImGuiCol_TabDimmedSelected) & kRgb,
+                         ImGui::GetColorU32(ImGuiCol_TabHovered) & kRgb};
+  const float scale = (height - drop) / height;
+  for (ImDrawVert &vert : draw_list->VtxBuffer) {
+    if (vert.pos.x < left - 1.0f || vert.pos.x > right + 1.0f ||
+        vert.pos.y < top - 1.0f || vert.pos.y > bottom) {
       continue;
     }
-    const float left = bar.BarRect.Min.x + tab.Offset - bar.ScrollingAnim;
-    const float top = bar.BarRect.Min.y + 1.0f * g.CurrentDpiScale;
-    const ImVec2 tl(left, top);
-    const ImVec2 tr(left + tab.Width, top);
-    draw_list->PushClipRect(bar.BarRect.Min, bar.BarRect.Max, true);
-    if (g.Style.TabRounding > 0.0f) {
-      const float rounding = g.Style.TabRounding;
-      draw_list->PathArcToFast(ImVec2(tl.x + rounding, tl.y + rounding),
-                               rounding, 7, 9);
-      draw_list->PathArcToFast(ImVec2(tr.x - rounding, tr.y + rounding),
-                               rounding, 9, 11);
-      draw_list->PathStroke(color, 0, g.Style.TabBarOverlineSize);
-    } else {
-      draw_list->AddLine(ImVec2(tl.x - 0.5f, tl.y - 0.5f),
-                         ImVec2(tr.x - 0.5f, tr.y - 0.5f), color,
-                         g.Style.TabBarOverlineSize);
+    const ImU32 rgb = vert.col & kRgb;
+    if (rgb == fills[0] || rgb == fills[1] || rgb == fills[2]) {
+      vert.pos.y = bottom - (bottom - vert.pos.y) * scale;
     }
-    draw_list->PopClipRect();
   }
 }
 
@@ -64,34 +86,41 @@ void keep_tab_bar_line_lit() {
   }
 }
 
-void draw_tab_bar_lines() {
+void draw_tab_bars() {
   const ImGuiContext &g = *GImGui;
   const float thickness = g.Style.TabBarBorderSize;
-  if (thickness > 0.0f) {
-    for (int i = 0; i < g.DockContext.Nodes.Data.Size; ++i) {
-      const auto *node =
-          static_cast<ImGuiDockNode *>(g.DockContext.Nodes.Data[i].val_p);
-      if (node == nullptr || node->TabBar == nullptr ||
-          node->HostWindow == nullptr || !node->IsVisible ||
-          node->IsHiddenTabBar() || node->IsNoTabBar() ||
-          node->LastFrameActive != g.FrameCount) {
-        continue;
-      }
-      const ImGuiTabBar &bar = *node->TabBar;
-      const bool focused =
-          (bar.Flags & ImGuiTabBarFlags_IsFocused) != 0 || is_lit(node->ID);
-      const float y = bar.BarRect.Max.y;
-      ImDrawList *draw_list = node->HostWindow->DrawList;
-      draw_list->PushClipRect(node->Pos, ImVec2(node->Pos.x + node->Size.x,
-                                                node->Pos.y + node->Size.y));
-      draw_list->AddRectFilled(
-          ImVec2(bar.SeparatorMinX, y - thickness),
-          ImVec2(bar.SeparatorMaxX, y),
-          styles::color_u32(focused ? styles::MegatoyCol::TabBarLine
-                                    : styles::MegatoyCol::TabBarLineDimmed));
-      draw_list->PopClipRect();
-      draw_hovered_overline(bar, draw_list);
+  for (int i = 0; i < g.DockContext.Nodes.Data.Size; ++i) {
+    const auto *node =
+        static_cast<ImGuiDockNode *>(g.DockContext.Nodes.Data[i].val_p);
+    if (node == nullptr || node->TabBar == nullptr ||
+        node->HostWindow == nullptr || !node->IsVisible ||
+        node->IsHiddenTabBar() || node->IsNoTabBar() ||
+        node->LastFrameActive != g.FrameCount) {
+      continue;
     }
+    const ImGuiTabBar &bar = *node->TabBar;
+    ImDrawList *draw_list = node->HostWindow->DrawList;
+    const ImGuiTabItem *shown = shown_tab(bar);
+    if (shown != nullptr) {
+      drop_shown_tab(bar, *shown, draw_list);
+    }
+    if (thickness <= 0.0f) {
+      continue;
+    }
+    // The line takes the shown tab's colour while it is pointed at.
+    const bool focused =
+        (bar.Flags & ImGuiTabBarFlags_IsFocused) != 0 || is_lit(node->ID);
+    const ImU32 color =
+        shown != nullptr && is_pointed_at(*shown)
+            ? ImGui::GetColorU32(ImGuiCol_TabHovered)
+            : styles::color_u32(focused ? styles::MegatoyCol::TabBarLine
+                                        : styles::MegatoyCol::TabBarLineDimmed);
+    const float y = bar.BarRect.Max.y;
+    draw_list->PushClipRect(node->Pos, ImVec2(node->Pos.x + node->Size.x,
+                                              node->Pos.y + node->Size.y));
+    draw_list->AddRectFilled(ImVec2(bar.SeparatorMinX, y - thickness),
+                             ImVec2(bar.SeparatorMaxX, y), color);
+    draw_list->PopClipRect();
   }
   lit_nodes().clear();
 }
