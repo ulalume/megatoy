@@ -341,7 +341,8 @@ void render_waveform(const char *title, WaveformContext &context) {
                        std::max(32.0f, available.y));
 
   const ImU32 background = styles::color_u32(styles::MegatoyCol::WaveformBg);
-  const ImU32 border = styles::color_u32(styles::MegatoyCol::WaveformBorder);
+  // No frame: the graphs stand on their backgrounds alone.
+  const ImU32 border = 0;
   const Panel scope_panel =
       begin_panel(panel_size, "##scope", background, border);
   draw_scope(scope_panel, left, right, mono, clipped);
