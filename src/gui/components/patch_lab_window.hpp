@@ -90,7 +90,6 @@ struct PatchLabState {
   std::uint64_t entries_revision = 0;
   std::string mix_error;
 
-
   // Mutate
   MutateSettings mutate;
 

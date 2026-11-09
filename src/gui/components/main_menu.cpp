@@ -296,7 +296,7 @@ struct AppMenuLook {
   float icon = 0.0f;
   float gap = 0.0f;
   ImVec2 logo;
-  float width() const { return icon + (logo.x > 0.0f ? gap + logo.x : 0.0f); }
+  float width() const { return icon + gap + logo.x; }
 };
 
 AppMenuLook app_menu_look(bool logo) {
@@ -458,8 +458,7 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const float full = std::max(least, ui::scale::px(kLoadGraphWidth));
   // The logo is the first to go as the bar narrows: it stands only while
   // all the rest fits in full.
-  if (bar_logo().texture != ImTextureID{} &&
-      room(BarCentreFit::Full, full, true) >= 0.0f) {
+  if (room(BarCentreFit::Full, full, true) >= 0.0f) {
     return {full, BarCentreFit::Full, false, true};
   }
   const float graph_room = full + room(BarCentreFit::Full, full);

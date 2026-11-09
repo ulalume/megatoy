@@ -167,9 +167,12 @@ void close_empty_main_group() {
       central->Windows.Size > 0 || GImGui->MovingWindow != nullptr) {
     return;
   }
-  const ImGuiDockNode *region = main_region();
   ImGuiDockNode *parent = central->ParentNode;
-  if (region == nullptr || parent == nullptr || !is_within(parent, region)) {
+  if (parent == nullptr) {
+    return;
+  }
+  const ImGuiDockNode *region = main_region();
+  if (region == nullptr || !is_within(parent, region)) {
     return;
   }
   // ImGui keeps the central group even when empty, and closes any other

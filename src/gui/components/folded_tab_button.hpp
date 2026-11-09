@@ -44,13 +44,9 @@ inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
   ImGui::PopStyleVar();
   // The icon in the middle of the fill, which stops as far above the line
   // as the tabs not shown do.
-  const ImRect &bar = node->TabBar->BarRect;
-  draw_centred_glyph(
-      icon,
-      ImVec2(ImGui::GetItemRectMin().x, bar.Min.y + scale::px(kTabRoomAbove)),
-      ImVec2(ImGui::GetItemRectMax().x, bar.Max.y -
-                                            ImGui::GetStyle().TabBarBorderSize -
-                                            scale::px(kTabRoomBelow)));
+  const TabSpan span = unshown_tab_span(node->TabBar->BarRect);
+  draw_centred_glyph(icon, ImVec2(ImGui::GetItemRectMin().x, span.top),
+                     ImVec2(ImGui::GetItemRectMax().x, span.bottom));
   FoldedTabButton button;
   button.hovered = ImGui::IsItemHovered();
   button.under_pointer =

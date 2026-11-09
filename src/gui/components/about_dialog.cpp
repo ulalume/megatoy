@@ -1,11 +1,11 @@
 #include "about_dialog.hpp"
-#include "gui/image/app_icon.hpp"
 
 #include "changelog_dialog.hpp"
 #include "common.hpp"
 #include "menu_rows.hpp"
 #include "modal.hpp"
 
+#include "gui/image/app_icon.hpp"
 #include "gui/image/resource_manager.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
@@ -251,11 +251,10 @@ void render_update_status(const AboutModalState &state) {
   }
 }
 
-// The header's pictures are stored at three times their drawn size, to stay
-// sharp at up to three device pixels per pixel.
-
 void render_header() {
   const ImVec4 muted = styles::color(styles::MegatoyCol::TextMuted);
+  // Stored at three times their drawn size, to stay sharp at up to three
+  // device pixels per pixel.
   static const Picture icon = load_picture("images/app_icon_large.png");
   static const Picture logo = load_picture("images/text_logo.png");
 

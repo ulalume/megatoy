@@ -3,7 +3,8 @@
 #include "gui/ui_scale.hpp"
 
 #include <imgui.h>
-#include <initializer_list>
+#include <imgui_internal.h>
+#include <iterator>
 
 namespace ui {
 
@@ -54,8 +55,28 @@ inline float unshown_tab_height() {
   return tab_height() - scale::px(kTabRoomBelow);
 }
 
+/// Where the tabs not shown stand in a dock's tab bar `bar`, from the room
+/// above them down to kTabRoomBelow above the line; the shown tab runs
+/// kTabRoomBelow further, to the line.
+struct TabSpan {
+  float top;
+  float bottom;
+};
+inline TabSpan unshown_tab_span(const ImRect &bar) {
+  return {bar.Min.y + scale::px(kTabRoomAbove),
+          bar.Max.y - ImGui::GetStyle().TabBarBorderSize -
+              scale::px(kTabRoomBelow)};
+}
+
+/// What ImGui draws a dock's tab bar with, which megatoy draws itself.
+inline constexpr ImGuiCol kClearTabBarColors[] = {
+    ImGuiCol_Tab,           ImGuiCol_TabHovered,        ImGuiCol_TabSelected,
+    ImGuiCol_TabDimmed,     ImGuiCol_TabDimmedSelected, ImGuiCol_TitleBg,
+    ImGuiCol_TitleBgActive, ImGuiCol_TitleBgCollapsed};
+
 /// The number of colours push_clear_tab_bar_colors() pushes.
-inline constexpr int kClearTabBarColorCount = 8;
+inline constexpr int kClearTabBarColorCount =
+    static_cast<int>(std::size(kClearTabBarColors));
 
 /**
  * Makes ImGui's own drawing of a dock's tab bar clear while pushed: its
@@ -65,12 +86,8 @@ inline constexpr int kClearTabBarColorCount = 8;
  * with this pushed. Popped with ImGui::PopStyleColor(kClearTabBarColorCount).
  */
 inline void push_clear_tab_bar_colors() {
-  const ImVec4 clear(0.0f, 0.0f, 0.0f, 0.0f);
-  for (const ImGuiCol col :
-       {ImGuiCol_Tab, ImGuiCol_TabHovered, ImGuiCol_TabSelected,
-        ImGuiCol_TabDimmed, ImGuiCol_TabDimmedSelected, ImGuiCol_TitleBg,
-        ImGuiCol_TitleBgActive, ImGuiCol_TitleBgCollapsed}) {
-    ImGui::PushStyleColor(col, clear);
+  for (const ImGuiCol col : kClearTabBarColors) {
+    ImGui::PushStyleColor(col, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
   }
 }
 

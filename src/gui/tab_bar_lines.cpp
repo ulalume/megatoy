@@ -64,9 +64,8 @@ void draw_tab_bar(ImDrawList *draw_list, const ImGuiDockNode &node,
       ImGui::GetColorU32(focused ? ImGuiCol_TitleBgActive : ImGuiCol_TitleBg));
 
   const float line = style.TabBarBorderSize;
-  const float top = bar.BarRect.Min.y + scale::px(kTabRoomAbove);
+  const auto [top, bottom] = unshown_tab_span(bar.BarRect);
   const float shown_bottom = bar.BarRect.Max.y - line;
-  const float bottom = shown_bottom - scale::px(kTabRoomBelow);
   draw_list->PushClipRect(bar.BarRect.Min, bar.BarRect.Max, true);
   for (const ImGuiTabItem &tab : bar.Tabs) {
     if (tab.Width <= 0.0f) {

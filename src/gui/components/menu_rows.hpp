@@ -61,12 +61,13 @@ inline float list_popup_height(int items) {
          list_row_spacing() + ImGui::GetStyle().WindowPadding.y * 2.0f;
 }
 
-/// BeginCombo with its list spaced like list rows, eight rows tall before it
-/// scrolls. Closed by end_combo when it returns true.
+/// BeginCombo with its list spaced like list rows, `max_height` tall before
+/// it scrolls: eight rows when 0. Closed by end_combo when it returns true.
 inline bool begin_combo(const char *label, const char *preview,
-                        ImGuiComboFlags flags = 0) {
-  ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
-                                      ImVec2(FLT_MAX, list_popup_height(8)));
+                        ImGuiComboFlags flags = 0, float max_height = 0.0f) {
+  ImGui::SetNextWindowSizeConstraints(
+      ImVec2(0.0f, 0.0f),
+      ImVec2(FLT_MAX, max_height > 0.0f ? max_height : list_popup_height(8)));
   if (!ImGui::BeginCombo(label, preview, flags)) {
     return false;
   }

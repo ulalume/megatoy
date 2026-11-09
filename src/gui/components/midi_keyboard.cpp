@@ -51,9 +51,7 @@ bool scale_rows(std::size_t first, std::size_t last, Scale &scale,
       ImGui::SeparatorText(kScaleGroups[info.group]);
     }
     group = info.group;
-    const std::string label =
-        info.alias != nullptr ? std::string(info.name) + " (" + info.alias + ")"
-                              : std::string(info.name);
+    const std::string label = scale_label(info);
     const bool selected = info.scale == scale;
     ImGui::PushID(static_cast<int>(i));
     if (ImGui::Selectable(label.c_str(), selected, 0, ImVec2(width, 0.0f))) {
@@ -75,21 +73,14 @@ bool scale_rows(std::size_t first, std::size_t last, Scale &scale,
  */
 bool scale_combo(const char *id, Scale &scale) {
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
-  ImGui::SetNextWindowSizeConstraints(
-      ImVec2(ImGui::CalcItemWidth(), 0.0f),
-      ImVec2(FLT_MAX, viewport->WorkSize.y * 0.9f));
-  if (!ImGui::BeginCombo(id, scale_name(scale))) {
+  if (!begin_combo(id, scale_name(scale), 0, viewport->WorkSize.y * 0.9f)) {
     return false;
   }
-  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
   const auto &infos = scale_infos();
   // Every row as wide as the widest name.
   float width = 0.0f;
   for (const ScaleInfo &info : infos) {
-    const std::string label =
-        info.alias != nullptr ? std::string(info.name) + " (" + info.alias + ")"
-                              : std::string(info.name);
-    width = std::max(width, ImGui::CalcTextSize(label.c_str()).x);
+    width = std::max(width, ImGui::CalcTextSize(scale_label(info).c_str()).x);
   }
   const ImGuiStyle &style = ImGui::GetStyle();
   const float column = width + style.ItemSpacing.x;
@@ -129,8 +120,7 @@ bool scale_combo(const char *id, Scale &scale) {
     }
     ImGui::PopStyleVar();
   }
-  ImGui::PopStyleVar();
-  ImGui::EndCombo();
+  end_combo();
   return picked;
 }
 
@@ -482,10 +472,10 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   // The octave buttons and the slider take the rest of the row, a pixel
   // apart, or a row of their own when too little is left.
   const float octave_gap = ui::scale::px(1.0f);
-  const float octave_button = ImGui::GetFrameHeight();
+  const float octave_button_width = ImGui::GetFrameHeight();
   ImGui::SameLine();
   if (ImGui::GetContentRegionAvail().x <
-      (octave_button + octave_gap) * 2.0f + ui::scale::px(120.0f)) {
+      (octave_button_width + octave_gap) * 2.0f + ui::scale::px(120.0f)) {
     ImGui::NewLine();
   }
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
@@ -495,32 +485,26 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     refresh_state(context.state, input, typing_layout, custom_layout);
   };
   // Each button names the key that does the same.
-  const auto key_label = [](ImGuiKey key) {
-    if (key == ImGuiKey_None) {
-      return std::string("Unassigned");
+  const auto octave_button = [&](const char *id, ImGuiDir dir, int step,
+                                 const char *name, ImGuiKey key) {
+    const int to = current_key_octave + step;
+    ImGui::BeginDisabled(to < 0 || to > 7);
+    if (ImGui::ArrowButton(id, dir)) {
+      set_typing_octave(to);
     }
-    std::string label = short_key_name(key);
-    if (label.empty() || label == "??") {
-      const char *fallback = ImGui::GetKeyName(key);
-      label = (fallback && fallback[0] != '\0') ? fallback : "Unknown";
+    ImGui::EndDisabled();
+    if (ImGui::BeginItemTooltip()) {
+      ImGui::Text("%s: %s", name,
+                  key == ImGuiKey_None ? "Unassigned"
+                                       : short_key_name(key).c_str());
+      ImGui::EndTooltip();
     }
-    return label;
+    ImGui::SameLine(0.0f, octave_gap);
   };
-  ImGui::BeginDisabled(current_key_octave <= 0);
-  if (ImGui::ArrowButton("##octave_down", ImGuiDir_Left)) {
-    set_typing_octave(current_key_octave - 1);
-  }
-  ImGui::EndDisabled();
-  ImGui::SetItemTooltip("Octave Down: %s",
-                        key_label(octave_keys.first).c_str());
-  ImGui::SameLine(0.0f, octave_gap);
-  ImGui::BeginDisabled(current_key_octave >= 7);
-  if (ImGui::ArrowButton("##octave_up", ImGuiDir_Right)) {
-    set_typing_octave(current_key_octave + 1);
-  }
-  ImGui::EndDisabled();
-  ImGui::SetItemTooltip("Octave Up: %s", key_label(octave_keys.second).c_str());
-  ImGui::SameLine(0.0f, octave_gap);
+  octave_button("##octave_down", ImGuiDir_Left, -1, "Octave Down",
+                octave_keys.first);
+  octave_button("##octave_up", ImGuiDir_Right, 1, "Octave Up",
+                octave_keys.second);
   current_key_octave = static_cast<int>(input.keyboard_typing_octave);
   ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
   if (ImGui::SliderInt("##Typing", &current_key_octave, 0, 7,
@@ -852,8 +836,8 @@ void render_scale_play(MidiKeyboardContext &context, BarCentreFit fit,
   ImGui::SetCursorPos(ImVec2(x, row_y));
   ImGui::BeginDisabled(!playing && !can_play_scale(context));
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, bar_item_spacing());
-  if (ImGui::Selectable(playing ? stop : play, false,
-                        ImGuiSelectableFlags_None, ImVec2(width, 0.0f))) {
+  if (ImGui::Selectable(playing ? stop : play, false, ImGuiSelectableFlags_None,
+                        ImVec2(width, 0.0f))) {
     if (playing) {
       stop_playback(context);
     } else {

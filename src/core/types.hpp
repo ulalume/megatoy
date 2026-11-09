@@ -246,6 +246,13 @@ inline const ScaleInfo &scale_info(Scale scale) {
 
 inline const char *scale_name(Scale scale) { return scale_info(scale).name; }
 
+/// How a list names `info`: its name, and its other name after it.
+inline std::string scale_label(const ScaleInfo &info) {
+  return info.alias != nullptr
+             ? std::string(info.name) + " (" + info.alias + ")"
+             : std::string(info.name);
+}
+
 inline std::vector<Key> keys_from_scale_and_key(Scale scale, Key key) {
   // Chromatic is every key whatever the selected one, and so is a value
   // outside the enum.

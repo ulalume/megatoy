@@ -132,7 +132,7 @@ void fit_footer_to_width() {
   ImGui::MarkIniSettingsDirty();
 }
 
-void fit_footer_to_waveform(bool waveform_shown) {
+void fit_footer_to_waveform(bool now) {
   // Whether the waveform was wanted last frame; its height when last laid
   // out, and the footer and frame height it was measured in.
   static std::optional<bool> shown;
@@ -161,9 +161,8 @@ void fit_footer_to_waveform(bool waveform_shown) {
                        frame->SplitAxis == ImGuiAxis_Y &&
                        frame->ChildNodes[1] == footer;
 
-  // Read from the preference, so the footer changes in the frame the
+  // `now` is the preference, so the footer changes in the frame the
   // waveform first goes or comes, before the dockspace moves anything.
-  const bool now = waveform_shown;
   const bool changed = shown.has_value() && *shown != now;
   shown = now;
   const float separator = GImGui->Style.DockingSeparatorSize;
