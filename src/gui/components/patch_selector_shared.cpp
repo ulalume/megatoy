@@ -191,7 +191,7 @@ void render_star_menu(const ImRect &box, bool typing, std::string &query,
   // Beside the box, level with it, so the list below stays in sight; below
   // it where the screen has no room to its right.
   const ImGuiStyle &style = ImGui::GetStyle();
-  const float width = star_rating_width() + style.WindowPadding.x * 2.0f;
+  const float width = star_rating_width();
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   const float right = box.Max.x + style.ItemSpacing.x;
   if (right + width <= viewport->WorkPos.x + viewport->WorkSize.x) {
@@ -204,13 +204,15 @@ void render_star_menu(const ImRect &box, bool typing, std::string &query,
                         ImGui::GetStyleColorVec4(ImGuiCol_PopupBg));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, style.PopupRounding);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.PopupBorderSize);
+  // Nothing around the stars: all of the menu is the stars' row.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("##star_search", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                    ImGuiWindowFlags_NoSavedSettings |
                    ImGuiWindowFlags_NoFocusOnAppearing |
                    ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking |
                    ImGuiWindowFlags_AlwaysAutoResize);
-  ImGui::PopStyleVar(2);
+  ImGui::PopStyleVar(3);
   ImGui::PopStyleColor();
   ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
