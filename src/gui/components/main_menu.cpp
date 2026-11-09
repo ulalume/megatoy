@@ -283,26 +283,70 @@ bool begin_bar_menu(const char *label) {
   return open;
 }
 
-bool begin_app_menu() {
-  const ImTextureID icon = app_icon();
-  if (icon == ImTextureID{}) {
-    return begin_bar_menu("megatoy");
+/// The text logo beside the app's icon, a bar item's height.
+constexpr float kBarLogoHeight = 20.0f;
+
+const Picture &bar_logo() {
+  static const Picture logo = load_picture("images/text_logo_small.png");
+  return logo;
+}
+
+/// The app menu's icon, and the text logo beside it with `logo`.
+struct AppMenuLook {
+  float icon = 0.0f;
+  float gap = 0.0f;
+  ImVec2 logo;
+  float width() const { return icon + (logo.x > 0.0f ? gap + logo.x : 0.0f); }
+};
+
+AppMenuLook app_menu_look(bool logo) {
+  AppMenuLook look;
+  look.icon = ImGui::GetTextLineHeight() + ui::scale::px(10.0f);
+  const Picture &picture = bar_logo();
+  if (logo && picture.texture != ImTextureID{} && picture.size.y > 0.0f) {
+    const float height = ui::scale::px(kBarLogoHeight);
+    look.logo = ImVec2(height * picture.size.x / picture.size.y, height);
+    look.gap = ImGui::GetStyle().ItemInnerSpacing.x;
   }
-  const float size = ImGui::GetTextLineHeight() + ui::scale::px(10.0f);
+  return look;
+}
+
+/// The app menu's label: spaces as wide as its icon and logo, which are
+/// drawn over them.
+std::string app_menu_label(bool logo) {
+  if (app_icon() == ImTextureID{}) {
+    return "megatoy";
+  }
   const float space = ImGui::CalcTextSize(" ").x;
-  const std::string label =
-      std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
-      "##megatoy";
+  return std::string(static_cast<std::size_t>(
+                         std::ceil(app_menu_look(logo).width() / space)),
+                     ' ') +
+         "##megatoy";
+}
+
+bool begin_app_menu(bool logo) {
+  const ImTextureID icon = app_icon();
+  const std::string label = app_menu_label(logo);
+  if (icon == ImTextureID{}) {
+    return begin_bar_menu(label.c_str());
+  }
+  const AppMenuLook look = app_menu_look(logo);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const ImVec2 start = ImGui::GetCursorScreenPos();
   const float label_width = ImGui::CalcTextSize(label.c_str(), nullptr, true).x;
   const bool open = begin_bar_menu(label.c_str());
   // A menu bar item's label starts half an item spacing in.
   const float x = start.x + ImGui::GetStyle().ItemSpacing.x * 0.5f +
-                  (label_width - size) * 0.5f;
-  const float y = start.y + (ImGui::GetFrameHeight() - size) * 0.5f;
-  draw_list->AddImage(icon, ImVec2(x, y),
-                      ImVec2(x + size, y + size));
+                  (label_width - look.width()) * 0.5f;
+  const float middle = start.y + ImGui::GetFrameHeight() * 0.5f;
+  draw_list->AddImage(icon, ImVec2(x, middle - look.icon * 0.5f),
+                      ImVec2(x + look.icon, middle + look.icon * 0.5f));
+  if (look.logo.x > 0.0f) {
+    const float logo_x = x + look.icon + look.gap;
+    draw_list->AddImage(
+        bar_logo().texture, ImVec2(logo_x, middle - look.logo.y * 0.5f),
+        ImVec2(logo_x + look.logo.x, middle + look.logo.y * 0.5f));
+  }
   return open;
 }
 
@@ -315,12 +359,14 @@ void panel_menu_item(const char *icon, const char *title, bool &shown) {
 }
 
 /// How much of the bar fits: the load graph's width (0 leaves it out), how
-/// much of the menus and the middle, and whether the LFO menu drops its name
-/// and keeps only On or Off.
+/// much of the menus and the middle, whether the LFO menu drops its name and
+/// keeps only On or Off, and whether the app menu has its text logo.
 struct BarFit {
   float graph_width = 0.0f;
   BarCentreFit centre = BarCentreFit::Full;
   bool lfo_short = false;
+  /// Whether the text logo stands beside the app's icon.
+  bool logo = false;
 };
 
 /// A menu of the bar, named with its icon, or shown as the icon alone.
@@ -381,9 +427,11 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const ImGuiStyle &style = ImGui::GetStyle();
   const float spacing = style.ItemSpacing.x;
   const float width = ImGui::GetWindowWidth();
+  // From the bar's start, the app menu first.
   const float menus_start = ImGui::GetCursorPosX();
-  const auto menus_end = [&](BarCentreFit fit) {
-    return menus_start + bar_menu_advance(kFileMenu.label(fit)) +
+  const auto menus_end = [&](BarCentreFit fit, bool logo = false) {
+    return menus_start + bar_menu_advance(app_menu_label(logo).c_str()) +
+           bar_menu_advance(kFileMenu.label(fit)) +
            bar_menu_advance(kEditMenu.label(fit)) +
            bar_menu_advance(kViewMenu.label(fit));
   };
@@ -391,15 +439,15 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   // centred in the bar, but never over the menus.
   // The LFO menu stands just left of the load area, named in full.
   const float lfo_width = lfo_menu_advance(false);
-  const auto room = [&](BarCentreFit fit, float load_width) {
+  const auto room = [&](BarCentreFit fit, float load_width, bool logo = false) {
     const float right_start =
         width - load_width - style.FramePadding.x * 2.0f - lfo_width;
     if (!context.bar_centre_size) {
-      return right_start - menus_end(fit);
+      return right_start - menus_end(fit, logo);
     }
     const BarCentreSize size = context.bar_centre_size(fit);
-    const float x =
-        std::max(width * 0.5f - size.centred * 0.5f, menus_end(fit) + spacing);
+    const float x = std::max(width * 0.5f - size.centred * 0.5f,
+                             menus_end(fit, logo) + spacing);
     return right_start - spacing - (x + size.total);
   };
 
@@ -408,6 +456,12 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const float reading_width = ImGui::CalcTextSize(reading).x;
   const float least = reading_width + style.FramePadding.x * 2.0f;
   const float full = std::max(least, ui::scale::px(kLoadGraphWidth));
+  // The logo is the first to go as the bar narrows: it stands only while
+  // all the rest fits in full.
+  if (bar_logo().texture != ImTextureID{} &&
+      room(BarCentreFit::Full, full, true) >= 0.0f) {
+    return {full, BarCentreFit::Full, false, true};
+  }
   const float graph_room = full + room(BarCentreFit::Full, full);
   if (graph_room >= full) {
     return {full, BarCentreFit::Full};
@@ -643,7 +697,19 @@ void render_main_menu(MainMenuContext &context) {
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
                       ImVec2(padding.x, padding.y + ui::scale::px(6.0f)));
   if (ImGui::BeginMainMenuBar()) {
-    if (begin_app_menu()) {
+    auto &session = context.patch_session;
+    const auto controls =
+        patches::save_controls(session, session.active_document());
+    const bool is_user_patch = controls.saves_in_place;
+    const bool save_disabled = !controls.save_enabled;
+    const LoadWindow load = load_window(context.audio_load.history(),
+                                        ui::scale::px(kLoadGraphWidth));
+    char reading[32];
+    format_load_reading(
+        reading, sizeof(reading), load,
+        audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
+    const BarFit fit = fit_bar(context, reading);
+    if (begin_app_menu(fit.logo)) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
 
       if (ImGui::MenuItem("About megatoy")) {
@@ -660,18 +726,6 @@ void render_main_menu(MainMenuContext &context) {
       }
       ui::end_menu();
     }
-    auto &session = context.patch_session;
-    const auto controls =
-        patches::save_controls(session, session.active_document());
-    const bool is_user_patch = controls.saves_in_place;
-    const bool save_disabled = !controls.save_enabled;
-    const LoadWindow load = load_window(context.audio_load.history(),
-                                        ui::scale::px(kLoadGraphWidth));
-    char reading[32];
-    format_load_reading(
-        reading, sizeof(reading), load,
-        audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
-    const BarFit fit = fit_bar(context, reading);
     if (begin_bar_menu(kFileMenu.label(fit.centre))) {
       file_menu_items(context, controls);
       ui::end_menu();
