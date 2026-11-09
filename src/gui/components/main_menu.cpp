@@ -675,7 +675,18 @@ void lfo_menu_items(ym2612::PlaybackSettings &playback) {
                                        "48.1 Hz", "72.2 Hz"};
   const float width =
       named_slider_fit_width("Frequency", "48.1 Hz") + ui::scale::px(48.0f);
+  const float left = ImGui::GetCursorScreenPos().x;
   ImGui::Checkbox("LFO Enabled", &playback.lfo_enable);
+  // The rest of its row, out to the slider's right end, switches it too.
+  const ImVec2 box_max = ImGui::GetItemRectMax();
+  const float rest = left + width - box_max.x;
+  if (rest > 0.0f) {
+    const float height = ImGui::GetItemRectSize().y;
+    ImGui::SameLine(0.0f, 0.0f);
+    if (ImGui::InvisibleButton("##lfo_enabled_rest", ImVec2(rest, height))) {
+      playback.lfo_enable = !playback.lfo_enable;
+    }
+  }
   ImGui::BeginDisabled(!playback.lfo_enable);
   int rate = std::clamp<int>(playback.lfo_frequency, 0, 7);
   ImGui::SetNextItemWidth(width);
