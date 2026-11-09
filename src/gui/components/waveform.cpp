@@ -38,6 +38,8 @@ constexpr std::uint64_t kClipHoldFrames = 22050;
 
 // Per-UI-frame release of the spectrum display.
 constexpr float kSpectrumSmoothing = 0.8f;
+/// The room between the two graphs, before the interface's scale.
+constexpr float kPanelGap = 1.0f;
 
 ImU32 with_alpha(ImU32 color, float alpha) {
   ImVec4 value = ImGui::ColorConvertU32ToFloat4(color);
@@ -289,7 +291,11 @@ void render_waveform(const char *title, WaveformContext &context) {
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(420.0f, 240.0f)),
                            ImGuiCond_FirstUseEver);
-  if (!ui::begin_window(title, &ui_prefs.show_waveform)) {
+  // The graphs run to the window's edges.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  const bool visible = ui::begin_window(title, &ui_prefs.show_waveform);
+  ImGui::PopStyleVar();
+  if (!visible) {
     ImGui::End();
     return;
   }
@@ -327,11 +333,11 @@ void render_waveform(const char *title, WaveformContext &context) {
   }
   ImGui::SetCursorScreenPos(origin);
   const bool stacked = available.y > available.x;
-  const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
+  const float gap = ui::scale::px(kPanelGap);
   const ImVec2 panel_size =
       stacked ? ImVec2(std::max(32.0f, available.x),
-                       std::max(32.0f, (available.y - spacing.y) * 0.5f))
-              : ImVec2(std::max(32.0f, (available.x - spacing.x) * 0.5f),
+                       std::max(32.0f, (available.y - gap) * 0.5f))
+              : ImVec2(std::max(32.0f, (available.x - gap) * 0.5f),
                        std::max(32.0f, available.y));
 
   const ImU32 background = styles::color_u32(styles::MegatoyCol::WaveformBg);
@@ -344,8 +350,10 @@ void render_waveform(const char *title, WaveformContext &context) {
                                            : std::vector<ym2612::Note>{}));
   end_panel(scope_panel);
 
-  if (!stacked) {
-    ImGui::SameLine();
+  if (stacked) {
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, scope_panel.max.y + gap));
+  } else {
+    ImGui::SameLine(0.0f, gap);
   }
 
   const Panel spectrum_panel =
