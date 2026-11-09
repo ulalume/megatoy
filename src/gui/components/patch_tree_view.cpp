@@ -11,6 +11,7 @@
 #include "patch_selector_shared.hpp"
 #include "patches/patch_tree_flatten.hpp"
 #include "patches/patch_tree_navigation.hpp"
+#include "platform/platform_config.hpp"
 #include "star_rating.hpp"
 
 #include <algorithm>
@@ -348,6 +349,10 @@ void render_directory_row(PatchSelectorContext &context,
                              ImGui::GetStyle().FrameRounding);
     draw_list->ChannelsMerge();
   }
+  // On the desktop a top folder is a place on disk, named in full.
+  if (heading && !megatoy::platform::is_web()) {
+    ImGui::SetItemTooltip("%s", item.full_path.string().c_str());
+  }
   ImGui::PopStyleVar(2);
   entry_context_menu(context, item,
                      row.depth == 0 &&
@@ -370,12 +375,11 @@ void render_patch_row(PatchSelectorContext &context,
       item.relative_path == context.session.current_patch_selection_path();
 
   // Name and dimmed format label, either of which loads the patch. The
-  // context menu and tooltip attach to whichever was drawn last, so both
-  // are registered after each selectable. The name's selectable spans the
+  // context menu attaches to whichever was drawn last, so it is registered
+  // after each selectable. The name's selectable spans the
   // row, so it alone carries the current patch's highlight.
   const bool name_clicked = patch_name_selectable(item, is_current);
   entry_context_menu(context, item);
-  show_patch_tooltip(context.repository, item);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
 
@@ -386,7 +390,6 @@ void render_patch_row(PatchSelectorContext &context,
       row_selectable(item.format.c_str(), patch_row_height());
   ImGui::PopStyleColor();
   entry_context_menu(context, item);
-  show_patch_tooltip(context.repository, item);
   entry_drag_source(context, item, row.depth);
   handle_row_keys(context, item);
 

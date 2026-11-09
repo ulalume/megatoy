@@ -8,7 +8,6 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_tree_view.hpp"
-#include "patches/instrument_icons.hpp"
 #include "patches/patch_entry_actions.hpp"
 #include "patches/patch_filter.hpp"
 #include "platform/platform_config.hpp"
@@ -22,31 +21,6 @@
 #include <optional>
 
 namespace ui::selector_detail {
-
-void show_patch_tooltip(const patches::PatchRepository &repository,
-                        const patches::PatchEntry &entry) {
-  if (!ImGui::IsItemHovered()) {
-    return;
-  }
-
-  std::string tooltip =
-      "Format: " + entry.format + "\nPath: " +
-      display_preset_path(repository.display_path(entry.relative_path));
-
-  if (entry.metadata) {
-    tooltip +=
-        "\nRating: " + std::to_string(entry.metadata->star_rating) + "/5";
-    if (!entry.metadata->icon.empty()) {
-      tooltip += "\nIcon: " +
-                 patches::instrument_icons::display_name(entry.metadata->icon);
-    }
-    if (!entry.metadata->notes.empty()) {
-      tooltip += "\nNotes: " + entry.metadata->notes;
-    }
-  }
-
-  ImGui::SetTooltip("%s", tooltip.c_str());
-}
 
 bool entry_can_rename(const PatchSelectorContext &context,
                       const patches::PatchEntry &entry) {

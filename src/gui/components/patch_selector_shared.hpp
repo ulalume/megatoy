@@ -14,9 +14,6 @@
 
 namespace ui::selector_detail {
 
-/// Tooltip with format, path and metadata for the last drawn item.
-void show_patch_tooltip(const patches::PatchRepository &repository,
-                        const patches::PatchEntry &entry);
 
 /// Whether the entry offers Rename and Delete, in its menu and by key.
 bool entry_can_rename(const PatchSelectorContext &context,
@@ -29,12 +26,12 @@ void entry_context_menu(PatchSelectorContext &context,
                         const patches::PatchEntry &entry,
                         bool allow_remove_folder = false);
 
-/// The search box and star filter row above the tree.
 /// The entry whose icon the browser's icon picker is to be opened for.
 std::optional<std::string> &icon_picker_target();
 /// The icon picker, a popup opened at the pointer for icon_picker_target().
 void render_icon_picker(PatchSelectorContext &context);
 
+/// The search box above the tree, and its star menu.
 void render_filter_bar(PatchSelectorContext &context);
 
 } // namespace ui::selector_detail
