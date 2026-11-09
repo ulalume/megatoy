@@ -1,4 +1,5 @@
 #include "theme.hpp"
+#include "gui/app_window.hpp"
 #include "imgui_dark.hpp"
 #include "imgui_light.hpp"
 #include "megatoy_dark.hpp"
@@ -42,7 +43,7 @@ void apply_style(ThemeId id, float scale) {
   style.DragDropTargetBorderSize = 1;
   style.FramePadding = ImVec2(4, 6);
   style.DockingSeparatorSize = 8;
-  style.TabBarBorderSize = 2;
+  style.TabBarBorderSize = kTabLineWidth;
   style.TabRounding = 10;
   // Tabs are told apart by their fill alone.
   style.TabBarOverlineSize = 0;

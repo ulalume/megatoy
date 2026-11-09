@@ -114,14 +114,14 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
   }
 
   // The add-folder icon closes the filter row, which is kept clear of it.
-  // Docked, the row stands at the window's top, 4 px short of the editors'
-  // tabs beside it, its contents as far in as the folders' below.
+  // Docked, the row stands at the window's top, as tall as the editors' tabs
+  // beside it, its contents as far in as the folders' below.
   ImGuiWindow *window = ImGui::GetCurrentWindow();
   if (window->DockNode != nullptr) {
     ImGui::SetCursorPosY(0.0f);
   }
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,
-                       window_tab_padding().y - ui::scale::px(2.0f));
+                       (tab_height() - ImGui::GetFontSize()) * 0.5f);
   // The row stands on a band of its own, across the whole window and from
   // a pixel above it, under the menu bar's edge, to kHeaderPadding below the
   // row; the tree starts kHeaderGap below that.

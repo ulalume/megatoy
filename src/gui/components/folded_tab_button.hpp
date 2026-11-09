@@ -31,9 +31,11 @@ inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
   if (node == nullptr || !ImGui::DockNodeBeginAmendTabBar(node)) {
     return std::nullopt;
   }
-  // As tall as the tabs beside it, and as wide as it is tall.
+  // As tall as the tabs beside it, and as wide as they and the line under
+  // them are tall.
+  const float width = tab_height() + scale::px(kTabLineWidth);
   push_window_tab_padding();
-  ImGui::SetNextItemWidth(ImGui::GetFrameHeight() - scale::px(kTabRoomAbove));
+  ImGui::SetNextItemWidth(width);
   ImGui::TabItemButton(id,
                        ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
   ImGui::PopStyleVar();

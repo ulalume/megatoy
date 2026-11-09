@@ -27,6 +27,22 @@ inline void push_window_tab_padding() {
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, window_tab_padding());
 }
 
+/// The line under a dock's tabs, before the interface's scale: the style's
+/// TabBarBorderSize.
+inline constexpr float kTabLineWidth = 2.0f;
+
+/// A dock's tab bar's height, as ImGui lays it out from window_tab_padding().
+/// Read outside push_window_tab_padding(), as the measures below are.
+inline float tab_bar_height() {
+  return ImGui::GetFontSize() + window_tab_padding().y * 2.0f;
+}
+
+/// How tall a dock's tabs are drawn: the bar less the room above them and the
+/// line under them.
+inline float tab_height() {
+  return tab_bar_height() - scale::px(kTabRoomAbove + kTabLineWidth);
+}
+
 /// ImGui::Begin for one of the app's own windows, the ones that dock.
 inline bool begin_window(const char *title, bool *open,
                          ImGuiWindowFlags flags = 0) {
