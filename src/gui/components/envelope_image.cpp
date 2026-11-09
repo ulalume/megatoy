@@ -483,81 +483,6 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
 constexpr float kHandleGrab = 10.5f;
 constexpr float kHandleGap = 2.0f;
 
-/**
- * Moves handles that would overlap along the axis until they stand a gap
- * apart, inside the plot. The attack, decay and sustain handles follow one
- * another in time and keep that order, pushed right and, at the plot's right
- * edge, back left; the release handle, on a line of its own, goes to the
- * nearest place clear of them. Only where a dot is drawn and grabbed moves:
- * a drag reads what the handle stands for, not where it is drawn.
- */
-void spread_handles(ui::envelope::EnvelopeHandles &handles) {
-  auto &items = handles.items;
-  const float least = handles.metrics.radius * 2.0f + ui::scale::px(kHandleGap);
-  const float left = handles.plot.min.x + handles.metrics.radius;
-  const float right = handles.plot.max.x - handles.metrics.radius;
-  // How far apart along the axis two handles have to be at their heights,
-  // or nothing where they cannot meet.
-  const auto apart = [&](const ui::envelope::EnvelopeHandle &a,
-                         const ui::envelope::EnvelopeHandle &b) {
-    const float dy = a.pos.y - b.pos.y;
-    return a.shown && b.shown && std::abs(dy) < least
-               ? std::sqrt(least * least - dy * dy)
-               : 0.0f;
-  };
-
-  std::vector<ui::envelope::EnvelopeHandle *> chain;
-  for (const auto index :
-       {ui::envelope::kAttackHandle, ui::envelope::kDecayHandle,
-        ui::envelope::kSustainHandle}) {
-    if (items[index].shown) {
-      chain.push_back(&items[index]);
-    }
-  }
-  for (std::size_t k = 1; k < chain.size(); ++k) {
-    chain[k]->pos.x = std::max(
-        chain[k]->pos.x, chain[k - 1]->pos.x + apart(*chain[k], *chain[k - 1]));
-  }
-  for (std::size_t k = chain.size(); k-- > 0;) {
-    const float limit =
-        k + 1 < chain.size()
-            ? chain[k + 1]->pos.x - apart(*chain[k], *chain[k + 1])
-            : right;
-    chain[k]->pos.x = std::max(std::min(chain[k]->pos.x, limit), left);
-  }
-
-  auto &release = items[ui::envelope::kReleaseHandle];
-  if (!release.shown) {
-    return;
-  }
-  const auto clear_at = [&](float x) {
-    for (const auto *other : chain) {
-      if (std::abs(x - other->pos.x) < apart(release, *other) - 0.01f) {
-        return false;
-      }
-    }
-    return x >= left && x <= right;
-  };
-  if (clear_at(release.pos.x)) {
-    return;
-  }
-  // Beside each handle it meets, on either side: the nearest clear one.
-  float best = release.pos.x;
-  float best_distance = -1.0f;
-  for (const auto *other : chain) {
-    const float gap = apart(release, *other);
-    for (const float x : {other->pos.x + gap, other->pos.x - gap}) {
-      const float distance = std::abs(x - release.pos.x);
-      if (gap > 0.0f && clear_at(x) &&
-          (best_distance < 0.0f || distance < best_distance)) {
-        best = x;
-        best_distance = distance;
-      }
-    }
-  }
-  release.pos.x = best;
-}
-
 ui::envelope::EnvelopeHandles
 render_envelope_image(const ym2612::OperatorSettings &op,
                       const UIState::EnvelopeState &slider_state, ImVec2 size,
@@ -787,10 +712,9 @@ render_envelope_image(const ym2612::OperatorSettings &op,
       ui::scale::px(kHandleGrab),
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
+      ui::scale::px(kHandleGap),
   };
-  auto handles = ui::envelope::handle_layout(curve, plot, metrics);
-  spread_handles(handles);
-  return handles;
+  return ui::envelope::handle_layout(curve, plot, metrics);
 }
 
 void draw_envelope_handle(const ui::envelope::EnvelopeHandles &handles,
