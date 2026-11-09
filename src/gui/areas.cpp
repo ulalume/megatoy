@@ -130,18 +130,27 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
 
   // A tab being dragged is left alone until it is let go.
   const ImGuiWindow *window = ImGui::FindWindowByName(window_name);
-  if (window == nullptr || !window->WasActive ||
-      GImGui->MovingWindow == window) {
+  if (window == nullptr || GImGui->MovingWindow == window) {
     return;
   }
   const ImGuiDockNode *region = main_region();
   if (region == nullptr) {
     return;
   }
-  const bool floating = window->DockNode == nullptr && window->DockId == 0;
-  const bool outside =
-      window->DockNode != nullptr && !is_within(window->DockNode, region);
-  if (!floating && !outside) {
+  bool misplaced = false;
+  if (window->WasActive) {
+    const bool floating = window->DockNode == nullptr && window->DockId == 0;
+    const bool outside =
+        window->DockNode != nullptr && !is_within(window->DockNode, region);
+    misplaced = floating || outside;
+  } else {
+    // Shown again: the group it was last in may have closed since, which
+    // ImGui would open again on its own where the group stood.
+    const ImGuiDockNode *last = find_node(window->DockId);
+    misplaced =
+        last == nullptr || last->IsSplitNode() || !is_within(last, region);
+  }
+  if (!misplaced) {
     return;
   }
   const ImGuiDockNode *target = find_node(main_dock_id);
