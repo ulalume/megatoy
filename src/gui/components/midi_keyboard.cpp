@@ -32,9 +32,9 @@ constexpr float kMinWhiteKeyWidth = 24.0f;
 constexpr float kBlackKeyWidth = 0.6f;
 constexpr float kBlackKeyHeight = 0.6f;
 
-/// The viewport width from which the scale list stands in two columns,
-/// before the interface's scale.
-constexpr float kTwoColumnScaleListWidth = 640.0f;
+/// The families each column of the scale list starts at, for one to three
+/// columns, so the columns stand about as tall as each other.
+constexpr int kScaleColumnGroups[3][3] = {{-1}, {-1, 3}, {-1, 2, 4}};
 
 /// The scales from `first` to `last` of the list, each family under its
 /// name, as rows `width` wide. Returns whether one was picked into `scale`.
@@ -67,9 +67,9 @@ bool scale_rows(std::size_t first, std::size_t last, Scale &scale,
 }
 
 /**
- * The scale list: Chromatic, then each family under its name. Where the
- * viewport is wide it stands in two columns, the families up to Japanese in
- * the first. Returns whether a scale was picked into `scale`.
+ * The scale list: Chromatic, then each family under its name, in as many
+ * columns as the viewport has room for, up to three. Returns whether a
+ * scale was picked into `scale`.
  */
 bool scale_combo(const char *id, Scale &scale) {
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -89,29 +89,42 @@ bool scale_combo(const char *id, Scale &scale) {
                               : std::string(info.name);
     width = std::max(width, ImGui::CalcTextSize(label.c_str()).x);
   }
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float column = width + style.ItemSpacing.x;
+  const int columns = std::clamp(
+      static_cast<int>((viewport->WorkSize.x - style.WindowPadding.x * 2.0f) /
+                       column),
+      1, 3);
+  // Where each column starts in the list.
+  std::vector<std::size_t> starts;
+  for (int c = 0; c < columns; ++c) {
+    const int group = kScaleColumnGroups[columns - 1][c];
+    const auto at = std::find_if(
+        infos.begin(), infos.end(),
+        [group](const ScaleInfo &info) { return info.group == group; });
+    starts.push_back(static_cast<std::size_t>(at - infos.begin()));
+  }
+  starts.push_back(infos.size());
   bool picked = false;
-  if (viewport->WorkSize.x >= scale::px(kTwoColumnScaleListWidth)) {
-    const auto second =
-        std::find_if(infos.begin(), infos.end(),
-                     [](const ScaleInfo &info) { return info.group == 3; });
-    const auto split = static_cast<std::size_t>(second - infos.begin());
-    ImGui::PushStyleVarX(ImGuiStyleVar_CellPadding,
-                         ImGui::GetStyle().ItemSpacing.x * 0.5f);
-    if (ImGui::BeginTable("##scale_columns", 2,
+  if (columns == 1) {
+    picked = scale_rows(0, infos.size(), scale, width);
+  } else {
+    ImGui::PushStyleVarX(ImGuiStyleVar_CellPadding, style.ItemSpacing.x * 0.5f);
+    if (ImGui::BeginTable("##scale_columns", columns,
                           ImGuiTableFlags_SizingFixedFit)) {
-      ImGui::TableSetupColumn("##first", ImGuiTableColumnFlags_WidthFixed,
-                              width);
-      ImGui::TableSetupColumn("##second", ImGuiTableColumnFlags_WidthFixed,
-                              width);
-      ImGui::TableNextColumn();
-      picked |= scale_rows(0, split, scale, width);
-      ImGui::TableNextColumn();
-      picked |= scale_rows(split, infos.size(), scale, width);
+      for (int c = 0; c < columns; ++c) {
+        ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthFixed,
+                                width);
+      }
+      for (int c = 0; c < columns; ++c) {
+        ImGui::TableNextColumn();
+        picked |=
+            scale_rows(starts[static_cast<std::size_t>(c)],
+                       starts[static_cast<std::size_t>(c) + 1], scale, width);
+      }
       ImGui::EndTable();
     }
     ImGui::PopStyleVar();
-  } else {
-    picked = scale_rows(0, infos.size(), scale, width);
   }
   ImGui::PopStyleVar();
   ImGui::EndCombo();
