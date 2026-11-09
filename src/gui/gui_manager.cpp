@@ -240,7 +240,7 @@ bool GuiManager::get_should_close() const { return !window_ || should_close_; }
 
 void GuiManager::set_should_close(bool value) { should_close_ = value; }
 
-void GuiManager::begin_frame() {
+void GuiManager::begin_frame(bool waveform_shown) {
   if (!initialized_) {
     return;
   }
@@ -258,7 +258,7 @@ void GuiManager::begin_frame() {
                                                                  : 0.0f;
   ui::touch::drag_to_scroll();
   ui::layouts::fit_footer_to_width();
-  ui::layouts::fit_footer_to_waveform();
+  ui::layouts::fit_footer_to_waveform(waveform_shown);
   ui::layouts::fit_sidebar_to_width();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();

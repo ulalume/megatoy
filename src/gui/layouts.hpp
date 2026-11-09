@@ -22,12 +22,10 @@ void fit_footer_to_width();
 /**
  * While the waveform is above the keyboard, hands its height to the patch
  * editor when it is closed and takes it back when it is shown, so the
- * keyboard keeps its own. Called before the dockspace is submitted.
+ * keyboard keeps its own. `waveform_shown` is its preference. Called before
+ * the dockspace is submitted.
  */
-void fit_footer_to_waveform();
-
-/// The waveform's shown preference, for fit_footer_to_waveform to read.
-void track_waveform_shown(const bool *shown);
+void fit_footer_to_waveform(bool waveform_shown);
 
 /**
  * Narrows the patch browser before the patch editor as the window narrows,

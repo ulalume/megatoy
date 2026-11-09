@@ -132,14 +132,7 @@ void fit_footer_to_width() {
   ImGui::MarkIniSettingsDirty();
 }
 
-namespace {
-/// The waveform's shown preference, read before the dockspace is laid out.
-const bool *waveform_shown = nullptr;
-} // namespace
-
-void track_waveform_shown(const bool *shown) { waveform_shown = shown; }
-
-void fit_footer_to_waveform() {
+void fit_footer_to_waveform(bool waveform_shown) {
   // Whether the waveform was wanted last frame; its height when last laid
   // out, and the footer and frame height it was measured in.
   static std::optional<bool> shown;
@@ -170,8 +163,7 @@ void fit_footer_to_waveform() {
 
   // Read from the preference, so the footer changes in the frame the
   // waveform first goes or comes, before the dockspace moves anything.
-  const bool now =
-      waveform_shown != nullptr ? *waveform_shown : node->IsVisible;
+  const bool now = waveform_shown;
   const bool changed = shown.has_value() && *shown != now;
   shown = now;
   const float separator = GImGui->Style.DockingSeparatorSize;

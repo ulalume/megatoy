@@ -5,7 +5,6 @@
 #include "gui/areas.hpp"
 #include "gui/components/folded_tab_button.hpp"
 #include "gui/components/panel.hpp"
-#include "gui/layouts.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -273,7 +272,6 @@ void render_folded_waveform(bool &show_waveform) {
 
 void render_waveform(const char *title, WaveformContext &context) {
   auto &ui_prefs = context.ui_prefs;
-  layouts::track_waveform_shown(&ui_prefs.show_waveform);
   if (!ui_prefs.show_waveform) {
     render_folded_waveform(ui_prefs.show_waveform);
     return;
