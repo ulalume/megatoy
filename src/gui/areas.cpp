@@ -76,6 +76,32 @@ bool is_within(const ImGuiDockNode *node, const ImGuiDockNode *region) {
   return false;
 }
 
+/**
+ * The group whose views move into the central group when a split of the main
+ * area has left it empty: the first group in the part of the tree beside it.
+ * Moved in, they leave that group empty, and ImGui closes it as it closes any
+ * group but the central one. None while the central group has views, or is
+ * not one of a split within the main area.
+ */
+const ImGuiDockNode *group_to_fill_central(const ImGuiDockNode *region) {
+  const ImGuiDockNode *central = central_node();
+  if (central == nullptr || !central->IsLeafNode() ||
+      central->Windows.Size > 0 || central == region) {
+    return nullptr;
+  }
+  const ImGuiDockNode *parent = central->ParentNode;
+  if (parent == nullptr || !is_within(parent, region)) {
+    return nullptr;
+  }
+  const ImGuiDockNode *beside = parent->ChildNodes[0] == central
+                                    ? parent->ChildNodes[1]
+                                    : parent->ChildNodes[0];
+  while (beside != nullptr && beside->IsSplitNode()) {
+    beside = beside->ChildNodes[0];
+  }
+  return beside;
+}
+
 } // namespace
 
 bool is_editor_window(std::string_view window_name) {
@@ -136,6 +162,13 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
   }
   const ImGuiDockNode *region = main_region();
   if (region == nullptr) {
+    return;
+  }
+  // A group of the main area left without views closes: the views of the
+  // group beside it take its place.
+  if (window->DockNode != nullptr &&
+      window->DockNode == group_to_fill_central(region)) {
+    ImGui::SetNextWindowDockID(central_node()->ID, ImGuiCond_Always);
     return;
   }
   const bool floating = window->DockNode == nullptr && window->DockId == 0;
