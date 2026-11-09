@@ -460,7 +460,7 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
   }
   ImGui::EndDisabled();
 
-  ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+  ImGui::SameLine(0, ui::scale::px(1.0f));
   ImGui::SetNextItemWidth(ui::scale::px(150.0f));
   if (scale_combo("##Scale", keyboard_settings.scale)) {
     context.ui_prefs.midi_keyboard_scale =
