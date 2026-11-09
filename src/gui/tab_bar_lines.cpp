@@ -1,5 +1,6 @@
 #include "gui/tab_bar_lines.hpp"
 
+#include "gui/app_window.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 
@@ -44,36 +45,57 @@ bool is_pointed_at(const ImGuiTabItem &tab) {
 }
 
 /**
- * Starts the fill of `bar`'s shown tab kShownTabDrop lower, its bottom where
- * it was: ImGui draws it as it draws the others, so its vertices are found
- * by the colours ImGui fills a shown tab with, inside the tab, and moved.
- * The label, drawn in other colours, stays.
+ * Draws `bar`'s tabs at the bottom of it, kTabRoomAbove short of its top,
+ * the shown one kShownTabDrop shorter still. ImGui draws each tab as tall as
+ * its bar, so the vertices of its fill, found by the colours ImGui fills a
+ * tab with, are pressed down to that height, and its label and icons are
+ * moved down to stay in the middle of it.
  */
-void drop_shown_tab(const ImGuiTabBar &bar, const ImGuiTabItem &tab,
-                    ImDrawList *draw_list) {
+void fit_tabs(const ImGuiTabBar &bar, ImDrawList *draw_list) {
   const ImGuiContext &g = *GImGui;
-  const float left = bar.BarRect.Min.x + tab.Offset - bar.ScrollingAnim;
-  const float right = left + tab.Width;
   const float top = bar.BarRect.Min.y;
   const float bottom = bar.BarRect.Max.y - g.Style.TabBarBorderSize;
   const float height = bottom - top;
-  const float drop = ui::scale::px(kShownTabDrop);
-  if (height <= drop) {
+  const float room = ui::scale::px(kTabRoomAbove);
+  const float shown_room = room + ui::scale::px(kShownTabDrop);
+  if (height <= shown_room) {
     return;
   }
   constexpr ImU32 kRgb = ~IM_COL32_A_MASK;
-  const ImU32 fills[] = {ImGui::GetColorU32(ImGuiCol_TabSelected) & kRgb,
-                         ImGui::GetColorU32(ImGuiCol_TabDimmedSelected) & kRgb,
-                         ImGui::GetColorU32(ImGuiCol_TabHovered) & kRgb};
-  const float scale = (height - drop) / height;
+  const ImU32 fills[] = {ImGui::GetColorU32(ImGuiCol_Tab) & kRgb,
+                         ImGui::GetColorU32(ImGuiCol_TabHovered) & kRgb,
+                         ImGui::GetColorU32(ImGuiCol_TabSelected) & kRgb,
+                         ImGui::GetColorU32(ImGuiCol_TabDimmed) & kRgb,
+                         ImGui::GetColorU32(ImGuiCol_TabDimmedSelected) & kRgb};
+  // The bar's own background, which runs under the tabs, stays.
+  const ImU32 title_bars[] = {ImGui::GetColorU32(ImGuiCol_TitleBg) & kRgb,
+                              ImGui::GetColorU32(ImGuiCol_TitleBgActive) &
+                                  kRgb};
   for (ImDrawVert &vert : draw_list->VtxBuffer) {
-    if (vert.pos.x < left - 1.0f || vert.pos.x > right + 1.0f ||
-        vert.pos.y < top - 1.0f || vert.pos.y > bottom) {
+    if (vert.pos.y < top - 1.0f || vert.pos.y > bottom) {
       continue;
     }
     const ImU32 rgb = vert.col & kRgb;
-    if (rgb == fills[0] || rgb == fills[1] || rgb == fills[2]) {
-      vert.pos.y = bottom - (bottom - vert.pos.y) * scale;
+    if (rgb == title_bars[0] || rgb == title_bars[1]) {
+      continue;
+    }
+    for (const ImGuiTabItem &tab : bar.Tabs) {
+      const float left = bar.BarRect.Min.x + tab.Offset - bar.ScrollingAnim;
+      if (vert.pos.x < left - 1.0f || vert.pos.x > left + tab.Width + 1.0f) {
+        continue;
+      }
+      bool fill = false;
+      for (const ImU32 colour : fills) {
+        fill = fill || rgb == colour;
+      }
+      if (fill) {
+        const float drop =
+            tab.ID != 0 && tab.ID == bar.VisibleTabId ? shown_room : room;
+        vert.pos.y = bottom - (bottom - vert.pos.y) * (height - drop) / height;
+      } else {
+        vert.pos.y += room * 0.5f;
+      }
+      break;
     }
   }
 }
@@ -100,10 +122,8 @@ void draw_tab_bars() {
     }
     const ImGuiTabBar &bar = *node->TabBar;
     ImDrawList *draw_list = node->HostWindow->DrawList;
+    fit_tabs(bar, draw_list);
     const ImGuiTabItem *shown = shown_tab(bar);
-    if (shown != nullptr) {
-      drop_shown_tab(bar, *shown, draw_list);
-    }
     if (thickness <= 0.0f) {
       continue;
     }

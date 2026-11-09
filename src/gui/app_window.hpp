@@ -6,14 +6,21 @@
 
 namespace ui {
 
+/// The room a dock's tab bar leaves above its tabs, before the interface's
+/// scale. The bar is padded for it; its tabs are drawn as tall as without
+/// it, at the bottom, once the frame is drawn.
+inline constexpr float kTabRoomAbove = 2.0f;
+
 /// Tabs, a window's own and those of a tab bar inside it, are padded more
-/// than other frames, a pixel taller in all. ImGui sizes a dock node's tab bar
-/// from FramePadding when the dock space is updated, where a docked window's
-/// contents start from it at the window's Begin, and a tab bar and its tabs
-/// from it as each is begun, so all of these are called with this pushed.
+/// than other frames, a pixel taller in all, and their bar by
+/// kTabRoomAbove more. ImGui sizes a dock node's tab bar from FramePadding
+/// when the dock space is updated, where a docked window's contents start
+/// from it at the window's Begin, and a tab bar and its tabs from it as each
+/// is begun, so all of these are called with this pushed.
 inline ImVec2 window_tab_padding() {
   const ImVec2 padding = ImGui::GetStyle().FramePadding;
-  return ImVec2(padding.x + scale::px(2.0f), padding.y + scale::px(2.5f));
+  return ImVec2(padding.x + scale::px(2.0f),
+                padding.y + scale::px(2.5f + kTabRoomAbove * 0.5f));
 }
 
 inline void push_window_tab_padding() {

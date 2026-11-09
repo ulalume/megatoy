@@ -66,6 +66,11 @@ float render_add_folder_icon(PatchSelectorContext &context) {
   return size + ImGui::GetStyle().ItemSpacing.x;
 }
 
+/// The search row's band reaches this far below it, and the tree starts
+/// this far below the band, before the interface's scale.
+constexpr float kHeaderPadding = 2.0f;
+constexpr float kHeaderGap = 2.0f;
+
 void render_tree(PatchSelectorContext &context) {
   // Scrolls on its own, so the filter row above stays in place. It reaches
   // the window's edges; its own padding keeps the rows where they were.
@@ -80,11 +85,14 @@ void render_tree(PatchSelectorContext &context) {
       ImGuiChildFlags_AlwaysUseWindowPadding);
   ImGui::PopStyleVar();
   if (visible) {
-    // Folder and file rows alike run to the area's edge: a file row's
-    // highlight would otherwise stop half a spacing past a folder row's.
+    // Folder and file rows alike run to a pixel short of the area's edge:
+    // a file row's highlight would otherwise stop half a spacing past a
+    // folder row's.
     ImGuiWindow *tree = ImGui::GetCurrentWindow();
-    tree->WorkRect.Max.x = tree->InnerRect.Max.x;
-    ImGui::PushClipRect(tree->InnerRect.Min, tree->InnerRect.Max, false);
+    const float right = tree->InnerRect.Max.x - ui::scale::px(1.0f);
+    tree->WorkRect.Max.x = right;
+    ImGui::PushClipRect(tree->InnerRect.Min,
+                        ImVec2(right, tree->InnerRect.Max.y), false);
     const auto search =
         patches::parse_search(context.prefs.metadata_search_query);
     const bool rendered = render_patch_tree(context.repository.tree(), context,
@@ -106,23 +114,28 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
   }
 
   // The add-folder icon closes the filter row, which is kept clear of it.
-  // Docked, the row stands at the window's top, 2 px short of the editors'
+  // Docked, the row stands at the window's top, 4 px short of the editors'
   // tabs beside it, its contents as far in as the folders' below.
   ImGuiWindow *window = ImGui::GetCurrentWindow();
   if (window->DockNode != nullptr) {
     ImGui::SetCursorPosY(0.0f);
   }
   ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,
-                       window_tab_padding().y - ui::scale::px(1.0f));
-  // The row stands on a band of its own, across the window and down to
-  // where the tree starts.
+                       window_tab_padding().y - ui::scale::px(2.0f));
+  // The row stands on a band of its own, across the whole window and from
+  // a pixel above it, under the menu bar's edge, to kHeaderPadding below the
+  // row; the tree starts kHeaderGap below that.
   const float header_top = ImGui::GetCursorScreenPos().y;
+  const float header_bottom =
+      header_top + ImGui::GetFrameHeight() + ui::scale::px(kHeaderPadding);
+  window->DrawList->PushClipRect(
+      ImVec2(window->Pos.x, window->Pos.y - ui::scale::px(1.0f)),
+      ImVec2(window->Pos.x + window->Size.x, window->Pos.y + window->Size.y));
   window->DrawList->AddRectFilled(
-      ImVec2(window->Pos.x, header_top),
-      ImVec2(window->Pos.x + window->Size.x,
-             header_top + ImGui::GetFrameHeight() +
-                 ImGui::GetStyle().ItemSpacing.y),
+      ImVec2(window->Pos.x, header_top - ui::scale::px(1.0f)),
+      ImVec2(window->Pos.x + window->Size.x, header_bottom),
       styles::color_u32(styles::MegatoyCol::BrowserHeaderBg));
+  window->DrawList->PopClipRect();
   const float work_right = window->WorkRect.Max.x;
   if (context.add_folder) {
     window->WorkRect.Max.x -= render_add_folder_icon(context);
@@ -130,6 +143,8 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
   render_filter_bar(context);
   window->WorkRect.Max.x = work_right;
   ImGui::PopStyleVar();
+  ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x,
+                                   header_bottom + ui::scale::px(kHeaderGap)));
   render_tree(context);
 
   if (context.pending_remove_folder && context.remove_folder) {
