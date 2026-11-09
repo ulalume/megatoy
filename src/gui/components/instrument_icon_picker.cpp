@@ -2,7 +2,6 @@
 
 #include "gui/components/centred_glyph.hpp"
 #include "gui/components/menu_rows.hpp"
-#include "gui/frame_requests.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patches/instrument_icons.hpp"
@@ -135,16 +134,9 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
       icons_x + cell * columns + gap * (columns - 1) + style.ScrollbarSize;
 
   static char filter[32] = "";
-  // The list takes its height from what it held the frame before, so the
-  // first few frames after it opens are drawn without waiting for input.
-  static int opened_frame = -1;
   if (ImGui::IsWindowAppearing()) {
     filter[0] = '\0';
     ImGui::SetKeyboardFocusHere();
-    opened_frame = ImGui::GetFrameCount();
-  }
-  if (ImGui::GetFrameCount() - opened_frame < 3) {
-    keep_drawing();
   }
   ImGui::SetNextItemWidth(width);
   ImGui::InputTextWithHint("##filter",
@@ -161,45 +153,59 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
   }
   ImGui::PopStyleVar();
 
-  // The icons scroll below the filter, up to most of the screen's height.
-  const float max_height = viewport->WorkSize.y * 0.7f;
-  ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
-                                      ImVec2(width, max_height));
-  ImGui::BeginChild("##icons", ImVec2(width, 0.0f),
-                    ImGuiChildFlags_AutoResizeY);
-  const ImU32 muted =
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  // The rows the filter leaves, each its icons and its height, laid out
+  // first so the list knows its height as it opens.
   ImFont *font = ImGui::GetFont();
   const float font_size = ImGui::GetFontSize();
-  const ImVec2 origin = ImGui::GetCursorScreenPos();
-  float y = origin.y;
-  std::vector<const patches::instrument_icons::Icon *> shown;
+  struct ShownRow {
+    const ListRow *row;
+    std::vector<const patches::instrument_icons::Icon *> icons;
+    float icons_height;
+    ImVec2 label;
+    float height;
+  };
+  std::vector<ShownRow> rows;
+  float total = 0.0f;
   for (const auto &row : list_rows()) {
-    shown.clear();
+    ShownRow shown{&row, {}, 0.0f, ImVec2(), 0.0f};
     for (const auto *icon : row.icons) {
       if (patches::instrument_icons::matches(icon->id, filter)) {
-        shown.push_back(icon);
+        shown.icons.push_back(icon);
       }
     }
-    if (shown.empty()) {
+    if (shown.icons.empty()) {
       continue;
     }
-    const auto lines = static_cast<int>((shown.size() + columns - 1) / columns);
-    const float icons_height = cell * lines + gap * (lines - 1);
-    const ImVec2 label =
+    const auto lines =
+        static_cast<int>((shown.icons.size() + columns - 1) / columns);
+    shown.icons_height = cell * lines + gap * (lines - 1);
+    shown.label =
         font->CalcTextSizeA(font_size, FLT_MAX, label_width, row.label.c_str());
-    const float height = std::max(icons_height, label.y);
+    shown.height = std::max(shown.icons_height, shown.label.y);
+    total += shown.height + row_gap;
+    rows.push_back(std::move(shown));
+  }
+
+  // The icons scroll below the filter, up to most of the screen's height.
+  ImGui::BeginChild(
+      "##icons", ImVec2(width, std::min(total, viewport->WorkSize.y * 0.7f)));
+  const ImU32 muted =
+      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  const ImVec2 origin = ImGui::GetCursorScreenPos();
+  float y = origin.y;
+  for (const auto &shown : rows) {
     ImGui::GetWindowDrawList()->AddText(
-        font, font_size, ImVec2(origin.x, y + (height - label.y) * 0.5f), muted,
-        row.label.c_str(), nullptr, label_width);
-    const float icons_top = y + (height - icons_height) * 0.5f;
-    for (std::size_t i = 0; i < shown.size(); ++i) {
+        font, font_size,
+        ImVec2(origin.x, y + (shown.height - shown.label.y) * 0.5f), muted,
+        shown.row->label.c_str(), nullptr, label_width);
+    const float icons_top = y + (shown.height - shown.icons_height) * 0.5f;
+    for (std::size_t i = 0; i < shown.icons.size(); ++i) {
       const auto column = static_cast<float>(i % columns);
       const auto line = static_cast<float>(i / columns);
       ImGui::SetCursorScreenPos(
           ImVec2(origin.x + icons_x + column * (cell + gap),
                  icons_top + line * (cell + gap)));
-      const std::string_view id = shown[i]->id;
+      const std::string_view id = shown.icons[i]->id;
       ImGui::PushID(id.data(), id.data() + id.size());
       if (ImGui::Selectable("##icon", id == current, 0, ImVec2(cell, cell))) {
         picked = std::string(id);
@@ -212,7 +218,7 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
       }
       ImGui::PopID();
     }
-    y += height + row_gap;
+    y += shown.height + row_gap;
   }
   ImGui::SetCursorScreenPos(ImVec2(origin.x, y));
   ImGui::Dummy(ImVec2(0.0f, 0.0f));

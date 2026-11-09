@@ -240,19 +240,6 @@ void render_icon_picker(PatchSelectorContext &context) {
   if (!ImGui::BeginPopup("##icon_picker")) {
     return;
   }
-  // Kept on the screen as the list grows to its full height.
-  const ImGuiWindow *window = ImGui::GetCurrentWindow();
-  const ImGuiViewport *viewport = ImGui::GetMainViewport();
-  const ImVec2 room(viewport->WorkPos.x + viewport->WorkSize.x - window->Size.x,
-                    viewport->WorkPos.y + viewport->WorkSize.y -
-                        window->Size.y);
-  const ImVec2 pos(ImClamp(window->Pos.x, viewport->WorkPos.x,
-                           ImMax(viewport->WorkPos.x, room.x)),
-                   ImClamp(window->Pos.y, viewport->WorkPos.y,
-                           ImMax(viewport->WorkPos.y, room.y)));
-  if (pos.x != window->Pos.x || pos.y != window->Pos.y) {
-    ImGui::SetWindowPos(pos);
-  }
   if (const auto *entry = context.session.find_entry(picking)) {
     const std::string icon =
         entry->metadata ? entry->metadata->icon : std::string();
