@@ -409,10 +409,11 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
 
   update_playback(context, ImGui::GetIO().DeltaTime);
 
+  // A key pressed with Command, Control or Option is a shortcut's, such as
+  // Command+S, and plays nothing.
   const ImGuiIO &io = ImGui::GetIO();
-  const bool primary_modifier = io.KeyCtrl || io.KeySuper;
-  if (!primary_modifier && !ImGui::GetIO().WantTextInput &&
-      !key_mappings.empty()) {
+  const bool shortcut = io.KeyCtrl || io.KeySuper || io.KeyAlt;
+  if (!shortcut && !io.WantTextInput && !key_mappings.empty()) {
     KeyboardTypingContext typing_context{
         context.input_state, octave_keys.first, octave_keys.second,
         [&context](ym2612::Note note, uint8_t velocity) {

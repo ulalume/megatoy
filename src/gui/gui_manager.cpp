@@ -344,6 +344,24 @@ void GuiManager::process_event(const SDL_Event &event) {
   ImGui_ImplSDL3_ProcessEvent(&event);
 
   switch (event.type) {
+  case SDL_EVENT_KEY_UP:
+    // macOS, and the browsers there, tell no key's release while Command is
+    // held, so a key let go before it would stay held: each is let go with
+    // Command.
+    if (event.key.scancode == SDL_SCANCODE_LGUI ||
+        event.key.scancode == SDL_SCANCODE_RGUI) {
+      ImGuiIO &io = ImGui::GetIO();
+      for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_GamepadStart;
+           ++key) {
+        const auto named = static_cast<ImGuiKey>(key);
+        const bool modifier =
+            named >= ImGuiKey_LeftCtrl && named <= ImGuiKey_RightSuper;
+        if (!modifier && ImGui::IsKeyDown(named)) {
+          io.AddKeyEvent(named, false);
+        }
+      }
+    }
+    break;
   case SDL_EVENT_QUIT:
     should_close_ = true;
     break;
