@@ -40,6 +40,22 @@ struct PatchLabState {
   /// The pages, in the order the list down the left shows them.
   enum class Page { Random, Mutate, Mix };
 
+  /// Mutate's settings.
+  struct MutateSettings {
+    int amount = 2;
+    float probability = 0.35f;
+    bool allow_algorithm_change = true;
+  };
+
+  /// Mix's settings.
+  struct MixSettings {
+    PatchLabSource source_a;
+    PatchLabSource source_b;
+    MixMode mode = MixMode::Pick;
+    float blend = 0.5f;
+    bool interpolate_algorithm = true;
+  };
+
   struct SessionResult {
     std::uint64_t id = 0;
     Page page = Page::Random;
@@ -48,15 +64,10 @@ struct PatchLabState {
     std::string settings;
     std::string created_at;
     ym2612::Patch patch;
-    // The page's settings it was made with, put back when it is chosen.
-    int mutate_amount = 0;
-    float mutate_probability = 0.0f;
-    bool mutate_allow_algorithm_change = false;
-    MixMode mix_mode = MixMode::Pick;
-    float blend = 0.0f;
-    bool blend_interpolate_algorithm = false;
-    PatchLabSource source_a;
-    PatchLabSource source_b;
+    // The pages' settings it was made with, its own page's put back when it
+    // is chosen.
+    MutateSettings mutate;
+    MixSettings mix;
   };
 
   Page page = Page::Random;
@@ -72,22 +83,16 @@ struct PatchLabState {
   int random_template_iterations = 4;
 
   // Mix
-  PatchLabSource source_a;
-  PatchLabSource source_b;
+  MixSettings mix;
   /// The patches a source can be picked from, as of `entries_revision` of the
   /// repository. They point into its tree, which only changes with it.
   std::vector<EntryDisplay> entries;
   std::uint64_t entries_revision = 0;
   std::string mix_error;
 
-  MixMode mix_mode = MixMode::Pick;
-  float blend = 0.5f;
-  bool blend_interpolate_algorithm = true;
 
   // Mutate
-  int mutate_amount = 2;
-  float mutate_probability = 0.35f;
-  bool mutate_allow_algorithm_change = true;
+  MutateSettings mutate;
 
   // Search text of the open source list; one list is open at a time.
   std::string picker_filter;

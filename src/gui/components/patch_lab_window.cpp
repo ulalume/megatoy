@@ -6,6 +6,7 @@
 #include "gui/components/centred_glyph.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/components/side_list.hpp"
 #include "gui/fonts/megatoy_icons.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
@@ -287,10 +288,10 @@ void render_source_slots(PatchLabContext &context, PatchLabState &state,
                          const std::vector<EntryDisplay> &entries) {
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   const float width = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
-  render_source_slot("a", context.session, entries, state.source_a,
+  render_source_slot("a", context.session, entries, state.mix.source_a,
                      state.picker_filter, width);
   ImGui::SameLine();
-  render_source_slot("b", context.session, entries, state.source_b,
+  render_source_slot("b", context.session, entries, state.mix.source_b,
                      state.picker_filter, width);
 }
 
@@ -299,8 +300,8 @@ std::optional<std::string> load_sources(const PatchLabContext &context,
                                         const PatchLabState &state,
                                         ym2612::Patch &patch_a,
                                         ym2612::Patch &patch_b) {
-  if (!resolve_source(context.session, state.source_a, nullptr, &patch_a) ||
-      !resolve_source(context.session, state.source_b, nullptr, &patch_b)) {
+  if (!resolve_source(context.session, state.mix.source_a, nullptr, &patch_a) ||
+      !resolve_source(context.session, state.mix.source_b, nullptr, &patch_b)) {
     return "Failed to load one or both patches.";
   }
   return std::nullopt;
@@ -343,20 +344,13 @@ void remember_result(PatchLabState &state, PatchLabState::Page page,
   std::erase_if(state.results, [&](const auto &result) {
     return result.patch.hash() == hash;
   });
-  PatchLabState::SessionResult result{
-      .id = state.next_result_id++,
-      .page = page,
-      .settings = std::move(settings),
-      .created_at = time_text,
-      .patch = patch,
-      .mutate_amount = state.mutate_amount,
-      .mutate_probability = state.mutate_probability,
-      .mutate_allow_algorithm_change = state.mutate_allow_algorithm_change,
-      .mix_mode = state.mix_mode,
-      .blend = state.blend,
-      .blend_interpolate_algorithm = state.blend_interpolate_algorithm,
-      .source_a = state.source_a,
-      .source_b = state.source_b};
+  PatchLabState::SessionResult result{.id = state.next_result_id++,
+                                      .page = page,
+                                      .settings = std::move(settings),
+                                      .created_at = time_text,
+                                      .patch = patch,
+                                      .mutate = state.mutate,
+                                      .mix = state.mix};
   state.chosen_result = result.id;
   state.results.insert(state.results.begin(), std::move(result));
 }
@@ -421,27 +415,27 @@ void render_mutate_section(PatchLabContext &context, PatchLabState &state) {
   ImGui::TextWrapped("Varies the current patch at random.");
   ImGui::Spacing();
 
-  state.mutate_amount = std::clamp(state.mutate_amount, 0, 12);
-  state.mutate_probability = std::clamp(state.mutate_probability, 0.0f, 1.0f);
+  state.mutate.amount = std::clamp(state.mutate.amount, 0, 12);
+  state.mutate.probability = std::clamp(state.mutate.probability, 0.0f, 1.0f);
 
   ImGui::PushItemWidth(-FLT_MIN);
-  named_slider_int("Variation Depth", &state.mutate_amount, 0, 12);
-  named_percent_slider("Probability", state.mutate_probability);
+  named_slider_int("Variation Depth", &state.mutate.amount, 0, 12);
+  named_percent_slider("Probability", state.mutate.probability);
   ImGui::PopItemWidth();
   ImGui::Checkbox("Allow algorithm change",
-                  &state.mutate_allow_algorithm_change);
+                  &state.mutate.allow_algorithm_change);
 
   if (generate_button()) {
     patch_lab::MutateOptions options;
-    options.amount = state.mutate_amount;
-    options.probability = state.mutate_probability;
-    options.allow_algorithm_variation = state.mutate_allow_algorithm_change;
+    options.amount = state.mutate.amount;
+    options.probability = state.mutate.probability;
+    options.allow_algorithm_variation = state.mutate.allow_algorithm_change;
 
     auto before = context.session.current_patch();
     patch_lab::mutate_in_place(before, options);
     remember_result(state, PatchLabState::Page::Mutate,
-                    "Depth " + std::to_string(state.mutate_amount) + ", " +
-                        std::to_string(percent(state.mutate_probability)) + "%",
+                    "Depth " + std::to_string(state.mutate.amount) + ", " +
+                        std::to_string(percent(state.mutate.probability)) + "%",
                     before);
     apply_patch_result(context, "Patch Lab Mutate", before.hash(), before);
   }
@@ -460,12 +454,12 @@ bool described_radio(const char *label, bool active, const char *description) {
 
 ym2612::Patch mixed(const PatchLabState &state, const ym2612::Patch &a,
                     const ym2612::Patch &b) {
-  if (state.mix_mode == PatchLabState::MixMode::Pick) {
+  if (state.mix.mode == PatchLabState::MixMode::Pick) {
     return patch_lab::merge(a, b).patch;
   }
   patch_lab::MorphOptions options;
-  options.mix = state.blend;
-  options.interpolate_algorithm = state.blend_interpolate_algorithm;
+  options.mix = state.mix.blend;
+  options.interpolate_algorithm = state.mix.interpolate_algorithm;
   return patch_lab::morph(a, b, options).patch;
 }
 
@@ -478,27 +472,27 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
   ImGui::Spacing();
 
   using MixMode = PatchLabState::MixMode;
-  if (described_radio("Pick", state.mix_mode == MixMode::Pick,
+  if (described_radio("Pick", state.mix.mode == MixMode::Pick,
                       "Each parameter from A or B, at random")) {
-    state.mix_mode = MixMode::Pick;
+    state.mix.mode = MixMode::Pick;
   }
-  if (described_radio("Blend", state.mix_mode == MixMode::Blend,
+  if (described_radio("Blend", state.mix.mode == MixMode::Blend,
                       "In between A and B")) {
-    state.mix_mode = MixMode::Blend;
+    state.mix.mode = MixMode::Blend;
   }
-  if (state.mix_mode == MixMode::Blend) {
+  if (state.mix.mode == MixMode::Blend) {
     const float indent =
         ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x;
     ImGui::Indent(indent);
     // Its own id: the radio button above is "Blend" too.
     ImGui::SetNextItemWidth(-FLT_MIN);
-    named_percent_slider("Blend##amount", state.blend);
-    ImGui::Checkbox("Interpolate algorithm",
-                    &state.blend_interpolate_algorithm);
+    named_percent_slider("Blend##amount", state.mix.blend);
+    ImGui::Checkbox("Interpolate algorithm", &state.mix.interpolate_algorithm);
     ImGui::Unindent(indent);
   }
 
-  ImGui::BeginDisabled(state.source_a.empty() || state.source_b.empty());
+  ImGui::BeginDisabled(state.mix.source_a.empty() ||
+                       state.mix.source_b.empty());
   if (generate_button()) {
     ym2612::Patch patch_a;
     ym2612::Patch patch_b;
@@ -507,9 +501,9 @@ void render_mix_section(PatchLabContext &context, PatchLabState &state,
     } else {
       const auto patch = mixed(state, patch_a, patch_b);
       const std::string settings =
-          state.mix_mode == MixMode::Pick
+          state.mix.mode == MixMode::Pick
               ? "Pick"
-              : "Blend " + std::to_string(percent(state.blend)) + "%";
+              : "Blend " + std::to_string(percent(state.mix.blend)) + "%";
       remember_result(state, PatchLabState::Page::Mix, settings, patch);
       apply_patch_result(context, "Patch Lab Mix", patch.hash(), patch);
       state.mix_error.clear();
@@ -534,15 +528,9 @@ void choose_result(PatchLabContext &context, PatchLabState &state,
   state.page = result.page;
   state.chosen_result = result.id;
   if (result.page == PatchLabState::Page::Mutate) {
-    state.mutate_amount = result.mutate_amount;
-    state.mutate_probability = result.mutate_probability;
-    state.mutate_allow_algorithm_change = result.mutate_allow_algorithm_change;
+    state.mutate = result.mutate;
   } else if (result.page == PatchLabState::Page::Mix) {
-    state.mix_mode = result.mix_mode;
-    state.blend = result.blend;
-    state.blend_interpolate_algorithm = result.blend_interpolate_algorithm;
-    state.source_a = result.source_a;
-    state.source_b = result.source_b;
+    state.mix = result.mix;
   }
   apply_patch_result(context, "Apply Patch Lab Result",
                      "patch_lab.result:" + std::to_string(result.id),
@@ -595,11 +583,8 @@ bool lab_list_row(const char *icon, bool muted_icon, const char *text,
 /// with its page's icon, what it was made with and when; choosing one puts
 /// back its page and settings.
 void render_lab_list(PatchLabContext &context, PatchLabState &state) {
-  if (ImGui::BeginChild("##patch_lab_list", ImVec2(lab_list_width(), 0.0f))) {
-    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
-    // A row's highlight reaches half the spacing above it, the first one's
-    // too.
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + list_row_spacing() * 0.5f);
+  if (begin_side_list("##patch_lab_list", lab_list_width())) {
+    begin_side_list_rows();
     // The pages and the results each in their own ID scope: a result's id
     // can be a page's index.
     ImGui::PushID("pages");
@@ -614,11 +599,10 @@ void render_lab_list(PatchLabContext &context, PatchLabState &state) {
       ImGui::PopID();
     }
     ImGui::PopID();
-    ImGui::PopStyleVar();
+    end_side_list_rows();
 
     ImGui::SeparatorText("Results");
-    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, list_row_spacing());
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + list_row_spacing() * 0.5f);
+    begin_side_list_rows();
     if (state.results.empty()) {
       ImGui::PushStyleColor(ImGuiCol_Text,
                             styles::color(styles::MegatoyCol::TextMuted));
@@ -640,19 +624,12 @@ void render_lab_list(PatchLabContext &context, PatchLabState &state) {
       ImGui::PopID();
     }
     ImGui::PopID();
-    ImGui::PopStyleVar();
+    end_side_list_rows();
     if (chosen != nullptr) {
       choose_result(context, state, *chosen);
     }
   }
-  ImGui::EndChild();
-
-  const float gap = ImGui::GetStyle().ItemSpacing.x;
-  const float x = ImGui::GetItemRectMax().x + gap;
-  ImGui::GetWindowDrawList()->AddLine(ImVec2(x, ImGui::GetItemRectMin().y),
-                                      ImVec2(x, ImGui::GetItemRectMax().y),
-                                      ImGui::GetColorU32(ImGuiCol_Separator));
-  ImGui::SameLine(0.0f, gap * 2.0f);
+  end_side_list();
 }
 
 } // namespace
