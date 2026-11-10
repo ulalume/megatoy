@@ -13,6 +13,7 @@
 #include "gui/tab_bar_lines.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
+#include "patches/instrument_icons.hpp"
 #include "platform/platform_config.hpp"
 #include <filesystem>
 #include <imgui.h>
@@ -240,6 +241,21 @@ bool GuiManager::get_should_close() const { return !window_ || should_close_; }
 
 void GuiManager::set_should_close(bool value) { should_close_ = value; }
 
+namespace {
+
+/// A tab's width showing its icon, the first letter of its name and the
+/// ellipsis after: ImGui keeps a letter that fits with a pixel to spare.
+float shrunk_tab_width() {
+  const ImFont *font = ImGui::GetFont();
+  const std::string start =
+      std::string(patches::instrument_icons::none_glyph()) + " M";
+  return ui::window_tab_padding().x * 2.0f +
+         ImGui::CalcTextSize(start.c_str()).x +
+         ImGui::GetFontBaked()->GetCharAdvance(font->EllipsisChar) + 1.0f;
+}
+
+} // namespace
+
 void GuiManager::begin_frame(bool waveform_shown) {
   if (!initialized_) {
     return;
@@ -256,6 +272,9 @@ void GuiManager::begin_frame(bool waveform_shown) {
   ImGui::GetStyle().TabCloseButtonMinWidthUnselected =
       ImGui::GetIO().MouseSource == ImGuiMouseSource_TouchScreen ? FLT_MAX
                                                                  : 0.0f;
+  // Tabs too many for their bar narrow down to their icon and a letter of
+  // their name before the bar scrolls.
+  ImGui::GetStyle().TabMinWidthShrink = shrunk_tab_width();
   ui::touch::drag_to_scroll();
   ui::layouts::fit_footer_to_width();
   ui::layouts::fit_footer_to_waveform(waveform_shown);
