@@ -111,6 +111,10 @@
     {
       "name": "star-outline",
       "from": "fontawesome-regular:star"
+    },
+    {
+      "name": "list",
+      "from": "fontawesome:list"
     }
   ]
 }

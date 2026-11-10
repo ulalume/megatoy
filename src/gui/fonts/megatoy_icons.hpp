@@ -4,7 +4,7 @@
 // tools/icons by tools/build_icon_font.py, which writes this file.
 // clang-format off
 #define ICON_MIN_MEGATOY 0xe000
-#define ICON_MAX_MEGATOY 0xe01b
+#define ICON_MAX_MEGATOY 0xe01c
 #define ICON_MEGATOY_PIANO "\xee\x80\x80" // U+e000
 #define ICON_MEGATOY_REFRESH "\xee\x80\x81" // U+e001
 #define ICON_MEGATOY_PLUS "\xee\x80\x82" // U+e002
@@ -33,5 +33,6 @@
 #define ICON_MEGATOY_FOLDER "\xee\x80\x99" // U+e019
 #define ICON_MEGATOY_FOLDER_OPEN "\xee\x80\x9a" // U+e01a
 #define ICON_MEGATOY_STAR_OUTLINE "\xee\x80\x9b" // U+e01b
+#define ICON_MEGATOY_LIST "\xee\x80\x9c" // U+e01c
 #define ICON_MIN_MEGATOY_INSTRUMENT 0xe900
 #define ICON_MAX_MEGATOY_INSTRUMENT 0xe956
