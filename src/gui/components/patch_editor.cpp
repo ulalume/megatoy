@@ -65,6 +65,21 @@ const char *document_icon(const patches::PatchSession &session,
           : std::string_view());
 }
 
+/// The document's name with its icon in front, as its tab shows it.
+std::string document_tab_label(const patches::PatchSession &session,
+                               const patches::PatchDocument &document) {
+  return std::string(document_icon(session, document)) + " " +
+         document_label(document);
+}
+
+/// The name of the document's editor window.
+std::string document_window_title(PatchEditorContext &context,
+                                  const patches::PatchDocument &document) {
+  return patch_editor_window_title(
+      document_tab_label(context.session, document),
+      context.document_ui(document.id()).window_slot);
+}
+
 /// What the header's metadata asks to write, once it is drawn.
 struct MetadataEdit {
   std::optional<std::string> icon;
@@ -582,10 +597,7 @@ void render_document_window(PatchEditorContext &context,
   auto &ui = context.document_ui(id);
   auto &session = context.session;
 
-  const auto title =
-      patch_editor_window_title(std::string(document_icon(session, document)) +
-                                    " " + document_label(document),
-                                ui.window_slot);
+  const auto title = document_window_title(context, document);
   const ImGuiWindow *existing = ImGui::FindWindowByName(title.c_str());
   ImGuiDockNode *node = existing != nullptr ? existing->DockNode : nullptr;
   areas::keep_in_area(areas::Area::Main, title.c_str(), 0,
@@ -751,6 +763,139 @@ void render_document_window(PatchEditorContext &context,
   }
 }
 
+/// The open documents in the order their tabs show: dock node by dock node
+/// from the top left, then along each node's tabs.
+std::vector<patches::DocumentId>
+documents_in_tab_order(PatchEditorContext &context) {
+  struct Place {
+    patches::DocumentId id;
+    const ImGuiDockNode *node;
+    int order;
+  };
+  std::vector<Place> places;
+  for (const auto &document : context.session.documents()) {
+    const ImGuiWindow *window = ImGui::FindWindowByName(
+        document_window_title(context, *document).c_str());
+    const ImGuiDockNode *node = window != nullptr ? window->DockNode : nullptr;
+    ImGuiTabItem *tab =
+        node != nullptr && node->TabBar != nullptr
+            ? ImGui::TabBarFindTabByID(node->TabBar, window->TabId)
+            : nullptr;
+    places.push_back(
+        {document->id(), node,
+         tab != nullptr ? ImGui::TabBarGetTabOrder(node->TabBar, tab) : 0});
+  }
+  std::stable_sort(places.begin(), places.end(),
+                   [](const Place &a, const Place &b) {
+                     if (a.node == b.node) {
+                       return a.order < b.order;
+                     }
+                     if (a.node == nullptr || b.node == nullptr) {
+                       return b.node == nullptr;
+                     }
+                     if (a.node->Pos.y != b.node->Pos.y) {
+                       return a.node->Pos.y < b.node->Pos.y;
+                     }
+                     return a.node->Pos.x < b.node->Pos.x;
+                   });
+  std::vector<patches::DocumentId> ids;
+  for (const Place &place : places) {
+    ids.push_back(place.id);
+  }
+  return ids;
+}
+
+/**
+ * One row of the open patches: the document's tab label, which brings it
+ * forward, and at its right the close button its tab has, or the mark of
+ * unsaved changes until the pointer comes over the row.
+ */
+void render_open_patch_row(PatchEditorContext &context,
+                           const patches::PatchDocument &document,
+                           float width) {
+  auto &session = context.session;
+  const auto id = document.id();
+  ImGui::PushID(static_cast<int>(id));
+  const bool preview = !document.pinned();
+  if (preview) {
+    push_preview_label_style();
+  }
+  const bool chosen =
+      ImGui::Selectable(document_tab_label(session, document).c_str(),
+                        id == session.active_document_id(),
+                        ImGuiSelectableFlags_AllowOverlap, ImVec2(width, 0.0f));
+  if (preview) {
+    pop_preview_label_style();
+  }
+  const ImVec2 row_min = ImGui::GetItemRectMin();
+  const ImVec2 row_max = ImGui::GetItemRectMax();
+  const float size = ImGui::GetFontSize();
+  const ImVec2 mark_pos(row_max.x - size,
+                        (row_min.y + row_max.y - size) * 0.5f);
+  const bool closable = session.can_close_document(id);
+  if (document.is_modified() &&
+      (!closable || !ImGui::IsMouseHoveringRect(row_min, row_max))) {
+    ImGui::RenderBullet(
+        ImGui::GetWindowDrawList(),
+        ImVec2(mark_pos.x + size * 0.5f, mark_pos.y + size * 0.5f),
+        ImGui::GetColorU32(ImGuiCol_Text));
+  } else if (closable &&
+             ImGui::CloseButton(ImGui::GetID("##close"), mark_pos)) {
+    context.request_close(id);
+  }
+  if (chosen) {
+    context.activate(id);
+    context.reveal_document = id;
+  }
+  ImGui::PopID();
+}
+
+/// A button at the left of the editors' tabs listing every open patch,
+/// those the bar has no room for too.
+void render_open_patches_button(PatchEditorContext &context,
+                                ImGuiDockNode *node) {
+  static const ImGuiID popup_id = ImHashStr("##open_patches");
+  static bool open_at_press = false;
+  const auto button = folded_tab_button(node, "##open_patches",
+                                        ICON_MEGATOY_LIST, "Open Patches");
+  if (!button) {
+    return;
+  }
+  open_popup_from(*button, popup_id, open_at_press);
+
+  const ImVec2 below(button->min.x, button->max.y);
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  const float bottom = viewport->WorkPos.y + viewport->WorkSize.y;
+  ImGui::SetNextWindowPos(below);
+  ImGui::SetNextWindowSizeConstraints(
+      ImVec2(0.0f, 0.0f), ImVec2(FLT_MAX, ImMax(0.0f, bottom - below.y)));
+  if (!ImGui::BeginPopupEx(popup_id, ImGuiWindowFlags_AlwaysAutoResize |
+                                         ImGuiWindowFlags_NoTitleBar |
+                                         ImGuiWindowFlags_NoSavedSettings)) {
+    return;
+  }
+  auto &session = context.session;
+  const auto ids = documents_in_tab_order(context);
+  // Every row as wide as the widest label, with the close button after it.
+  float label_width = 0.0f;
+  for (const auto id : ids) {
+    if (const auto *document = session.find_document(id)) {
+      label_width = ImMax(
+          label_width,
+          ImGui::CalcTextSize(document_tab_label(session, *document).c_str())
+              .x);
+    }
+  }
+  const float width =
+      label_width + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::GetFontSize();
+  for (const auto id : ids) {
+    if (const auto *document = session.find_document(id)) {
+      render_open_patch_row(context, *document, width);
+    }
+  }
+  ImGui::EndPopup();
+}
+
 } // namespace
 
 bool patch_editor_has_focus() {
@@ -798,14 +943,19 @@ void render_patch_editors(PatchEditorContext &context,
   for (const auto id : frame.to_close) {
     context.request_close(id);
   }
+}
+
+void render_patch_editor_tab_buttons(PatchEditorContext &context) {
+  ImGuiDockNode *node =
+      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID);
+  render_open_patches_button(context, node);
 
   // A new patch from the right of the editors' tabs, as the folder icon adds
   // a folder at the right of the browser's search row.
   static bool new_patch_pressed = false;
-  const auto new_patch = tab_bar_button(
-      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID),
-      "##new_patch", ICON_MEGATOY_PLUS, "New Patch", ImGuiTabItemFlags_Trailing,
-      unshown_tab_height());
+  const auto new_patch =
+      tab_bar_button(node, "##new_patch", ICON_MEGATOY_PLUS, "New Patch",
+                     ImGuiTabItemFlags_Trailing, unshown_tab_height());
   if (folded_tab_button_clicked(new_patch, new_patch_pressed) &&
       context.new_patch) {
     context.new_patch();

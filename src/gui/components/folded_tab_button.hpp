@@ -92,4 +92,25 @@ folded_tab_button_clicked(const std::optional<FoldedTabButton> &button,
   return clicked;
 }
 
+/**
+ * Opens the popup `popup_id` when a press on the button is let go, unless
+ * the popup was open when the press began: that press closed it, as a press
+ * outside it does. `open_at_press` keeps that from one frame to the next.
+ */
+inline void open_popup_from(const FoldedTabButton &button, ImGuiID popup_id,
+                            bool &open_at_press) {
+  // Also through the open popup, so a press here while it is open is known
+  // for the one that closes it.
+  if (!button.under_pointer) {
+    return;
+  }
+  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    open_at_press = ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None);
+  }
+  // On release, so the press is not taken for one outside the popup.
+  if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !open_at_press) {
+    ImGui::OpenPopupEx(popup_id);
+  }
+}
+
 } // namespace ui

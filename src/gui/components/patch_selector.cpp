@@ -198,8 +198,6 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
  */
 void render_folded_patch_selector(PatchSelectorContext &context) {
   static const ImGuiID popup_id = ImHashStr("##folded_patch_browser");
-  // Whether the browser was open when the button was pressed: that press
-  // closed it, as a press outside it does, and the release leaves it so.
   static bool open_at_press = false;
 
   const auto button = folded_tab_button(
@@ -209,17 +207,7 @@ void render_folded_patch_selector(PatchSelectorContext &context) {
     return;
   }
   const ImVec2 below(button->min.x, button->max.y);
-  // Also through the open browser, so a press here while it is open is
-  // known for the one that closes it.
-  if (button->under_pointer) {
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-      open_at_press = ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None);
-    }
-    // On release, so the press is not taken for one outside the browser.
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !open_at_press) {
-      ImGui::OpenPopupEx(popup_id);
-    }
-  }
+  open_popup_from(*button, popup_id, open_at_press);
 
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   const float bottom = viewport->WorkPos.y + viewport->WorkSize.y;

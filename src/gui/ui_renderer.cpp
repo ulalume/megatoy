@@ -116,6 +116,7 @@ void render_all(AppContext &ctx) {
   render_midi_keyboard(soft_keyboard.get(), contexts.midi_keyboard);
   render_patch_lab(patch_lab.get(), contexts.patch_lab, patch_lab_state());
   render_waveform(waveform.get(), contexts.waveform);
+  render_patch_editor_tab_buttons(contexts.patch_editor);
   if (const auto drop = take_view_patch_drop()) {
     if (const auto *entry =
             ctx.services.patch_session.find_entry(drop->entry_path)) {
