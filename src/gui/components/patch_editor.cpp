@@ -952,9 +952,15 @@ void render_open_patches_button(PatchEditorContext &context,
   ImGui::SetNextWindowPos(below);
   ImGui::SetNextWindowSizeConstraints(
       ImVec2(0.0f, 0.0f), ImVec2(FLT_MAX, ImMax(0.0f, bottom - below.y)));
-  if (!ImGui::BeginPopupEx(popup_id, ImGuiWindowFlags_AlwaysAutoResize |
-                                         ImGuiWindowFlags_NoTitleBar |
-                                         ImGuiWindowFlags_NoSavedSettings)) {
+  // The rows reach within 2 px of the popup's edges.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(ui::scale::px(2.0f), ui::scale::px(2.0f)));
+  const bool open =
+      ImGui::BeginPopupEx(popup_id, ImGuiWindowFlags_AlwaysAutoResize |
+                                        ImGuiWindowFlags_NoTitleBar |
+                                        ImGuiWindowFlags_NoSavedSettings);
+  ImGui::PopStyleVar();
+  if (!open) {
     return;
   }
   const auto tabs = tabs_in_order(context);
