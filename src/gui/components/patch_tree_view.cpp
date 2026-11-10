@@ -185,25 +185,14 @@ float row_margin() { return ui::list_row_spacing(); }
 
 float row_height() { return ImGui::GetTextLineHeight() + row_margin(); }
 
-/// How much larger than the text a patch's instrument icon is drawn.
-constexpr float kPatchIconScale = 1.5f;
-
-/// A patch's row: a folder's and more above and below, for its larger icon.
-float patch_row_height() { return row_height() + ui::scale::px(8.0f); }
-
 float row_height_of(const patches::TreeRow &row) {
-  return row.is_directory ? row_height() : patch_row_height();
-}
-
-/// How wide a patch's icon is drawn.
-float patch_icon_width() {
-  return std::round(ImGui::GetFontSize() * kPatchIconScale);
+  return row.is_directory ? row_height() : ui::patch_row_height();
 }
 
 /// How far a name starts past a patch's icon or a folder's arrow, the two
 /// standing at one place: the icon's width and the frame padding after it.
 float name_offset() {
-  return patch_icon_width() + ImGui::GetStyle().FramePadding.x;
+  return ui::patch_row_icon_width() + ImGui::GetStyle().FramePadding.x;
 }
 
 /// How much larger than the text the star of a rating too wide for its row
@@ -261,7 +250,7 @@ bool patch_row_selectable(const patches::PatchEntry &item, bool selected) {
   const int stars =
       std::clamp(item.metadata ? item.metadata->star_rating : 0, 0, 5);
   const ImGuiStyle &style = ImGui::GetStyle();
-  const float height = patch_row_height();
+  const float height = ui::patch_row_height();
   const ImVec2 pos = ImGui::GetCursorScreenPos();
   const float right =
       pos.x + ImGui::GetContentRegionAvail().x - style.FramePadding.x;
@@ -281,10 +270,11 @@ bool patch_row_selectable(const patches::PatchEntry &item, bool selected) {
   // Centred under a folder's arrow, which stands a text height wide; the
   // larger icon reaches out to either side of it.
   const float icon_left =
-      pos.x - (patch_icon_width() - ImGui::GetFontSize()) * 0.5f;
-  draw_instrument_icon(icon_id, ImVec2(icon_left, pos.y),
-                       ImVec2(icon_left + patch_icon_width(), pos.y + height),
-                       kPatchIconScale);
+      pos.x - (ui::patch_row_icon_width() - ImGui::GetFontSize()) * 0.5f;
+  draw_instrument_icon(
+      icon_id, ImVec2(icon_left, pos.y),
+      ImVec2(icon_left + ui::patch_row_icon_width(), pos.y + height),
+      ui::kPatchRowIconScale);
 
   const float centre_y = pos.y + height * 0.5f;
   const float text_y = centre_y - ImGui::GetTextLineHeight() * 0.5f;
@@ -550,7 +540,7 @@ void row_tops(const std::vector<patches::TreeRow> &rows,
               std::vector<float> &tops) {
   const float gap = ImGui::GetStyle().ItemSpacing.y;
   const float folder_height = row_height();
-  const float patch_height = patch_row_height();
+  const float patch_height = ui::patch_row_height();
   tops.clear();
   tops.reserve(rows.size() + 1);
   float y = 0.0f;
@@ -614,7 +604,7 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
   const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
   const ImRect clip = ImGui::GetCurrentWindow()->ClipRect;
   // The tallest a row stands, to find the first one in view.
-  const float height = patch_row_height();
+  const float height = ui::patch_row_height();
   const bool can_drop = static_cast<bool>(context.move_patch);
   std::optional<DropHover> hover;
   const auto first = static_cast<std::size_t>(

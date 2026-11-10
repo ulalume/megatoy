@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <cmath>
 #include <imgui.h>
 
 namespace ui {
@@ -11,6 +12,21 @@ namespace ui {
 /// Space between the rows of the patch tree and between the items of a menu,
 /// so the two stand as tall as each other.
 inline float list_row_spacing() { return scale::px(14.0f); }
+
+/// How much larger than the text a patch's instrument icon is drawn on its
+/// list row.
+inline constexpr float kPatchRowIconScale = 1.5f;
+
+/// A patch's list row: a text line, the rows' spacing and more above and
+/// below for its larger icon.
+inline float patch_row_height() {
+  return ImGui::GetTextLineHeight() + list_row_spacing() + scale::px(8.0f);
+}
+
+/// How wide a patch's icon is drawn on its list row.
+inline float patch_row_icon_width() {
+  return std::round(ImGui::GetFontSize() * kPatchRowIconScale);
+}
 
 /// Space the menu bar's items are laid out with, which makes their highlight
 /// stop 6 px short of the bar's top and bottom.

@@ -4,8 +4,10 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/centred_glyph.hpp"
 #include "gui/components/folded_tab_button.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
@@ -763,95 +765,176 @@ void render_document_window(PatchEditorContext &context,
   }
 }
 
-/// The open documents in the order their tabs show: dock node by dock node
-/// from the top left, then along each node's tabs.
-std::vector<patches::DocumentId>
-documents_in_tab_order(PatchEditorContext &context) {
-  struct Place {
-    patches::DocumentId id;
-    const ImGuiDockNode *node;
-    int order;
-  };
-  std::vector<Place> places;
+/// A tab the editors' list holds: an open document, or Preferences when no
+/// document is given.
+struct ListedTab {
+  std::optional<patches::DocumentId> document;
+  ImGuiWindow *window;
+};
+
+/// The Preferences window while it is open.
+ImGuiWindow *preferences_window(const PatchEditorContext &context) {
+  if (!context.prefs.show_preferences) {
+    return nullptr;
+  }
+  static const std::string name = std::string("###") + PREFERENCES_TITLE;
+  return ImGui::FindWindowByName(name.c_str());
+}
+
+/// The open documents and Preferences in the order their tabs show: dock
+/// node by dock node from the top left, then along each node's tabs.
+std::vector<ListedTab> tabs_in_order(PatchEditorContext &context) {
+  std::vector<ListedTab> tabs;
   for (const auto &document : context.session.documents()) {
-    const ImGuiWindow *window = ImGui::FindWindowByName(
-        document_window_title(context, *document).c_str());
-    const ImGuiDockNode *node = window != nullptr ? window->DockNode : nullptr;
-    ImGuiTabItem *tab =
-        node != nullptr && node->TabBar != nullptr
-            ? ImGui::TabBarFindTabByID(node->TabBar, window->TabId)
-            : nullptr;
-    places.push_back(
-        {document->id(), node,
-         tab != nullptr ? ImGui::TabBarGetTabOrder(node->TabBar, tab) : 0});
+    tabs.push_back({document->id(),
+                    ImGui::FindWindowByName(
+                        document_window_title(context, *document).c_str())});
   }
-  std::stable_sort(places.begin(), places.end(),
-                   [](const Place &a, const Place &b) {
-                     if (a.node == b.node) {
-                       return a.order < b.order;
+  if (ImGuiWindow *window = preferences_window(context)) {
+    tabs.push_back({std::nullopt, window});
+  }
+  const auto node_of = [](const ListedTab &tab) -> const ImGuiDockNode * {
+    return tab.window != nullptr ? tab.window->DockNode : nullptr;
+  };
+  const auto order_of = [](const ListedTab &tab) {
+    ImGuiDockNode *node =
+        tab.window != nullptr ? tab.window->DockNode : nullptr;
+    if (node == nullptr || node->TabBar == nullptr) {
+      return 0;
+    }
+    ImGuiTabItem *item =
+        ImGui::TabBarFindTabByID(node->TabBar, tab.window->TabId);
+    return item != nullptr ? ImGui::TabBarGetTabOrder(node->TabBar, item) : 0;
+  };
+  std::stable_sort(tabs.begin(), tabs.end(),
+                   [&](const ListedTab &a, const ListedTab &b) {
+                     const ImGuiDockNode *a_node = node_of(a);
+                     const ImGuiDockNode *b_node = node_of(b);
+                     if (a_node == b_node) {
+                       return order_of(a) < order_of(b);
                      }
-                     if (a.node == nullptr || b.node == nullptr) {
-                       return b.node == nullptr;
+                     if (a_node == nullptr || b_node == nullptr) {
+                       return b_node == nullptr;
                      }
-                     if (a.node->Pos.y != b.node->Pos.y) {
-                       return a.node->Pos.y < b.node->Pos.y;
+                     if (a_node->Pos.y != b_node->Pos.y) {
+                       return a_node->Pos.y < b_node->Pos.y;
                      }
-                     return a.node->Pos.x < b.node->Pos.x;
+                     return a_node->Pos.x < b_node->Pos.x;
                    });
-  std::vector<patches::DocumentId> ids;
-  for (const Place &place : places) {
-    ids.push_back(place.id);
+  return tabs;
+}
+
+/// What a row of the list shows and does.
+struct ListedRow {
+  const char *icon;
+  float icon_scale;
+  bool icon_muted;
+  std::string name;
+  bool active;
+  bool preview;
+  bool modified;
+  bool closable;
+};
+
+ListedRow listed_row(PatchEditorContext &context, const ListedTab &tab) {
+  auto &session = context.session;
+  if (!tab.document) {
+    return {PREFERENCES_ICON,
+            1.0f,
+            false,
+            PREFERENCES_TITLE,
+            false,
+            false,
+            false,
+            true};
   }
-  return ids;
+  const auto *document = session.find_document(*tab.document);
+  const char *icon = document_icon(session, *document);
+  // Muted, as the browser shows it, for a patch without an icon.
+  return {icon,
+          ui::kPatchRowIconScale,
+          std::string_view(icon) == patches::instrument_icons::none_glyph(),
+          document_label(*document),
+          *tab.document == session.active_document_id(),
+          !document->pinned(),
+          document->is_modified(),
+          session.can_close_document(*tab.document)};
+}
+
+/// How far a row's name starts from its left: the icon with the frame
+/// padding on either side.
+float listed_name_offset() {
+  return ui::patch_row_icon_width() + ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+/// How wide a row's end is: the close button with the frame padding before
+/// and after it.
+float listed_end_width() {
+  return ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.x * 2.0f;
 }
 
 /**
- * One row of the open patches: the document's tab label, which brings it
- * forward, and at its right the close button its tab has, or the mark of
- * unsaved changes until the pointer comes over the row.
+ * One row of the list, laid out as a patch row of the browser: the icon,
+ * the name, and at the right the close button its tab has, or the mark of
+ * unsaved changes until the pointer comes over the row. True when the row
+ * is chosen; `close` is set when its close button is pressed.
  */
-void render_open_patch_row(PatchEditorContext &context,
-                           const patches::PatchDocument &document,
-                           float width) {
-  auto &session = context.session;
-  const auto id = document.id();
-  ImGui::PushID(static_cast<int>(id));
-  const bool preview = !document.pinned();
-  if (preview) {
+bool listed_row_selectable(const ListedRow &row, float width, bool &close) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float height = ui::patch_row_height();
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+  const bool chosen =
+      ImGui::Selectable("##row", row.active, ImGuiSelectableFlags_AllowOverlap,
+                        ImVec2(width, height));
+  ImGui::PopStyleVar();
+  const ImVec2 max(pos.x + width, pos.y + height);
+
+  if (row.preview) {
     push_preview_label_style();
   }
-  const bool chosen =
-      ImGui::Selectable(document_tab_label(session, document).c_str(),
-                        id == session.active_document_id(),
-                        ImGuiSelectableFlags_AllowOverlap, ImVec2(width, 0.0f));
-  if (preview) {
+  const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
+  const float icon_left = pos.x + style.FramePadding.x;
+  draw_centred_glyph(row.icon, ImVec2(icon_left, pos.y),
+                     ImVec2(icon_left + ui::patch_row_icon_width(), max.y),
+                     row.icon_muted ? ImGui::GetColorU32(styles::color(
+                                          styles::MegatoyCol::TextMuted))
+                                    : text,
+                     row.icon_scale);
+  ImGui::GetWindowDrawList()->AddText(
+      ImVec2(pos.x + listed_name_offset(),
+             pos.y + (height - ImGui::GetTextLineHeight()) * 0.5f),
+      text, row.name.c_str());
+  if (row.preview) {
     pop_preview_label_style();
   }
-  const ImVec2 row_min = ImGui::GetItemRectMin();
-  const ImVec2 row_max = ImGui::GetItemRectMax();
+
   const float size = ImGui::GetFontSize();
-  const ImVec2 mark_pos(row_max.x - size,
-                        (row_min.y + row_max.y - size) * 0.5f);
-  const bool closable = session.can_close_document(id);
-  if (document.is_modified() &&
-      (!closable || !ImGui::IsMouseHoveringRect(row_min, row_max))) {
+  const ImVec2 mark_pos(max.x - style.FramePadding.x - size,
+                        pos.y + (height - size) * 0.5f);
+  if (row.modified &&
+      (!row.closable || !ImGui::IsMouseHoveringRect(pos, max))) {
     ImGui::RenderBullet(
         ImGui::GetWindowDrawList(),
-        ImVec2(mark_pos.x + size * 0.5f, mark_pos.y + size * 0.5f),
-        ImGui::GetColorU32(ImGuiCol_Text));
-  } else if (closable &&
-             ImGui::CloseButton(ImGui::GetID("##close"), mark_pos)) {
-    context.request_close(id);
+        ImVec2(mark_pos.x + size * 0.5f, mark_pos.y + size * 0.5f), text);
+  } else if (row.closable) {
+    close = ImGui::CloseButton(ImGui::GetID("##close"), mark_pos);
   }
-  if (chosen) {
-    context.activate(id);
-    context.reveal_document = id;
-  }
-  ImGui::PopID();
+  return chosen;
 }
 
-/// A button at the left of the editors' tabs listing every open patch,
-/// those the bar has no room for too.
+/// Select a window's tab in its dock node, or raise it when it is not
+/// docked, and give it the keys.
+void bring_window_forward(ImGuiWindow *window) {
+  ImGuiDockNode *node = window->DockNode;
+  if (node != nullptr && node->TabBar != nullptr) {
+    node->TabBar->NextSelectedTabId = window->TabId;
+  }
+  ImGui::FocusWindow(window);
+}
+
+/// A button at the left of the editors' tabs listing every open patch and
+/// Preferences, those the bar has no room for too.
 void render_open_patches_button(PatchEditorContext &context,
                                 ImGuiDockNode *node) {
   static const ImGuiID popup_id = ImHashStr("##open_patches");
@@ -874,23 +957,34 @@ void render_open_patches_button(PatchEditorContext &context,
                                          ImGuiWindowFlags_NoSavedSettings)) {
     return;
   }
-  auto &session = context.session;
-  const auto ids = documents_in_tab_order(context);
-  // Every row as wide as the widest label, with the close button after it.
-  float label_width = 0.0f;
-  for (const auto id : ids) {
-    if (const auto *document = session.find_document(id)) {
-      label_width = ImMax(
-          label_width,
-          ImGui::CalcTextSize(document_tab_label(session, *document).c_str())
-              .x);
-    }
+  const auto tabs = tabs_in_order(context);
+  std::vector<ListedRow> rows;
+  float name_width = 0.0f;
+  for (const auto &tab : tabs) {
+    rows.push_back(listed_row(context, tab));
+    name_width =
+        ImMax(name_width, ImGui::CalcTextSize(rows.back().name.c_str()).x);
   }
-  const float width =
-      label_width + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::GetFontSize();
-  for (const auto id : ids) {
-    if (const auto *document = session.find_document(id)) {
-      render_open_patch_row(context, *document, width);
+  // Every row as wide as the widest name.
+  const float width = listed_name_offset() + name_width +
+                      ImGui::GetStyle().ItemInnerSpacing.x + listed_end_width();
+  for (std::size_t i = 0; i < tabs.size(); ++i) {
+    const ListedTab &tab = tabs[i];
+    ImGui::PushID(tab.document ? static_cast<int>(*tab.document) : -1);
+    bool close = false;
+    const bool chosen = listed_row_selectable(rows[i], width, close);
+    ImGui::PopID();
+    if (tab.document) {
+      if (close) {
+        context.request_close(*tab.document);
+      } else if (chosen) {
+        context.activate(*tab.document);
+        context.reveal_document = *tab.document;
+      }
+    } else if (close) {
+      context.prefs.show_preferences = false;
+    } else if (chosen && tab.window != nullptr) {
+      bring_window_forward(tab.window);
     }
   }
   ImGui::EndPopup();

@@ -4,6 +4,7 @@
 #include "gui/components/centred_glyph.hpp"
 #include "gui/tab_bar_lines.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -19,6 +20,27 @@ struct FoldedTabButton {
   ImVec2 min;
   ImVec2 max;
 };
+
+/**
+ * Keeps the buttons at the left of `bar` in the order they are drawn: a
+ * dock's tab bar keeps its tabs in the order they first came, so a button
+ * that came before one drawn ahead of it this frame moves after that one.
+ */
+inline void keep_leading_order(ImGuiTabBar &bar, ImGuiID id) {
+  ImGuiTabItem *tab = ImGui::TabBarFindTabByID(&bar, id);
+  if (tab == nullptr) {
+    return;
+  }
+  ImGuiTabItem *after = tab;
+  for (ImGuiTabItem *other = tab + 1; other < bar.Tabs.end(); ++other) {
+    if ((other->Flags & ImGuiTabItemFlags_Leading) != 0 &&
+        other->LastFrameVisible == ImGui::GetFrameCount() &&
+        other->BeginOrder < tab->BeginOrder) {
+      after = other;
+    }
+  }
+  std::rotate(tab, tab + 1, after + 1);
+}
 
 /**
  * Draws a button with `icon` among `node`'s tabs, its title as a tooltip,
@@ -45,17 +67,23 @@ tab_bar_button(ImGuiDockNode *node, const char *id, const char *icon,
   ImGui::TabItemButton(id, placement | ImGuiTabItemFlags_NoTooltip);
   ImGui::PopStyleColor(kClearTabBarColorCount);
   ImGui::PopStyleVar();
+  const ImRect item(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+  const bool hovered = ImGui::IsItemHovered();
+  const bool under_pointer =
+      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+  if ((placement & ImGuiTabItemFlags_Leading) != 0) {
+    keep_leading_order(*bar, ImGui::GetID(id));
+  }
   // The icon in the middle of the fill, which stops as far above the line
   // as the tabs not shown do.
   const TabSpan span = unshown_tab_span(bar->BarRect);
-  draw_centred_glyph(icon, ImVec2(ImGui::GetItemRectMin().x, span.top),
-                     ImVec2(ImGui::GetItemRectMax().x, span.bottom));
+  draw_centred_glyph(icon, ImVec2(item.Min.x, span.top),
+                     ImVec2(item.Max.x, span.bottom));
   FoldedTabButton button;
-  button.hovered = ImGui::IsItemHovered();
-  button.under_pointer =
-      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
-  button.min = ImGui::GetItemRectMin();
-  button.max = ImGui::GetItemRectMax();
+  button.hovered = hovered;
+  button.under_pointer = under_pointer;
+  button.min = item.Min;
+  button.max = item.Max;
   ImGui::DockNodeEndAmendTabBar();
   if (button.hovered) {
     ImGui::SetTooltip("%s", title);
