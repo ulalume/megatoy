@@ -867,10 +867,34 @@ float listed_name_offset() {
   return ui::patch_row_icon_width() + ImGui::GetStyle().FramePadding.x * 2.0f;
 }
 
-/// How wide a row's end is: the close button with the frame padding before
-/// and after it.
-float listed_end_width() {
-  return ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.x * 2.0f;
+/**
+ * A close button filling the square `bb`, its cross as large as ImGui's own
+ * close button draws it.
+ */
+bool square_close_button(ImGuiID id, const ImRect &bb) {
+  if (!ImGui::ItemAdd(bb, id)) {
+    return false;
+  }
+  bool hovered = false;
+  bool held = false;
+  const bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  if (hovered) {
+    draw_list->AddRectFilled(bb.Min, bb.Max,
+                             ImGui::GetColorU32(held ? ImGuiCol_ButtonActive
+                                                     : ImGuiCol_ButtonHovered));
+  }
+  const ImU32 cross = ImGui::GetColorU32(ImGuiCol_Text);
+  const ImVec2 centre = bb.GetCenter();
+  const float x = centre.x - 0.5f;
+  const float y = centre.y - 0.5f;
+  const float extent = ImGui::GetFontSize() * 0.5f * 0.7071f - 1.0f;
+  const float thickness = ui::scale::px(1.0f);
+  draw_list->AddLine(ImVec2(x - extent, y - extent),
+                     ImVec2(x + extent, y + extent), cross, thickness);
+  draw_list->AddLine(ImVec2(x - extent, y + extent),
+                     ImVec2(x + extent, y - extent), cross, thickness);
+  return pressed;
 }
 
 /**
@@ -909,16 +933,13 @@ bool listed_row_selectable(const ListedRow &row, float width, bool &close) {
     pop_preview_label_style();
   }
 
-  const float size = ImGui::GetFontSize();
-  const ImVec2 mark_pos(max.x - style.FramePadding.x - size,
-                        pos.y + (height - size) * 0.5f);
+  // The close button a square as tall as the row, at its right end.
+  const ImRect end(ImVec2(max.x - height, pos.y), max);
   if (row.modified &&
       (!row.closable || !ImGui::IsMouseHoveringRect(pos, max))) {
-    ImGui::RenderBullet(
-        ImGui::GetWindowDrawList(),
-        ImVec2(mark_pos.x + size * 0.5f, mark_pos.y + size * 0.5f), text);
+    ImGui::RenderBullet(ImGui::GetWindowDrawList(), end.GetCenter(), text);
   } else if (row.closable) {
-    close = ImGui::CloseButton(ImGui::GetID("##close"), mark_pos);
+    close = square_close_button(ImGui::GetID("##close"), end);
   }
   return chosen;
 }
@@ -973,7 +994,8 @@ void render_open_patches_button(PatchEditorContext &context,
   }
   // Every row as wide as the widest name.
   const float width = listed_name_offset() + name_width +
-                      ImGui::GetStyle().ItemInnerSpacing.x + listed_end_width();
+                      ImGui::GetStyle().ItemInnerSpacing.x +
+                      ui::patch_row_height();
   for (std::size_t i = 0; i < tabs.size(); ++i) {
     const ListedTab &tab = tabs[i];
     ImGui::PushID(tab.document ? static_cast<int>(*tab.document) : -1);
