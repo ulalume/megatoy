@@ -320,6 +320,7 @@ FrameContexts::FrameContexts(AppContext &ctx)
                                          const ym2612::Patch &patch) {
     patch_actions::reload_from_disk(ctx, document, patch);
   };
+  patch_editor.new_patch = [&ctx]() { patch_actions::new_patch(ctx); };
 }
 
 } // namespace ui::renderer_detail

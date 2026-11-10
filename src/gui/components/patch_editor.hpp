@@ -35,6 +35,8 @@ struct PatchEditorContext {
   /// Show a document's file's new contents, as one undo step.
   std::function<void(patches::DocumentId, const ym2612::Patch &)>
       reload_from_disk;
+  /// As the File menu's New Patch.
+  std::function<void()> new_patch;
 
   OperatorEditState &operator_edit() const {
     return document_ui(document).operator_edit;

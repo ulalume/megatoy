@@ -4,6 +4,7 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/folded_tab_button.hpp"
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
@@ -796,6 +797,18 @@ void render_patch_editors(PatchEditorContext &context,
   }
   for (const auto id : frame.to_close) {
     context.request_close(id);
+  }
+
+  // A new patch from the right of the editors' tabs, as the folder icon adds
+  // a folder at the right of the browser's search row.
+  static bool new_patch_pressed = false;
+  const auto new_patch = tab_bar_button(
+      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID),
+      "##new_patch", ICON_MEGATOY_PLUS, "New Patch", ImGuiTabItemFlags_Trailing,
+      unshown_tab_height());
+  if (folded_tab_button_clicked(new_patch, new_patch_pressed) &&
+      context.new_patch) {
+    context.new_patch();
   }
 }
 

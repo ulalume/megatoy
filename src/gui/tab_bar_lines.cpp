@@ -45,8 +45,14 @@ template <typename Visit> void for_each_tab_bar(Visit visit) {
   }
 }
 
+/// Where `tab` starts: the tabs between the leading and trailing ones
+/// scroll.
 float tab_left(const ImGuiTabBar &bar, const ImGuiTabItem &tab) {
-  return bar.BarRect.Min.x + tab.Offset - bar.ScrollingAnim;
+  if ((tab.Flags & ImGuiTabItemFlags_Trailing) != 0) {
+    return bar.BarRect.Min.x + trailing_tab_offset(bar, tab);
+  }
+  const bool scrolls = (tab.Flags & ImGuiTabItemFlags_SectionMask_) == 0;
+  return bar.BarRect.Min.x + tab.Offset - (scrolls ? bar.ScrollingAnim : 0.0f);
 }
 
 /// One node's bar: its background, its tabs and the line under them.
@@ -75,9 +81,13 @@ void draw_tab_bar(ImDrawList *draw_list, const ImGuiDockNode &node,
     // lights up instead, as ImGui draws it.
     const bool shown = tab.ID != 0 && tab.ID == bar.VisibleTabId;
     const bool pointed = !shown && is_pointed_at(tab.ID);
-    // A button among the tabs, such as a folded view's, keeps a fill of its
-    // own.
+    // A button among the tabs keeps a fill of its own, such as a folded
+    // view's at the left; one at the right, an action's, shows one only
+    // under the pointer.
     const bool button = (tab.Flags & ImGuiTabItemFlags_Button) != 0;
+    if (button && !pointed && (tab.Flags & ImGuiTabItemFlags_Trailing) != 0) {
+      continue;
+    }
     const ImU32 color =
         pointed  ? ImGui::GetColorU32(ImGuiCol_TabHovered)
         : button ? styles::color_u32(styles::MegatoyCol::TabButton)

@@ -2,6 +2,7 @@
 
 #include "gui/app_window.hpp"
 #include "gui/components/centred_glyph.hpp"
+#include "gui/tab_bar_lines.hpp"
 
 #include <cmath>
 #include <imgui.h>
@@ -20,31 +21,33 @@ struct FoldedTabButton {
 };
 
 /**
- * Draws a folded view's button, with its icon and its title as a tooltip, at
- * the left of `node`'s tabs. A button added to a dock's tab bar does not take
- * clicks itself, so the caller reads them from what this returns. Nothing
- * when the node has no tab bar to add to.
+ * Draws a button with `icon` among `node`'s tabs, its title as a tooltip,
+ * `width` wide: at their left with ImGuiTabItemFlags_Leading, at the bar's
+ * right end with ImGuiTabItemFlags_Trailing. A button added to a dock's tab bar
+ * does not take clicks itself, so the caller reads them from what this returns.
+ * Nothing when the node has no tab bar to add to.
  */
-inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
-                                                        const char *id,
-                                                        const char *icon,
-                                                        const char *title) {
+inline std::optional<FoldedTabButton>
+tab_bar_button(ImGuiDockNode *node, const char *id, const char *icon,
+               const char *title, ImGuiTabItemFlags placement, float width) {
   if (node == nullptr || !ImGui::DockNodeBeginAmendTabBar(node)) {
     return std::nullopt;
   }
-  // Half again as wide as the tabs beside it are tall, its fill drawn with
-  // theirs.
-  const float width = std::round(unshown_tab_height() * 1.5f);
+  ImGuiTabBar *bar = node->TabBar;
+  if ((placement & ImGuiTabItemFlags_Trailing) != 0) {
+    if (ImGuiTabItem *tab = ImGui::TabBarFindTabByID(bar, ImGui::GetID(id))) {
+      tab->Offset = trailing_tab_offset(*bar, *tab);
+    }
+  }
   push_window_tab_padding();
   push_clear_tab_bar_colors();
   ImGui::SetNextItemWidth(width);
-  ImGui::TabItemButton(id,
-                       ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
+  ImGui::TabItemButton(id, placement | ImGuiTabItemFlags_NoTooltip);
   ImGui::PopStyleColor(kClearTabBarColorCount);
   ImGui::PopStyleVar();
   // The icon in the middle of the fill, which stops as far above the line
   // as the tabs not shown do.
-  const TabSpan span = unshown_tab_span(node->TabBar->BarRect);
+  const TabSpan span = unshown_tab_span(bar->BarRect);
   draw_centred_glyph(icon, ImVec2(ImGui::GetItemRectMin().x, span.top),
                      ImVec2(ImGui::GetItemRectMax().x, span.bottom));
   FoldedTabButton button;
@@ -58,6 +61,16 @@ inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
     ImGui::SetTooltip("%s", title);
   }
   return button;
+}
+
+/// A folded view's button at the left of `node`'s tabs, half again as wide
+/// as the tabs beside it are tall, its fill drawn with theirs.
+inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
+                                                        const char *id,
+                                                        const char *icon,
+                                                        const char *title) {
+  return tab_bar_button(node, id, icon, title, ImGuiTabItemFlags_Leading,
+                        std::round(unshown_tab_height() * 1.5f));
 }
 
 /**

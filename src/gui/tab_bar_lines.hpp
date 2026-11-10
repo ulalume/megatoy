@@ -1,6 +1,7 @@
 #pragma once
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 namespace ui {
 
@@ -12,6 +13,13 @@ namespace ui {
  */
 ImGuiID dock_space_over_viewport(ImGuiID dockspace_id,
                                  const ImGuiViewport *viewport);
+
+/// Where a trailing button among `bar`'s tabs stands: right after them while
+/// they leave room, as ImGui lays it out, but moved to the bar's end.
+inline float trailing_tab_offset(const ImGuiTabBar &bar,
+                                 const ImGuiTabItem &tab) {
+  return ImMax(tab.Offset, bar.BarRect.GetWidth() - tab.Width);
+}
 
 /// Keeps the tab bar of the dock node the current window is in drawn as the
 /// focused node's.
