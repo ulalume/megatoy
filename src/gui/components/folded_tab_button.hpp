@@ -5,7 +5,6 @@
 #include "gui/tab_bar_lines.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <optional>
@@ -91,14 +90,14 @@ tab_bar_button(ImGuiDockNode *node, const char *id, const char *icon,
   return button;
 }
 
-/// A folded view's button at the left of `node`'s tabs, half again as wide
-/// as the tabs beside it are tall, its fill drawn with theirs.
+/// A folded view's button at the left of `node`'s tabs, as wide as the tabs
+/// beside it are tall, its fill drawn with theirs.
 inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
                                                         const char *id,
                                                         const char *icon,
                                                         const char *title) {
   return tab_bar_button(node, id, icon, title, ImGuiTabItemFlags_Leading,
-                        std::round(unshown_tab_height() * 1.5f));
+                        unshown_tab_height());
 }
 
 /**
