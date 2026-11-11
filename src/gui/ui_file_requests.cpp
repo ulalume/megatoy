@@ -680,14 +680,11 @@ void request_patch_duplicate(AppContext &ctx,
 #else
   const auto start_directory = default_save_as_folder(
       source_folder, ctx.services.preference_manager.last_save_directory());
-  const auto format = session.find_save_format(extension);
-  const std::vector<platform::file_dialog::FileFilter> filters{
-      {format ? format->label : "megatoy", {extension.substr(1)}},
-      {"All Files", {"*"}}};
-
+  const auto formats = session.save_formats();
   std::filesystem::path selected;
   const auto dialog = platform::file_dialog::save_file(
-      start_directory, stem + extension, filters, selected);
+      start_directory, stem + extension,
+      patches::save_dialog_filters(formats, extension), selected);
   if (dialog == platform::file_dialog::DialogResult::Cancelled) {
     return;
   }
@@ -697,7 +694,7 @@ void request_patch_duplicate(AppContext &ctx,
   }
 
   selected =
-      patches::append_extension_if_missing(std::move(selected), extension);
+      patches::with_save_extension(std::move(selected), formats, extension);
   patch.name = selected.stem().string();
   if (!patches::write_patch(patch, selected)) {
     megatoy::status::error("Failed to write " + selected.string());

@@ -217,7 +217,10 @@ else()
 endif()
 # Add platform-specific source files
 if(APPLE)
-  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm)
+  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm
+                                    src/platform/file_dialog_mac.mm)
+  set_source_files_properties(src/platform/file_dialog_mac.mm
+    PROPERTIES COMPILE_OPTIONS -fobjc-arc)
   list(APPEND MEGATOY_CORE_SOURCES src/gui/mac_window_menu.mm)
 elseif(WIN32)
   list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
@@ -294,6 +297,7 @@ if(APPLE)
     "-framework ApplicationServices"
     "-framework CoreFoundation"
     "-framework Foundation"
+    "-framework UniformTypeIdentifiers"
   )
 endif()
 

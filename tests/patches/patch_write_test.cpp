@@ -10,6 +10,8 @@
 #include "../test_check.hpp"
 #include <filesystem>
 #include <iostream>
+#include <string>
+#include <vector>
 
 int main() {
   using patches::can_overwrite_in_place;
@@ -61,6 +63,26 @@ int main() {
     CHECK(!loaded.patches.empty());
     CHECK(loaded.patches[0].instrument.algorithm == 5);
   }
+
+  // The save dialog offers every format once, the patch's own first.
+  const std::vector<formats::SaveFormatInfo> formats{
+      {".dmp", "DefleMask Preset", false},
+      {".fui", "Furnace Instrument", false},
+      {".mml", "MML", true},
+      {".dmp", "DefleMask Preset", true}};
+  const auto filters = patches::save_dialog_filters(formats, ".fui");
+  CHECK(filters.size() == 3);
+  CHECK(filters[0].extensions == std::vector<std::string>{"fui"});
+  CHECK(filters[1].extensions == std::vector<std::string>{"dmp"});
+  CHECK(filters[2].label == "MML");
+
+  // The format is the one the returned name has, or else the one offered.
+  CHECK(patches::with_save_extension("lead.FUI", formats, ".dmp") ==
+        std::filesystem::path("lead.FUI"));
+  CHECK(patches::with_save_extension("lead", formats, ".dmp") ==
+        std::filesystem::path("lead.dmp"));
+  CHECK(patches::with_save_extension("lead.txt", formats, ".dmp") ==
+        std::filesystem::path("lead.txt.dmp"));
 
   std::filesystem::remove_all(dir);
   std::cout << "All patch write tests passed\n";

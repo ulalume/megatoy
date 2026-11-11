@@ -23,6 +23,12 @@ void shutdown();
 DialogResult pick_folder(const std::filesystem::path &default_path,
                          std::filesystem::path &selected_path);
 
+/**
+ * Asks where to save, and in which of `filters`' formats where there are
+ * several: the dialog starts on the first, and the name's extension follows
+ * the one picked. Which was picked is told by the extension of
+ * `selected_path`.
+ */
 DialogResult save_file(const std::filesystem::path &default_dir,
                        const std::string &default_name,
                        const std::vector<FileFilter> &filters,

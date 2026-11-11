@@ -3,10 +3,14 @@
 // Format-driven rules and file writing for saving a patch, kept free of
 // session state so they can be tested without one.
 
+#include "formats/patch_registry.hpp"
+#include "platform/file_dialog.hpp"
 #include "ym2612/patch.hpp"
 
 #include <filesystem>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace patches {
 
@@ -29,5 +33,18 @@ bool can_overwrite_in_place(const std::filesystem::path &path);
  * Text formats are written as text; .ginpkg appends a version.
  */
 bool write_patch(const ym2612::Patch &patch, const std::filesystem::path &path);
+
+/// The save dialog's formats: each extension of `formats` once, `first`
+/// leading so the dialog starts on it.
+std::vector<platform::file_dialog::FileFilter>
+save_dialog_filters(const std::vector<formats::SaveFormatInfo> &formats,
+                    std::string_view first);
+
+/// `path` as the save dialog returned it, given `fallback`'s extension when
+/// its own is none of `formats`.
+std::filesystem::path
+with_save_extension(std::filesystem::path path,
+                    const std::vector<formats::SaveFormatInfo> &formats,
+                    std::string_view fallback);
 
 } // namespace patches

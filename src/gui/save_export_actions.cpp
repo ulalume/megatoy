@@ -3,6 +3,7 @@
 #include "components/modal.hpp"
 #include "core/status.hpp"
 #include "gui/components/menu_rows.hpp"
+#include "gui/save_as_dialog.hpp"
 #include "patches/filename_utils.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
@@ -14,7 +15,6 @@
 #include <string_view>
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "gui/patch_save_dialog.hpp"
-#include "gui/save_as_dialog.hpp"
 #include "platform/web/web_storage_bootstrap.hpp"
 #include "platform/web/web_workspace_download.hpp"
 #endif
@@ -208,14 +208,12 @@ void render_save_export_popups(patches::PatchSession &session,
     open_save_to_storage_dialog(session, state);
   }
 #endif
-  if (state.save_as_requested) {
 #if defined(MEGATOY_PLATFORM_WEB)
+  if (state.save_as_requested) {
     ImGui::OpenPopup(kSaveAsMenuId);
-#else
-    ImGui::OpenPopup("Save As...");
-#endif
     state.save_as_requested = false;
   }
+#endif
 
 #if defined(MEGATOY_PLATFORM_WEB)
   render_save_as_menu(session, state);
@@ -228,19 +226,17 @@ void render_save_export_popups(patches::PatchSession &session,
         save_as_into(session, state, folder, stem, extension, overwrite);
       });
 #else
-  std::optional<std::string> selected_extension;
-  if (ui::begin_popup("Save As...")) {
-    for (const auto &format : session.save_formats()) {
-      if (ImGui::MenuItem(format.display_name().c_str())) {
-        selected_extension = format.extension;
-      }
-    }
-    ui::end_popup();
-  }
-  if (selected_extension) {
-    auto result = session.save_current_patch_as(*selected_extension);
+  // The file dialog asks for the format too, starting on the patch's own.
+  if (state.save_as_requested) {
+    state.save_as_requested = false;
+    const std::string extension = default_save_as_extension(
+        std::filesystem::path(session.current_patch_path())
+            .extension()
+            .string(),
+        session.save_formats());
+    auto result = session.save_current_patch_as(extension);
     if (result.is_duplicated()) {
-      state.pending_save_as_extension = *selected_extension;
+      state.pending_save_as_extension = extension;
       state.overwrite_confirmation_pending = true;
     } else {
       announce_save(session, result);

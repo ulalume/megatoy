@@ -144,6 +144,8 @@ DialogResult pick_folder(const std::filesystem::path &default_path,
   return DialogResult::Error;
 }
 
+// macOS asks with a Format popup of its own: file_dialog_mac.mm.
+#if !defined(__APPLE__)
 DialogResult save_file(const std::filesystem::path &default_dir,
                        const std::string &default_name,
                        const std::vector<FileFilter> &filters,
@@ -162,10 +164,17 @@ DialogResult save_file(const std::filesystem::path &default_dir,
       static_cast<nfdfiltersize_t>(filter_items.items.size());
 
   nfdu8char_t *out_path = nullptr;
+#if defined(_WIN32)
+  const std::string &name = default_name;
+#else
+  // GTK gives a name without an extension the picked format's, and leaves
+  // one that has an extension as it is.
+  const std::string name = std::filesystem::path(default_name).stem().string();
+#endif
   const nfdresult_t result =
       NFD_SaveDialogU8(&out_path, filter_ptr, filter_count,
                        default_utf8.empty() ? nullptr : default_utf8.c_str(),
-                       default_name.empty() ? nullptr : default_name.c_str());
+                       name.empty() ? nullptr : name.c_str());
 
   if (result == NFD_OKAY) {
     selected_path = path_from_utf8(out_path);
@@ -178,6 +187,7 @@ DialogResult save_file(const std::filesystem::path &default_dir,
   report_error("Error selecting file");
   return DialogResult::Error;
 }
+#endif
 
 #endif // __EMSCRIPTEN__
 

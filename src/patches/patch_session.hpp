@@ -297,8 +297,6 @@ public:
   bool can_move_patch(const PatchEntry &entry,
                       const PatchEntry &destination) const;
   bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
-  std::optional<SaveFormatInfo>
-  find_save_format(const std::string &extension) const;
   std::vector<SaveFormatInfo> save_formats() const;
 
   // Note management

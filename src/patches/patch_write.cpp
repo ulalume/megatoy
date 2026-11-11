@@ -3,6 +3,7 @@
 #include "formats/ginpkg.hpp"
 #include "formats/patch_registry.hpp"
 #include "formats/ym2612_format_adapter.hpp"
+#include "patches/filename_utils.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -52,6 +53,44 @@ bool write_patch(const ym2612::Patch &patch,
     }
   }
   return registry.write(extension, patch, path);
+}
+
+std::vector<platform::file_dialog::FileFilter>
+save_dialog_filters(const std::vector<formats::SaveFormatInfo> &formats,
+                    std::string_view first) {
+  std::vector<platform::file_dialog::FileFilter> filters;
+  const auto add = [&](const formats::SaveFormatInfo &format) {
+    const std::string extension = format.extension.substr(1);
+    const bool listed =
+        std::any_of(filters.begin(), filters.end(), [&](const auto &filter) {
+          return filter.extensions.front() == extension;
+        });
+    if (!listed) {
+      filters.push_back({format.label, {extension}});
+    }
+  };
+  for (const auto &format : formats) {
+    if (format.extension == first) {
+      add(format);
+    }
+  }
+  for (const auto &format : formats) {
+    add(format);
+  }
+  return filters;
+}
+
+std::filesystem::path
+with_save_extension(std::filesystem::path path,
+                    const std::vector<formats::SaveFormatInfo> &formats,
+                    std::string_view fallback) {
+  const auto extension = lowercase_extension(path);
+  const bool writable =
+      std::any_of(formats.begin(), formats.end(), [&](const auto &format) {
+        return format.extension == extension;
+      });
+  return writable ? path
+                  : append_extension_if_missing(std::move(path), fallback);
 }
 
 } // namespace patches
