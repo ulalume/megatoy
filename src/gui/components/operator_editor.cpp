@@ -784,11 +784,16 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     // Feedback belongs to the channel, not to an operator -- there is one of
     // it, and OP1's panel is only where it is drawn. So it spreads nowhere,
     // but it still leads: editing it makes OP1 the primary operator. It
-    // takes the rest of the row, out to the graph's right edge.
+    // stands at the row's right, out to the graph's right edge, no wider
+    // than kFeedbackMaxWidth.
+    constexpr float kFeedbackMaxWidth = 150.0f;
     ImGui::SameLine();
     const float row_end = row_left + content_width - frame_padding();
-    ImGui::SetNextItemWidth(
-        std::max(row_end - ImGui::GetCursorPosX(), ImGui::GetFrameHeight()));
+    const float width = std::max(std::min(row_end - ImGui::GetCursorPosX(),
+                                          ui::scale::px(kFeedbackMaxWidth)),
+                                 ImGui::GetFrameHeight());
+    ImGui::SetCursorPosX(std::max(row_end - width, ImGui::GetCursorPosX()));
+    ImGui::SetNextItemWidth(width);
     int feedback = instrument.feedback;
     const bool feedback_changed = named_slider_int("Feedback", &feedback, 0, 7);
     if (ImGui::IsItemActivated()) {
