@@ -501,11 +501,10 @@ void push_preview_label_style() {
 
 void pop_preview_label_style() { ImGui::PopStyleColor(); }
 
-/// Select the current window's tab in its dock node, or raise it when it is
-/// not docked, without taking the keyboard from another window. False while
-/// the node has not built its tabs yet, as on the first frame.
-bool bring_current_window_forward() {
-  ImGuiWindow *window = ImGui::GetCurrentWindow();
+/// Select a window's tab in its dock node, or raise it when it is not
+/// docked, without taking the keyboard from another window. False while the
+/// node has not built its tabs yet, as on the first frame.
+bool bring_window_forward(ImGuiWindow *window) {
   if (ImGuiDockNode *node = window->DockNode) {
     if (node->TabBar == nullptr) {
       return node->Windows.Size <= 1;
@@ -686,7 +685,8 @@ void render_document_window(PatchEditorContext &context,
       ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
     session.pin(id);
   }
-  if (reveal && (take_focus || bring_current_window_forward())) {
+  if (reveal &&
+      (take_focus || bring_window_forward(ImGui::GetCurrentWindow()))) {
     context.reveal_document.reset();
   }
   if (frame.first_dock_id == 0) {
@@ -766,10 +766,12 @@ void render_document_window(PatchEditorContext &context,
 }
 
 /// A tab the editors' list holds: an open document, or Preferences when no
-/// document is given.
+/// document is given, with the dock node it stands in and its place there.
 struct ListedTab {
   std::optional<patches::DocumentId> document;
   ImGuiWindow *window;
+  const ImGuiDockNode *node = nullptr;
+  int order = 0;
 };
 
 /// The Preferences window while it is open.
@@ -777,8 +779,8 @@ ImGuiWindow *preferences_window(const PatchEditorContext &context) {
   if (!context.prefs.show_preferences) {
     return nullptr;
   }
-  static const std::string name = std::string("###") + PREFERENCES_TITLE;
-  return ImGui::FindWindowByName(name.c_str());
+  static const std::string id = panel_window_id(PREFERENCES_TITLE);
+  return ImGui::FindWindowByName(id.c_str());
 }
 
 /// The open documents and Preferences in the order their tabs show: dock
@@ -793,72 +795,68 @@ std::vector<ListedTab> tabs_in_order(PatchEditorContext &context) {
   if (ImGuiWindow *window = preferences_window(context)) {
     tabs.push_back({std::nullopt, window});
   }
-  const auto node_of = [](const ListedTab &tab) -> const ImGuiDockNode * {
-    return tab.window != nullptr ? tab.window->DockNode : nullptr;
-  };
-  const auto order_of = [](const ListedTab &tab) {
+  for (ListedTab &tab : tabs) {
     ImGuiDockNode *node =
         tab.window != nullptr ? tab.window->DockNode : nullptr;
-    if (node == nullptr || node->TabBar == nullptr) {
-      return 0;
+    tab.node = node;
+    if (node != nullptr && node->TabBar != nullptr) {
+      if (ImGuiTabItem *item =
+              ImGui::TabBarFindTabByID(node->TabBar, tab.window->TabId)) {
+        tab.order = ImGui::TabBarGetTabOrder(node->TabBar, item);
+      }
     }
-    ImGuiTabItem *item =
-        ImGui::TabBarFindTabByID(node->TabBar, tab.window->TabId);
-    return item != nullptr ? ImGui::TabBarGetTabOrder(node->TabBar, item) : 0;
-  };
+  }
   std::stable_sort(tabs.begin(), tabs.end(),
-                   [&](const ListedTab &a, const ListedTab &b) {
-                     const ImGuiDockNode *a_node = node_of(a);
-                     const ImGuiDockNode *b_node = node_of(b);
-                     if (a_node == b_node) {
-                       return order_of(a) < order_of(b);
+                   [](const ListedTab &a, const ListedTab &b) {
+                     if (a.node == b.node) {
+                       return a.order < b.order;
                      }
-                     if (a_node == nullptr || b_node == nullptr) {
-                       return b_node == nullptr;
+                     if (a.node == nullptr || b.node == nullptr) {
+                       return b.node == nullptr;
                      }
-                     if (a_node->Pos.y != b_node->Pos.y) {
-                       return a_node->Pos.y < b_node->Pos.y;
+                     if (a.node->Pos.y != b.node->Pos.y) {
+                       return a.node->Pos.y < b.node->Pos.y;
                      }
-                     return a_node->Pos.x < b_node->Pos.x;
+                     if (a.node->Pos.x != b.node->Pos.x) {
+                       return a.node->Pos.x < b.node->Pos.x;
+                     }
+                     return a.node->ID < b.node->ID;
                    });
   return tabs;
 }
 
 /// What a row of the list shows and does.
 struct ListedRow {
-  const char *icon;
-  float icon_scale;
-  bool icon_muted;
+  const char *icon = nullptr;
+  float icon_scale = 1.0f;
+  bool icon_muted = false;
   std::string name;
-  bool active;
-  bool preview;
-  bool modified;
-  bool closable;
+  bool active = false;
+  bool preview = false;
+  bool modified = false;
+  bool closable = false;
 };
 
 ListedRow listed_row(PatchEditorContext &context, const ListedTab &tab) {
   auto &session = context.session;
   if (!tab.document) {
-    return {PREFERENCES_ICON,
-            1.0f,
-            false,
-            PREFERENCES_TITLE,
-            false,
-            false,
-            false,
-            true};
+    return {.icon = PREFERENCES_ICON,
+            .icon_scale = 1.0f,
+            .name = PREFERENCES_TITLE,
+            .closable = true};
   }
   const auto *document = session.find_document(*tab.document);
   const char *icon = document_icon(session, *document);
   // Muted, as the browser shows it, for a patch without an icon.
-  return {icon,
-          ui::kPatchRowIconScale,
-          std::string_view(icon) == patches::instrument_icons::none_glyph(),
-          document_label(*document),
-          *tab.document == session.active_document_id(),
-          !document->pinned(),
-          document->is_modified(),
-          session.can_close_document(*tab.document)};
+  return {.icon = icon,
+          .icon_scale = ui::kPatchRowIconScale,
+          .icon_muted =
+              std::string_view(icon) == patches::instrument_icons::none_glyph(),
+          .name = document_label(*document),
+          .active = *tab.document == session.active_document_id(),
+          .preview = !document->pinned(),
+          .modified = document->is_modified(),
+          .closable = session.can_close_document(*tab.document)};
 }
 
 /// How far a row's name starts from its left: the icon with the frame
@@ -925,10 +923,16 @@ bool listed_row_selectable(const ListedRow &row, float width, bool &close) {
                                           styles::MegatoyCol::TextMuted))
                                     : text,
                      row.icon_scale);
-  ImGui::GetWindowDrawList()->AddText(
-      ImVec2(pos.x + listed_name_offset(),
-             pos.y + (height - ImGui::GetTextLineHeight()) * 0.5f),
-      text, row.name.c_str());
+  // Cut short when the row has no room for all of it.
+  const ImVec2 name_pos(pos.x + listed_name_offset(),
+                        pos.y + (height - ImGui::GetTextLineHeight()) * 0.5f);
+  const float name_end = max.x - height - style.ItemInnerSpacing.x;
+  const ImVec2 name_size = ImGui::CalcTextSize(row.name.c_str());
+  ImGui::PushStyleColor(ImGuiCol_Text, text);
+  ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), name_pos,
+                            ImVec2(name_end, name_pos.y + name_size.y),
+                            name_end, row.name.c_str(), nullptr, &name_size);
+  ImGui::PopStyleColor();
   if (row.preview) {
     pop_preview_label_style();
   }
@@ -942,16 +946,6 @@ bool listed_row_selectable(const ListedRow &row, float width, bool &close) {
     close = square_close_button(ImGui::GetID("##close"), end);
   }
   return chosen;
-}
-
-/// Select a window's tab in its dock node, or raise it when it is not
-/// docked, and give it the keys.
-void bring_window_forward(ImGuiWindow *window) {
-  ImGuiDockNode *node = window->DockNode;
-  if (node != nullptr && node->TabBar != nullptr) {
-    node->TabBar->NextSelectedTabId = window->TabId;
-  }
-  ImGui::FocusWindow(window);
 }
 
 /// A button at the left of the editors' tabs listing every open patch and
@@ -992,10 +986,14 @@ void render_open_patches_button(PatchEditorContext &context,
     name_width =
         ImMax(name_width, ImGui::CalcTextSize(rows.back().name.c_str()).x);
   }
-  // Every row as wide as the widest name.
-  const float width = listed_name_offset() + name_width +
-                      ImGui::GetStyle().ItemInnerSpacing.x +
-                      ui::patch_row_height();
+  // Every row as wide as the widest name, as far as the screen's right
+  // edge allows.
+  const float room = viewport->WorkPos.x + viewport->WorkSize.x - below.x -
+                     ImGui::GetCurrentWindow()->WindowPadding.x * 2.0f;
+  const float width =
+      ImMin(listed_name_offset() + name_width +
+                ImGui::GetStyle().ItemInnerSpacing.x + ui::patch_row_height(),
+            room);
   for (std::size_t i = 0; i < tabs.size(); ++i) {
     const ListedTab &tab = tabs[i];
     ImGui::PushID(tab.document ? static_cast<int>(*tab.document) : -1);
@@ -1013,6 +1011,7 @@ void render_open_patches_button(PatchEditorContext &context,
       context.prefs.show_preferences = false;
     } else if (chosen && tab.window != nullptr) {
       bring_window_forward(tab.window);
+      ImGui::FocusWindow(tab.window);
     }
   }
   ImGui::EndPopup();

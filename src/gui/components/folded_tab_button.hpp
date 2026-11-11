@@ -24,6 +24,8 @@ struct FoldedTabButton {
  * Keeps the buttons at the left of `bar` in the order they are drawn: a
  * dock's tab bar keeps its tabs in the order they first came, so a button
  * that came before one drawn ahead of it this frame moves after that one.
+ * Called right after the button is drawn, which the bar keeps as its last
+ * tab drawn, moved with it.
  */
 inline void keep_leading_order(ImGuiTabBar &bar, ImGuiID id) {
   ImGuiTabItem *tab = ImGui::TabBarFindTabByID(&bar, id);
@@ -38,7 +40,11 @@ inline void keep_leading_order(ImGuiTabBar &bar, ImGuiID id) {
       after = other;
     }
   }
+  if (after == tab) {
+    return;
+  }
   std::rotate(tab, tab + 1, after + 1);
+  bar.LastTabItemIdx = static_cast<ImS16>(bar.Tabs.index_from_ptr(after));
 }
 
 /**

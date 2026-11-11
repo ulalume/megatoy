@@ -15,10 +15,12 @@
 #include "gui/window_title.hpp"
 #include "patches/instrument_icons.hpp"
 #include "platform/platform_config.hpp"
+#include <algorithm>
 #include <filesystem>
 #include <imgui.h>
 #if defined(MEGATOY_PLATFORM_WEB)
 #define IMGUI_IMPL_OPENGL_ES3 1
+#include <emscripten.h>
 #include <emscripten/html5.h>
 #endif
 #include <imgui_impl_opengl3.h>
@@ -243,14 +245,50 @@ void GuiManager::set_should_close(bool value) { should_close_ = value; }
 
 namespace {
 
+#if defined(MEGATOY_PLATFORM_WEB)
+// clang-format off
+EM_JS(int, browser_on_apple_system, (), {
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  return /Mac|iPhone|iPad|iOS/i.test(platform) ? 1 : 0;
+});
+// clang-format on
+#endif
+
+/// Whether the system tells no key's release while Command is held.
+bool command_hides_key_releases() {
+#if defined(__APPLE__)
+  return true;
+#elif defined(MEGATOY_PLATFORM_WEB)
+  static const bool apple = browser_on_apple_system() != 0;
+  return apple;
+#else
+  return false;
+#endif
+}
+
+/// How wide the widest instrument icon is drawn at the text's size, worked
+/// out again when that size changes.
+float widest_instrument_icon() {
+  static float font_size = 0.0f;
+  static float widest = 0.0f;
+  if (ImGui::GetFontSize() != font_size) {
+    font_size = ImGui::GetFontSize();
+    widest = ImGui::CalcTextSize(patches::instrument_icons::none_glyph()).x;
+    for (const auto &group : patches::instrument_icons::groups()) {
+      for (const auto &icon : group.icons) {
+        widest = std::max(widest, ImGui::CalcTextSize(icon.glyph).x);
+      }
+    }
+  }
+  return widest;
+}
+
 /// A tab's width showing its icon, the first letter of its name and the
 /// ellipsis after: ImGui keeps a letter that fits with a pixel to spare.
 float shrunk_tab_width() {
   const ImFont *font = ImGui::GetFont();
-  const std::string start =
-      std::string(patches::instrument_icons::none_glyph()) + " M";
-  return ui::window_tab_padding().x * 2.0f +
-         ImGui::CalcTextSize(start.c_str()).x +
+  return ui::window_tab_padding().x * 2.0f + widest_instrument_icon() +
+         ImGui::CalcTextSize(" M").x +
          ImGui::GetFontBaked()->GetCharAdvance(font->EllipsisChar) + 1.0f;
 }
 
@@ -364,18 +402,18 @@ void GuiManager::process_event(const SDL_Event &event) {
 
   switch (event.type) {
   case SDL_EVENT_KEY_UP:
-    // macOS, and the browsers there, tell no key's release while Command is
-    // held, so a key let go before it would stay held: each is let go with
-    // Command.
-    if (event.key.scancode == SDL_SCANCODE_LGUI ||
-        event.key.scancode == SDL_SCANCODE_RGUI) {
+    // Apple's systems, and the browsers there, tell no key's release while
+    // Command is held, so a key let go before it would stay held: each is
+    // let go with Command. Also one whose press is still queued; ImGui drops
+    // the release of a key already up.
+    if (command_hides_key_releases() &&
+        (event.key.scancode == SDL_SCANCODE_LGUI ||
+         event.key.scancode == SDL_SCANCODE_RGUI)) {
       ImGuiIO &io = ImGui::GetIO();
       for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_GamepadStart;
            ++key) {
         const auto named = static_cast<ImGuiKey>(key);
-        const bool modifier =
-            named >= ImGuiKey_LeftCtrl && named <= ImGuiKey_RightSuper;
-        if (!modifier && ImGui::IsKeyDown(named)) {
+        if (named < ImGuiKey_LeftCtrl || named > ImGuiKey_RightSuper) {
           io.AddKeyEvent(named, false);
         }
       }
