@@ -21,7 +21,6 @@
 #include <vector>
 
 namespace ui::renderer_detail {
-namespace {
 
 drop_actions::Environment make_drop_environment(AppContext &ctx) {
   return {
@@ -30,6 +29,8 @@ drop_actions::Environment make_drop_environment(AppContext &ctx) {
         patch_actions::open_dropped_patch(ctx, patch, path);
       }};
 }
+
+namespace {
 
 UIState::DocumentUi &active_document_ui(AppContext &ctx) {
   return ctx.ui_state().document_ui(

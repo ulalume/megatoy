@@ -165,22 +165,39 @@ bool PatchSession::rename_patch(const PatchEntry &entry,
   return true;
 }
 
-bool PatchSession::delete_patch(const PatchEntry &entry) {
-  std::vector<DocumentId> showing;
+bool PatchSession::delete_patch(const PatchEntry &entry,
+                                std::vector<DetachedDocument> *detached) {
+  std::vector<DetachedDocument> showing;
   for (const auto &document : documents_) {
     if (selection_belongs_to_entry(document->selection_path(), entry)) {
-      showing.push_back(document->id());
+      showing.push_back(
+          {document->id(), document->path(), document->selection_path()});
     }
   }
   if (!repository_->delete_patch(entry)) {
     return false;
   }
-  for (const auto id : showing) {
-    if (auto *document = find_document(id)) {
+  for (const auto &shown : showing) {
+    if (auto *document = find_document(shown.id)) {
       set_document_path(*document, {});
     }
   }
+  if (detached != nullptr) {
+    *detached = std::move(showing);
+  }
   return true;
+}
+
+void PatchSession::reattach(const std::vector<DetachedDocument> &detached) {
+  for (const auto &shown : detached) {
+    auto *document = find_document(shown.id);
+    if (document == nullptr || !document->path().empty()) {
+      continue;
+    }
+    document->set_path(shown.path);
+    document->set_selection_path(shown.selection_path);
+    remember_disk_time(*document);
+  }
 }
 
 bool PatchSession::can_move_patch(const PatchEntry &entry,

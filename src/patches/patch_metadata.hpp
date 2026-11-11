@@ -71,6 +71,12 @@ bool write(const std::filesystem::path &sidecar, const nlohmann::json &entry);
 /// Move the sidecars of the file `from` to those of the file `to`.
 bool move(const std::filesystem::path &from, const std::filesystem::path &to);
 
+/// Copy the sidecars of the file `from` to those of the file `to`.
+bool copy(const std::filesystem::path &from, const std::filesystem::path &to);
+
+/// The sidecar files of the file `file`: its own and its instruments'.
+std::vector<std::filesystem::path> files_of(const std::filesystem::path &file);
+
 /// Remove the sidecars of the file `file`.
 void remove(const std::filesystem::path &file);
 

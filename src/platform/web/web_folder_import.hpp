@@ -55,8 +55,6 @@ void import_folder(const std::filesystem::path &destination_root,
  * once per dropped directory. File-only drops still fall through to SDL.
  */
 void set_drop_import_handler(std::function<void(FolderImportResult)> handler);
-/// Called as a dropped folder is taken over, before SDL would see the drop.
-void set_drop_start_handler(std::function<void()> handler);
 void install_drop_import(const std::filesystem::path &destination_root);
 
 enum class ImportPhase : int {

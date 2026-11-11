@@ -14,23 +14,9 @@ namespace fs = std::filesystem;
 
 namespace {
 
-const patches::PatchEntry *
-find_entry(const std::vector<patches::PatchEntry> &entries,
-           const fs::path &full_path) {
-  for (const auto &entry : entries) {
-    if (entry.full_path == full_path) {
-      return &entry;
-    }
-    if (const auto *found = find_entry(entry.children, full_path)) {
-      return found;
-    }
-  }
-  return nullptr;
-}
-
 patches::PatchEntry entry_at(const patches::PatchRepository &repository,
                              const fs::path &full_path) {
-  const auto *found = find_entry(repository.tree(), full_path);
+  const auto *found = repository.find_by_full_path(full_path);
   CHECK(found != nullptr);
   return *found;
 }
@@ -65,7 +51,7 @@ void test_file_copy(const fs::path &root) {
   const auto copied = repository.copy_patch(file, pads, ".dmp");
   CHECK(copied.has_value() && *copied == folder / "pads" / "lead.dmp");
   CHECK(fs::exists(folder / "lead.dmp"));
-  const auto *copy = find_entry(repository.tree(), *copied);
+  const auto *copy = repository.find_by_full_path(*copied);
   CHECK(copy != nullptr && copy->metadata.has_value());
   CHECK(copy->metadata->star_rating == 4);
 
@@ -107,8 +93,8 @@ void test_directory_copy(const fs::path &root) {
       repository.copy_patch(bass, entry_at(repository, folder / "low"), "");
   CHECK(copied == folder / "low" / "bass");
   CHECK(fs::exists(folder / "bass" / "inner" / "sub.dmp"));
-  const auto *copy = find_entry(repository.tree(),
-                                folder / "low" / "bass" / "inner" / "sub.dmp");
+  const auto *copy = repository.find_by_full_path(folder / "low" / "bass" /
+                                                  "inner" / "sub.dmp");
   CHECK(copy != nullptr && copy->metadata.has_value());
   CHECK(copy->metadata->icon == "Bass");
 }
@@ -191,7 +177,7 @@ void test_undo(const fs::path &root) {
       repository.copy_patch(entry_at(repository, folder / "kit"),
                             entry_at(repository, folder / "low"), "");
   CHECK(copied.has_value());
-  CHECK(repository.remove_copy(*copied));
+  CHECK(repository.remove_copies({*copied}));
   CHECK(!fs::exists(folder / "low" / "kit"));
   CHECK(fs::exists(folder / "kit" / "inner" / "x.dmp"));
 
@@ -283,12 +269,22 @@ void test_files_from_outside(const fs::path &root) {
   CHECK(fs::exists(folder / "kit copy" / "snare.dmp"));
   CHECK(!fs::exists(folder / "kit copy" / "readme.txt"));
   CHECK(!fs::exists(folder / "docs"));
-  CHECK(repository.remove_copy(again.front()));
+  CHECK(repository.remove_copies(again));
 
-  for (const auto &copy : copies) {
-    CHECK(repository.remove_copy(copy));
-  }
+  CHECK(repository.remove_copies(copies));
   CHECK(!fs::exists(folder / "lead.dmp") && !fs::exists(folder / "kit"));
+
+  // Nor a folder into one inside it.
+  fs::create_directories(outside / "kit" / "deeper");
+  CHECK(workspace.add(outside));
+  repository.sync_workspace();
+  CHECK(repository
+            .copy_files_in({outside / "kit"},
+                           entry_at(repository, outside / "kit" / "deeper"),
+                           skipped)
+            .empty());
+  CHECK(skipped == 1);
+  CHECK(!fs::exists(outside / "kit" / "deeper" / "kit"));
 }
 
 } // namespace

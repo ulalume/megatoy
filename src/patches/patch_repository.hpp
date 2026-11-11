@@ -46,20 +46,19 @@ struct PatchEntry {
   std::string container_item_id;
 };
 
-/// A patch file or a folder as it stood before it was deleted, to put back.
+/// A patch file or a folder as it stood before it was deleted, with the
+/// metadata that went with it, to put back.
 struct DeletedEntry {
   struct File {
-    /// Below the folder; empty for the file itself.
-    std::filesystem::path relative;
+    std::filesystem::path path;
     std::string bytes;
   };
   std::filesystem::path path;
   bool is_directory = false;
-  /// A folder's folders, its empty ones among them, below it.
+  /// A folder's folders, its empty ones among them.
   std::vector<std::filesystem::path> folders;
+  /// The file itself, or the folder's files, with their sidecars.
   std::vector<File> files;
-  /// A file's own metadata. A folder's is among its files.
-  std::optional<nlohmann::json> metadata;
 };
 
 /**
@@ -89,6 +88,9 @@ public:
 
   /// Exact selection path first, then the first entry from that source.
   const PatchEntry *find_entry(const std::string &relative_path) const;
+  /// The entry listed at `path` itself, a workspace folder among them; not an
+  /// instrument inside a bank, which shares its bank's path.
+  const PatchEntry *find_by_full_path(const std::filesystem::path &path) const;
 
   bool load_patch(const PatchEntry &entry, ym2612::Patch &patch) const;
   bool has_directory_changed() const;
@@ -147,8 +149,9 @@ public:
   std::vector<std::filesystem::path>
   copy_files_in(const std::vector<std::filesystem::path> &files,
                 const PatchEntry &destination, std::size_t &skipped);
-  /// Removes a copy made by copy_patch, file or folder, with its metadata.
-  bool remove_copy(const std::filesystem::path &copy);
+  /// Removes copies made by copy_patch or copy_files_in, files or folders,
+  /// with their metadata.
+  bool remove_copies(const std::vector<std::filesystem::path> &copies);
   /// What `entry` holds, read before deleting it: the file and its metadata,
   /// or the folder and everything in it. Nothing for a folder holding more
   /// than `limit` bytes.
@@ -176,6 +179,9 @@ public:
 
 private:
   static constexpr const char *kBuiltinRootName = "presets";
+
+  /// After a change on disk: list it, and on the web have it kept.
+  void changed();
 
   void rebuild_storages();
   void index_tree();

@@ -148,7 +148,5 @@ private:
   void process_event(const SDL_Event &event);
   void setup_default_layout(unsigned int dockspace_id);
 
-  // Drop callback state
-
   bool web_ini_loaded_ = false;
 };

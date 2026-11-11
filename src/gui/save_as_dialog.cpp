@@ -5,10 +5,6 @@
 
 namespace ui {
 
-std::string duplicate_stem(std::string_view stem) {
-  return std::string(stem.empty() ? kFallbackSaveAsStem : stem) + " copy";
-}
-
 std::string
 default_save_as_extension(std::string_view current_extension,
                           const std::vector<formats::SaveFormatInfo> &formats) {

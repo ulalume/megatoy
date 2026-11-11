@@ -338,6 +338,46 @@ bool move(const fs::path &from, const fs::path &to) {
   return true;
 }
 
+bool copy(const fs::path &from, const fs::path &to) {
+  bool copied = true;
+  const auto put = [&copied](const fs::path &source, const fs::path &target) {
+    std::error_code ec;
+    fs::create_directories(target.parent_path(), ec);
+    copied = !ec &&
+             fs::copy_file(source, target, fs::copy_options::overwrite_existing,
+                           ec) &&
+             !ec && copied;
+  };
+  std::error_code ec;
+  if (fs::is_regular_file(path_for(from), ec)) {
+    put(path_for(from), path_for(to));
+  }
+  const auto items = items_path_for(from);
+  for (fs::recursive_directory_iterator it(items, ec), end; !ec && it != end;
+       it.increment(ec)) {
+    if (it->is_regular_file(ec)) {
+      put(it->path(),
+          items_path_for(to) / it->path().lexically_relative(items));
+    }
+  }
+  return copied;
+}
+
+std::vector<fs::path> files_of(const fs::path &file) {
+  std::vector<fs::path> files;
+  std::error_code ec;
+  if (const auto entry = path_for(file); fs::is_regular_file(entry, ec)) {
+    files.push_back(entry);
+  }
+  for (fs::recursive_directory_iterator it(items_path_for(file), ec), end;
+       !ec && it != end; it.increment(ec)) {
+    if (it->is_regular_file(ec)) {
+      files.push_back(it->path());
+    }
+  }
+  return files;
+}
+
 void remove(const fs::path &file) {
   const auto entry = path_for(file);
   std::error_code ec;

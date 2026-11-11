@@ -5,15 +5,12 @@
 #include "app_state.hpp"
 #include "audio/audio_command.hpp"
 #include "core/status.hpp"
-#include "drop_actions.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/frame_requests.hpp"
 #include "gui/input/history_shortcuts.hpp"
-#include "gui/os_file_drop.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
-#include "patch_actions.hpp"
 #include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -29,7 +26,6 @@
 #endif
 #include "runtime_context.hpp"
 #include <algorithm>
-#include <filesystem>
 #include <imgui.h>
 #include <iostream>
 #include <utility>
@@ -257,8 +253,6 @@ int main(int argc, char *argv[]) {
                                    "\" is already in the workspace.");
         }
       });
-  // The page takes over a dropped folder, so SDL never ends that drag.
-  platform::web::set_drop_start_handler([]() { ui::os_file_drop::cancel(); });
   platform::web::install_drop_import(
       megatoy::system::PathService::web_storage_root());
   emscripten_set_visibilitychange_callback(nullptr, true, on_visibility_change);

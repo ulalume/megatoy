@@ -88,7 +88,6 @@ struct PendingSelection {
 };
 
 std::function<void(FolderImportResult)> g_drop_handler;
-std::function<void()> g_drop_start_handler;
 std::unique_ptr<ImportRequest> g_active_import;
 std::unique_ptr<PendingSelection> g_pending_selection;
 std::uintptr_t g_next_selection_token = 1;
@@ -100,9 +99,6 @@ bool g_selection_finished = false;
 void *begin_pending_selection(bool is_drop) {
   if (g_pending_selection || g_active_import) {
     return nullptr;
-  }
-  if (is_drop && g_drop_start_handler) {
-    g_drop_start_handler();
   }
   auto selection = std::make_unique<PendingSelection>();
   selection->token = reinterpret_cast<void *>(g_next_selection_token++);
@@ -1066,10 +1062,6 @@ void cancel_folder_import() {
   if (g_active_import) {
     g_active_import->cancel_requested.store(true, std::memory_order_relaxed);
   }
-}
-
-void set_drop_start_handler(std::function<void()> handler) {
-  g_drop_start_handler = std::move(handler);
 }
 
 void set_drop_import_handler(std::function<void(FolderImportResult)> handler) {

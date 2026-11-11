@@ -183,10 +183,10 @@ float centred_start(float left, float right, float icon_width,
 /// A slot for one source: a click lists what it can take, and a patch
 /// dragged from the browser drops into it.
 void render_source_slot(const char *id, const PatchLabContext &context,
-                        const patches::PatchSession &session,
                         const std::vector<EntryDisplay> &entries,
                         PatchLabSource &source, std::string &filter_text,
                         float width) {
+  const patches::PatchSession &session = context.session;
   std::string name;
   std::string icon;
   if (!source.empty() &&
@@ -305,10 +305,10 @@ void render_source_slots(PatchLabContext &context, PatchLabState &state,
                          const std::vector<EntryDisplay> &entries) {
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   const float width = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
-  render_source_slot("a", context, context.session, entries, state.mix.source_a,
+  render_source_slot("a", context, entries, state.mix.source_a,
                      state.picker_filter, width);
   ImGui::SameLine();
-  render_source_slot("b", context, context.session, entries, state.mix.source_b,
+  render_source_slot("b", context, entries, state.mix.source_b,
                      state.picker_filter, width);
 }
 

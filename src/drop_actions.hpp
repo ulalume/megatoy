@@ -8,8 +8,7 @@ struct AppServices;
 
 namespace drop_actions {
 
-using ApplyPatchFn =
-    std::function<void(const ym2612::Patch &, const std::filesystem::path &)>;
+using ApplyPatchFn = UIState::DropState::ApplyPatch;
 
 struct Environment {
   AppServices &services;

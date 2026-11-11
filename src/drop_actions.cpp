@@ -11,14 +11,6 @@
 namespace drop_actions {
 namespace {
 
-void handle_success(Environment &env, const ym2612::Patch &patch,
-                    const std::filesystem::path &path) {
-  if (env.apply_patch) {
-    env.apply_patch(patch, path);
-  }
-  reset_drop_state(env.ui_state.drop_state);
-}
-
 void handle_multi(Environment &env, std::vector<ym2612::Patch> patches,
                   const std::filesystem::path &path) {
   auto &drop = env.ui_state.drop_state;
@@ -32,6 +24,33 @@ void handle_failure(Environment &env, const std::string &message) {
   reset_drop_state(env.ui_state.drop_state);
   megatoy::status::error(message.empty() ? "Unsupported file format."
                                          : message);
+}
+
+/// The patch in the file at `path` goes to `apply`, after a pick where the
+/// file holds several.
+void load_file(Environment &env, const std::filesystem::path &path,
+               ApplyPatchFn apply) {
+  auto result = formats::load_patch_from_file(path);
+  switch (result.status) {
+  case formats::PatchLoadStatus::Success:
+    if (result.patches.empty()) {
+      handle_failure(env, "No instruments found.");
+      return;
+    }
+    reset_drop_state(env.ui_state.drop_state);
+    if (apply) {
+      apply(result.patches[0], path);
+    }
+    break;
+  case formats::PatchLoadStatus::MultiInstrument:
+    handle_multi(env, std::move(result.patches), path);
+    env.ui_state.drop_state.apply = std::move(apply);
+    break;
+  case formats::PatchLoadStatus::Failure:
+  default:
+    handle_failure(env, result.message);
+    break;
+  }
 }
 
 } // namespace
@@ -78,23 +97,7 @@ void handle_drop(Environment &env, const std::filesystem::path &path) {
     return;
   }
 
-  auto result = formats::load_patch_from_file(path);
-  switch (result.status) {
-  case formats::PatchLoadStatus::Success:
-    if (!result.patches.empty()) {
-      handle_success(env, result.patches[0], path);
-    } else {
-      handle_failure(env, "No instruments found.");
-    }
-    break;
-  case formats::PatchLoadStatus::MultiInstrument:
-    handle_multi(env, std::move(result.patches), path);
-    break;
-  case formats::PatchLoadStatus::Failure:
-  default:
-    handle_failure(env, result.message);
-    break;
-  }
+  load_file(env, path, env.apply_patch);
 }
 
 void handle_drop_into(Environment &env, const std::filesystem::path &path,
@@ -104,25 +107,7 @@ void handle_drop_into(Environment &env, const std::filesystem::path &path,
     handle_failure(env, "Drop a patch file here, not a folder.");
     return;
   }
-  auto result = formats::load_patch_from_file(path);
-  switch (result.status) {
-  case formats::PatchLoadStatus::Success:
-    if (result.patches.empty()) {
-      handle_failure(env, "No instruments found.");
-      return;
-    }
-    reset_drop_state(env.ui_state.drop_state);
-    apply(result.patches[0], path);
-    break;
-  case formats::PatchLoadStatus::MultiInstrument:
-    handle_multi(env, std::move(result.patches), path);
-    env.ui_state.drop_state.apply = std::move(apply);
-    break;
-  case formats::PatchLoadStatus::Failure:
-  default:
-    handle_failure(env, result.message);
-    break;
-  }
+  load_file(env, path, std::move(apply));
 }
 
 void apply_selection(Environment &env, size_t index) {

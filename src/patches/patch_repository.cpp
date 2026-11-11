@@ -1,6 +1,7 @@
 #include "patch_repository.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/ym2612_format_adapter.hpp"
+#include "patches/filename_utils.hpp"
 #include "patches/filesystem_patch_storage.hpp"
 #include "patches/patch_entry_actions.hpp"
 #include "patches/patch_write.hpp"
@@ -12,7 +13,6 @@
 #endif
 #include "ym2612/patch.hpp"
 #include <algorithm>
-#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <string>
@@ -235,10 +235,7 @@ PatchRepository::save_patch(const ym2612::Patch &patch, const std::string &name,
         storage->save_patch(patch, name, overwrite, preferred_extension);
     if (result.status != SavePatchResult::Status::Unsupported) {
       if (result.status == SavePatchResult::Status::Success) {
-        refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-        platform::web::request_storage_persist();
-#endif
+        changed();
       }
       return result;
     }
@@ -258,10 +255,7 @@ PatchRepository::save_patch_in(const std::filesystem::path &folder,
     auto result =
         storage->save_patch(patch, name, overwrite, preferred_extension);
     if (result.status == SavePatchResult::Status::Success) {
-      refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-      platform::web::request_storage_persist();
-#endif
+      changed();
     }
     return result;
   }
@@ -282,10 +276,7 @@ bool PatchRepository::delete_patch(const PatchEntry &entry) {
     if (!storage->delete_patch(entry)) {
       return false;
     }
-    refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-    platform::web::request_storage_persist();
-#endif
+    changed();
     return true;
   }
   return false;
@@ -306,10 +297,7 @@ bool PatchRepository::rename_patch(const PatchEntry &entry,
     if (!storage->rename_patch(entry, new_stem)) {
       return false;
     }
-    refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-    platform::web::request_storage_persist();
-#endif
+    changed();
     return true;
   }
   return false;
@@ -332,10 +320,7 @@ bool PatchRepository::move_patch(const PatchEntry &entry,
     if (!storage->move_patch(entry, destination)) {
       return false;
     }
-    refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-    platform::web::request_storage_persist();
-#endif
+    changed();
     return true;
   }
   return false;
@@ -349,26 +334,39 @@ bool is_inside_file(const PatchEntry &entry) {
          !entry.container_item_id.empty();
 }
 
-/// `name` in `folder`, or the first of "<stem> copy", "<stem> copy 2", ...
-/// that the folder does not have yet.
+/// Whether `path` is `folder` or lies inside it.
+bool within(const std::filesystem::path &path,
+            const std::filesystem::path &folder) {
+  const auto relative =
+      path.lexically_normal().lexically_relative(folder.lexically_normal());
+  return !relative.empty() && *relative.begin() != "..";
+}
+
+/// `stem` + `extension` in `folder`, or the first of "<stem> copy",
+/// "<stem> copy 2", ... that the folder does not have yet, ignoring case as
+/// some filesystems do.
 std::filesystem::path unused_copy_path(const std::filesystem::path &folder,
                                        const std::string &stem,
                                        const std::string &extension) {
+  std::vector<std::string> taken;
   std::error_code ec;
-  auto candidate = folder / (stem + extension);
-  for (int n = 1; std::filesystem::exists(candidate, ec) || ec; ++n) {
-    if (ec) {
-      return {};
+  for (const auto &item : std::filesystem::directory_iterator(folder, ec)) {
+    const auto name = item.path().filename();
+    if (extension.empty()) {
+      taken.push_back(name.string());
+    } else if (equals_case_insensitive(name.extension().string(), extension)) {
+      taken.push_back(name.stem().string());
     }
-    candidate = folder / (stem + " copy" +
-                          (n == 1 ? std::string() : " " + std::to_string(n)) +
-                          extension);
   }
-  return candidate;
+  const std::string free_stem =
+      unused_folder_name(taken, stem) == stem
+          ? stem
+          : unused_folder_name(taken, duplicate_stem(stem));
+  return folder / (free_stem + extension);
 }
 
-/// `source`, a file or a folder with everything in it, copied into
-/// `folder` under its own name or, taken, a name of its own.
+/// `source`, a file with its sidecars or a folder with everything in it,
+/// copied into `folder` under its own name or, taken, a name of its own.
 std::filesystem::path copy_path_into(const std::filesystem::path &source,
                                      const std::filesystem::path &folder) {
   std::error_code ec;
@@ -377,15 +375,14 @@ std::filesystem::path copy_path_into(const std::filesystem::path &source,
       directory ? unused_copy_path(folder, source.filename().string(), "")
                 : unused_copy_path(folder, source.stem().string(),
                                    source.extension().string());
-  if (target.empty()) {
-    return {};
-  }
   if (directory) {
     // A folder's sidecars are inside it and go with it.
     std::filesystem::copy(source, target,
                           std::filesystem::copy_options::recursive, ec);
-  } else if (!std::filesystem::copy_file(source, target, ec)) {
+  } else if (!std::filesystem::copy_file(source, target, ec) || ec) {
     return {};
+  } else {
+    sidecar::copy(source, target);
   }
   if (ec) {
     std::filesystem::remove_all(target, ec);
@@ -422,13 +419,7 @@ std::size_t copy_readable_tree(const std::filesystem::path &source,
         copy_error) {
       continue;
     }
-    if (const auto sidecar = sidecar::path_for(path);
-        std::filesystem::exists(sidecar, copy_error)) {
-      const auto copied_sidecar = sidecar::path_for(copy);
-      std::filesystem::create_directories(copied_sidecar.parent_path(),
-                                          copy_error);
-      std::filesystem::copy_file(sidecar, copied_sidecar, copy_error);
-    }
+    sidecar::copy(path, copy);
     ++copied;
   }
   if (copied == 0) {
@@ -454,12 +445,9 @@ bool PatchRepository::can_copy_patch(const PatchEntry &entry,
   if (!takes_copies(destination)) {
     return false;
   }
-  if (is_inside_file(entry)) {
-    return true;
-  }
   // A folder does not go inside itself.
-  return destination.relative_path != entry.relative_path &&
-         destination.relative_path.rfind(entry.relative_path + "/", 0) != 0;
+  return is_inside_file(entry) ||
+         !within(destination.full_path, entry.full_path);
 }
 
 std::optional<std::filesystem::path>
@@ -470,7 +458,6 @@ PatchRepository::copy_patch(const PatchEntry &entry,
     return std::nullopt;
   }
 
-  std::error_code ec;
   std::filesystem::path target;
   if (is_inside_file(entry)) {
     ym2612::Patch patch;
@@ -479,11 +466,9 @@ PatchRepository::copy_patch(const PatchEntry &entry,
     }
     target = unused_copy_path(destination.full_path, entry_stem(entry),
                               std::string(extension));
-    if (target.empty()) {
-      return std::nullopt;
-    }
     patch.name = target.stem().string();
     if (!write_patch(patch, target)) {
+      std::error_code ec;
       std::filesystem::remove_all(target, ec);
       return std::nullopt;
     }
@@ -493,15 +478,12 @@ PatchRepository::copy_patch(const PatchEntry &entry,
     if (target.empty()) {
       return std::nullopt;
     }
-    if (!std::filesystem::is_directory(target, ec)) {
+    // As the tree shows it, a read-only folder's own metadata laid over.
+    if (std::error_code ec; !std::filesystem::is_directory(target, ec)) {
       copy_patch_metadata(entry.metadata, target);
     }
   }
-
-  refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::request_storage_persist();
-#endif
+  changed();
   return target;
 }
 
@@ -511,30 +493,22 @@ PatchRepository::copy_files_in(const std::vector<std::filesystem::path> &files,
                                std::size_t &skipped) {
   std::vector<std::filesystem::path> copies;
   skipped = 0;
-  if (!takes_copies(destination)) {
-    skipped = files.size();
-    return copies;
-  }
   for (const auto &file : files) {
     std::error_code ec;
-    const bool directory = std::filesystem::is_directory(file, ec);
-    if (directory) {
+    std::filesystem::path copy;
+    if (!takes_copies(destination) || within(destination.full_path, file)) {
+      // Nowhere to go, or into itself.
+    } else if (std::filesystem::is_directory(file, ec)) {
       // Only what a format reads: the rest would sit in the folder unseen.
-      const auto copy =
+      copy =
           unused_copy_path(destination.full_path, file.filename().string(), "");
-      if (!copy.empty() && copy_readable_tree(file, copy) > 0) {
-        copies.push_back(copy);
-      } else {
-        ++skipped;
+      if (copy_readable_tree(file, copy) == 0) {
+        copy.clear();
       }
-      continue;
+    } else if (platform::import_pipeline::supports_extension(
+                   lowercase_extension(file))) {
+      copy = copy_path_into(file, destination.full_path);
     }
-    if (!platform::import_pipeline::supports_extension(
-            lowercase_extension(file))) {
-      ++skipped;
-      continue;
-    }
-    auto copy = copy_path_into(file, destination.full_path);
     if (copy.empty()) {
       ++skipped;
     } else {
@@ -542,58 +516,32 @@ PatchRepository::copy_files_in(const std::vector<std::filesystem::path> &files,
     }
   }
   if (!copies.empty()) {
-    refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-    platform::web::request_storage_persist();
-#endif
+    changed();
   }
   return copies;
 }
 
-bool PatchRepository::remove_copy(const std::filesystem::path &copy) {
-  const auto *owner = workspace_.owner_of(copy.parent_path());
-  if (owner == nullptr || !owner->writable) {
-    return false;
+bool PatchRepository::remove_copies(
+    const std::vector<std::filesystem::path> &copies) {
+  bool removed = true;
+  for (const auto &copy : copies) {
+    const auto *owner = workspace_.owner_of(copy.parent_path());
+    if (owner == nullptr || !owner->writable) {
+      removed = false;
+      continue;
+    }
+    std::error_code ec;
+    if (std::filesystem::is_directory(copy, ec)) {
+      // Its sidecars are inside it and go with it.
+      std::filesystem::remove_all(copy, ec);
+    } else if (std::filesystem::remove(copy, ec) && !ec) {
+      sidecar::remove(copy);
+    }
+    removed = removed && !ec;
   }
-  std::error_code ec;
-  if (std::filesystem::is_directory(copy, ec)) {
-    // Its sidecars are inside it and go with it.
-    std::filesystem::remove_all(copy, ec);
-  } else if (std::filesystem::remove(copy, ec) && !ec) {
-    sidecar::remove(copy);
-  }
-  if (ec) {
-    return false;
-  }
-  refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::request_storage_persist();
-#endif
-  return true;
+  changed();
+  return removed;
 }
-
-namespace {
-
-std::optional<std::string> read_bytes(const std::filesystem::path &file) {
-  std::ifstream in(file, std::ios::binary);
-  if (!in) {
-    return std::nullopt;
-  }
-  std::string bytes((std::istreambuf_iterator<char>(in)),
-                    std::istreambuf_iterator<char>());
-  if (in.bad()) {
-    return std::nullopt;
-  }
-  return bytes;
-}
-
-bool write_bytes(const std::filesystem::path &file, const std::string &bytes) {
-  std::ofstream out(file, std::ios::binary);
-  out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-  return static_cast<bool>(out);
-}
-
-} // namespace
 
 std::optional<DeletedEntry>
 PatchRepository::keep_for_restore(const PatchEntry &entry,
@@ -601,81 +549,79 @@ PatchRepository::keep_for_restore(const PatchEntry &entry,
   DeletedEntry kept;
   kept.path = entry.full_path;
   std::error_code ec;
-  if (!std::filesystem::is_directory(entry.full_path, ec)) {
-    auto bytes = read_bytes(entry.full_path);
-    if (!bytes) {
-      return std::nullopt;
+  std::vector<std::filesystem::path> files;
+  if (std::filesystem::is_directory(entry.full_path, ec)) {
+    kept.is_directory = true;
+    // A folder's sidecars are inside it.
+    for (std::filesystem::recursive_directory_iterator it(entry.full_path, ec),
+         end;
+         !ec && it != end; it.increment(ec)) {
+      if (it->is_directory(ec)) {
+        kept.folders.push_back(it->path());
+      } else {
+        files.push_back(it->path());
+      }
     }
-    kept.files.push_back({{}, std::move(*bytes)});
-    kept.metadata = sidecar::read(sidecar::path_for(entry.full_path));
-    return kept;
-  }
-
-  kept.is_directory = true;
-  std::uintmax_t total = 0;
-  for (std::filesystem::recursive_directory_iterator it(entry.full_path, ec),
-       end;
-       !ec && it != end; it.increment(ec)) {
-    const auto relative = it->path().lexically_relative(entry.full_path);
-    if (it->is_directory(ec)) {
-      kept.folders.push_back(relative);
-      continue;
-    }
-    auto bytes = read_bytes(it->path());
-    if (!bytes) {
-      return std::nullopt;
-    }
-    total += bytes->size();
-    if (total > limit) {
-      return std::nullopt;
-    }
-    kept.files.push_back({relative, std::move(*bytes)});
+  } else {
+    files = sidecar::files_of(entry.full_path);
+    files.insert(files.begin(), entry.full_path);
   }
   if (ec) {
     return std::nullopt;
+  }
+
+  // Sized up first, so a folder too large to keep is not read at all.
+  std::uintmax_t total = 0;
+  for (const auto &file : files) {
+    std::uintmax_t size = 0;
+    if (!vfs_.file_size(file, size) || (total += size) > limit) {
+      return std::nullopt;
+    }
+  }
+  for (const auto &file : files) {
+    const auto in = vfs_.open_read(file);
+    if (!in) {
+      return std::nullopt;
+    }
+    kept.files.push_back({file, std::string(std::istreambuf_iterator<char>(*in),
+                                            std::istreambuf_iterator<char>())});
   }
   return kept;
 }
 
 bool PatchRepository::restore(const DeletedEntry &deleted) {
   const auto *owner = workspace_.owner_of(deleted.path.parent_path());
-  std::error_code ec;
-  if (owner == nullptr || !owner->writable ||
-      std::filesystem::exists(deleted.path, ec) || ec ||
-      !std::filesystem::is_directory(deleted.path.parent_path(), ec)) {
+  if (owner == nullptr || !owner->writable || vfs_.exists(deleted.path) ||
+      !vfs_.is_directory(deleted.path.parent_path())) {
     return false;
   }
-  bool written = true;
-  if (deleted.is_directory) {
-    written = std::filesystem::create_directory(deleted.path, ec) && !ec;
-    for (const auto &folder : deleted.folders) {
-      if (!written) {
-        break;
-      }
-      std::filesystem::create_directories(deleted.path / folder, ec);
-      written = !ec;
-    }
+  bool written = !deleted.is_directory || vfs_.create_directories(deleted.path);
+  for (const auto &folder : deleted.folders) {
+    written = written && vfs_.create_directories(folder);
   }
   for (const auto &file : deleted.files) {
     if (!written) {
       break;
     }
-    written = write_bytes(file.relative.empty() ? deleted.path
-                                                : deleted.path / file.relative,
-                          file.bytes);
+    const auto out = vfs_.open_write(file.path);
+    written =
+        out && out->write(file.bytes.data(),
+                          static_cast<std::streamsize>(file.bytes.size()));
   }
   if (!written) {
+    std::error_code ec;
     std::filesystem::remove_all(deleted.path, ec);
     return false;
   }
-  if (deleted.metadata) {
-    sidecar::write(sidecar::path_for(deleted.path), *deleted.metadata);
-  }
+  changed();
+  return true;
+}
+
+void PatchRepository::changed() {
   refresh();
 #if defined(MEGATOY_PLATFORM_WEB)
   platform::web::request_storage_persist();
 #endif
-  return true;
 }
 
 bool PatchRepository::can_edit_metadata(const PatchEntry &entry) const {
@@ -741,6 +687,30 @@ void PatchRepository::copy_patch_metadata(
       return;
     }
   }
+}
+
+namespace {
+
+const PatchEntry *find_listed(const std::vector<PatchEntry> &entries,
+                              const std::filesystem::path &path) {
+  for (const auto &entry : entries) {
+    if (entry.full_path == path && !is_inside_file(entry)) {
+      return &entry;
+    }
+    if (entry.is_directory) {
+      if (const auto *found = find_listed(entry.children, path)) {
+        return found;
+      }
+    }
+  }
+  return nullptr;
+}
+
+} // namespace
+
+const PatchEntry *
+PatchRepository::find_by_full_path(const std::filesystem::path &path) const {
+  return find_listed(tree(), path.lexically_normal());
 }
 
 const PatchEntry *

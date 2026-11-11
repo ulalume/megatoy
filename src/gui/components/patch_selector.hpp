@@ -24,18 +24,6 @@ struct PendingIcon {
   std::string icon;
 };
 
-struct PendingMove {
-  patches::PatchEntry entry;
-  patches::PatchEntry destination;
-  bool copy = false;
-};
-
-/// Files from outside let go over a folder.
-struct PendingFiles {
-  std::vector<std::filesystem::path> files;
-  patches::PatchEntry destination;
-};
-
 /// Drag payload of a browser entry: its repository-relative path.
 inline constexpr const char *kPatchEntryPayload = "MEGATOY_PATCH_ENTRY";
 
@@ -90,8 +78,7 @@ struct PatchSelectorContext {
   /// The entry whose icon its menu's Icon... asked to pick, by path.
   std::optional<std::string> pending_icon_picker;
   /// A drop in the tree, carried out once the tree is no longer being drawn.
-  std::optional<PendingMove> pending_move;
-  std::optional<PendingFiles> pending_files;
+  std::function<void()> pending_drop;
 };
 
 // Function to render library panel

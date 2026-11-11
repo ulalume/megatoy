@@ -451,6 +451,7 @@ void GuiManager::process_event(const SDL_Event &event) {
   case SDL_EVENT_DROP_POSITION:
     if (event.drop.windowID == window_id_) {
       ImGui::GetIO().AddMousePosEvent(event.drop.x, event.drop.y);
+      ui::os_file_drop::moved();
     }
     break;
   case SDL_EVENT_DROP_FILE:

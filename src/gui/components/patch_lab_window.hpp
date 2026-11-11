@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app_state.hpp"
 #include "patches/patch_lab_sources.hpp"
 #include "patches/patch_repository.hpp"
 #include "patches/patch_session.hpp"
@@ -22,8 +23,7 @@ struct PatchLabContext {
   /// Load a file dropped from outside into one place, asking which
   /// instrument where it holds several.
   std::function<void(const std::filesystem::path &,
-                     std::function<void(const ym2612::Patch &,
-                                        const std::filesystem::path &)>)>
+                     UIState::DropState::ApplyPatch)>
       load_dropped_file;
 };
 

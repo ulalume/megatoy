@@ -4,7 +4,6 @@
 #include <cctype>
 
 namespace patches {
-namespace {
 
 bool equals_case_insensitive(std::string_view lhs, std::string_view rhs) {
   return lhs.size() == rhs.size() &&
@@ -14,8 +13,6 @@ bool equals_case_insensitive(std::string_view lhs, std::string_view rhs) {
                              std::tolower(static_cast<unsigned char>(right));
                     });
 }
-
-} // namespace
 
 std::filesystem::path append_extension_if_missing(std::filesystem::path path,
                                                   std::string_view extension) {
@@ -54,6 +51,10 @@ std::string new_patch_name_error(const std::string &stem,
     return "Could not check the name.";
   }
   return {};
+}
+
+std::string duplicate_stem(std::string_view stem) {
+  return std::string(stem.empty() ? kFallbackStem : stem) + " copy";
 }
 
 std::string unused_folder_name(const std::vector<std::string> &existing_names,

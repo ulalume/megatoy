@@ -137,10 +137,8 @@ find_by_relative_path(const std::vector<patches::PatchEntry> &entries,
   return nullptr;
 }
 
-/// What dropping the entry being dragged does where it is held, as the
-/// folder under it found last frame.
+/// What letting go of what is dragged does over a folder.
 enum class DropAction { None, Move, Copy };
-DropAction g_held_drop = DropAction::None;
 
 /**
  * What dropping `source` into `folder` does. An entry megatoy can move goes
@@ -187,7 +185,7 @@ void entry_drag_source(const patches::PatchEntry &entry, int depth) {
  * by its row, which is not drawn while out of view, and ImGui would show
  * "..." in its place.
  */
-void draw_drag_tooltip(const PatchSelectorContext &context) {
+void draw_drag_tooltip(const PatchSelectorContext &context, DropAction held) {
   const ImGuiPayload *payload = ImGui::GetDragDropPayload();
   if (payload == nullptr || !payload->IsDataType(kPatchEntryPayload)) {
     return;
@@ -203,7 +201,7 @@ void draw_drag_tooltip(const PatchSelectorContext &context) {
   ImGuiContext &g = *GImGui;
   g.DragDropWithinSource = true;
   ImGui::BeginTooltip();
-  if (g_held_drop == DropAction::Copy) {
+  if (held == DropAction::Copy) {
     ImGui::TextUnformatted(ICON_MEGATOY_PLUS);
     ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
   }
@@ -528,11 +526,6 @@ PatchTreeCache &tree_cache() {
   return cache;
 }
 
-/// The folder an entry is held over.
-struct DropHover {
-  std::size_t folder = 0;
-};
-
 /// A closed folder that takes the entry held over it opens after a moment,
 /// as ImGui's hold-to-open does, so the drag can go on into it.
 void spring_open(PatchTreeCache &cache, const patches::TreeRow *held) {
@@ -553,93 +546,102 @@ void spring_open(PatchTreeCache &cache, const patches::TreeRow *held) {
   }
 }
 
-/**
- * Makes row `index`, across the whole width, take an entry for its folder.
- * True with `hover` filled while one that folder can take is held over it.
- */
-/// Row `index` taking files dragged in from outside for its folder, which
-/// they are copied into.
-bool files_drop_target(PatchSelectorContext &context,
-                       const std::vector<patches::TreeRow> &rows,
-                       std::size_t index, std::size_t folder_index,
-                       const ImRect &rect, DropHover &hover, DropAction &held) {
-  const auto &folder = *rows[folder_index].entry;
-  if (!context.copy_files_in || !context.repository.takes_copies(folder)) {
-    return false;
-  }
-  if (!ImGui::BeginDragDropTargetCustom(
-          rect, ImGui::GetID(rows[index].entry->relative_path.c_str()))) {
-    return false;
-  }
-  bool holding = false;
-  if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
-          os_file_drop::kPayload,
-          ImGuiDragDropFlags_AcceptBeforeDelivery |
-              ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
-    if (payload->IsPreview()) {
-      hover = {folder_index};
-      held = DropAction::Copy;
-      holding = true;
-    }
-    if (payload->IsDelivery()) {
-      context.pending_files = PendingFiles{os_file_drop::take(), folder};
-    }
-  }
-  ImGui::EndDragDropTarget();
-  return holding;
+/// The entry at `relative_path` in the tree as it is when the drop runs,
+/// copied: the change it is passed to rebuilds the tree.
+std::optional<patches::PatchEntry> listed(const PatchSelectorContext &context,
+                                          const std::string &relative_path) {
+  const auto *entry =
+      find_by_relative_path(context.repository.tree(), relative_path);
+  return entry != nullptr ? std::optional(*entry) : std::nullopt;
 }
 
-bool row_drop_target(PatchSelectorContext &context,
-                     const std::vector<patches::TreeRow> &rows,
-                     std::size_t index, const ImRect &rect, DropHover &hover,
-                     DropAction &held) {
-  const std::size_t folder_index = patches::drop_folder_index(rows, index);
-  if (folder_index == std::string::npos) {
-    return false;
-  }
+/// What letting go of the tree's entry at `from` over the folder at `to`
+/// does, carried out once the tree is no longer being drawn.
+std::function<void()> entry_drop(PatchSelectorContext &context,
+                                 std::string from, std::string to,
+                                 DropAction action) {
+  return [&context, from = std::move(from), to = std::move(to), action]() {
+    const auto entry = listed(context, from);
+    const auto folder = listed(context, to);
+    if (!entry || !folder) {
+      return;
+    }
+    if (action == DropAction::Copy) {
+      context.copy_patch(*entry, *folder);
+      return;
+    }
+    if (entry->is_directory) {
+      follow_tree_directory(entry->relative_path,
+                            folder->relative_path + "/" +
+                                entry->full_path.filename().string());
+    }
+    context.move_patch(*entry, *folder);
+  };
+}
+
+/**
+ * Makes row `index`, across the whole width, take what is dragged for its
+ * folder: an entry of the tree, moved or copied (see drop_action), or files
+ * from outside, copied. What letting go would do while it is held over the
+ * row; nothing otherwise, and for the rows the pointer is not over.
+ */
+DropAction row_drop_target(PatchSelectorContext &context,
+                           const std::vector<patches::TreeRow> &rows,
+                           std::size_t index, std::size_t folder_index,
+                           const ImRect &rect) {
   const ImGuiPayload *pending = ImGui::GetDragDropPayload();
-  if (pending == nullptr) {
-    return false;
+  const bool files =
+      pending != nullptr && pending->IsDataType(os_file_drop::kPayload);
+  if (pending == nullptr ||
+      (!files && !pending->IsDataType(kPatchEntryPayload))) {
+    return DropAction::None;
   }
-  if (pending->IsDataType(os_file_drop::kPayload)) {
-    return files_drop_target(context, rows, index, folder_index, rect, hover,
-                             held);
-  }
-  if (!pending->IsDataType(kPatchEntryPayload)) {
-    return false;
-  }
-  const std::string relative_path(static_cast<const char *>(pending->Data),
-                                  static_cast<std::size_t>(pending->DataSize));
-  const auto *source =
-      find_by_relative_path(context.repository.tree(), relative_path);
-  if (source == nullptr) {
-    return false;
-  }
-  const auto &folder = *rows[folder_index].entry;
-  const DropAction action = drop_action(context, *source, folder);
-  if (action == DropAction::None) {
-    return false;
-  }
+  // Only the row under the pointer works out what the drop would do.
   if (!ImGui::BeginDragDropTargetCustom(
           rect, ImGui::GetID(rows[index].entry->relative_path.c_str()))) {
-    return false;
+    return DropAction::None;
   }
-  bool holding = false;
-  if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
-          kPatchEntryPayload, ImGuiDragDropFlags_AcceptBeforeDelivery |
-                                  ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
-    if (payload->IsPreview()) {
-      hover = {folder_index};
-      held = action;
-      holding = true;
+  const auto &folder = *rows[folder_index].entry;
+  const patches::PatchEntry *source = nullptr;
+  DropAction action = DropAction::None;
+  if (files) {
+    if (context.copy_files_in && context.repository.takes_copies(folder)) {
+      action = DropAction::Copy;
     }
-    if (payload->IsDelivery()) {
-      context.pending_move =
-          PendingMove{*source, folder, action == DropAction::Copy};
+  } else {
+    source = find_by_relative_path(
+        context.repository.tree(),
+        std::string(static_cast<const char *>(pending->Data),
+                    static_cast<std::size_t>(pending->DataSize)));
+    if (source != nullptr) {
+      action = drop_action(context, *source, folder);
+    }
+  }
+  DropAction held = DropAction::None;
+  if (action != DropAction::None) {
+    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
+            files ? os_file_drop::kPayload : kPatchEntryPayload,
+            ImGuiDragDropFlags_AcceptBeforeDelivery |
+                ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+      if (payload->IsPreview()) {
+        held = action;
+      }
+      if (payload->IsDelivery()) {
+        context.pending_drop =
+            files
+                ? std::function<void()>([&context, files = os_file_drop::take(),
+                                         to = folder.relative_path]() {
+                    if (const auto into = listed(context, to)) {
+                      context.copy_files_in(files, *into);
+                    }
+                  })
+                : entry_drop(context, source->relative_path,
+                             folder.relative_path, action);
+      }
     }
   }
   ImGui::EndDragDropTarget();
-  return holding;
+  return held;
 }
 
 /// The frame around the folder taking a drop and everything listed under it,
@@ -742,7 +744,7 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
   // The tallest a row stands, to find the first one in view.
   const float height = ui::patch_row_height();
   const bool can_drop = context.move_patch || context.copy_patch;
-  std::optional<DropHover> hover;
+  std::optional<std::size_t> hover;
   DropAction held_drop = DropAction::None;
   const auto first = static_cast<std::size_t>(
       std::upper_bound(tops.begin(), tops.end() - 1,
@@ -765,29 +767,30 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
     if (offset > 0.0f) {
       ImGui::Unindent(offset);
     }
-    DropHover held;
-    if (can_drop &&
-        row_drop_target(context, rows, index,
-                        ImRect(left, top, right, top + row_height_of(row)),
-                        held, held_drop)) {
-      hover = held;
+    const std::size_t folder_index = patches::drop_folder_index(rows, index);
+    if (can_drop && folder_index != std::string::npos) {
+      const DropAction action =
+          row_drop_target(context, rows, index, folder_index,
+                          ImRect(left, top, right, top + row_height_of(row)));
+      if (action != DropAction::None) {
+        hover = folder_index;
+        held_drop = action;
+      }
     }
   }
-  g_held_drop = held_drop;
   ImGui::SetCursorScreenPos(ImVec2(left, origin.y + tops.back()));
   ImGui::Dummy(ImVec2(0.0f, 0.0f));
 
   // The folder taking a drop is framed with everything listed under it,
   // even the rows out of view.
   if (hover) {
-    const std::size_t last = patches::last_row_under(rows, hover->folder);
+    const std::size_t last = patches::last_row_under(rows, *hover);
     draw_drop_frame(
-        ImVec2(left + row_indent(rows[hover->folder]),
-               origin.y + tops[hover->folder]),
+        ImVec2(left + row_indent(rows[*hover]), origin.y + tops[*hover]),
         ImVec2(right, origin.y + tops[last] + row_height_of(rows[last])));
   }
-  spring_open(cache, hover ? &rows[hover->folder] : nullptr);
-  draw_drag_tooltip(context);
+  spring_open(cache, hover ? &rows[*hover] : nullptr);
+  draw_drag_tooltip(context, held_drop);
 
   return true;
 }

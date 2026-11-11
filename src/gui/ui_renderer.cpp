@@ -129,13 +129,11 @@ void render_all(AppContext &ctx) {
 
   render_save_export_popup_host(ctx);
   // Files let go where nothing takes them open as a drop always did.
-  for (const auto &path : os_file_drop::take_unclaimed()) {
-    drop_actions::Environment env{
-        ctx.services, ctx.ui_state(),
-        [&ctx](const ym2612::Patch &patch, const std::filesystem::path &from) {
-          patch_actions::open_dropped_patch(ctx, patch, from);
-        }};
-    drop_actions::handle_drop(env, path);
+  if (auto dropped = os_file_drop::take(); !dropped.empty()) {
+    auto env = make_drop_environment(ctx);
+    for (const auto &path : dropped) {
+      drop_actions::handle_drop(env, path);
+    }
   }
   library_undo::check(ctx.services.patch_session);
   render_status_toasts();

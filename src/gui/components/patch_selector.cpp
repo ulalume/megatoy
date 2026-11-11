@@ -154,25 +154,10 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
     context.remove_folder(folder);
   }
 
-  if (context.pending_files && context.copy_files_in) {
-    const auto files = std::move(*context.pending_files);
-    context.pending_files.reset();
-    context.copy_files_in(files.files, files.destination);
-  }
-  if (context.pending_move && context.pending_move->copy &&
-      context.copy_patch) {
-    const auto copy = std::move(*context.pending_move);
-    context.pending_move.reset();
-    context.copy_patch(copy.entry, copy.destination);
-  } else if (context.pending_move && context.move_patch) {
-    const auto move = std::move(*context.pending_move);
-    context.pending_move.reset();
-    if (move.entry.is_directory) {
-      follow_tree_directory(move.entry.relative_path,
-                            move.destination.relative_path + "/" +
-                                move.entry.full_path.filename().string());
-    }
-    context.move_patch(move.entry, move.destination);
+  if (context.pending_drop) {
+    const auto drop = std::move(context.pending_drop);
+    context.pending_drop = nullptr;
+    drop();
   }
 
   if (context.pending_rating) {

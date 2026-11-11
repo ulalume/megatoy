@@ -284,11 +284,22 @@ public:
   SaveResult create_folder_in(const std::filesystem::path &parent,
                               const std::string &name);
   bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
+  /// A document a deletion left without its file, and where it showed it.
+  struct DetachedDocument {
+    DocumentId id;
+    std::string path;
+    std::string selection_path;
+  };
   /**
    * Delete `entry` from the repository. Every document showing it, or
-   * something inside it, loses its path and becomes an unsaved patch.
+   * something inside it, loses its path and becomes an unsaved patch; those
+   * go in `detached` when it is given.
    */
-  bool delete_patch(const PatchEntry &entry);
+  bool delete_patch(const PatchEntry &entry,
+                    std::vector<DetachedDocument> *detached = nullptr);
+  /// Give the documents a deletion detached their files again, once those
+  /// are back, unless they have been saved elsewhere since.
+  void reattach(const std::vector<DetachedDocument> &detached);
   /**
    * Move `entry` into the folder `destination`, within one workspace folder.
    * Every open document follows when it was the entry or inside it, as does
