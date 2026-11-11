@@ -128,6 +128,7 @@ public:
   bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
   /// Copies go into a plain folder of a writable workspace folder, from
   /// anywhere: another workspace folder, the built-in presets or a bank.
+  bool takes_copies(const PatchEntry &destination) const;
   bool can_copy_patch(const PatchEntry &entry,
                       const PatchEntry &destination) const;
   /**
@@ -139,6 +140,12 @@ public:
   std::optional<std::filesystem::path> copy_patch(const PatchEntry &entry,
                                                   const PatchEntry &destination,
                                                   std::string_view extension);
+  /// Copies files and folders from outside into `destination`, as
+  /// copy_patch names them, and returns the copies. A file no format reads
+  /// is left out, counted in `skipped` with those that fail.
+  std::vector<std::filesystem::path>
+  copy_files_in(const std::vector<std::filesystem::path> &files,
+                const PatchEntry &destination, std::size_t &skipped);
   /// Removes a copy made by copy_patch, file or folder, with its metadata.
   bool remove_copy(const std::filesystem::path &copy);
   /// What `entry` holds, read before deleting it: the file and its metadata,

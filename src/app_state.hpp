@@ -30,6 +30,9 @@ struct UIState {
     std::filesystem::path pending_instruments_path;
     std::vector<ym2612::Patch> instruments;
     int selected_instrument = 0;
+    /// Where the instrument picked goes, in place of the editor.
+    std::function<void(const ym2612::Patch &, const std::filesystem::path &)>
+        apply;
   } drop_state;
 
   struct EnvelopeState {

@@ -5,6 +5,7 @@
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/input/touch.hpp"
 #include "gui/layouts.hpp"
+#include "gui/os_file_drop.hpp"
 #if defined(__APPLE__)
 #include "gui/mac_window_menu.hpp"
 #endif
@@ -46,20 +47,9 @@ GuiManager::GuiManager(PreferenceManager &preferences)
       fullscreen_(false), windowed_pos_x_(0), windowed_pos_y_(0),
       windowed_width_(0), windowed_height_(0), first_frame_(true),
       first_end_frame_(false), pending_imgui_ini_update_(false),
-      imgui_ini_file_path_(), theme_(ui::styles::ThemeId::Megatoy),
-      drop_user_pointer_(nullptr), drop_callback_(nullptr) {}
+      imgui_ini_file_path_(), theme_(ui::styles::ThemeId::Megatoy) {}
 
 GuiManager::~GuiManager() { shutdown(); }
-
-void GuiManager::dispatch_drop_event(const char *path) {
-  if (path == nullptr || drop_callback_ == nullptr ||
-      drop_user_pointer_ == nullptr) {
-    return;
-  }
-
-  const char *paths[]{path};
-  drop_callback_(drop_user_pointer_, 1, paths);
-}
 
 bool GuiManager::initialize(const std::string &window_title, int width,
                             int height) {
@@ -453,11 +443,24 @@ void GuiManager::process_event(const SDL_Event &event) {
       }
     }
     break;
-  case SDL_EVENT_DROP_FILE:
-    if (event.drop.windowID == window_id_ && event.drop.data != nullptr) {
-      std::string dropped_path(event.drop.data);
-      dispatch_drop_event(dropped_path.c_str());
+  // Files dragged in from outside: the pointer follows them, for the place
+  // under it to answer, and they go to the place they are let go over.
+  case SDL_EVENT_DROP_BEGIN:
+    ui::os_file_drop::begin();
+    break;
+  case SDL_EVENT_DROP_POSITION:
+    if (event.drop.windowID == window_id_) {
+      ImGui::GetIO().AddMousePosEvent(event.drop.x, event.drop.y);
     }
+    break;
+  case SDL_EVENT_DROP_FILE:
+    if (event.drop.data != nullptr) {
+      ui::os_file_drop::add(std::filesystem::path(
+          std::u8string(reinterpret_cast<const char8_t *>(event.drop.data))));
+    }
+    break;
+  case SDL_EVENT_DROP_COMPLETE:
+    ui::os_file_drop::complete();
     break;
   default:
     break;
@@ -596,13 +599,6 @@ void GuiManager::apply_imgui_ini_binding() {
   pending_imgui_ini_update_ = false;
 }
 
-void GuiManager::set_drop_callback(void *user_pointer,
-                                   void (*callback)(void *user_pointer,
-                                                    int count,
-                                                    const char **paths)) {
-  drop_user_pointer_ = user_pointer;
-  drop_callback_ = callback;
-}
 
 void GuiManager::sync_web_imgui_ini() {
   if (!megatoy::platform::is_web() || web_ini_loaded_ ||

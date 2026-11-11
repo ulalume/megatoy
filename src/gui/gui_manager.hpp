@@ -110,13 +110,6 @@ public:
   /// Enlargement the display asks content for; 1.0 when it cannot be read.
   float display_scale() const;
 
-  /**
-   * File drop callback management
-   */
-  void set_drop_callback(void *user_pointer,
-                         void (*callback)(void *user_pointer, int count,
-                                          const char **paths));
-
   // Web-specific ini bridge (no-op on native).
   void sync_web_imgui_ini();
 
@@ -152,13 +145,10 @@ private:
   // Internal methods
   void set_imgui_ini_file(const std::string &path);
   void apply_imgui_ini_binding();
-  void dispatch_drop_event(const char *path);
   void process_event(const SDL_Event &event);
   void setup_default_layout(unsigned int dockspace_id);
 
   // Drop callback state
-  void *drop_user_pointer_;
-  void (*drop_callback_)(void *user_pointer, int count, const char **paths);
 
   bool web_ini_loaded_ = false;
 };

@@ -19,6 +19,12 @@ struct PatchLabContext {
   std::function<void(const std::string &label, const std::string &merge_key)>
       begin_history;
   std::function<void()> commit_history;
+  /// Load a file dropped from outside into one place, asking which
+  /// instrument where it holds several.
+  std::function<void(const std::filesystem::path &,
+                     std::function<void(const ym2612::Patch &,
+                                        const std::filesystem::path &)>)>
+      load_dropped_file;
 };
 
 /// A patch picked for Mix or Morph: a browser entry, read when the operation

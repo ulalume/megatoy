@@ -9,6 +9,7 @@
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/frame_requests.hpp"
 #include "gui/input/history_shortcuts.hpp"
+#include "gui/os_file_drop.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
@@ -34,32 +35,6 @@
 #include <utility>
 
 namespace {
-
-void handle_file_drop(void *user_pointer, int count, const char **paths) {
-  if (paths == nullptr || count <= 0) {
-    return;
-  }
-
-  auto *context = static_cast<AppContext *>(user_pointer);
-  if (context == nullptr) {
-    return;
-  }
-
-  for (int i = 0; i < count; ++i) {
-    if (paths[i] == nullptr) {
-      continue;
-    }
-
-    drop_actions::Environment env{context->services, context->ui_state(),
-                                  [context](const ym2612::Patch &patch,
-                                            const std::filesystem::path &path) {
-                                    patch_actions::open_dropped_patch(
-                                        *context, patch, path);
-                                  }};
-
-    drop_actions::handle_drop(env, std::filesystem::path(paths[i]));
-  }
-}
 
 void draw_frame(RuntimeContext &runtime);
 
@@ -255,7 +230,6 @@ int main(int argc, char *argv[]) {
   services.initialize_app(app_state);
   MEGATOY_APP_STORAGE AppContext app_context{services, app_state};
 
-  services.gui_manager.set_drop_callback(&app_context, handle_file_drop);
   // Lambdas cannot capture statics on the web build; a reference with
   // automatic storage duration is capturable on both platforms.
   AppServices &services_ref = services;
@@ -283,6 +257,8 @@ int main(int argc, char *argv[]) {
                                    "\" is already in the workspace.");
         }
       });
+  // The page takes over a dropped folder, so SDL never ends that drag.
+  platform::web::set_drop_start_handler([]() { ui::os_file_drop::cancel(); });
   platform::web::install_drop_import(
       megatoy::system::PathService::web_storage_root());
   emscripten_set_visibilitychange_callback(nullptr, true, on_visibility_change);

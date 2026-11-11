@@ -14,6 +14,9 @@ void request_patch_move(AppContext &ctx, const patches::PatchEntry &entry,
                         const patches::PatchEntry &destination);
 void request_patch_copy(AppContext &ctx, const patches::PatchEntry &entry,
                         const patches::PatchEntry &destination);
+void request_files_copy(AppContext &ctx,
+                        const std::vector<std::filesystem::path> &files,
+                        const patches::PatchEntry &destination);
 void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry);
 void request_new_patch(AppContext &ctx, const std::filesystem::path &folder);
 void request_new_folder(AppContext &ctx, const std::filesystem::path &parent);

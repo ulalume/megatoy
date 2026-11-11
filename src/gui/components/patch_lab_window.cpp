@@ -8,6 +8,7 @@
 #include "gui/components/menu_rows.hpp"
 #include "gui/components/side_list.hpp"
 #include "gui/fonts/megatoy_icons.hpp"
+#include "gui/os_file_drop.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -181,7 +182,7 @@ float centred_start(float left, float right, float icon_width,
 
 /// A slot for one source: a click lists what it can take, and a patch
 /// dragged from the browser drops into it.
-void render_source_slot(const char *id,
+void render_source_slot(const char *id, const PatchLabContext &context,
                         const patches::PatchSession &session,
                         const std::vector<EntryDisplay> &entries,
                         PatchLabSource &source, std::string &filter_text,
@@ -210,6 +211,22 @@ void render_source_slot(const char *id,
       if (session.find_entry(path) != nullptr &&
           ImGui::AcceptDragDropPayload(kPatchEntryPayload) != nullptr) {
         source = {.entry_path = path};
+      }
+    } else if (payload != nullptr &&
+               payload->IsDataType(os_file_drop::kPayload) &&
+               context.load_dropped_file &&
+               ImGui::AcceptDragDropPayload(os_file_drop::kPayload) !=
+                   nullptr) {
+      // A file from outside: its patch as it is now, the first file of
+      // several.
+      if (const auto files = os_file_drop::take(); !files.empty()) {
+        context.load_dropped_file(
+            files.front(), [&source](const ym2612::Patch &patch,
+                                     const std::filesystem::path &path) {
+              source = {.patch = patch,
+                        .label = patch.name.empty() ? path.stem().string()
+                                                    : patch.name};
+            });
       }
     }
     ImGui::EndDragDropTarget();
@@ -288,10 +305,10 @@ void render_source_slots(PatchLabContext &context, PatchLabState &state,
                          const std::vector<EntryDisplay> &entries) {
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   const float width = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
-  render_source_slot("a", context.session, entries, state.mix.source_a,
+  render_source_slot("a", context, context.session, entries, state.mix.source_a,
                      state.picker_filter, width);
   ImGui::SameLine();
-  render_source_slot("b", context.session, entries, state.mix.source_b,
+  render_source_slot("b", context, context.session, entries, state.mix.source_b,
                      state.picker_filter, width);
 }
 

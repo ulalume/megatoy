@@ -21,6 +21,7 @@
 #include "system/path_service.hpp"
 #include "workspace/path_policy.hpp"
 #endif
+#include <algorithm>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -440,6 +441,54 @@ void request_patch_copy(AppContext &ctx, const patches::PatchEntry &entry,
                               [&ctx, entry, destination]() {
                                 perform_patch_copy(ctx, entry, destination);
                               });
+}
+
+void request_files_copy(AppContext &ctx,
+                        const std::vector<std::filesystem::path> &files,
+                        const patches::PatchEntry &destination) {
+  std::size_t skipped = 0;
+  auto copies = ctx.services.patch_session.repository().copy_files_in(
+      files, destination, skipped);
+  const std::string unread =
+      skipped == 0
+          ? ""
+          : " " + std::to_string(skipped) +
+                (skipped == 1 ? " file was" : " files were") + " left out.";
+  if (copies.empty()) {
+    megatoy::status::error("Nothing was copied to \"" + destination.name +
+                           "\"." + unread);
+    return;
+  }
+  const std::string message =
+      (copies.size() == 1
+           ? "Copied \"" + copies.front().filename().string() + "\""
+           : "Copied " + std::to_string(copies.size()) + " items") +
+      " to \"" + destination.name + "\"." + unread;
+  const bool folders = std::any_of(
+      copies.begin(), copies.end(), [](const std::filesystem::path &copy) {
+        std::error_code ec;
+        return std::filesystem::is_directory(copy, ec);
+      });
+  auto report = [&ctx, message, copies]() {
+    library_undo::offer(message, copies, [&ctx, copies]() {
+      auto &repository = ctx.services.patch_session.repository();
+      bool removed = true;
+      for (const auto &copy : copies) {
+        removed = repository.remove_copy(copy) && removed;
+      }
+      if (removed) {
+        megatoy::status::success("Removed the copies.");
+      } else {
+        megatoy::status::error("Could not remove every copy.");
+      }
+    });
+  };
+  if (!folders) {
+    report();
+    return;
+  }
+  after_storage_has("Copying to \"" + destination.name + "\"...", report,
+                    "Could not save the copy");
 }
 
 void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {

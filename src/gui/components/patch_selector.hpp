@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace ui {
 
@@ -27,6 +28,12 @@ struct PendingMove {
   patches::PatchEntry entry;
   patches::PatchEntry destination;
   bool copy = false;
+};
+
+/// Files from outside let go over a folder.
+struct PendingFiles {
+  std::vector<std::filesystem::path> files;
+  patches::PatchEntry destination;
 };
 
 /// Drag payload of a browser entry: its repository-relative path.
@@ -65,6 +72,10 @@ struct PatchSelectorContext {
   /// Copy an entry into a folder.
   std::function<void(const patches::PatchEntry &, const patches::PatchEntry &)>
       copy_patch;
+  /// Copy files from outside into a folder.
+  std::function<void(const std::vector<std::filesystem::path> &,
+                     const patches::PatchEntry &)>
+      copy_files_in;
   /// Copy the entry's patch to a new file, leaving the editor alone.
   std::function<void(const patches::PatchEntry &)> duplicate_patch;
   /// Ask for a new patch in this folder. Only offered on a folder the
@@ -80,6 +91,7 @@ struct PatchSelectorContext {
   std::optional<std::string> pending_icon_picker;
   /// A drop in the tree, carried out once the tree is no longer being drawn.
   std::optional<PendingMove> pending_move;
+  std::optional<PendingFiles> pending_files;
 };
 
 // Function to render library panel

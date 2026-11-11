@@ -367,17 +367,48 @@ std::filesystem::path unused_copy_path(const std::filesystem::path &folder,
   return candidate;
 }
 
+/// `source`, a file or a folder with everything in it, copied into
+/// `folder` under its own name or, taken, a name of its own.
+std::filesystem::path copy_path_into(const std::filesystem::path &source,
+                                     const std::filesystem::path &folder) {
+  std::error_code ec;
+  const bool directory = std::filesystem::is_directory(source, ec);
+  const auto target =
+      directory ? unused_copy_path(folder, source.filename().string(), "")
+                : unused_copy_path(folder, source.stem().string(),
+                                   source.extension().string());
+  if (target.empty()) {
+    return {};
+  }
+  if (directory) {
+    // A folder's sidecars are inside it and go with it.
+    std::filesystem::copy(source, target,
+                          std::filesystem::copy_options::recursive, ec);
+  } else if (!std::filesystem::copy_file(source, target, ec)) {
+    return {};
+  }
+  if (ec) {
+    std::filesystem::remove_all(target, ec);
+    return {};
+  }
+  return target;
+}
+
 } // namespace
 
-bool PatchRepository::can_copy_patch(const PatchEntry &entry,
-                                     const PatchEntry &destination) const {
+bool PatchRepository::takes_copies(const PatchEntry &destination) const {
   if (!destination.is_directory || !destination.format.empty() ||
       is_inside_file(destination)) {
     return false;
   }
   const auto *owner = workspace_.owner_of(destination.full_path);
-  if (owner == nullptr || !owner->writable ||
-      !vfs_.is_directory(destination.full_path)) {
+  return owner != nullptr && owner->writable &&
+         vfs_.is_directory(destination.full_path);
+}
+
+bool PatchRepository::can_copy_patch(const PatchEntry &entry,
+                                     const PatchEntry &destination) const {
+  if (!takes_copies(destination)) {
     return false;
   }
   if (is_inside_file(entry)) {
@@ -414,28 +445,14 @@ PatchRepository::copy_patch(const PatchEntry &entry,
       return std::nullopt;
     }
     copy_patch_metadata(entry.metadata, target);
-  } else if (std::filesystem::is_directory(entry.full_path, ec)) {
-    // Its sidecars are inside it and go with it.
-    target = unused_copy_path(destination.full_path,
-                              entry.full_path.filename().string(), "");
+  } else {
+    target = copy_path_into(entry.full_path, destination.full_path);
     if (target.empty()) {
       return std::nullopt;
     }
-    std::filesystem::copy(entry.full_path, target,
-                          std::filesystem::copy_options::recursive, ec);
-    if (ec) {
-      std::filesystem::remove_all(target, ec);
-      return std::nullopt;
+    if (!std::filesystem::is_directory(target, ec)) {
+      copy_patch_metadata(entry.metadata, target);
     }
-  } else {
-    target =
-        unused_copy_path(destination.full_path, entry.full_path.stem().string(),
-                         entry.full_path.extension().string());
-    if (target.empty() ||
-        !std::filesystem::copy_file(entry.full_path, target, ec) || ec) {
-      return std::nullopt;
-    }
-    copy_patch_metadata(entry.metadata, target);
   }
 
   refresh();
@@ -443,6 +460,40 @@ PatchRepository::copy_patch(const PatchEntry &entry,
   platform::web::request_storage_persist();
 #endif
   return target;
+}
+
+std::vector<std::filesystem::path>
+PatchRepository::copy_files_in(const std::vector<std::filesystem::path> &files,
+                               const PatchEntry &destination,
+                               std::size_t &skipped) {
+  std::vector<std::filesystem::path> copies;
+  skipped = 0;
+  if (!takes_copies(destination)) {
+    skipped = files.size();
+    return copies;
+  }
+  for (const auto &file : files) {
+    std::error_code ec;
+    const bool directory = std::filesystem::is_directory(file, ec);
+    if (!directory && !platform::import_pipeline::supports_extension(
+                          lowercase_extension(file))) {
+      ++skipped;
+      continue;
+    }
+    auto copy = copy_path_into(file, destination.full_path);
+    if (copy.empty()) {
+      ++skipped;
+    } else {
+      copies.push_back(std::move(copy));
+    }
+  }
+  if (!copies.empty()) {
+    refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+    platform::web::request_storage_persist();
+#endif
+  }
+  return copies;
 }
 
 bool PatchRepository::remove_copy(const std::filesystem::path &copy) {

@@ -142,7 +142,12 @@ PatchLabContext make_patch_lab_context(AppContext &ctx) {
           [&ctx](const std::string &label, const std::string &merge_key) {
             patch_actions::begin_change(ctx, label, merge_key);
           },
-          [&ctx]() { patch_actions::commit_change(ctx); }};
+          [&ctx]() { patch_actions::commit_change(ctx); },
+          [&ctx](const std::filesystem::path &path,
+                 drop_actions::ApplyPatchFn apply) {
+            auto env = make_drop_environment(ctx);
+            drop_actions::handle_drop_into(env, path, std::move(apply));
+          }};
 }
 
 PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
@@ -216,6 +221,10 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
       [&ctx](const patches::PatchEntry &entry,
              const patches::PatchEntry &destination) {
         request_patch_copy(ctx, entry, destination);
+      },
+      [&ctx](const std::vector<std::filesystem::path> &files,
+             const patches::PatchEntry &destination) {
+        request_files_copy(ctx, files, destination);
       },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_duplicate(ctx, entry);

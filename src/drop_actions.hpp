@@ -19,6 +19,10 @@ struct Environment {
 
 void reset_drop_state(UIState::DropState &drop);
 void handle_drop(Environment &env, const std::filesystem::path &path);
+/// A file dropped onto one place: its patch goes to `apply`, after a pick
+/// where it holds several.
+void handle_drop_into(Environment &env, const std::filesystem::path &path,
+                      ApplyPatchFn apply);
 void apply_selection(Environment &env, size_t index);
 void cancel_selection(UIState::DropState &drop);
 

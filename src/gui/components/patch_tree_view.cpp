@@ -4,6 +4,7 @@
 #include "gui/components/menu_rows.hpp"
 #include "gui/components/section_header.hpp"
 #include "gui/fonts/megatoy_icons.hpp"
+#include "gui/os_file_drop.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "patches/instrument_icons.hpp"
 
@@ -546,6 +547,38 @@ void spring_open(PatchTreeCache &cache, const patches::TreeRow *held) {
  * Makes row `index`, across the whole width, take an entry for its folder.
  * True with `hover` filled while one that folder can take is held over it.
  */
+/// Row `index` taking files dragged in from outside for its folder, which
+/// they are copied into.
+bool files_drop_target(PatchSelectorContext &context,
+                       const std::vector<patches::TreeRow> &rows,
+                       std::size_t index, std::size_t folder_index,
+                       const ImRect &rect, DropHover &hover, DropAction &held) {
+  const auto &folder = *rows[folder_index].entry;
+  if (!context.copy_files_in || !context.repository.takes_copies(folder)) {
+    return false;
+  }
+  if (!ImGui::BeginDragDropTargetCustom(
+          rect, ImGui::GetID(rows[index].entry->relative_path.c_str()))) {
+    return false;
+  }
+  bool holding = false;
+  if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
+          os_file_drop::kPayload,
+          ImGuiDragDropFlags_AcceptBeforeDelivery |
+              ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+    if (payload->IsPreview()) {
+      hover = {folder_index};
+      held = DropAction::Copy;
+      holding = true;
+    }
+    if (payload->IsDelivery()) {
+      context.pending_files = PendingFiles{os_file_drop::take(), folder};
+    }
+  }
+  ImGui::EndDragDropTarget();
+  return holding;
+}
+
 bool row_drop_target(PatchSelectorContext &context,
                      const std::vector<patches::TreeRow> &rows,
                      std::size_t index, const ImRect &rect, DropHover &hover,
@@ -555,7 +588,14 @@ bool row_drop_target(PatchSelectorContext &context,
     return false;
   }
   const ImGuiPayload *pending = ImGui::GetDragDropPayload();
-  if (pending == nullptr || !pending->IsDataType(kPatchEntryPayload)) {
+  if (pending == nullptr) {
+    return false;
+  }
+  if (pending->IsDataType(os_file_drop::kPayload)) {
+    return files_drop_target(context, rows, index, folder_index, rect, hover,
+                             held);
+  }
+  if (!pending->IsDataType(kPatchEntryPayload)) {
     return false;
   }
   const std::string relative_path(static_cast<const char *>(pending->Data),

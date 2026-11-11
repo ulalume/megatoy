@@ -154,6 +154,11 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
     context.remove_folder(folder);
   }
 
+  if (context.pending_files && context.copy_files_in) {
+    const auto files = std::move(*context.pending_files);
+    context.pending_files.reset();
+    context.copy_files_in(files.files, files.destination);
+  }
   if (context.pending_move && context.pending_move->copy &&
       context.copy_patch) {
     const auto copy = std::move(*context.pending_move);
