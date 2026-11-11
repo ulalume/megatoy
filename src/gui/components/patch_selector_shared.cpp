@@ -148,8 +148,8 @@ void entry_context_menu(PatchSelectorContext &context,
   // callback is simply absent on platforms without one.
   if (begin_group(actions.reveal)) {
     if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
-      context.reveal_in_file_manager(
-          context.repository.to_absolute_path(entry.relative_path));
+      // An instrument inside a bank shows the bank, the file it is in.
+      context.reveal_in_file_manager(entry.full_path);
     }
   }
 

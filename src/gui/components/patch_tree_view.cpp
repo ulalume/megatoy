@@ -436,10 +436,13 @@ void render_directory_row(PatchSelectorContext &context,
     const ImGuiStyle &style = ImGui::GetStyle();
     const float text_y =
         row_min.y + (row_height() - ImGui::GetTextLineHeight()) * 0.5f;
+    // A bank or a package is a file listing its instruments: named as a
+    // patch is, its format muted after its name.
+    const bool file = !item.format.empty();
+    const ImU32 muted =
+        ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
     const ImU32 color =
-        heading
-            ? ImGui::GetColorU32(ImGuiCol_Text)
-            : ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+        heading || file ? ImGui::GetColorU32(ImGuiCol_Text) : muted;
     // Every row's name stands at the same distance past its arrow or icon.
     const float name_x = row_min.x + style.FramePadding.x + name_offset();
     if (heading) {
@@ -452,6 +455,13 @@ void render_directory_row(PatchSelectorContext &context,
           color);
     }
     draw_list->AddText(ImVec2(name_x, text_y), color, display_name.c_str());
+    if (file) {
+      draw_list->AddText(
+          ImVec2(name_x + ImGui::CalcTextSize(display_name.c_str()).x +
+                     style.ItemSpacing.x,
+                 text_y),
+          muted, item.format.c_str());
+    }
     if (!item.telling_parents.empty()) {
       draw_list->AddText(
           ImVec2(name_x + ImGui::CalcTextSize(display_name.c_str()).x +
