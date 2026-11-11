@@ -470,13 +470,10 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
 
   const auto avail_width = ImGui::GetContentRegionAvail().x;
   const float column_min_width = ui::scale::px(250.0f);
-  if (avail_width > column_min_width * 4) {
-    ImGui::Columns(4, "operation_columns", false);
-  } else if (avail_width > column_min_width * 2) {
-    ImGui::Columns(2, "operation_columns", false);
-  } else {
-    ImGui::Columns(1, "operation_columns", false);
-  }
+  const int columns = avail_width > column_min_width * 4   ? 4
+                      : avail_width > column_min_width * 2 ? 2
+                                                           : 1;
+  ImGui::Columns(columns, "operation_columns", false);
 
   // The four frames share one height so their borders line up; each operator
   // reports what it needed and the tallest wins the next frame.
@@ -485,7 +482,7 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
   echo_selection_highlights(context);
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_state(slot),
-                           voices);
+                           voices, columns == 1);
 
     ImGui::Spacing();
     ImGui::NextColumn();
@@ -633,8 +630,7 @@ void assign_window_slots(PatchEditorContext &context) {
  * it had unsaved changes: take the file's contents, or keep the edits and
  * count the file's contents as what they differ from.
  */
-void render_disk_change_bar(PatchEditorContext &context,
-                            patches::DocumentId id,
+void render_disk_change_bar(PatchEditorContext &context, patches::DocumentId id,
                             UIState::DocumentUi &ui) {
   ImGui::AlignTextToFramePadding();
   ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),

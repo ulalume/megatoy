@@ -39,11 +39,13 @@ struct PatchEditorContext;
  *
  * The operator draws itself inside a border that doubles as its selection
  * state, and every widget in it feeds the selection: see
- * note_operator_edit() for what an edit does to the group.
+ * note_operator_edit() for what an edit does to the group. `stacked` is
+ * the one-column layout, where an operator outside the selection shows only
+ * its graph, and a tap on it selects it.
  */
 void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
-                            const EnvelopeVoices &voices);
+                            const EnvelopeVoices &voices, bool stacked);
 
 /// Give each selected operator what the others in the selection light, as
 /// UIState::EnvelopeState::echoed. Called before the operators are drawn.

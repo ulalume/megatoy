@@ -698,8 +698,8 @@ bool operator_drop_target(PatchEditorContext &context,
     const std::string to = operator_slot_label(slot);
     const std::string label =
         copy ? "Copy " + from + " to " + to
-             : "Swap " + operator_slot_label(std::min(source, slot)) +
-                   " and " + operator_slot_label(std::max(source, slot));
+             : "Swap " + operator_slot_label(std::min(source, slot)) + " and " +
+                   operator_slot_label(std::max(source, slot));
     // Taken before the step opens: opening it makes this patch the active one.
     const auto copied = ym2612::copy_operator(
         from_other_patch ? source_document->patch().instrument : instrument,
@@ -759,9 +759,11 @@ void render_envelope_sliders(OperatorWidget &widget,
   ImGui::EndGroup();
 }
 
+/// Draws the graph alone, without its handles, where the operator is
+/// `folded`.
 void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                               int slot, UIState::EnvelopeState &envelope_state,
-                              const EnvelopeVoices &voices) {
+                              const EnvelopeVoices &voices, bool folded) {
   auto &state = context.operator_edit();
   auto &instrument = patch.instrument;
   auto &op = ym2612::operator_at(instrument, slot);
@@ -774,6 +776,19 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                           .operator_enable[static_cast<std::size_t>(slot)];
   if (!sounds) {
     ImGui::BeginDisabled();
+  }
+  if (folded) {
+    render_envelope_image(
+        op, envelope_state,
+        ImVec2(content_width - frame_padding(), envelope_graph_height()),
+        voices, is_carrier(slot, instrument.algorithm), false);
+    envelope_state.handles = UIState::EnvelopeState::HandleLit{};
+    envelope_state.handle_active = false;
+    end_envelope_image();
+    if (!sounds) {
+      ImGui::EndDisabled();
+    }
+    return;
   }
   ImGui::PushItemWidth(hslider_width());
 
@@ -921,7 +936,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
 
 void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
-                            const EnvelopeVoices &voices) {
+                            const EnvelopeVoices &voices, bool stacked) {
   auto &state = context.operator_edit();
   OperatorWidget widget{context, patch.instrument, slot};
 
@@ -957,16 +972,22 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       ImVec2(frame_min.x + frame_padding(),
              block_min.y + header_height + frame_padding()));
   ImGui::BeginGroup();
-  render_operator_contents(context, patch, slot, envelope_state, voices);
+  // Stacked, an operator not being edited shows its graph alone.
+  render_operator_contents(context, patch, slot, envelope_state, voices,
+                           stacked && !state.selection.contains(slot));
   ImGui::EndGroup();
 
   const float content_height =
       ImGui::GetItemRectMax().y - frame_min.y + frame_padding();
-  state.pending_frame_height =
-      std::max(state.pending_frame_height, content_height);
-  // All four drawn to the tallest one's height so the borders line up. From
-  // the previous frame; measuring and applying in one would need two passes.
-  const float frame_height = std::max(content_height, state.frame_height);
+  // Side by side, all four drawn to the tallest one's height so the borders
+  // line up. From the previous frame; measuring and applying in one would
+  // need two passes. Stacked, each is as tall as it needs.
+  float frame_height = content_height;
+  if (!stacked) {
+    state.pending_frame_height =
+        std::max(state.pending_frame_height, content_height);
+    frame_height = std::max(content_height, state.frame_height);
+  }
   const ImVec2 frame_max(frame_min.x + frame_width, frame_min.y + frame_height);
   // Claim the full block so the columns row and the scroll extent account
   // for the header, the padding and any borrowed height.
@@ -1000,9 +1021,9 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       scroll_reveal::request(block_min.y, frame_max.y);
     }
   }
-  drag_from_background(
-      state, context.document, slot,
-      on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left));
+  drag_from_background(state, context.document, slot,
+                       on_background &&
+                           ImGui::IsMouseClicked(ImGuiMouseButton_Left));
 
   const bool receiving =
       sounds && operator_drop_target(context, patch.instrument, slot, block_min,
