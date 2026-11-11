@@ -241,7 +241,7 @@ void draw_chord(const std::string &chord, float left, float right, float top) {
   const float width = ImGui::CalcTextSize(chord.c_str()).x;
   ImGui::GetWindowDrawList()->AddText(
       ImVec2(std::round((left + right - width) * 0.5f),
-             top + ui::scale::px(4.0f)),
+             top + ui::scale::px(6.0f)),
       ImGui::GetColorU32(ImGuiCol_Text), chord.c_str());
 }
 
