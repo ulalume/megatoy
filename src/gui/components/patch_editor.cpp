@@ -443,6 +443,9 @@ void render_document_header(PatchEditorContext &context,
       const LfoNames &names = column >= lfo_fit_width(kLfoFullNames)
                                   ? kLfoFullNames
                                   : kLfoShortNames;
+      // Level with the algorithm's foot: FMS beside its slider.
+      ImGui::SetCursorPos(ImVec2(column_left, column_top + height - row * 2.0f +
+                                                  style.ItemSpacing.y));
       ImGui::BeginGroup();
       render_lfo_sliders(context, patch, names, column, false);
       ImGui::EndGroup();
