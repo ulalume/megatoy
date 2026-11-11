@@ -416,9 +416,11 @@ void render_document_header(PatchEditorContext &context,
     const float half = (rows_right - left - spacing) * 0.5f;
     const LfoNames &names =
         half >= lfo_fit_width(kLfoFullNames) ? kLfoFullNames : kLfoShortNames;
-    ImGui::SetCursorPos(ImVec2(left, top + row * 2.0f));
-    render_lfo_sliders(context, patch, names,
-                       std::min(half, lfo_slider_width(kLfoFullNames)), true);
+    // Against the algorithm, at the right of the rows.
+    const float width = std::min(half, lfo_slider_width(kLfoFullNames));
+    ImGui::SetCursorPos(
+        ImVec2(rows_right - width * 2.0f - spacing, top + row * 2.0f));
+    render_lfo_sliders(context, patch, names, width, true);
     ImGui::SetCursorPos(ImVec2(right - algorithm_width(*algorithm_names), top));
     render_algorithm(context, patch, *algorithm_names, height);
   }
