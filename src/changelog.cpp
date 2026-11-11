@@ -22,6 +22,8 @@ constexpr std::string_view kLibraryCopyDetails[] = {
     "From the built-in presets, a bank or a read-only folder, always",
 };
 constexpr ChangelogItem kItems_0_10_0[] = {
+    {"Notes sound sooner on macOS: about 9 ms to the device, from about 35",
+     {}},
     {"The patch browser is now the Library", {}},
     {"Drag in the Library with Option (Alt) held to copy", kLibraryCopyDetails},
     {"Delete folders inside the Library's folders", {}},

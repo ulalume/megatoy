@@ -209,6 +209,7 @@ else()
     src/gui/components/folder_scan_dialog.cpp
   )
   list(APPEND MEGATOY_LOGIC_SOURCES
+    src/audio/native_audio_transport.cpp
     src/audio/sdl_audio_transport.cpp
     src/midi/rtmidi_backend.cpp
     src/patches/background_folder_scan.cpp
@@ -218,7 +219,8 @@ endif()
 # Add platform-specific source files
 if(APPLE)
   list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm
-                                    src/platform/file_dialog_mac.mm)
+                                    src/platform/file_dialog_mac.mm
+                                    src/audio/core_audio_transport.cpp)
   set_source_files_properties(src/platform/file_dialog_mac.mm
     PROPERTIES COMPILE_OPTIONS -fobjc-arc)
   list(APPEND MEGATOY_CORE_SOURCES src/gui/mac_window_menu.mm)
@@ -295,6 +297,8 @@ if(APPLE)
   target_link_libraries(megatoy_logic PUBLIC
     "-framework AppKit"
     "-framework ApplicationServices"
+    "-framework AudioToolbox"
+    "-framework CoreAudio"
     "-framework CoreFoundation"
     "-framework Foundation"
     "-framework UniformTypeIdentifiers"

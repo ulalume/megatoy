@@ -12,7 +12,7 @@
 namespace ui {
 
 /// Audio buffer sizes the Sound tab offers, in frames, smallest first.
-inline constexpr int kAudioBufferChoices[] = {256, 384, 512, 1024, 2048};
+inline constexpr int kAudioBufferChoices[] = {128, 256, 384, 512, 1024, 2048};
 
 struct PreferencesContext {
   PreferenceManager &preferences;
