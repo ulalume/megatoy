@@ -220,14 +220,15 @@ endif()
 if(APPLE)
   list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm
                                     src/platform/file_dialog_mac.mm
+                                    src/platform/trash_mac.mm
                                     src/audio/core_audio_transport.cpp)
   set_source_files_properties(src/platform/file_dialog_mac.mm
+                              src/platform/trash_mac.mm
     PROPERTIES COMPILE_OPTIONS -fobjc-arc)
   list(APPEND MEGATOY_CORE_SOURCES src/gui/mac_window_menu.mm)
-elseif(WIN32)
-  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
 else()
-  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
+  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp
+                                    src/platform/trash.cpp)
 endif()
 
 add_library(megatoy_logic STATIC ${MEGATOY_LOGIC_SOURCES})

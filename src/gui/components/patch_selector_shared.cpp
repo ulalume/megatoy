@@ -11,6 +11,7 @@
 #include "patches/patch_entry_actions.hpp"
 #include "patches/patch_filter.hpp"
 #include "platform/platform_config.hpp"
+#include "platform/trash.hpp"
 #include "star_rating.hpp"
 
 #include "gui/fonts/megatoy_icons.hpp"
@@ -157,10 +158,11 @@ void entry_context_menu(PatchSelectorContext &context,
     if (actions.rename && ImGui::MenuItem("Rename...")) {
       context.rename_patch(entry);
     }
-    if (actions.delete_patch &&
-        ImGui::MenuItem(entry.is_directory && entry.format.empty()
-                            ? "Delete Folder..."
-                            : "Delete...")) {
+    const char *delete_label = platform::trash::available() ? "Move to Trash..."
+                               : entry.is_directory && entry.format.empty()
+                                   ? "Delete Folder..."
+                                   : "Delete...";
+    if (actions.delete_patch && ImGui::MenuItem(delete_label)) {
       context.delete_patch(entry);
     }
   }

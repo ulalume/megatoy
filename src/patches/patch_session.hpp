@@ -297,6 +297,11 @@ public:
    */
   bool delete_patch(const PatchEntry &entry,
                     std::vector<DetachedDocument> *detached = nullptr);
+  /// Move `entry` to the system's Trash, detaching documents as
+  /// delete_patch() does, and return what puts it back.
+  std::optional<DeletedEntry>
+  trash_patch(const PatchEntry &entry,
+              std::vector<DetachedDocument> *detached = nullptr);
   /// Give the documents a deletion detached their files again, once those
   /// are back, unless they have been saved elsewhere since.
   void reattach(const std::vector<DetachedDocument> &detached);
@@ -342,6 +347,11 @@ public:
   writable_source_folder(const PatchDocument &document) const;
 
 private:
+  /// Runs `remove`, which takes `entry` off the disk, and detaches the
+  /// documents that showed it once it has.
+  template <typename Remove>
+  auto detaching(const PatchEntry &entry,
+                 std::vector<DetachedDocument> *detached, Remove &&remove);
   /// default_patch() together with the file it came from, empty when the
   /// built-in defaults were used.
   struct DefaultPatch {

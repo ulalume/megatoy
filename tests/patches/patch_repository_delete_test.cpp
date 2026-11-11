@@ -339,6 +339,80 @@ void test_scan_lists_folders_that_hold_nothing(const fs::path &root) {
   CHECK(empty->holds_nothing);
 }
 
+// The system's Trash is stood in for by a folder: what restore() does with
+// a trashed entry is move it back and write its metadata.
+void test_restore_from_trash(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto writable = root / "trash_restore";
+  const auto trash = root / "trash_restore_bin";
+  fs::create_directories(writable);
+  fs::create_directories(trash);
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(writable));
+  patches::PatchRepository repository(file_system, workspace);
+
+  ym2612::Patch patch;
+  patch.name = "lead";
+  const auto saved = repository.save_patch(patch, patch.name,
+                                           /*overwrite=*/true, ".dmp");
+  CHECK(saved.status == patches::SavePatchResult::Status::Success);
+  patches::PatchMetadata metadata;
+  metadata.star_rating = 4;
+  CHECK(repository.update_patch_metadata(
+      repository.to_relative_path(saved.path).generic_string(), metadata));
+  const auto sidecar = patches::sidecar::path_for(saved.path);
+  std::ifstream in(sidecar, std::ios::binary);
+  const std::string sidecar_bytes((std::istreambuf_iterator<char>(in)),
+                                  std::istreambuf_iterator<char>());
+  in.close();
+
+  patches::DeletedEntry deleted;
+  deleted.path = saved.path;
+  deleted.trashed = trash / "lead.dmp";
+  deleted.files.push_back({sidecar, sidecar_bytes});
+  fs::rename(saved.path, deleted.trashed);
+  fs::remove_all(sidecar.parent_path());
+
+  CHECK(repository.restore(deleted));
+  CHECK(fs::exists(saved.path));
+  CHECK(!fs::exists(deleted.trashed));
+  CHECK(fs::exists(sidecar));
+  CHECK(find_entry(repository.tree(), saved.path) != nullptr);
+
+  // Nothing is put back over a file that has taken its place.
+  fs::copy_file(saved.path, deleted.trashed);
+  CHECK(!repository.restore(deleted));
+  CHECK(fs::exists(deleted.trashed));
+}
+
+void test_unlisted_files(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto writable = root / "unlisted";
+  const auto folder = writable / "mixed";
+  fs::create_directories(folder / "inner");
+  fs::create_directories(folder / ".hidden");
+
+  ym2612::Patch patch;
+  patch.name = "bass";
+  CHECK(patches::write_patch(patch, folder / "bass.dmp"));
+  CHECK(patches::write_patch(patch, folder / "inner" / "bass.dmp"));
+  for (const auto &other : {folder / "notes.txt", folder / "inner" / "take.wav",
+                            folder / ".DS_Store", folder / "Thumbs.db",
+                            folder / ".hidden" / "secret.txt"}) {
+    std::ofstream(other) << "x";
+  }
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(writable));
+  patches::PatchRepository repository(file_system, workspace);
+  const auto *listed = find_named(repository.tree(), "unlisted");
+  CHECK(listed != nullptr);
+  const auto *entry = find_named(listed->children, "mixed");
+  CHECK(entry != nullptr);
+  CHECK(repository.unlisted_files(*entry) == 2);
+}
+
 } // namespace
 
 int main() {
@@ -355,6 +429,8 @@ int main() {
   test_container_parse_cache_invalidates_on_change(root);
   test_repository_revision_tracks_refresh(root);
   test_scan_lists_folders_that_hold_nothing(root);
+  test_restore_from_trash(root);
+  test_unlisted_files(root);
 
   fs::remove_all(root);
   std::cout << "All patch repository delete tests passed\n";

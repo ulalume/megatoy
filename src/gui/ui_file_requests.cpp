@@ -2,7 +2,9 @@
 
 #include "app_services.hpp"
 #include "core/status.hpp"
+#include "core/utf8_utils.hpp"
 #include "gui/components/common.hpp"
+#include "gui/components/file_manager.hpp"
 #include "gui/library_undo.hpp"
 #include "gui/patch_save_dialog.hpp"
 #include "gui/save_as_dialog.hpp"
@@ -13,6 +15,7 @@
 #include "patches/patch_write.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
+#include "platform/trash.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_folder_delete.hpp"
 #include "platform/web/web_storage_bootstrap.hpp"
@@ -198,40 +201,62 @@ workspace_rollback(AppContext &ctx, const std::filesystem::path &old_path,
   };
 }
 
+/// Puts `kept` back and gives the documents `detached` their file again.
+static std::function<void()>
+restoring(AppContext &ctx, patches::DeletedEntry kept,
+          std::vector<patches::PatchSession::DetachedDocument> detached,
+          std::string name) {
+  // Shared, not copied, by the callbacks it passes through.
+  return [&ctx,
+          kept = std::make_shared<const patches::DeletedEntry>(std::move(kept)),
+          detached = std::move(detached), name = std::move(name)]() {
+    auto &session = ctx.services.patch_session;
+    if (!session.repository().restore(*kept)) {
+      megatoy::status::error("Could not restore \"" + name + "\".");
+      return;
+    }
+    session.reattach(detached);
+    const std::string restored = "Restored \"" + name + "\".";
+    if (!kept->is_directory) {
+      megatoy::status::success(restored);
+      return;
+    }
+    after_storage_has(
+        "Restoring \"" + name + "\"...",
+        [restored]() { megatoy::status::success(restored); },
+        "Could not save the restore");
+  };
+}
+
 static void perform_patch_deletion(AppContext &ctx,
                                    const patches::PatchEntry &entry) {
   auto &session = ctx.services.patch_session;
-  auto kept = session.repository().keep_for_restore(entry);
+  std::optional<patches::DeletedEntry> kept;
   std::vector<patches::PatchSession::DetachedDocument> detached;
-  if (!session.delete_patch(entry, &detached)) {
-    megatoy::status::error("Could not delete \"" + entry.name + "\".");
-    return;
+  std::string message;
+  if (platform::trash::available()) {
+    kept = session.trash_patch(entry, &detached);
+    if (!kept) {
+      megatoy::status::post(
+          megatoy::status::Severity::Error,
+          "Could not move \"" + entry.name + "\" to the Trash.",
+          {ui::reveal_in_file_manager_label(), [path = entry.full_path]() {
+             ui::reveal_in_file_manager(megatoy::utf8::from_path(path));
+           }});
+      return;
+    }
+    message = "Moved \"" + entry.name + "\" to the Trash.";
+  } else {
+    kept = session.repository().keep_for_restore(entry);
+    if (!session.delete_patch(entry, &detached)) {
+      megatoy::status::error("Could not delete \"" + entry.name + "\".");
+      return;
+    }
+    message = "Deleted \"" + entry.name + "\".";
   }
-  std::function<void()> undo;
-  if (kept) {
-    // Shared, not copied, by the callbacks it passes through.
-    undo = [&ctx,
-            kept =
-                std::make_shared<const patches::DeletedEntry>(std::move(*kept)),
-            detached = std::move(detached), name = entry.name]() {
-      auto &session = ctx.services.patch_session;
-      if (!session.repository().restore(*kept)) {
-        megatoy::status::error("Could not restore \"" + name + "\".");
-        return;
-      }
-      session.reattach(detached);
-      const std::string restored = "Restored \"" + name + "\".";
-      if (!kept->is_directory) {
-        megatoy::status::success(restored);
-        return;
-      }
-      after_storage_has(
-          "Restoring \"" + name + "\"...",
-          [restored]() { megatoy::status::success(restored); },
-          "Could not save the restore");
-    };
-  }
-  const std::string message = "Deleted \"" + entry.name + "\".";
+  auto undo =
+      kept ? restoring(ctx, std::move(*kept), std::move(detached), entry.name)
+           : std::function<void()>();
   const bool folder = entry.is_directory && entry.format.empty();
   if (!folder) {
     report_done(message, {entry.full_path}, std::move(undo));
@@ -246,12 +271,11 @@ static void perform_patch_deletion(AppContext &ctx,
 }
 
 void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
-  if (!ctx.services.patch_session.repository().can_delete_patch(entry)) {
+  const auto &repository = ctx.services.patch_session.repository();
+  if (!repository.can_delete_patch(entry)) {
     return;
   }
 
-  const std::string location =
-      megatoy::platform::is_web() ? "from browser storage" : "from disk";
   const bool folder = entry.is_directory && entry.format.empty();
   const std::size_t patches = folder ? count_patches(entry) : 0;
   const std::string what =
@@ -259,11 +283,28 @@ void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
       : patches == 0 ? "the folder"
                      : "the folder and the " + std::to_string(patches) +
                            (patches == 1 ? " patch" : " patches") + " in it";
+  const std::size_t unlisted = folder ? repository.unlisted_files(entry) : 0;
+  const std::string others =
+      unlisted == 0 ? ""
+                    : "\n\nIt also holds " + std::to_string(unlisted) +
+                          (unlisted == 1 ? " file" : " files") +
+                          " the Library does not show, which go with it.";
+  const auto perform = [&ctx, entry]() { perform_patch_deletion(ctx, entry); };
+  if (platform::trash::available()) {
+    ctx.ui_state().danger_confirmation_state.request(
+        "Move to Trash?",
+        "Move \"" + entry.name + "\" to the Trash?\n\nThis moves " + what +
+            " to the Trash." + others,
+        "Move to Trash", perform);
+    return;
+  }
+  const std::string location =
+      megatoy::platform::is_web() ? "from browser storage" : "from disk";
   ctx.ui_state().danger_confirmation_state.request(
       folder ? "Delete Folder?" : "Delete Patch?",
       "Delete \"" + entry.name + "\"?\n\nThis deletes " + what + " " +
-          location + ".",
-      "Delete", [&ctx, entry]() { perform_patch_deletion(ctx, entry); });
+          location + "." + others,
+      "Delete", perform);
 }
 
 /// The entry listed at `path`, as the tree has it now, copied: the change it

@@ -165,8 +165,10 @@ bool PatchSession::rename_patch(const PatchEntry &entry,
   return true;
 }
 
-bool PatchSession::delete_patch(const PatchEntry &entry,
-                                std::vector<DetachedDocument> *detached) {
+template <typename Remove>
+auto PatchSession::detaching(const PatchEntry &entry,
+                             std::vector<DetachedDocument> *detached,
+                             Remove &&remove) {
   std::vector<DetachedDocument> showing;
   for (const auto &document : documents_) {
     if (selection_belongs_to_entry(document->selection_path(), entry)) {
@@ -174,8 +176,9 @@ bool PatchSession::delete_patch(const PatchEntry &entry,
           {document->id(), document->path(), document->selection_path()});
     }
   }
-  if (!repository_->delete_patch(entry)) {
-    return false;
+  auto removed = remove();
+  if (!removed) {
+    return removed;
   }
   for (const auto &shown : showing) {
     if (auto *document = find_document(shown.id)) {
@@ -185,7 +188,20 @@ bool PatchSession::delete_patch(const PatchEntry &entry,
   if (detached != nullptr) {
     *detached = std::move(showing);
   }
-  return true;
+  return removed;
+}
+
+bool PatchSession::delete_patch(const PatchEntry &entry,
+                                std::vector<DetachedDocument> *detached) {
+  return detaching(entry, detached,
+                   [&] { return repository_->delete_patch(entry); });
+}
+
+std::optional<DeletedEntry>
+PatchSession::trash_patch(const PatchEntry &entry,
+                          std::vector<DetachedDocument> *detached) {
+  return detaching(entry, detached,
+                   [&] { return repository_->trash_patch(entry); });
 }
 
 void PatchSession::reattach(const std::vector<DetachedDocument> &detached) {

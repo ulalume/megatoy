@@ -8,6 +8,7 @@
 #include "patches/persistent_parse_cache.hpp"
 #include "platform/import_pipeline.hpp"
 #include "platform/platform_config.hpp"
+#include "platform/trash.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_storage_persistence.hpp"
 #endif
@@ -394,35 +395,55 @@ std::filesystem::path copy_path_into(const std::filesystem::path &source,
 /// The files of `source` a format reads, with their sidecars, copied into
 /// `target` with the folders they are in. How many, none leaving no
 /// `target` behind.
-std::size_t copy_readable_tree(const std::filesystem::path &source,
-                               const std::filesystem::path &target) {
-  std::size_t copied = 0;
+/// Calls `visit` with each file in `folder` and the folders inside it, past
+/// hidden ones: the metadata's, and the system's such as .DS_Store.
+template <typename Visit>
+void for_each_visible_file(const std::filesystem::path &folder, Visit &&visit) {
   std::error_code ec;
-  for (std::filesystem::recursive_directory_iterator it(source, ec), end;
+  for (std::filesystem::recursive_directory_iterator it(folder, ec), end;
        !ec && it != end; it.increment(ec)) {
-    const auto &path = it->path();
-    if (path.filename().string().starts_with(".")) {
+    if (it->path().filename().string().starts_with(".")) {
       if (it->is_directory(ec)) {
         it.disable_recursion_pending();
       }
       continue;
     }
-    if (!it->is_regular_file(ec) ||
-        !platform::import_pipeline::supports_extension(
-            lowercase_extension(path))) {
-      continue;
+    if (it->is_regular_file(ec)) {
+      visit(it->path());
+    }
+  }
+}
+
+bool is_readable(const std::filesystem::path &file) {
+  return platform::import_pipeline::supports_extension(
+      lowercase_extension(file));
+}
+
+/// The files Windows leaves in folders, unseen there.
+bool is_system_file(const std::filesystem::path &file) {
+  const auto name = file.filename().string();
+  return equals_case_insensitive(name, "Thumbs.db") ||
+         equals_case_insensitive(name, "desktop.ini");
+}
+
+std::size_t copy_readable_tree(const std::filesystem::path &source,
+                               const std::filesystem::path &target) {
+  std::size_t copied = 0;
+  for_each_visible_file(source, [&](const std::filesystem::path &path) {
+    if (!is_readable(path)) {
+      return;
     }
     const auto copy = target / path.lexically_relative(source);
-    std::error_code copy_error;
-    std::filesystem::create_directories(copy.parent_path(), copy_error);
-    if (copy_error || !std::filesystem::copy_file(path, copy, copy_error) ||
-        copy_error) {
-      continue;
+    std::error_code ec;
+    std::filesystem::create_directories(copy.parent_path(), ec);
+    if (ec || !std::filesystem::copy_file(path, copy, ec) || ec) {
+      return;
     }
     sidecar::copy(path, copy);
     ++copied;
-  }
+  });
   if (copied == 0) {
+    std::error_code ec;
     std::filesystem::remove_all(target, ec);
   }
   return copied;
@@ -505,8 +526,7 @@ PatchRepository::copy_files_in(const std::vector<std::filesystem::path> &files,
       if (copy_readable_tree(file, copy) == 0) {
         copy.clear();
       }
-    } else if (platform::import_pipeline::supports_extension(
-                   lowercase_extension(file))) {
+    } else if (is_readable(file)) {
       copy = copy_path_into(file, destination.full_path);
     }
     if (copy.empty()) {
@@ -578,14 +598,48 @@ PatchRepository::keep_for_restore(const PatchEntry &entry,
       return std::nullopt;
     }
   }
-  for (const auto &file : files) {
-    const auto in = vfs_.open_read(file);
-    if (!in) {
-      return std::nullopt;
-    }
-    kept.files.push_back({file, std::string(std::istreambuf_iterator<char>(*in),
-                                            std::istreambuf_iterator<char>())});
+  if (!read_files(files, kept.files)) {
+    return std::nullopt;
   }
+  return kept;
+}
+
+bool PatchRepository::read_files(
+    const std::vector<std::filesystem::path> &paths,
+    std::vector<DeletedEntry::File> &files) const {
+  for (const auto &path : paths) {
+    const auto in = vfs_.open_read(path);
+    if (!in) {
+      return false;
+    }
+    files.push_back({path, std::string(std::istreambuf_iterator<char>(*in),
+                                       std::istreambuf_iterator<char>())});
+  }
+  return true;
+}
+
+std::optional<DeletedEntry>
+PatchRepository::trash_patch(const PatchEntry &entry) {
+  if (!platform::trash::available() || !can_delete_patch(entry)) {
+    return std::nullopt;
+  }
+  DeletedEntry kept;
+  kept.path = entry.full_path;
+  kept.is_directory = vfs_.is_directory(entry.full_path);
+  // A folder's sidecars are inside it and go with it; a file's stay here.
+  if (!kept.is_directory &&
+      !read_files(sidecar::files_of(entry.full_path), kept.files)) {
+    return std::nullopt;
+  }
+  auto trashed = platform::trash::move_to_trash(entry.full_path);
+  if (!trashed) {
+    return std::nullopt;
+  }
+  if (!kept.is_directory) {
+    sidecar::remove(entry.full_path);
+  }
+  kept.trashed = std::move(*trashed);
+  changed();
   return kept;
 }
 
@@ -594,6 +648,22 @@ bool PatchRepository::restore(const DeletedEntry &deleted) {
   if (owner == nullptr || !owner->writable || vfs_.exists(deleted.path) ||
       !vfs_.is_directory(deleted.path.parent_path())) {
     return false;
+  }
+  if (!deleted.trashed.empty()) {
+    std::error_code ec;
+    std::filesystem::rename(deleted.trashed, deleted.path, ec);
+    if (ec) {
+      return false;
+    }
+    // The file is back whether or not its metadata can follow.
+    for (const auto &file : deleted.files) {
+      if (const auto out = vfs_.open_write(file.path)) {
+        out->write(file.bytes.data(),
+                   static_cast<std::streamsize>(file.bytes.size()));
+      }
+    }
+    changed();
+    return true;
   }
   bool written = !deleted.is_directory || vfs_.create_directories(deleted.path);
   for (const auto &folder : deleted.folders) {
@@ -615,6 +685,17 @@ bool PatchRepository::restore(const DeletedEntry &deleted) {
   }
   changed();
   return true;
+}
+
+std::size_t PatchRepository::unlisted_files(const PatchEntry &folder) const {
+  std::size_t unlisted = 0;
+  for_each_visible_file(folder.full_path,
+                        [&unlisted](const std::filesystem::path &file) {
+                          if (!is_readable(file) && !is_system_file(file)) {
+                            ++unlisted;
+                          }
+                        });
+  return unlisted;
 }
 
 void PatchRepository::changed() {
