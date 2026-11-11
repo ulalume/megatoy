@@ -286,10 +286,19 @@ constexpr float kLfoSliderGap = 1.0f;
 /// The narrowest the algorithm diagram is drawn, where the names are short.
 constexpr float kMinAlgorithmDiagramWidth = 112.0f;
 
-/// The LFO section's sliders: one width for the two, wide enough for the
-/// longer name.
+/// How far each sensitivity moves the sound: the volume only down from where
+/// it stands, the pitch either way.
+constexpr const char *kAmsDepths[] = {"0 dB", "-1.4 dB", "-5.9 dB", "-11.8 dB"};
+constexpr const char *kFmsDepths[] = {
+    "0 cent",        "\u00b13.4 cent", "\u00b16.7 cent", "\u00b110 cent",
+    "\u00b114 cent", "\u00b120 cent",  "\u00b140 cent",  "\u00b180 cent"};
+
+/// The LFO section's sliders: one width for the two, wide enough for either
+/// name with its widest depth.
 float lfo_slider_width(const LfoNames &names) {
-  return std::max(hslider_width(), named_slider_fit_width(names.fms, "0"));
+  return std::max({hslider_width(),
+                   named_slider_fit_width(names.ams, "-11.8 dB"),
+                   named_slider_fit_width(names.fms, "\u00b180 cent")});
 }
 
 void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
@@ -322,8 +331,9 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::PushItemWidth(lfo_slider_width(names));
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::scale::px(kLfoSliderGap));
 
-  int ams = patch.channel.amplitude_modulation_sensitivity;
-  bool ams_changed = named_slider_int(names.ams, &ams, 0, 3);
+  int ams =
+      std::clamp<int>(patch.channel.amplitude_modulation_sensitivity, 0, 3);
+  bool ams_changed = named_slider_int(names.ams, &ams, 0, 3, kAmsDepths[ams]);
   tell(kLfoFullNames.ams);
   track_patch_history(context, "Amplitude Modulation Sensitivity",
                       "channel.am_sensitivity");
@@ -331,8 +341,9 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
     patch.channel.amplitude_modulation_sensitivity = static_cast<uint8_t>(ams);
   }
 
-  int fms = patch.channel.frequency_modulation_sensitivity;
-  bool fms_changed = named_slider_int(names.fms, &fms, 0, 7);
+  int fms =
+      std::clamp<int>(patch.channel.frequency_modulation_sensitivity, 0, 7);
+  bool fms_changed = named_slider_int(names.fms, &fms, 0, 7, kFmsDepths[fms]);
   tell(kLfoFullNames.fms);
   track_patch_history(context, "Frequency Modulation Sensitivity",
                       "channel.fm_sensitivity");
