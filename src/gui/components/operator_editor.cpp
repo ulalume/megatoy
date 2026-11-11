@@ -833,21 +833,21 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
 
-  // SSG-EG and the controls under it stand in the room right of RR, out to
-  // the graph's right edge, as tall as the sliders, when that is wide enough
-  // for the narrowest of them; otherwise they go under the sliders.
+  // SSG-EG and the controls under it stand in the room right of RR, as tall
+  // as the sliders, when that is wide enough for the narrowest of them;
+  // otherwise they go under the sliders. Either way they reach the graph's
+  // right edge.
+  const float side_right = block_left + content_width - frame_padding();
   const float side_left = block_left + hslider_width() + style.ItemSpacing.x;
-  const float side_room =
-      block_left + content_width - frame_padding() - side_left;
   const bool beside_rates =
-      side_room >= named_slider_fit_width("SSG EG Type", "0");
+      side_right - side_left >= named_slider_fit_width("SSG EG Type", "0");
   if (beside_rates) {
     ImGui::SetCursorPos(ImVec2(side_left, sliders_top));
     ImGui::BeginGroup();
-    ImGui::PushItemWidth(side_room);
   } else {
     ImGui::Spacing();
   }
+  ImGui::PushItemWidth(side_right - ImGui::GetCursorPosX());
   // The rows side_row_gap() apart, the SSG-EG ones and the rest the spacing
   // between items, as vslider_height() counts them.
   const float group_gap = style.ItemSpacing.y;
@@ -906,8 +906,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                   nullptr);
 
   ImGui::PopStyleVar();
+  ImGui::PopItemWidth();
   if (beside_rates) {
-    ImGui::PopItemWidth();
     ImGui::EndGroup();
   }
   ImGui::PopItemWidth();

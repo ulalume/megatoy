@@ -10,15 +10,10 @@
 
 namespace ui {
 
-/// The vertical sliders stand a pixel apart, and share out among them the
-/// room six of them a text height and 8 px wide, at the spacing between
-/// items, would take, on whole pixels.
+/// The vertical sliders stand a pixel apart, each as wide as a horizontal
+/// slider is tall.
 inline float vslider_gap() { return scale::px(1.0f); }
-inline float vslider_width() {
-  const float room = (ImGui::GetFontSize() + scale::px(8.0f)) * 6.0f +
-                     ImGui::GetStyle().ItemSpacing.y * 5.0f;
-  return std::floor((room - vslider_gap() * 5.0f) / 6.0f);
-}
+inline float vslider_width() { return ImGui::GetFrameHeight(); }
 /// The room between the rows of the column beside the sliders.
 inline float side_row_gap() { return scale::px(1.0f); }
 /// As tall as the column beside the sliders: five rows of controls, three of
