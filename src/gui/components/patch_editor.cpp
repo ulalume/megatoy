@@ -27,6 +27,7 @@
 #include "view_patch_drop.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <optional>
@@ -146,7 +147,47 @@ void render_header_rating(const patches::PatchEntry &entry,
   }
 }
 
-/// Save, and Save As... where it is offered, as one row.
+/// An icon-only button for Undo or Redo, square, faint when there is nothing
+/// to take back or do again. Named in full by its tooltip.
+void render_history_button(const char *id, const char *icon, bool enabled,
+                           std::string_view label,
+                           const std::function<void()> &action) {
+  ImGui::BeginDisabled(!enabled);
+  const std::string text = std::string(icon) + id;
+  const float side = ImGui::GetFrameHeight();
+  if (ImGui::Button(text.c_str(), ImVec2(side, side)) && action) {
+    action();
+  }
+  ImGui::EndDisabled();
+  if (enabled && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%.*s", static_cast<int>(label.size()), label.data());
+  }
+}
+
+/// Undo and Redo as the Edit menu has them, 1 px apart.
+void render_history_buttons(PatchEditorContext &context) {
+  if (!context.history) {
+    return;
+  }
+  const auto &history = context.history();
+  const auto named = [](const char *action, std::string_view change) {
+    return change.empty() ? std::string(action)
+                          : std::string(action) + " " + std::string(change);
+  };
+  ImGui::SameLine();
+  render_history_button("##undo", ICON_MEGATOY_UNDO, history.can_undo(),
+                        named("Undo", history.can_undo() ? history.undo_label()
+                                                         : std::string_view()),
+                        context.undo);
+  ImGui::SameLine(0.0f, ui::scale::px(1.0f));
+  render_history_button("##redo", ICON_MEGATOY_REDO, history.can_redo(),
+                        named("Redo", history.can_redo() ? history.redo_label()
+                                                         : std::string_view()),
+                        context.redo);
+}
+
+/// Save, and Save As... where it is offered, as one row, with Undo and Redo
+/// after them.
 void render_save_buttons(PatchEditorContext &context,
                          patches::PatchDocument &document,
                          const patches::SaveControls &controls,
@@ -199,6 +240,7 @@ void render_save_buttons(PatchEditorContext &context,
 #endif
     }
   }
+  render_history_buttons(context);
 }
 
 /// The names of the LFO's sliders and of the Algorithm slider, in full or as
@@ -1001,8 +1043,9 @@ void render_open_patches_button(PatchEditorContext &context,
                                 ImGuiDockNode *node) {
   static const ImGuiID popup_id = ImHashStr("##open_patches");
   static bool open_at_press = false;
-  const auto button = folded_tab_button(node, "##open_patches",
-                                        ICON_MEGATOY_LIST, "Open Patches");
+  const auto button =
+      folded_tab_button(node, "##open_patches", ICON_MEGATOY_ANGLE_DOWN,
+                        "Open Patches", /*filled=*/false);
   if (!button) {
     return;
   }

@@ -70,13 +70,14 @@ LoadWindow load_window(const audio::LoadMeter::History &history, float width) {
   const std::size_t used = std::min(history.count, wanted);
   const std::size_t first = history.count - used;
   const std::size_t columns = std::min<std::size_t>(
-      kMaxLoadColumns, std::max<std::size_t>(2, static_cast<std::size_t>(width)));
+      kMaxLoadColumns,
+      std::max<std::size_t>(2, static_cast<std::size_t>(width)));
   out.count = std::min(columns, used);
   out.latest = history.values[history.count - 1];
   double total = 0.0;
   for (std::size_t i = 0; i < used; ++i) {
-    const std::size_t column = out.count < 2 ? 0
-                                             : i * (out.count - 1) / (used - 1);
+    const std::size_t column =
+        out.count < 2 ? 0 : i * (out.count - 1) / (used - 1);
     const float value = history.values[first + i];
     out.columns[column] = std::max(out.columns[column], value);
     out.dropouts[column] = out.dropouts[column] || audio::is_dropout(value);
@@ -199,7 +200,6 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
       context.open_sound_preferences = true;
     }
   }
-
 }
 
 /**
@@ -227,15 +227,14 @@ float render_audio_load(MainMenuContext &context, const LoadWindow &window,
     clicked = ImGui::IsItemClicked();
     hovered = ImGui::IsItemHovered();
     draw_load_graph(panel, window);
-    panel.draw_list->AddText(
-        ImVec2(panel.min.x + style.FramePadding.x,
-               panel.min.y + (size.y - row) * 0.5f),
-        ImGui::GetColorU32(ImGuiCol_Text), reading);
+    panel.draw_list->AddText(ImVec2(panel.min.x + style.FramePadding.x,
+                                    panel.min.y + (size.y - row) * 0.5f),
+                             ImGui::GetColorU32(ImGuiCol_Text), reading);
     end_panel(panel);
   } else {
     // Text in the bar is drawn the frame padding below the cursor.
-    ImGui::SetCursorPos(ImVec2(
-        x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
+    ImGui::SetCursorPos(ImVec2(x, (ImGui::GetWindowHeight() - row) * 0.5f -
+                                      style.FramePadding.y));
     ImGui::TextUnformatted(reading);
     clicked = ImGui::IsItemClicked();
     hovered = ImGui::IsItemHovered();
@@ -520,8 +519,7 @@ void file_menu_items(MainMenuContext &context,
   if (save_disabled)
     ImGui::EndDisabled();
 
-  const char *save_as_shortcut =
-      mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
+  const char *save_as_shortcut = mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
   if (controls.show_save_as &&
       ImGui::MenuItem("Save As...", save_as_shortcut)) {
     request_save_as(context.save_state);
@@ -533,8 +531,7 @@ void file_menu_items(MainMenuContext &context,
   const char *close_shortcut = megatoy::platform::is_web()
                                    ? nullptr
                                    : (mac_behavior ? "Cmd+W" : "Ctrl+W");
-  if (ImGui::MenuItem("Close Patch", close_shortcut) &&
-      context.close_patch) {
+  if (ImGui::MenuItem("Close Patch", close_shortcut) && context.close_patch) {
     context.close_patch();
   }
 
@@ -550,8 +547,8 @@ void file_menu_items(MainMenuContext &context,
     }
 
     const auto &folders = context.preferences.workspace().folders();
-    const bool has_removable_folder = std::any_of(
-        folders.begin(), folders.end(), [&](const auto &folder) {
+    const bool has_removable_folder =
+        std::any_of(folders.begin(), folders.end(), [&](const auto &folder) {
           return !context.preferences.workspace_folder_is_protected(
               folder.path);
         });
@@ -560,8 +557,7 @@ void file_menu_items(MainMenuContext &context,
     if (ui::begin_menu(remove_label, has_removable_folder)) {
       std::optional<std::filesystem::path> to_remove;
       for (const auto &folder : folders) {
-        if (context.preferences.workspace_folder_is_protected(
-                folder.path)) {
+        if (context.preferences.workspace_folder_is_protected(folder.path)) {
           continue;
         }
         if (ImGui::MenuItem(folder.path.string().c_str())) {
@@ -584,7 +580,7 @@ void edit_menu_items(MainMenuContext &context) {
   const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
   const char *redo_shortcut = mac_behavior ? "Cmd+Shift+Z" : "Ctrl+Shift+Z";
 
-  std::string undo_label = "Undo";
+  std::string undo_label = ICON_MEGATOY_UNDO " Undo";
   if (history.can_undo()) {
     std::string_view change = history.undo_label();
     if (!change.empty()) {
@@ -600,7 +596,7 @@ void edit_menu_items(MainMenuContext &context) {
     }
   }
 
-  std::string redo_label = "Redo";
+  std::string redo_label = ICON_MEGATOY_REDO " Redo";
   if (history.can_redo()) {
     std::string_view change = history.redo_label();
     if (!change.empty()) {

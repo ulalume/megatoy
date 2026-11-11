@@ -21,6 +21,10 @@ inline float trailing_tab_offset(const ImGuiTabBar &bar,
   return ImMax(tab.Offset, bar.BarRect.GetWidth() - tab.Width);
 }
 
+/// Draws the button among the tabs with id `tab_id` with a fill only while
+/// the pointer is over it.
+void leave_button_unfilled(ImGuiID tab_id);
+
 /// Keeps the tab bar of the dock node the current window is in drawn as the
 /// focused node's.
 void keep_tab_bar_lit();

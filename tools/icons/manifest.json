@@ -115,6 +115,18 @@
     {
       "name": "list",
       "from": "fontawesome:list"
+    },
+    {
+      "name": "angle-down",
+      "from": "fontawesome:angle-down"
+    },
+    {
+      "name": "undo",
+      "from": "iconoven:undo"
+    },
+    {
+      "name": "redo",
+      "from": "iconoven:redo"
     }
   ]
 }

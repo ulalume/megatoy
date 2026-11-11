@@ -335,6 +335,9 @@ FrameContexts::FrameContexts(AppContext &ctx)
     patch_actions::reload_from_disk(ctx, document, patch);
   };
   patch_editor.new_patch = [&ctx]() { patch_actions::new_patch(ctx); };
+  patch_editor.history = main_menu.history;
+  patch_editor.undo = main_menu.undo;
+  patch_editor.redo = main_menu.redo;
 }
 
 } // namespace ui::renderer_detail
