@@ -450,13 +450,17 @@ void request_files_copy(AppContext &ctx,
   auto copies = ctx.services.patch_session.repository().copy_files_in(
       files, destination, skipped);
   const std::string unread =
-      skipped == 0
-          ? ""
-          : " " + std::to_string(skipped) +
-                (skipped == 1 ? " file was" : " files were") + " left out.";
+      skipped == 0 ? ""
+                   : " " + std::to_string(skipped) +
+                         (skipped == 1 ? " item holds" : " items hold") +
+                         " no patch megatoy reads.";
   if (copies.empty()) {
-    megatoy::status::error("Nothing was copied to \"" + destination.name +
-                           "\"." + unread);
+    const std::string what =
+        files.size() == 1 ? "\"" + files.front().filename().string() + "\""
+                          : "what was dropped";
+    megatoy::status::warning("Nothing in " + what +
+                             " is a patch megatoy reads, so nothing was "
+                             "copied.");
     return;
   }
   const std::string message =

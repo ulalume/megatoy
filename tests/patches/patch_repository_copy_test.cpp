@@ -268,6 +268,23 @@ void test_files_from_outside(const fs::path &root) {
   CHECK(fs::exists(folder / "kit" / "snare.dmp"));
   CHECK(!fs::exists(folder / "notes.txt"));
   CHECK(fs::exists(outside / "lead.dmp"));
+
+  // A folder brings only what a format reads, and with nothing so, it is not
+  // copied at all.
+  fs::create_directories(outside / "docs");
+  {
+    std::ofstream(outside / "kit" / "readme.txt") << "not a patch";
+    std::ofstream(outside / "docs" / "specs.txt") << "not a patch";
+  }
+  const auto again =
+      repository.copy_files_in({outside / "kit", outside / "docs"},
+                               entry_at(repository, folder), skipped);
+  CHECK(again.size() == 1 && skipped == 1);
+  CHECK(fs::exists(folder / "kit copy" / "snare.dmp"));
+  CHECK(!fs::exists(folder / "kit copy" / "readme.txt"));
+  CHECK(!fs::exists(folder / "docs"));
+  CHECK(repository.remove_copy(again.front()));
+
   for (const auto &copy : copies) {
     CHECK(repository.remove_copy(copy));
   }

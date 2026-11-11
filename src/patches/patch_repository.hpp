@@ -141,8 +141,9 @@ public:
                                                   const PatchEntry &destination,
                                                   std::string_view extension);
   /// Copies files and folders from outside into `destination`, as
-  /// copy_patch names them, and returns the copies. A file no format reads
-  /// is left out, counted in `skipped` with those that fail.
+  /// copy_patch names them, and returns the copies. A folder brings only the
+  /// files a format reads. A file no format reads, and a folder holding
+  /// none, is left out, counted in `skipped` with those that fail.
   std::vector<std::filesystem::path>
   copy_files_in(const std::vector<std::filesystem::path> &files,
                 const PatchEntry &destination, std::size_t &skipped);

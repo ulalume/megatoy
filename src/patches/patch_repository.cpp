@@ -394,6 +394,49 @@ std::filesystem::path copy_path_into(const std::filesystem::path &source,
   return target;
 }
 
+/// The files of `source` a format reads, with their sidecars, copied into
+/// `target` with the folders they are in. How many, none leaving no
+/// `target` behind.
+std::size_t copy_readable_tree(const std::filesystem::path &source,
+                               const std::filesystem::path &target) {
+  std::size_t copied = 0;
+  std::error_code ec;
+  for (std::filesystem::recursive_directory_iterator it(source, ec), end;
+       !ec && it != end; it.increment(ec)) {
+    const auto &path = it->path();
+    if (path.filename().string().starts_with(".")) {
+      if (it->is_directory(ec)) {
+        it.disable_recursion_pending();
+      }
+      continue;
+    }
+    if (!it->is_regular_file(ec) ||
+        !platform::import_pipeline::supports_extension(
+            lowercase_extension(path))) {
+      continue;
+    }
+    const auto copy = target / path.lexically_relative(source);
+    std::error_code copy_error;
+    std::filesystem::create_directories(copy.parent_path(), copy_error);
+    if (copy_error || !std::filesystem::copy_file(path, copy, copy_error) ||
+        copy_error) {
+      continue;
+    }
+    if (const auto sidecar = sidecar::path_for(path);
+        std::filesystem::exists(sidecar, copy_error)) {
+      const auto copied_sidecar = sidecar::path_for(copy);
+      std::filesystem::create_directories(copied_sidecar.parent_path(),
+                                          copy_error);
+      std::filesystem::copy_file(sidecar, copied_sidecar, copy_error);
+    }
+    ++copied;
+  }
+  if (copied == 0) {
+    std::filesystem::remove_all(target, ec);
+  }
+  return copied;
+}
+
 } // namespace
 
 bool PatchRepository::takes_copies(const PatchEntry &destination) const {
@@ -475,8 +518,19 @@ PatchRepository::copy_files_in(const std::vector<std::filesystem::path> &files,
   for (const auto &file : files) {
     std::error_code ec;
     const bool directory = std::filesystem::is_directory(file, ec);
-    if (!directory && !platform::import_pipeline::supports_extension(
-                          lowercase_extension(file))) {
+    if (directory) {
+      // Only what a format reads: the rest would sit in the folder unseen.
+      const auto copy =
+          unused_copy_path(destination.full_path, file.filename().string(), "");
+      if (!copy.empty() && copy_readable_tree(file, copy) > 0) {
+        copies.push_back(copy);
+      } else {
+        ++skipped;
+      }
+      continue;
+    }
+    if (!platform::import_pipeline::supports_extension(
+            lowercase_extension(file))) {
       ++skipped;
       continue;
     }
