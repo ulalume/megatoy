@@ -34,9 +34,13 @@ private:
   static OSStatus render(void *self, AudioUnitRenderActionFlags *flags,
                          const AudioTimeStamp *time, UInt32 bus, UInt32 frames,
                          AudioBufferList *data);
-  /// Asks the unit's device for `frames` per I/O cycle, and reports what the
-  /// device then runs at.
-  void use_buffer_frames(UInt32 frames) const;
+  /// The unit moved to another output device, which is given the buffer too.
+  static void device_changed(void *self, AudioUnit unit,
+                             AudioUnitPropertyID property, AudioUnitScope scope,
+                             AudioUnitElement element);
+  /// Asks the unit's device for the buffer the preference names, and reports
+  /// what the device then runs at.
+  void use_buffer_frames() const;
 
   AudioComponentInstance unit_ = nullptr;
   RenderCallback callback_;

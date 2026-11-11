@@ -80,8 +80,9 @@ bool CoreAudioTransport::start(std::uint32_t sample_rate,
     return false;
   }
 
-  use_buffer_frames(static_cast<UInt32>(
-      buffer_frames_ > 0 ? buffer_frames_ : kDefaultBufferFrames));
+  use_buffer_frames();
+  AudioUnitAddPropertyListener(unit_, kAudioOutputUnitProperty_CurrentDevice,
+                               &CoreAudioTransport::device_changed, this);
   if (AudioOutputUnitStart(unit_) != noErr) {
     std::cerr << "Could not start the Core Audio output unit\n";
     stop();
@@ -96,6 +97,9 @@ void CoreAudioTransport::stop() {
   }
   // Once the unit is stopped and disposed of, the render callback is no
   // longer called, so the engine's callback can go.
+  AudioUnitRemovePropertyListenerWithUserData(
+      unit_, kAudioOutputUnitProperty_CurrentDevice,
+      &CoreAudioTransport::device_changed, this);
   AudioOutputUnitStop(unit_);
   AudioUnitUninitialize(unit_);
   AudioComponentInstanceDispose(unit_);
@@ -119,7 +123,15 @@ OSStatus CoreAudioTransport::render(void *self, AudioUnitRenderActionFlags *,
   return noErr;
 }
 
-void CoreAudioTransport::use_buffer_frames(UInt32 frames) const {
+void CoreAudioTransport::device_changed(void *self, AudioUnit,
+                                        AudioUnitPropertyID, AudioUnitScope,
+                                        AudioUnitElement) {
+  static_cast<const CoreAudioTransport *>(self)->use_buffer_frames();
+}
+
+void CoreAudioTransport::use_buffer_frames() const {
+  const auto frames = static_cast<UInt32>(
+      buffer_frames_ > 0 ? buffer_frames_ : kDefaultBufferFrames);
   AudioObjectID device = kAudioObjectUnknown;
   UInt32 size = sizeof(device);
   if (AudioUnitGetProperty(unit_, kAudioOutputUnitProperty_CurrentDevice,
