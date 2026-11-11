@@ -3,15 +3,19 @@
 
 #include "audio/scope_trigger.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/folded_tab_button.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
+#include "gui/window_title.hpp"
 
+#include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
 #include <chord_detector.h>
 #include <cmath>
 #include <cstdio>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <string>
 #include <vector>
 
@@ -33,6 +37,8 @@ constexpr std::uint64_t kClipHoldFrames = 22050;
 
 // Per-UI-frame release of the spectrum display.
 constexpr float kSpectrumSmoothing = 0.8f;
+/// The room between the two graphs, before the interface's scale.
+constexpr float kPanelGap = 1.0f;
 
 ImU32 with_alpha(ImU32 color, float alpha) {
   ImVec4 value = ImGui::ColorConvertU32ToFloat4(color);
@@ -226,16 +232,41 @@ std::string chord_of(const std::vector<ym2612::Note> &notes) {
   return get_chord_name(midi_notes, false, true);
 }
 
-/// The chord at the top of the scope, in the middle.
-void draw_chord(const Panel &panel, const std::string &chord) {
+/// The chord at the top of the graphs, in the middle of the two side by
+/// side, from `left` to `right`.
+void draw_chord(const std::string &chord, float left, float right, float top) {
   if (chord.empty()) {
     return;
   }
   const float width = ImGui::CalcTextSize(chord.c_str()).x;
-  panel.draw_list->AddText(
-      ImVec2(std::round((panel.min.x + panel.max.x - width) * 0.5f),
-             panel.min.y + ui::scale::px(4.0f)),
+  ImGui::GetWindowDrawList()->AddText(
+      ImVec2(std::round((left + right - width) * 0.5f),
+             top + ui::scale::px(6.0f)),
       ImGui::GetColorU32(ImGuiCol_Text), chord.c_str());
+}
+
+/// The tab group of the soft keyboard and Patch Lab while one is shown, else
+/// the patch editors'.
+ImGuiDockNode *folded_waveform_node() {
+  for (ImGuiWindow *window : GImGui->Windows) {
+    if (window->Active && window->DockNode != nullptr &&
+        areas::area_of(window->Name) == areas::Area::FooterRight) {
+      return window->DockNode;
+    }
+  }
+  return ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID);
+}
+
+/// The closed waveform as a button at the left of a tab group, which shows
+/// it again when pressed and released on it.
+void render_folded_waveform(bool &show_waveform) {
+  static bool pressed = false;
+  const auto button =
+      folded_tab_button(folded_waveform_node(), "##folded_waveform",
+                        WAVEFORM_ICON, WAVEFORM_TITLE);
+  if (folded_tab_button_clicked(button, pressed)) {
+    show_waveform = true;
+  }
 }
 
 } // namespace
@@ -243,15 +274,24 @@ void draw_chord(const Panel &panel, const std::string &chord) {
 void render_waveform(const char *title, WaveformContext &context) {
   auto &ui_prefs = context.ui_prefs;
   if (!ui_prefs.show_waveform) {
+    render_folded_waveform(ui_prefs.show_waveform);
     return;
   }
 
   areas::keep_in_area(areas::Area::FooterLeft, title,
-                      ImGuiDockNodeFlags_AutoHideTabBar);
+                      ImGuiDockNodeFlags_NoTabBar);
 
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(420.0f, 240.0f)),
                            ImGuiCond_FirstUseEver);
-  if (!ui::begin_window(title, &ui_prefs.show_waveform)) {
+  // The graphs run to the window's edges, and what shows past them is the
+  // colour between the areas.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                        styles::color(styles::MegatoyCol::AreaSplitter));
+  const bool visible = ui::begin_window(title, &ui_prefs.show_waveform);
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+  if (!visible) {
     ImGui::End();
     return;
   }
@@ -272,26 +312,42 @@ void render_waveform(const char *title, WaveformContext &context) {
 
   // Side by side in a wide area, one above the other in a tall one.
   const ImVec2 available = ImGui::GetContentRegionAvail();
+
+  // The close mark in the top right corner, over the graphs. Submitted before
+  // them so it, not they, takes the pointer there; drawn after them.
+  const ImVec2 origin = ImGui::GetCursorScreenPos();
+  const float close_size = ImGui::GetFrameHeight();
+  ImGui::SetCursorScreenPos(
+      ImVec2(origin.x + available.x - close_size, origin.y));
+  const bool close = ImGui::InvisibleButton("##close_waveform",
+                                            ImVec2(close_size, close_size));
+  const bool close_hovered = ImGui::IsItemHovered();
+  const ImVec2 close_min = ImGui::GetItemRectMin();
+  const ImVec2 close_max = ImGui::GetItemRectMax();
+  if (close_hovered) {
+    ImGui::SetTooltip("Close");
+  }
+  ImGui::SetCursorScreenPos(origin);
   const bool stacked = available.y > available.x;
-  const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
+  const float gap = ui::scale::px(kPanelGap);
   const ImVec2 panel_size =
       stacked ? ImVec2(std::max(32.0f, available.x),
-                       std::max(32.0f, (available.y - spacing.y) * 0.5f))
-              : ImVec2(std::max(32.0f, (available.x - spacing.x) * 0.5f),
+                       std::max(32.0f, (available.y - gap) * 0.5f))
+              : ImVec2(std::max(32.0f, (available.x - gap) * 0.5f),
                        std::max(32.0f, available.y));
 
   const ImU32 background = styles::color_u32(styles::MegatoyCol::WaveformBg);
-  const ImU32 border = styles::color_u32(styles::MegatoyCol::WaveformBorder);
+  // No frame: the graphs stand on their backgrounds alone.
+  const ImU32 border = 0;
   const Panel scope_panel =
       begin_panel(panel_size, "##scope", background, border);
   draw_scope(scope_panel, left, right, mono, clipped);
-  draw_chord(scope_panel,
-             chord_of(context.active_notes ? context.active_notes()
-                                           : std::vector<ym2612::Note>{}));
   end_panel(scope_panel);
 
-  if (!stacked) {
-    ImGui::SameLine();
+  if (stacked) {
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, scope_panel.max.y + gap));
+  } else {
+    ImGui::SameLine(0.0f, gap);
   }
 
   const Panel spectrum_panel =
@@ -299,7 +355,21 @@ void render_waveform(const char *title, WaveformContext &context) {
   draw_spectrum(spectrum_panel, context.spectrum, context.sample_rate);
   end_panel(spectrum_panel);
 
+  draw_chord(chord_of(context.active_notes ? context.active_notes()
+                                           : std::vector<ym2612::Note>{}),
+             scope_panel.min.x,
+             stacked ? scope_panel.max.x : spectrum_panel.max.x,
+             scope_panel.min.y);
+
+  draw_centred_glyph(ICON_MEGATOY_XMARK, close_min, close_max,
+                     close_hovered
+                         ? ImGui::GetColorU32(ImGuiCol_Text)
+                         : styles::color_u32(styles::MegatoyCol::TextMuted));
+
   ImGui::End();
+  if (close) {
+    ui_prefs.show_waveform = false;
+  }
 }
 
 } // namespace ui

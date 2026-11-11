@@ -2,6 +2,7 @@
 #include "gui/app_window.hpp"
 
 #include "gui/areas.hpp"
+#include "gui/components/folded_tab_button.hpp"
 #include "gui/layouts.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
@@ -9,7 +10,7 @@
 #include "patch_selector_shared.hpp"
 #include "patch_tree_view.hpp"
 
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
@@ -37,8 +38,8 @@ const char *add_folder_label() {
 
 /// The labelled button, under the prompt shown while there are no folders.
 void render_add_folder_button(PatchSelectorContext &context) {
-  const std::string label = std::string(ICON_FA_FOLDER_PLUS " ") +
-                            add_folder_label();
+  const std::string label =
+      std::string(ICON_MEGATOY_FOLDER_PLUS " ") + add_folder_label();
   if (ImGui::Button(label.c_str())) {
     context.add_folder();
   }
@@ -53,7 +54,8 @@ float render_add_folder_icon(PatchSelectorContext &context) {
   const float right = ImGui::GetCurrentWindow()->WorkRect.Max.x;
   ImGui::SetCursorScreenPos(ImVec2(right - size, row.y));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-  if (ImGui::Button(ICON_FA_FOLDER_PLUS "##add_folder", ImVec2(size, size))) {
+  if (ImGui::Button(ICON_MEGATOY_FOLDER_PLUS "##add_folder",
+                    ImVec2(size, size))) {
     context.add_folder();
   }
   ImGui::PopStyleColor();
@@ -63,6 +65,11 @@ float render_add_folder_icon(PatchSelectorContext &context) {
   ImGui::SetCursorScreenPos(row);
   return size + ImGui::GetStyle().ItemSpacing.x;
 }
+
+/// The search row's band reaches this far below it, and the tree starts
+/// this far below the band, before the interface's scale.
+constexpr float kHeaderPadding = 2.0f;
+constexpr float kHeaderGap = 2.0f;
 
 void render_tree(PatchSelectorContext &context) {
   // Scrolls on its own, so the filter row above stays in place. It reaches
@@ -78,19 +85,21 @@ void render_tree(PatchSelectorContext &context) {
       ImGuiChildFlags_AlwaysUseWindowPadding);
   ImGui::PopStyleVar();
   if (visible) {
-    // Folder and file rows alike run to the area's edge: a file row's
-    // highlight would otherwise stop half a spacing past a folder row's.
+    // Folder and file rows alike run to a pixel short of the area's edges:
+    // a file row's highlight would otherwise stop half a spacing past a
+    // folder row's. Their contents stay in by the padding.
     ImGuiWindow *tree = ImGui::GetCurrentWindow();
-    tree->WorkRect.Max.x = tree->InnerRect.Max.x;
-    ImGui::PushClipRect(tree->InnerRect.Min, tree->InnerRect.Max, false);
-    const std::string query_lower =
-        patches::search_key(context.prefs.metadata_search_query);
-    const bool rendered =
-        render_patch_tree(context.repository.tree(), context, query_lower,
-                          context.prefs.metadata_star_filter);
+    const float right = tree->InnerRect.Max.x - ui::scale::px(1.0f);
+    tree->WorkRect.Min.x = tree->InnerRect.Min.x + ui::scale::px(1.0f);
+    tree->WorkRect.Max.x = right;
+    ImGui::PushClipRect(tree->InnerRect.Min,
+                        ImVec2(right, tree->InnerRect.Max.y), false);
+    const auto search =
+        patches::parse_search(context.prefs.metadata_search_query);
+    const bool rendered = render_patch_tree(context.repository.tree(), context,
+                                            search.text_lower, search.stars);
     ImGui::PopClipRect();
-    if (!rendered &&
-        (!query_lower.empty() || context.prefs.metadata_star_filter > 0)) {
+    if (!rendered && (!search.text_lower.empty() || search.stars.active())) {
       ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                          "No results for current filters");
     }
@@ -106,13 +115,37 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
   }
 
   // The add-folder icon closes the filter row, which is kept clear of it.
+  // Docked, the row stands at the window's top, as tall as the editors' tabs
+  // beside it, its contents as far in as the folders' below.
   ImGuiWindow *window = ImGui::GetCurrentWindow();
+  if (window->DockNode != nullptr) {
+    ImGui::SetCursorPosY(0.0f);
+  }
+  ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding,
+                       (tab_height() - ImGui::GetFontSize()) * 0.5f);
+  // The row stands on a band of its own, across the whole window and from
+  // a pixel above it, under the menu bar's edge, to kHeaderPadding below the
+  // row; the tree starts kHeaderGap below that.
+  const float header_top = ImGui::GetCursorScreenPos().y;
+  const float header_bottom =
+      header_top + ImGui::GetFrameHeight() + ui::scale::px(kHeaderPadding);
+  window->DrawList->PushClipRect(
+      ImVec2(window->Pos.x, window->Pos.y - ui::scale::px(1.0f)),
+      ImVec2(window->Pos.x + window->Size.x, window->Pos.y + window->Size.y));
+  window->DrawList->AddRectFilled(
+      ImVec2(window->Pos.x, header_top - ui::scale::px(1.0f)),
+      ImVec2(window->Pos.x + window->Size.x, header_bottom),
+      styles::color_u32(styles::MegatoyCol::BrowserHeaderBg));
+  window->DrawList->PopClipRect();
   const float work_right = window->WorkRect.Max.x;
   if (context.add_folder) {
     window->WorkRect.Max.x -= render_add_folder_icon(context);
   }
   render_filter_bar(context);
   window->WorkRect.Max.x = work_right;
+  ImGui::PopStyleVar();
+  ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x,
+                                   header_bottom + ui::scale::px(kHeaderGap)));
   render_tree(context);
 
   if (context.pending_remove_folder && context.remove_folder) {
@@ -140,25 +173,21 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
     }
   }
 
+  render_icon_picker(context);
+  if (context.pending_icon) {
+    const auto icon = std::move(*context.pending_icon);
+    context.pending_icon.reset();
+    if (const auto *entry = context.session.find_entry(icon.relative_path)) {
+      context.session.set_entry_icon(*entry, icon.icon);
+    }
+  }
+
   if (context.pending_menu_action) {
     context.pending_menu_action.reset();
     if (context.save_current_patch) {
       context.save_current_patch();
     }
   }
-}
-
-/// Draws a one-glyph `icon` centred in the rectangle by the glyph's outline.
-void draw_centred_glyph(const char *icon, ImVec2 min, ImVec2 max) {
-  unsigned int codepoint = 0;
-  ImTextCharFromUtf8(&codepoint, icon, nullptr);
-  const ImFontGlyph *glyph =
-      ImGui::GetFontBaked()->FindGlyph(static_cast<ImWchar>(codepoint));
-  const ImVec2 centre((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f);
-  const ImVec2 pos(IM_ROUND(centre.x - (glyph->X0 + glyph->X1) * 0.5f),
-                   IM_ROUND(centre.y - (glyph->Y0 + glyph->Y1) * 0.5f));
-  ImGui::GetWindowDrawList()->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text),
-                                      icon);
 }
 
 /**
@@ -169,43 +198,16 @@ void draw_centred_glyph(const char *icon, ImVec2 min, ImVec2 max) {
  */
 void render_folded_patch_selector(PatchSelectorContext &context) {
   static const ImGuiID popup_id = ImHashStr("##folded_patch_browser");
-  // Whether the browser was open when the button was pressed: that press
-  // closed it, as a press outside it does, and the release leaves it so.
   static bool open_at_press = false;
 
-  ImGuiDockNode *editors =
-      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID);
-  if (editors == nullptr || !ImGui::DockNodeBeginAmendTabBar(editors)) {
+  const auto button = folded_tab_button(
+      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID),
+      "##folded_patch_browser", PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE);
+  if (!button) {
     return;
   }
-  // Drawn as a tab button, but a button added to a dock's tab bar does not
-  // take clicks itself, so the press and release are read here. The icon is
-  // drawn over it centred by its own outline: the glyph sits low in its line.
-  ImGui::SetNextItemWidth(ImGui::CalcTextSize(PATCH_BROWSER_ICON).x +
-                          ImGui::GetStyle().FramePadding.x * 2.0f);
-  ImGui::TabItemButton("##folded_patch_browser",
-                       ImGuiTabItemFlags_Leading | ImGuiTabItemFlags_NoTooltip);
-  draw_centred_glyph(PATCH_BROWSER_ICON, ImGui::GetItemRectMin(),
-                     ImGui::GetItemRectMax());
-  const bool hovered = ImGui::IsItemHovered();
-  // Also through the open browser, so a press here while it is open is
-  // known for the one that closes it.
-  const bool under_pointer =
-      ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
-  const ImVec2 below(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y);
-  ImGui::DockNodeEndAmendTabBar();
-  if (hovered) {
-    ImGui::SetTooltip("%s", PATCH_BROWSER_TITLE);
-  }
-  if (under_pointer) {
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-      open_at_press = ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None);
-    }
-    // On release, so the press is not taken for one outside the browser.
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !open_at_press) {
-      ImGui::OpenPopupEx(popup_id);
-    }
-  }
+  const ImVec2 below(button->min.x, button->max.y);
+  open_popup_from(*button, popup_id, open_at_press);
 
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   const float bottom = viewport->WorkPos.y + viewport->WorkSize.y;
@@ -227,15 +229,30 @@ void render_folded_patch_selector(PatchSelectorContext &context) {
   ImGui::EndPopup();
 }
 
+/// The closed patch browser as the same button, a click on which brings
+/// the sidebar back.
+void render_closed_patch_selector(bool &show) {
+  static bool pressed = false;
+  const auto button = folded_tab_button(
+      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID),
+      "##folded_patch_browser", PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE);
+  if (folded_tab_button_clicked(button, pressed)) {
+    show = true;
+  }
+}
+
 } // namespace
 
 void render_patch_selector(const char *title, PatchSelectorContext &context) {
   auto &prefs = context.prefs;
-  if (!prefs.show_patch_selector) {
-    return;
-  }
+  // Folded on a narrow screen, opened over the editor from its button;
+  // closed on a wide one, brought back as the sidebar from it.
   if (layouts::window_is_narrow()) {
     render_folded_patch_selector(context);
+    return;
+  }
+  if (!prefs.show_patch_selector) {
+    render_closed_patch_selector(prefs.show_patch_selector);
     return;
   }
 
@@ -244,9 +261,7 @@ void render_patch_selector(const char *title, PatchSelectorContext &context) {
   ImGui::SetNextWindowSize(ui::scale::px(ImVec2(350, 500)),
                            ImGuiCond_FirstUseEver);
 
-  // Match the waveform panel: no tab bar while this window is docked alone.
-  areas::keep_in_area(areas::Area::Sidebar, title,
-                      ImGuiDockNodeFlags_AutoHideTabBar);
+  areas::keep_in_area(areas::Area::Sidebar, title, ImGuiDockNodeFlags_NoTabBar);
   // Only the tree scrolls; it runs to the bottom edge.
   if (!ui::begin_window(title, &prefs.show_patch_selector,
                         ImGuiWindowFlags_NoScrollbar |

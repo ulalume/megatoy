@@ -5,6 +5,7 @@
 #include "gui/window_title.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <optional>
 #include <string>
 
 namespace ui::layouts {
@@ -12,7 +13,7 @@ namespace ui::layouts {
 namespace {
 
 constexpr float kEditorMinWidth = 300.0f;
-constexpr float kBrowserMinWidth = 230.0f;
+constexpr float kBrowserMinWidth = 180.0f;
 
 /// The most of the window's height the footer takes when it grows.
 constexpr float kFooterMaxShare = 0.6f;
@@ -128,6 +129,72 @@ void fit_footer_to_width() {
   waveform->DockNode->SizeRef[axis] = size[axis] * waveform_share[axis];
   other->SizeRef[axis] = size[axis] - waveform->DockNode->SizeRef[axis];
   waveform->DockNode->SizeRef[was] = other->SizeRef[was] = size[was];
+  ImGui::MarkIniSettingsDirty();
+}
+
+void fit_footer_to_waveform(bool now) {
+  // Whether the waveform was wanted last frame; its height when last laid
+  // out, and the footer and frame height it was measured in.
+  static std::optional<bool> shown;
+  static float waveform_height = 0.0f;
+  static ImGuiID measured_footer = 0;
+  static float measured_frame_height = 0.0f;
+
+  // Closed, the window leaves its group but keeps its id, which keeps the
+  // group in the tree.
+  const ImGuiWindow *waveform = ImGui::FindWindowByName(ui::WAVEFORM_TITLE);
+  const ImGuiDockNode *node =
+      waveform != nullptr && waveform->DockId != 0
+          ? ImGui::DockContextFindNodeByID(GImGui, waveform->DockId)
+          : nullptr;
+  if (node == nullptr) {
+    return;
+  }
+  ImGuiDockNode *footer = node->ParentNode;
+  if (footer == nullptr || !footer->IsSplitNode() ||
+      footer->ChildNodes[0] != node) {
+    return;
+  }
+  ImGuiDockNode *frame = footer->ParentNode;
+  const bool stacked = footer->SplitAxis == ImGuiAxis_Y && frame != nullptr &&
+                       frame->IsSplitNode() &&
+                       frame->SplitAxis == ImGuiAxis_Y &&
+                       frame->ChildNodes[1] == footer;
+
+  // `now` is the preference, so the footer changes in the frame the
+  // waveform first goes or comes, before the dockspace moves anything.
+  const bool changed = shown.has_value() && *shown != now;
+  shown = now;
+  const float separator = GImGui->Style.DockingSeparatorSize;
+  if (!changed) {
+    if (now && node->IsVisible && stacked) {
+      waveform_height = node->Size.y + separator;
+      measured_footer = footer->ID;
+      measured_frame_height = frame->Size.y;
+    }
+    return;
+  }
+  if (!stacked) {
+    return;
+  }
+  // Stacked on the keyboard, the waveform's height comes from the editor
+  // and goes back to it: the keyboard keeps its own.
+  float height = footer->Size.y;
+  if (now) {
+    // A height measured in another layout, or at another window height,
+    // does not fit this one; the default share does.
+    const bool measured_here =
+        waveform_height > 0.0f && measured_footer == footer->ID &&
+        ImAbs(measured_frame_height - frame->Size.y) < 1.0f;
+    height = measured_here ? height + waveform_height
+                           : height / (1.0f - waveform_share[ImGuiAxis_Y]);
+    height = ImMin(height, frame->Size.y * kFooterMaxShare);
+  } else {
+    height = ImMax(height - (node->Size.y + separator),
+                   GImGui->Style.WindowMinSize.y);
+  }
+  footer->SizeRef.y = height;
+  frame->ChildNodes[0]->SizeRef.y = frame->Size.y - height;
   ImGui::MarkIniSettingsDirty();
 }
 

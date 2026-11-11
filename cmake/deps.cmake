@@ -138,15 +138,6 @@ set(KISSFFT_TOOLS    OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(kissfft)
 
-# FontAwesome Headers
-FetchContent_Declare(
-  IconFontCppHeaders
-  GIT_REPOSITORY https://github.com/juliettef/IconFontCppHeaders.git
-  # No releases upstream; pinned to a known-good commit.
-  GIT_TAG        210b5a399a64270674560d633638952d1e8d804d
-)
-FetchContent_MakeAvailable(IconFontCppHeaders)
-
 # ym2612_format - patch file readers and writers.
 # It vendors miniz (third_party/miniz amalgamation) as a `miniz` target, which
 # megatoy uses directly for .ginpkg packaging.
@@ -164,7 +155,7 @@ FetchContent_MakeAvailable(ym2612_format)
 FetchContent_Declare(
   ym2612_eg
   GIT_REPOSITORY https://github.com/ulalume/ym2612_eg.git
-  GIT_TAG        v0.8.2
+  GIT_TAG        v0.9.0
 )
 set(YM2612_EG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YM2612_EG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
@@ -183,6 +174,6 @@ FetchContent_MakeAvailable(ym2612_eg)
 FetchContent_Declare(
   ym2612_patches
   GIT_REPOSITORY https://github.com/ulalume/ym2612-patches.git
-  GIT_TAG        5db76c3977801d7f069ac92d463ba2ae495ef467
+  GIT_TAG        bf0a750b9c67b04cfe8815cec2503d17b5b5abaa
 )
 FetchContent_MakeAvailable(ym2612_patches)

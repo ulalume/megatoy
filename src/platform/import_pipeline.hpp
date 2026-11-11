@@ -45,6 +45,11 @@ bool needs_confirmation(std::size_t file_count, std::uint64_t byte_count);
 std::string import_summary(const std::string &folder_name, std::size_t imported,
                            std::size_t skipped);
 
+/// Whether `relative` is patch metadata kept beside the instruments: a JSON
+/// file in a `.ym2612` folder, or in the older `.megatoy` one. An import
+/// keeps these without validating them.
+bool is_patch_metadata(const std::filesystem::path &relative);
+
 /// Perform a real, format-specific validation of a staged file.
 ValidationResult validate_file(const std::filesystem::path &path);
 
@@ -73,7 +78,9 @@ public:
   const std::filesystem::path &staging_root() const { return staging_root_; }
   const std::filesystem::path &final_root() const { return final_root_; }
 
+  /// Keeps `validated_files`, at least one, and `metadata_files` with them.
   bool commit(const std::vector<std::filesystem::path> &validated_files,
+              const std::vector<std::filesystem::path> &metadata_files,
               std::string &error);
   bool rollback_commit(std::string &error);
   void abort();

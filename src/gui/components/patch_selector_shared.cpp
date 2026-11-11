@@ -1,16 +1,19 @@
 #include "patch_selector_shared.hpp"
+#include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
 
 #include "common.hpp"
 #include "file_manager.hpp"
 #include "gui/save_export_actions.hpp"
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "patch_tree_view.hpp"
 #include "patches/patch_entry_actions.hpp"
+#include "patches/patch_filter.hpp"
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
 
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <algorithm>
 #include <cstring>
 #include <imgui.h>
@@ -18,30 +21,6 @@
 #include <optional>
 
 namespace ui::selector_detail {
-
-void show_patch_tooltip(const patches::PatchRepository &repository,
-                        const patches::PatchEntry &entry) {
-  if (!ImGui::IsItemHovered()) {
-    return;
-  }
-
-  std::string tooltip =
-      "Format: " + entry.format + "\nPath: " +
-      display_preset_path(repository.display_path(entry.relative_path));
-
-  if (entry.metadata) {
-    tooltip +=
-        "\nRating: " + std::to_string(entry.metadata->star_rating) + "/5";
-    if (!entry.metadata->icon.empty()) {
-      tooltip += "\nIcon: " + entry.metadata->icon;
-    }
-    if (!entry.metadata->notes.empty()) {
-      tooltip += "\nNotes: " + entry.metadata->notes;
-    }
-  }
-
-  ImGui::SetTooltip("%s", tooltip.c_str());
-}
 
 bool entry_can_rename(const PatchSelectorContext &context,
                       const patches::PatchEntry &entry) {
@@ -149,15 +128,20 @@ void entry_context_menu(PatchSelectorContext &context,
 
   // Written once the tree is drawn: the write rebuilds it, and `entry`
   // with it.
-  if (begin_group(actions.rate) && ui::begin_menu("Rating")) {
-    const int rating = entry.metadata ? entry.metadata->star_rating : 0;
-    for (int stars = 0; stars <= 5; ++stars) {
-      const char *label = stars == 0 ? "None" : kStarLabels[stars].data();
-      if (ImGui::MenuItem(label, nullptr, stars == rating)) {
-        context.pending_rating = PendingRating{entry.relative_path, stars};
-      }
+  if (begin_group(actions.rate)) {
+    if (ImGui::MenuItem("Icon...")) {
+      context.pending_icon_picker = entry.relative_path;
     }
-    ui::end_menu();
+    if (ui::begin_menu("Rating")) {
+      const int rating = entry.metadata ? entry.metadata->star_rating : 0;
+      for (int stars = 0; stars <= 5; ++stars) {
+        const char *label = stars == 0 ? "None" : kStarLabels[stars].data();
+        if (ImGui::MenuItem(label, nullptr, stars == rating)) {
+          context.pending_rating = PendingRating{entry.relative_path, stars};
+        }
+      }
+      ui::end_menu();
+    }
   }
 
   // Whether a file manager exists is the composition root's call -- the
@@ -189,6 +173,86 @@ void entry_context_menu(PatchSelectorContext &context,
   ui::end_popup();
 }
 
+namespace {
+
+/**
+ * Beside the search box, while it is typed in or the menu is in use: the
+ * stars, dragged as the editor's rating is to show the patches rated that
+ * many or more. Writes the pick into `query` as it changes, and sets
+ * `refocus` once it is let go.
+ */
+void render_star_menu(const ImRect &box, bool typing, std::string &query,
+                      bool &refocus) {
+  static bool open = false;
+  open = open || typing;
+  if (!open) {
+    return;
+  }
+  // Against the box's right end and as tall, so the list below stays in
+  // sight; below it where the screen has no room to its right. The stars
+  // take all of it, the room around them included.
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float padding = style.FramePadding.x + style.WindowPadding.x;
+  const ImVec2 size(star_rating_width(padding), box.GetHeight());
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(box.Max.x + size.x <=
+                                  viewport->WorkPos.x + viewport->WorkSize.x
+                              ? ImVec2(box.Max.x, box.Min.y)
+                              : ImVec2(box.Min.x, box.Max.y));
+  ImGui::SetNextWindowSize(size);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                        ImGui::GetStyleColorVec4(ImGuiCol_PopupBg));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, style.PopupRounding);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.PopupBorderSize);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("##star_search", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoSavedSettings |
+                   ImGuiWindowFlags_NoFocusOnAppearing |
+                   ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking);
+  ImGui::PopStyleVar(4);
+  ImGui::PopStyleColor();
+  ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+
+  int stars = patches::least_stars(patches::parse_search(query).stars);
+  if (star_rating_slider("##stars", stars, "Rating", padding)) {
+    query = patches::with_least_stars(query, stars);
+  }
+  refocus = refocus || ImGui::IsItemDeactivated();
+
+  const bool held =
+      ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) ||
+      ImGui::IsWindowFocused();
+  ImGui::End();
+  open = typing || held;
+}
+
+} // namespace
+
+void render_icon_picker(PatchSelectorContext &context) {
+  static std::string picking;
+  if (context.pending_icon_picker) {
+    picking = std::move(*context.pending_icon_picker);
+    context.pending_icon_picker.reset();
+    ImGui::OpenPopup("##icon_picker");
+  }
+  if (!ImGui::BeginPopup("##icon_picker")) {
+    return;
+  }
+  if (const auto *entry = context.session.find_entry(picking)) {
+    const std::string icon =
+        entry->metadata ? entry->metadata->icon : std::string();
+    if (auto picked = instrument_icon_list(icon)) {
+      context.pending_icon = PendingIcon{picking, std::move(*picked)};
+      ImGui::CloseCurrentPopup();
+    }
+  } else {
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndPopup();
+}
+
 void render_filter_bar(PatchSelectorContext &context) {
   auto &prefs = context.prefs;
   char search_buffer[128];
@@ -196,38 +260,50 @@ void render_filter_bar(PatchSelectorContext &context) {
                sizeof(search_buffer));
   search_buffer[sizeof(search_buffer) - 1] = '\0';
 
-  // The search box takes what the star filter leaves of the row, up to where
-  // the caller has narrowed it to.
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const float row_end = ImGui::GetCurrentWindow()->WorkRect.Max.x;
-  const float search_width = std::max(
-      row_end - ImGui::GetCursorScreenPos().x - star_rating_width() -
-          style.ItemSpacing.x,
-      ui::scale::px(60.0f));
-  ImGui::SetNextItemWidth(search_width);
+  // Back into the box once a rating is picked from its menu, typing on
+  // after its text rather than over it.
+  static bool refocus = false;
+  static bool to_end = false;
+  if (refocus) {
+    ImGui::SetKeyboardFocusHere();
+    refocus = false;
+    to_end = true;
+  }
+  const auto place_cursor = [](ImGuiInputTextCallbackData *data) {
+    if (to_end) {
+      data->ClearSelection();
+      data->CursorPos = data->BufTextLen;
+      to_end = false;
+    }
+    return 0;
+  };
+  // The search box takes the row, up to where the caller has narrowed it to.
+  ImGui::SetNextItemWidth(ImGui::GetCurrentWindow()->WorkRect.Max.x -
+                          ImGui::GetCursorScreenPos().x);
   // The clear button sits over the box's right end and has to win the hover.
   ImGui::SetNextItemAllowOverlap();
-  if (ImGui::InputTextWithHint("##SharedSearch",
-                               ICON_FA_MAGNIFYING_GLASS " Search...",
-                               search_buffer, sizeof(search_buffer))) {
+  if (ImGui::InputTextWithHint(
+          "##SharedSearch", ICON_MEGATOY_MAGNIFYING_GLASS " Search...",
+          search_buffer, sizeof(search_buffer),
+          ImGuiInputTextFlags_CallbackAlways, place_cursor)) {
     prefs.metadata_search_query = std::string(search_buffer);
   }
+  const bool typing = ImGui::IsItemActive();
+  const ImRect box(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
   if (!prefs.metadata_search_query.empty()) {
-    const ImVec2 box_min = ImGui::GetItemRectMin();
-    const ImVec2 box_max = ImGui::GetItemRectMax();
-    const float size = box_max.y - box_min.y;
-    ImGui::SetCursorScreenPos(ImVec2(box_max.x - size, box_min.y));
+    const float size = box.GetHeight();
+    ImGui::SetCursorScreenPos(ImVec2(box.Max.x - size, box.Min.y));
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_Text,
                           ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    if (ImGui::Button(ICON_FA_XMARK "##clear_search", ImVec2(size, size))) {
+    if (ImGui::Button(ICON_MEGATOY_XMARK "##clear_search",
+                      ImVec2(size, size))) {
       prefs.metadata_search_query.clear();
     }
     ImGui::PopStyleColor(2);
   }
 
-  ImGui::SameLine();
-  star_rating_slider("##Rating", prefs.metadata_star_filter, "Rating");
+  render_star_menu(box, typing, prefs.metadata_search_query, refocus);
 }
 
 } // namespace ui::selector_detail

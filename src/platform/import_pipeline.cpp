@@ -2,6 +2,7 @@
 
 #include "formats/ginpkg.hpp"
 #include "formats/ym2612_format_adapter.hpp"
+#include "patches/patch_metadata.hpp"
 
 #include <algorithm>
 #include <array>
@@ -255,8 +256,19 @@ bool ImportStager::is_safe_relative_path(
          *normalized.begin() != "..";
 }
 
+bool is_patch_metadata(const std::filesystem::path &relative) {
+  if (relative.extension() != ".json") {
+    return false;
+  }
+  return std::any_of(relative.begin(), relative.end(), [](const auto &part) {
+    return part == patches::sidecar::kDirectory ||
+           part == patches::sidecar::kLegacyDirectory;
+  });
+}
+
 bool ImportStager::commit(
     const std::vector<std::filesystem::path> &validated_files,
+    const std::vector<std::filesystem::path> &metadata_files,
     std::string &error) {
   error.clear();
   if (committed_) {
@@ -289,6 +301,11 @@ bool ImportStager::commit(
     error = "no valid instrument files were found";
     abort();
     return false;
+  }
+  for (const auto &relative : metadata_files) {
+    if (is_safe_relative_path(relative)) {
+      keep.insert(relative.lexically_normal());
+    }
   }
 
   for (std::filesystem::recursive_directory_iterator it(staging_root_, ec), end;

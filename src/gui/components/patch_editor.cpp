@@ -4,24 +4,28 @@
 
 #include "common.hpp"
 #include "gui/areas.hpp"
+#include "gui/components/centred_glyph.hpp"
+#include "gui/components/folded_tab_button.hpp"
+#include "gui/components/instrument_icon_picker.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/components/named_slider.hpp"
 #include "gui/components/operator_commands.hpp"
 #include "gui/components/preview/algorithm_preview.hpp"
-#include "gui/instrument_icons.hpp"
+#include "gui/fonts/megatoy_icons.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/scroll_reveal.hpp"
 #include "gui/styles/megatoy_style.hpp"
+#include "gui/tab_bar_lines.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "operator_editor.hpp"
 #include "patch_editor_tools.hpp"
+#include "patches/instrument_icons.hpp"
 #include "patches/save_controls.hpp"
 #include "platform/platform_config.hpp"
 #include "star_rating.hpp"
 #include "view_patch_drop.hpp"
-#include <IconsFontAwesome7.h>
 #include <algorithm>
-#include <cfloat>
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -53,162 +57,93 @@ ImVec2 menu_anchor_below_last_item() {
 }
 #endif
 
-/// The browser's entry for the patch `document` holds, or nullptr when the
-/// browser does not list it.
-const patches::PatchEntry *
-document_entry(const patches::PatchSession &session,
-               const patches::PatchDocument &document) {
-  const auto &key = document.selection_path().empty()
-                        ? document.path()
-                        : document.selection_path();
-  return session.find_entry(key);
-}
-
 /// The glyph of the patch's instrument icon, or the none icon.
 const char *document_icon(const patches::PatchSession &session,
                           const patches::PatchDocument &document) {
-  const auto *entry = document_entry(session, document);
-  return instrument_icons::glyph(entry != nullptr && entry->metadata
-                                     ? std::string_view(entry->metadata->icon)
-                                     : std::string_view());
+  const auto *entry = session.document_entry(document);
+  return patches::instrument_icons::glyph(
+      entry != nullptr && entry->metadata
+          ? std::string_view(entry->metadata->icon)
+          : std::string_view());
 }
 
-/// The icon picker's columns, and its greatest height before it scrolls.
-constexpr int kIconPickerColumns = 8;
-constexpr float kIconPickerMaxHeight = 330.0f;
-
-/**
- * The icon picker, opened below the button just drawn: a filter, None, and
- * every group's icons that match the filter. The id picked, "" for None, or
- * nothing while none is.
- */
-std::optional<std::string> icon_picker(ImGuiID popup_id,
-                                       const std::string &current) {
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const float cell = ImGui::GetFrameHeight();
-  const float width = cell * kIconPickerColumns +
-                      style.ItemSpacing.x * (kIconPickerColumns - 1) +
-                      style.ScrollbarSize;
-  const float max_height = ui::scale::px(kIconPickerMaxHeight);
-  const ImRect button(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
-  ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
-                                      ImVec2(FLT_MAX, max_height));
-  if (!ImGui::BeginComboPopup(popup_id, button, ImGuiComboFlags_None)) {
-    return std::nullopt;
-  }
-  static char filter[32] = "";
-  if (ImGui::IsWindowAppearing()) {
-    filter[0] = '\0';
-    ImGui::SetKeyboardFocusHere();
-  }
-  ImGui::SetNextItemWidth(width);
-  ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " Filter...",
-                           filter, sizeof(filter));
-
-  std::optional<std::string> picked;
-  if (ImGui::Selectable("None", current.empty())) {
-    picked = std::string();
-  }
-  // The icons scroll below the filter, filling what the popup has left.
-  ImGui::SetNextWindowSizeConstraints(
-      ImVec2(0.0f, 0.0f), ImVec2(width, max_height - ImGui::GetCursorPosY() -
-                                            style.WindowPadding.y));
-  ImGui::BeginChild("##icons", ImVec2(width, 0.0f),
-                    ImGuiChildFlags_AutoResizeY);
-  ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
-  for (const auto &group : instrument_icons::groups()) {
-    int column = 0;
-    for (const auto &icon : group.icons) {
-      if (!instrument_icons::matches(icon.id, filter)) {
-        continue;
-      }
-      if (column == 0) {
-        ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "%.*s",
-                           static_cast<int>(group.name.size()),
-                           group.name.data());
-      } else if (column % kIconPickerColumns != 0) {
-        ImGui::SameLine();
-      }
-      ++column;
-      const std::string id(icon.id);
-      ImGui::PushID(id.c_str());
-      if (ImGui::Selectable(icon.glyph, id == current, 0, ImVec2(cell, cell))) {
-        picked = id;
-      }
-      ImGui::SetItemTooltip("%s", id.c_str());
-      ImGui::PopID();
-    }
-  }
-  ImGui::PopStyleVar();
-  ImGui::EndChild();
-  if (picked) {
-    ImGui::CloseCurrentPopup();
-  }
-  ImGui::EndCombo();
-  return picked;
+/// The document's name with its icon in front, as its tab shows it.
+std::string document_tab_label(const patches::PatchSession &session,
+                               const patches::PatchDocument &document) {
+  return std::string(document_icon(session, document)) + " " +
+         document_label(document);
 }
 
+/// The name of the document's editor window.
+std::string document_window_title(PatchEditorContext &context,
+                                  const patches::PatchDocument &document) {
+  return patch_editor_window_title(
+      document_tab_label(context.session, document),
+      context.document_ui(document.id()).window_slot);
+}
+
+/// What the header's metadata asks to write, once it is drawn.
+struct MetadataEdit {
+  std::optional<std::string> icon;
+  std::optional<int> rating;
+};
+
 /**
- * The icon and rating of the patch's file, at the right of the row,
- * or below it when the row has no room. Only for a patch the browser lists
- * in a folder that keeps metadata.
+ * The patch's instrument icon, large, at the start of the header. A button
+ * that picks another for a patch the browser lists in a folder that keeps
+ * metadata.
  */
-void render_patch_metadata(PatchEditorContext &context,
-                           const patches::PatchDocument &document,
-                           UIState::DocumentUi &ui) {
-  auto &session = context.session;
-  const auto *entry = document_entry(session, document);
-  if (entry == nullptr || !session.repository().can_edit_metadata(*entry)) {
+void render_header_icon(const patches::PatchEntry *entry, bool editable,
+                        float size, MetadataEdit &edit) {
+  const std::string icon =
+      entry != nullptr && entry->metadata ? entry->metadata->icon : "";
+  if (!editable) {
+    ImGui::Dummy(ImVec2(size, size));
+    draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                         kLargeIconScale);
     return;
   }
-  const float spacing = ImGui::GetStyle().ItemSpacing.x;
-  const float button_size = ImGui::GetFrameHeight();
-  const float needed = button_size + spacing + star_rating_width();
-  ImGui::SameLine();
-  if (ImGui::GetContentRegionAvail().x >= needed) {
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                         ImGui::GetContentRegionAvail().x - needed);
-  } else {
-    ImGui::NewLine();
-  }
-
-  const std::string saved_icon =
-      entry->metadata ? entry->metadata->icon : std::string();
   const ImGuiID popup_id = ImGui::GetID("##icon_picker");
-  const std::string button_label =
-      std::string(instrument_icons::glyph(saved_icon)) + "##icon";
-  if (ImGui::Button(button_label.c_str(), ImVec2(button_size, button_size))) {
+  // No fill at rest: the icon stands alone until the pointer is over it.
+  ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+  if (ImGui::Button("##icon", ImVec2(size, size))) {
     ImGui::OpenPopupEx(popup_id);
   }
-  ImGui::SetItemTooltip("Icon");
-  if (const auto picked = icon_picker(popup_id, saved_icon);
-      picked && *picked != saved_icon) {
-    // The tree is rebuilt by the write, so `entry` is not used after it.
-    session.set_entry_icon(*entry, *picked);
-    return;
+  ImGui::PopStyleColor();
+  draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                       kLargeIconScale);
+  if (patches::instrument_icons::known(icon)) {
+    ImGui::SetItemTooltip(
+        "Icon: %s", patches::instrument_icons::display_name(icon).c_str());
+  } else {
+    ImGui::SetItemTooltip("Icon");
   }
+  if (auto picked = instrument_icon_popup(popup_id, icon);
+      picked && *picked != icon) {
+    edit.icon = std::move(picked);
+  }
+}
 
-  // Written once let go, as the browser's star filter is dragged the same.
-  ImGui::SameLine(0.0f, spacing);
+/// The rating, written once let go as the browser's star filter is.
+void render_header_rating(const patches::PatchEntry &entry,
+                          UIState::DocumentUi &ui, MetadataEdit &edit) {
   int rating = ui.pending_rating.value_or(
-      entry->metadata ? entry->metadata->star_rating : 0);
+      entry.metadata ? entry.metadata->star_rating : 0);
   if (star_rating_slider("##rating", rating, "Rating")) {
     ui.pending_rating = rating;
   }
   if (ImGui::IsItemDeactivated() && ui.pending_rating) {
-    const int chosen = *ui.pending_rating;
+    edit.rating = *ui.pending_rating;
     ui.pending_rating.reset();
-    session.set_entry_rating(*entry, chosen);
   }
 }
 
-void render_save_export_buttons(PatchEditorContext &context,
-                                patches::PatchDocument &document,
-                                UIState::DocumentUi &ui,
-                                PatchEditorState &state, bool is_active) {
+/// Save, and Save As... where it is offered, as one row.
+void render_save_buttons(PatchEditorContext &context,
+                         patches::PatchDocument &document,
+                         const patches::SaveControls &controls,
+                         PatchEditorState &state) {
   auto &patch_session = context.session;
-
-  const auto controls = patches::save_controls(patch_session, document);
   const bool save_button_is_disabled = !controls.save_enabled;
 
   if (save_button_is_disabled) {
@@ -256,15 +191,73 @@ void render_save_export_buttons(PatchEditorContext &context,
 #endif
     }
   }
+}
+
+/**
+ * The header: the patch's icon; the save buttons, with the rating at the
+ * row's right, over where the patch is kept, cut short where the window is
+ * narrow. The rating goes below only when the buttons leave it no room.
+ */
+void render_document_header(PatchEditorContext &context,
+                            patches::PatchDocument &document,
+                            UIState::DocumentUi &ui, PatchEditorState &state,
+                            bool is_active) {
+  auto &patch_session = context.session;
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const auto *entry = patch_session.document_entry(document);
+  const bool editable =
+      entry != nullptr && patch_session.repository().can_edit_metadata(*entry);
+
+  // Two lines tall: the save buttons' and the path's.
+  const float height = ImGui::GetFrameHeight() + style.ItemSpacing.y +
+                       ImGui::GetTextLineHeight();
+  const float top = ImGui::GetCursorPosY();
+  MetadataEdit edit;
+  render_header_icon(entry, editable, height, edit);
 
   ImGui::SameLine();
+  const float left = ImGui::GetCursorPosX();
+  const float right = left + ImGui::GetContentRegionAvail().x;
+  const auto controls = patches::save_controls(patch_session, document);
+  render_save_buttons(context, document, controls, state);
+  const float buttons_end =
+      ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + ImGui::GetScrollX();
+  const bool rating_beside =
+      editable &&
+      right - buttons_end - style.ItemSpacing.x >= star_rating_width();
+  if (rating_beside) {
+    ImGui::SetCursorPos(ImVec2(right - star_rating_width(), top));
+    render_header_rating(*entry, ui, edit);
+  }
+
   const auto &repository = patch_session.repository();
   const auto relative_path =
       repository.to_relative_path(document.path()).generic_string();
-  ImGui::TextColored(
-      styles::color(styles::MegatoyCol::TextMuted), "%s",
-      display_preset_path(repository.display_path(relative_path)).c_str());
-  render_patch_metadata(context, document, ui);
+  const std::string path =
+      display_preset_path(repository.display_path(relative_path));
+  ImGui::SetCursorPos(
+      ImVec2(left, top + ImGui::GetFrameHeight() + style.ItemSpacing.y));
+  const ImVec2 path_min = ImGui::GetCursorScreenPos();
+  const ImVec2 path_max(path_min.x + std::max(right - left, 0.0f),
+                        path_min.y + ImGui::GetTextLineHeight());
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::TextMuted));
+  ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), path_min, path_max,
+                            path_max.x, path.c_str(), nullptr, nullptr);
+  ImGui::PopStyleColor();
+  ImGui::Dummy(ImVec2(path_max.x - path_min.x, ImGui::GetTextLineHeight()));
+
+  if (editable && !rating_beside) {
+    render_header_rating(*entry, ui, edit);
+  }
+
+  // Written once the header is drawn: a write rebuilds the browser's tree,
+  // and `entry` with it.
+  if (edit.icon) {
+    patch_session.set_entry_icon(*entry, *edit.icon);
+  } else if (edit.rating) {
+    patch_session.set_entry_rating(*entry, *edit.rating);
+  }
 
   // Render popups in the same window/ID stack as the actions that open them.
   // They act on the active document, so only its window holds them.
@@ -273,52 +266,118 @@ void render_save_export_buttons(PatchEditorContext &context,
   }
 }
 
-/// The LFO section's sliders: one width for the two, wide enough for the
-/// longer name.
-float lfo_slider_width() {
-  return std::max(
-      hslider_width(),
-      named_slider_fit_width("Frequency Modulation Sensitivity", "0"));
+/// The LFO and Channel sections' sliders' names, in full or as AMS, FMS and
+/// ALG.
+struct LfoNames {
+  const char *ams;
+  const char *fms;
+  const char *algorithm;
+  bool short_names;
+};
+constexpr LfoNames kLfoFullNames{"Amplitude Modulation Sensitivity",
+                                 "Frequency Modulation Sensitivity",
+                                 "Algorithm", false};
+constexpr LfoNames kLfoShortNames{"AMS", "FMS", "ALG", true};
+
+/// The space between the LFO section's two sliders, before the interface's
+/// scale.
+constexpr float kLfoSliderGap = 1.0f;
+
+/// The narrowest the algorithm diagram is drawn, where the names are short.
+constexpr float kMinAlgorithmDiagramWidth = 112.0f;
+
+/// How far each sensitivity moves the sound: the volume only down from where
+/// it stands, the pitch either way.
+constexpr const char *kAmsDepths[] = {"0 dB", "-1.4 dB", "-5.9 dB", "-11.8 dB"};
+constexpr const char *kFmsDepths[] = {
+    "0 cent",        "\u00b13.4 cent", "\u00b16.7 cent", "\u00b110 cent",
+    "\u00b114 cent", "\u00b120 cent",  "\u00b140 cent",  "\u00b180 cent"};
+
+/// The LFO section's sliders: one width for the two, wide enough for either
+/// name with its widest depth.
+float lfo_slider_width(const LfoNames &names) {
+  return std::max({hslider_width(),
+                   named_slider_fit_width(names.ams, "-11.8 dB"),
+                   named_slider_fit_width(names.fms, "\u00b180 cent")});
 }
 
-void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch) {
+void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
+                        const LfoNames &names) {
   // The LFO's switch and rate are how the patch is played, set from the
   // menu bar; what the patch holds is how far it follows the LFO.
-  ImGui::SeparatorText("Low Frequency Oscillator");
+  ImGui::SeparatorText("LFO");
 
-  ImGui::PushItemWidth(lfo_slider_width());
+  // The sensitivities do nothing while the LFO is off, which is said by the
+  // one being touched.
+  // A short name is told in full there too.
+  const bool lfo_on = context.session.playback().lfo_enable;
+  const bool short_names = names.short_names;
+  const auto tell = [&](const char *full_name) {
+    const bool touched = ImGui::IsItemHovered() || ImGui::IsItemActive();
+    if (!touched) {
+      return;
+    }
+    constexpr const char *kOff =
+        "The LFO is off. Turn it on from the LFO menu.";
+    if (!lfo_on && short_names) {
+      ImGui::SetTooltip("%s\n%s", full_name, kOff);
+    } else if (!lfo_on) {
+      ImGui::SetTooltip("%s", kOff);
+    } else if (short_names && ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", full_name);
+    }
+  };
 
-  int ams = patch.channel.amplitude_modulation_sensitivity;
-  bool ams_changed =
-      named_slider_int("Amplitude Modulation Sensitivity", &ams, 0, 3);
+  // No wider than the column, which a name too long for it is cut short to.
+  ImGui::PushItemWidth(
+      std::min(lfo_slider_width(names), ImGui::GetContentRegionAvail().x));
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::scale::px(kLfoSliderGap));
+
+  int ams =
+      std::clamp<int>(patch.channel.amplitude_modulation_sensitivity, 0, 3);
+  bool ams_changed = named_slider_int(names.ams, &ams, 0, 3, kAmsDepths[ams]);
+  tell(kLfoFullNames.ams);
   track_patch_history(context, "Amplitude Modulation Sensitivity",
                       "channel.am_sensitivity");
   if (ams_changed) {
     patch.channel.amplitude_modulation_sensitivity = static_cast<uint8_t>(ams);
   }
 
-  int fms = patch.channel.frequency_modulation_sensitivity;
-  bool fms_changed =
-      named_slider_int("Frequency Modulation Sensitivity", &fms, 0, 7);
+  int fms =
+      std::clamp<int>(patch.channel.frequency_modulation_sensitivity, 0, 7);
+  bool fms_changed = named_slider_int(names.fms, &fms, 0, 7, kFmsDepths[fms]);
+  tell(kLfoFullNames.fms);
   track_patch_history(context, "Frequency Modulation Sensitivity",
                       "channel.fm_sensitivity");
   if (fms_changed) {
     patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(fms);
   }
 
+  ImGui::PopStyleVar();
   ImGui::PopItemWidth();
   ImGui::Spacing();
 }
 
-void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
+void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
+                            const LfoNames &names) {
   ImGui::SeparatorText("Channel");
   ImGui::PushItemWidth(hslider_width());
 
   // The slider stands beside the diagram, as tall as it, at the spacing
-  // between any two items.
-  const float diagram_height = ui::scale::px(48.0f);
+  // between any two items, and the two as tall as the LFO's sliders. With
+  // the names short, the diagram narrows down to its least to leave the
+  // slider its own.
+  const float diagram_height =
+      ImGui::GetFrameHeight() * 2.0f + ui::scale::px(kLfoSliderGap);
+  float diagram_width = ImGui::CalcItemWidth();
+  if (names.short_names) {
+    diagram_width = std::clamp(
+        ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x -
+            named_slider_fit_width(names.algorithm, "0"),
+        ui::scale::px(kMinAlgorithmDiagramWidth), diagram_width);
+  }
   algorithm_diagram(patch.instrument.algorithm,
-                    ImVec2(ImGui::CalcItemWidth(), diagram_height));
+                    ImVec2(diagram_width, diagram_height));
   ImGui::SameLine();
   ImGui::PushStyleVarY(
       ImGuiStyleVar_FramePadding,
@@ -327,7 +386,10 @@ void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch) {
   int algorithm = patch.instrument.algorithm;
   ImGui::SetNextItemWidth(
       std::min(ImGui::CalcItemWidth(), ImGui::GetContentRegionAvail().x));
-  bool algorithm_changed = named_slider_int("Algorithm", &algorithm, 0, 7);
+  bool algorithm_changed = named_slider_int(names.algorithm, &algorithm, 0, 7);
+  if (names.short_names) {
+    ImGui::SetItemTooltip("%s", kLfoFullNames.algorithm);
+  }
   ImGui::PopStyleVar();
   track_patch_history(context, "Algorithm", "instrument.algorithm");
   if (algorithm_changed) {
@@ -452,11 +514,10 @@ void push_preview_label_style() {
 
 void pop_preview_label_style() { ImGui::PopStyleColor(); }
 
-/// Select the current window's tab in its dock node, or raise it when it is
-/// not docked, without taking the keyboard from another window. False while
-/// the node has not built its tabs yet, as on the first frame.
-bool bring_current_window_forward() {
-  ImGuiWindow *window = ImGui::GetCurrentWindow();
+/// Select a window's tab in its dock node, or raise it when it is not
+/// docked, without taking the keyboard from another window. False while the
+/// node has not built its tabs yet, as on the first frame.
+bool bring_window_forward(ImGuiWindow *window) {
   if (ImGuiDockNode *node = window->DockNode) {
     if (node->TabBar == nullptr) {
       return node->Windows.Size <= 1;
@@ -512,7 +573,7 @@ void render_disk_change_bar(PatchEditorContext &context,
                             UIState::DocumentUi &ui) {
   ImGui::AlignTextToFramePadding();
   ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
-                     ICON_FA_TRIANGLE_EXCLAMATION
+                     ICON_MEGATOY_TRIANGLE_EXCLAMATION
                      " The file was changed outside megatoy.");
   ImGui::SameLine();
   if (ImGui::Button("Reload")) {
@@ -550,10 +611,7 @@ void render_document_window(PatchEditorContext &context,
   auto &ui = context.document_ui(id);
   auto &session = context.session;
 
-  const auto title =
-      patch_editor_window_title(std::string(document_icon(session, document)) +
-                                    " " + document_label(document),
-                                ui.window_slot);
+  const auto title = document_window_title(context, document);
   const ImGuiWindow *existing = ImGui::FindWindowByName(title.c_str());
   ImGuiDockNode *node = existing != nullptr ? existing->DockNode : nullptr;
   areas::keep_in_area(areas::Area::Main, title.c_str(), 0,
@@ -615,17 +673,7 @@ void render_document_window(PatchEditorContext &context,
   if (preview) {
     push_preview_label_style();
   }
-  // ImGui dims a tab whose node does not have the keys, which the active
-  // document's often lacks: a click in the browser keeps them there. Its tab
-  // stays lit regardless, so it can be told from the others.
   const bool was_active = id == session.active_document_id();
-  if (was_active) {
-    ImGui::PushStyleColor(ImGuiCol_TabDimmedSelected,
-                          ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
-    ImGui::PushStyleColor(
-        ImGuiCol_TabDimmedSelectedOverline,
-        ImGui::GetStyleColorVec4(ImGuiCol_TabSelectedOverline));
-  }
   ImGui::PushStyleColor(ImGuiCol_WindowBg,
                         styles::color(styles::MegatoyCol::PatchEditorBg));
   // Marked unsaved, a document's tab stays in place when its close button
@@ -634,7 +682,13 @@ void render_document_window(PatchEditorContext &context,
       title.c_str(), session.can_close_document(id) ? &open : nullptr,
       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse |
           (document.is_modified() ? ImGuiWindowFlags_UnsavedDocument : 0));
-  ImGui::PopStyleColor(was_active ? 3 : 1);
+  ImGui::PopStyleColor();
+  // A tab bar is dimmed while its node does not have the keys, which the
+  // active document's often lacks: a click in the browser keeps them there.
+  // Its bar stays lit regardless, so it can be told from the others.
+  if (was_active) {
+    keep_tab_bar_lit();
+  }
   if (preview) {
     pop_preview_label_style();
   }
@@ -644,7 +698,8 @@ void render_document_window(PatchEditorContext &context,
       ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
     session.pin(id);
   }
-  if (reveal && (take_focus || bring_current_window_forward())) {
+  if (reveal &&
+      (take_focus || bring_window_forward(ImGui::GetCurrentWindow()))) {
     context.reveal_document.reset();
   }
   if (frame.first_dock_id == 0) {
@@ -677,19 +732,37 @@ void render_document_window(PatchEditorContext &context,
     if (ui.disk_version) {
       render_disk_change_bar(context, id, ui);
     }
-    render_save_export_buttons(context, document, ui, state, is_active);
+    render_document_header(context, document, ui, state, is_active);
     ImGui::Spacing();
 
     // Side by side while each of the two even columns holds the LFO's
-    // sliders.
+    // sliders, named in full or else as AMS, FMS and ALG; one above the
+    // other after that, in full while they fit.
+    // The Channel column needs the diagram and the Algorithm slider named
+    // beside it, which is shortened with the LFO's.
     const auto available_width = ImGui::GetContentRegionAvail().x;
-    const float column_width =
-        lfo_slider_width() + ImGui::GetStyle().ItemSpacing.x * 2.0f;
-    ImGui::Columns(available_width >= column_width * 2.0f ? 2 : 1,
-                   "##lfo_channel_columns", false);
-    render_lfo_section(context, patch);
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const auto section_width = [&](const LfoNames &names) {
+      const float diagram_width =
+          !names.short_names ? hslider_width()
+                             : ui::scale::px(kMinAlgorithmDiagramWidth);
+      const float channel_width = diagram_width + spacing +
+                                  named_slider_fit_width(names.algorithm, "0");
+      return std::max(lfo_slider_width(names), channel_width);
+    };
+    const auto fits_beside = [&](const LfoNames &names) {
+      return available_width >= (section_width(names) + spacing * 2.0f) * 2.0f;
+    };
+    const bool full_beside = fits_beside(kLfoFullNames);
+    const bool beside = full_beside || fits_beside(kLfoShortNames);
+    const bool full =
+        full_beside ||
+        (!beside && available_width >= section_width(kLfoFullNames));
+    ImGui::Columns(beside ? 2 : 1, "##lfo_channel_columns", false);
+    const LfoNames &names = full ? kLfoFullNames : kLfoShortNames;
+    render_lfo_section(context, patch, names);
     ImGui::NextColumn();
-    render_channel_section(context, patch);
+    render_channel_section(context, patch, names);
     ImGui::Columns(1);
     // Only the active document is what the chip is playing.
     render_operator_section(context, patch,
@@ -706,6 +779,258 @@ void render_document_window(PatchEditorContext &context,
   if (!open) {
     frame.to_close.push_back(id);
   }
+}
+
+/// A tab the editors' list holds: an open document, or Preferences when no
+/// document is given, with the dock node it stands in and its place there.
+struct ListedTab {
+  std::optional<patches::DocumentId> document;
+  ImGuiWindow *window;
+  const ImGuiDockNode *node = nullptr;
+  int order = 0;
+};
+
+/// The Preferences window while it is open.
+ImGuiWindow *preferences_window(const PatchEditorContext &context) {
+  if (!context.prefs.show_preferences) {
+    return nullptr;
+  }
+  static const std::string id = panel_window_id(PREFERENCES_TITLE);
+  return ImGui::FindWindowByName(id.c_str());
+}
+
+/// The open documents and Preferences in the order their tabs show: dock
+/// node by dock node from the top left, then along each node's tabs.
+std::vector<ListedTab> tabs_in_order(PatchEditorContext &context) {
+  std::vector<ListedTab> tabs;
+  for (const auto &document : context.session.documents()) {
+    tabs.push_back({document->id(),
+                    ImGui::FindWindowByName(
+                        document_window_title(context, *document).c_str())});
+  }
+  if (ImGuiWindow *window = preferences_window(context)) {
+    tabs.push_back({std::nullopt, window});
+  }
+  for (ListedTab &tab : tabs) {
+    ImGuiDockNode *node =
+        tab.window != nullptr ? tab.window->DockNode : nullptr;
+    tab.node = node;
+    if (node != nullptr && node->TabBar != nullptr) {
+      if (ImGuiTabItem *item =
+              ImGui::TabBarFindTabByID(node->TabBar, tab.window->TabId)) {
+        tab.order = ImGui::TabBarGetTabOrder(node->TabBar, item);
+      }
+    }
+  }
+  std::stable_sort(tabs.begin(), tabs.end(),
+                   [](const ListedTab &a, const ListedTab &b) {
+                     if (a.node == b.node) {
+                       return a.order < b.order;
+                     }
+                     if (a.node == nullptr || b.node == nullptr) {
+                       return b.node == nullptr;
+                     }
+                     if (a.node->Pos.y != b.node->Pos.y) {
+                       return a.node->Pos.y < b.node->Pos.y;
+                     }
+                     if (a.node->Pos.x != b.node->Pos.x) {
+                       return a.node->Pos.x < b.node->Pos.x;
+                     }
+                     return a.node->ID < b.node->ID;
+                   });
+  return tabs;
+}
+
+/// What a row of the list shows and does.
+struct ListedRow {
+  const char *icon = nullptr;
+  float icon_scale = 1.0f;
+  bool icon_muted = false;
+  std::string name;
+  bool active = false;
+  bool preview = false;
+  bool modified = false;
+  bool closable = false;
+};
+
+ListedRow listed_row(PatchEditorContext &context, const ListedTab &tab) {
+  auto &session = context.session;
+  if (!tab.document) {
+    return {.icon = PREFERENCES_ICON,
+            .icon_scale = 1.0f,
+            .name = PREFERENCES_TITLE,
+            .closable = true};
+  }
+  const auto *document = session.find_document(*tab.document);
+  const char *icon = document_icon(session, *document);
+  // Muted, as the browser shows it, for a patch without an icon.
+  return {.icon = icon,
+          .icon_scale = ui::kPatchRowIconScale,
+          .icon_muted =
+              std::string_view(icon) == patches::instrument_icons::none_glyph(),
+          .name = document_label(*document),
+          .active = *tab.document == session.active_document_id(),
+          .preview = !document->pinned(),
+          .modified = document->is_modified(),
+          .closable = session.can_close_document(*tab.document)};
+}
+
+/// How far a row's name starts from its left: the icon with the frame
+/// padding on either side.
+float listed_name_offset() {
+  return ui::patch_row_icon_width() + ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+/**
+ * A close button filling the square `bb`, its cross as large as ImGui's own
+ * close button draws it.
+ */
+bool square_close_button(ImGuiID id, const ImRect &bb) {
+  if (!ImGui::ItemAdd(bb, id)) {
+    return false;
+  }
+  bool hovered = false;
+  bool held = false;
+  const bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  if (hovered) {
+    draw_list->AddRectFilled(bb.Min, bb.Max,
+                             ImGui::GetColorU32(held ? ImGuiCol_ButtonActive
+                                                     : ImGuiCol_ButtonHovered));
+  }
+  const ImU32 cross = ImGui::GetColorU32(ImGuiCol_Text);
+  const ImVec2 centre = bb.GetCenter();
+  const float x = centre.x - 0.5f;
+  const float y = centre.y - 0.5f;
+  const float extent = ImGui::GetFontSize() * 0.5f * 0.7071f - 1.0f;
+  const float thickness = ui::scale::px(1.0f);
+  draw_list->AddLine(ImVec2(x - extent, y - extent),
+                     ImVec2(x + extent, y + extent), cross, thickness);
+  draw_list->AddLine(ImVec2(x - extent, y + extent),
+                     ImVec2(x + extent, y - extent), cross, thickness);
+  return pressed;
+}
+
+/**
+ * One row of the list, laid out as a patch row of the browser: the icon,
+ * the name, and at the right the close button its tab has, or the mark of
+ * unsaved changes until the pointer comes over the row. True when the row
+ * is chosen; `close` is set when its close button is pressed.
+ */
+bool listed_row_selectable(const ListedRow &row, float width, bool &close) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float height = ui::patch_row_height();
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+  const bool chosen =
+      ImGui::Selectable("##row", row.active, ImGuiSelectableFlags_AllowOverlap,
+                        ImVec2(width, height));
+  ImGui::PopStyleVar();
+  const ImVec2 max(pos.x + width, pos.y + height);
+
+  if (row.preview) {
+    push_preview_label_style();
+  }
+  const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
+  const float icon_left = pos.x + style.FramePadding.x;
+  draw_centred_glyph(row.icon, ImVec2(icon_left, pos.y),
+                     ImVec2(icon_left + ui::patch_row_icon_width(), max.y),
+                     row.icon_muted ? ImGui::GetColorU32(styles::color(
+                                          styles::MegatoyCol::TextMuted))
+                                    : text,
+                     row.icon_scale);
+  // Cut short when the row has no room for all of it.
+  const ImVec2 name_pos(pos.x + listed_name_offset(),
+                        pos.y + (height - ImGui::GetTextLineHeight()) * 0.5f);
+  const float name_end = max.x - height - style.ItemInnerSpacing.x;
+  const ImVec2 name_size = ImGui::CalcTextSize(row.name.c_str());
+  ImGui::PushStyleColor(ImGuiCol_Text, text);
+  ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), name_pos,
+                            ImVec2(name_end, name_pos.y + name_size.y),
+                            name_end, row.name.c_str(), nullptr, &name_size);
+  ImGui::PopStyleColor();
+  if (row.preview) {
+    pop_preview_label_style();
+  }
+
+  // The close button a square as tall as the row, at its right end.
+  const ImRect end(ImVec2(max.x - height, pos.y), max);
+  if (row.modified &&
+      (!row.closable || !ImGui::IsMouseHoveringRect(pos, max))) {
+    ImGui::RenderBullet(ImGui::GetWindowDrawList(), end.GetCenter(), text);
+  } else if (row.closable) {
+    close = square_close_button(ImGui::GetID("##close"), end);
+  }
+  return chosen;
+}
+
+/// A button at the left of the editors' tabs listing every open patch and
+/// Preferences, those the bar has no room for too.
+void render_open_patches_button(PatchEditorContext &context,
+                                ImGuiDockNode *node) {
+  static const ImGuiID popup_id = ImHashStr("##open_patches");
+  static bool open_at_press = false;
+  const auto button = folded_tab_button(node, "##open_patches",
+                                        ICON_MEGATOY_LIST, "Open Patches");
+  if (!button) {
+    return;
+  }
+  open_popup_from(*button, popup_id, open_at_press);
+
+  const ImVec2 below(button->min.x, button->max.y);
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  const float bottom = viewport->WorkPos.y + viewport->WorkSize.y;
+  ImGui::SetNextWindowPos(below);
+  ImGui::SetNextWindowSizeConstraints(
+      ImVec2(0.0f, 0.0f), ImVec2(FLT_MAX, ImMax(0.0f, bottom - below.y)));
+  // The rows reach within 2 px of the popup's edges.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(ui::scale::px(2.0f), ui::scale::px(2.0f)));
+  const bool open =
+      ImGui::BeginPopupEx(popup_id, ImGuiWindowFlags_AlwaysAutoResize |
+                                        ImGuiWindowFlags_NoTitleBar |
+                                        ImGuiWindowFlags_NoSavedSettings);
+  ImGui::PopStyleVar();
+  if (!open) {
+    return;
+  }
+  const auto tabs = tabs_in_order(context);
+  std::vector<ListedRow> rows;
+  float name_width = 0.0f;
+  for (const auto &tab : tabs) {
+    rows.push_back(listed_row(context, tab));
+    name_width =
+        ImMax(name_width, ImGui::CalcTextSize(rows.back().name.c_str()).x);
+  }
+  // Every row as wide as the widest name, as far as the screen's right
+  // edge allows.
+  const float room = viewport->WorkPos.x + viewport->WorkSize.x - below.x -
+                     ImGui::GetCurrentWindow()->WindowPadding.x * 2.0f;
+  const float width =
+      ImMin(listed_name_offset() + name_width +
+                ImGui::GetStyle().ItemInnerSpacing.x + ui::patch_row_height(),
+            room);
+  for (std::size_t i = 0; i < tabs.size(); ++i) {
+    const ListedTab &tab = tabs[i];
+    ImGui::PushID(tab.document ? static_cast<int>(*tab.document) : -1);
+    bool close = false;
+    const bool chosen = listed_row_selectable(rows[i], width, close);
+    ImGui::PopID();
+    if (tab.document) {
+      if (close) {
+        context.request_close(*tab.document);
+      } else if (chosen) {
+        context.activate(*tab.document);
+        context.reveal_document = *tab.document;
+      }
+    } else if (close) {
+      context.prefs.show_preferences = false;
+    } else if (chosen && tab.window != nullptr) {
+      bring_window_forward(tab.window);
+      ImGui::FocusWindow(tab.window);
+    }
+  }
+  ImGui::EndPopup();
 }
 
 } // namespace
@@ -754,6 +1079,23 @@ void render_patch_editors(PatchEditorContext &context,
   }
   for (const auto id : frame.to_close) {
     context.request_close(id);
+  }
+}
+
+void render_patch_editor_tab_buttons(PatchEditorContext &context) {
+  ImGuiDockNode *node =
+      ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID);
+  render_open_patches_button(context, node);
+
+  // A new patch from the right of the editors' tabs, as the folder icon adds
+  // a folder at the right of the browser's search row.
+  static bool new_patch_pressed = false;
+  const auto new_patch =
+      tab_bar_button(node, "##new_patch", ICON_MEGATOY_PLUS, "New Patch",
+                     ImGuiTabItemFlags_Trailing, unshown_tab_height());
+  if (folded_tab_button_clicked(new_patch, new_patch_pressed) &&
+      context.new_patch) {
+    context.new_patch();
   }
 }
 

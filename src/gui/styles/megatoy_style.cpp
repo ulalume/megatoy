@@ -68,6 +68,11 @@ void derive_widget_colors() {
   set(MegatoyCol::SectionHeader, imgui[ImGuiCol_FrameBg]);
   set(MegatoyCol::SectionHeaderHovered, imgui[ImGuiCol_HeaderHovered]);
   set(MegatoyCol::SectionHeaderActive, imgui[ImGuiCol_HeaderActive]);
+  set(MegatoyCol::TabBarLine, imgui[ImGuiCol_TabSelected]);
+  set(MegatoyCol::TabBarLineDimmed, imgui[ImGuiCol_TabDimmedSelected]);
+  set(MegatoyCol::TabButton, imgui[ImGuiCol_FrameBg]);
+  set(MegatoyCol::BrowserHeaderBg, imgui[ImGuiCol_TitleBg]);
+  set(MegatoyCol::AreaSplitter, imgui[ImGuiCol_Border]);
 }
 
 const ImVec4 &color(MegatoyCol col) {

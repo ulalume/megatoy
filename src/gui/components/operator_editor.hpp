@@ -5,18 +5,28 @@
 #include "gui/ui_scale.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/types.hpp"
+#include <cmath>
 #include <imgui.h>
 
 namespace ui {
 
-/// A vertical slider is as wide as a horizontal one is tall, and they stand as
-/// far apart as horizontal ones do.
-inline float vslider_width() { return ImGui::GetFrameHeight(); }
-inline float vslider_gap() { return ImGui::GetStyle().ItemSpacing.y; }
-/// As tall as the column beside the sliders: five rows of controls, the
-/// spacing between them and one extra break.
+/// The vertical sliders stand a pixel apart, and share out among them the
+/// room six of them a text height and 8 px wide, at the spacing between
+/// items, would take, on whole pixels.
+inline float vslider_gap() { return scale::px(1.0f); }
+inline float vslider_width() {
+  const float room = (ImGui::GetFontSize() + scale::px(8.0f)) * 6.0f +
+                     ImGui::GetStyle().ItemSpacing.y * 5.0f;
+  return std::floor((room - vslider_gap() * 5.0f) / 6.0f);
+}
+/// The room between the rows of the column beside the sliders.
+inline float side_row_gap() { return scale::px(1.0f); }
+/// As tall as the column beside the sliders: five rows of controls, three of
+/// them side_row_gap() under the one above, and the SSG-EG ones and the rest
+/// the spacing between items apart.
 inline float vslider_height() {
-  return (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y) * 5.0f;
+  return ImGui::GetFrameHeight() * 5.0f + side_row_gap() * 3.0f +
+         ImGui::GetStyle().ItemSpacing.y;
 }
 /// Room for a handle dragged through attenuation.
 inline float envelope_graph_height() { return ui::scale::px(128.0f); }

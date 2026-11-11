@@ -14,13 +14,13 @@
 #include "gui/components/common.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/components/preferences.hpp"
+#include "gui/fonts/megatoy_icons.hpp"
 #include "gui/image/app_icon.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
-#include <IconsFontAwesome7.h>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -283,26 +283,70 @@ bool begin_bar_menu(const char *label) {
   return open;
 }
 
-bool begin_app_menu() {
-  const ImTextureID icon = app_icon();
-  if (icon == ImTextureID{}) {
-    return begin_bar_menu("megatoy");
+/// The text logo beside the app's icon, a bar item's height.
+constexpr float kBarLogoHeight = 14.0f;
+
+const Picture &bar_logo() {
+  static const Picture logo = load_picture("images/text_logo_small.png");
+  return logo;
+}
+
+/// The app menu's icon, and the text logo beside it with `logo`.
+struct AppMenuLook {
+  float icon = 0.0f;
+  float gap = 0.0f;
+  ImVec2 logo;
+  float width() const { return icon + gap + logo.x; }
+};
+
+AppMenuLook app_menu_look(bool logo) {
+  AppMenuLook look;
+  look.icon = ImGui::GetTextLineHeight() + ui::scale::px(10.0f);
+  const Picture &picture = bar_logo();
+  if (logo && picture.texture != ImTextureID{} && picture.size.y > 0.0f) {
+    const float height = ui::scale::px(kBarLogoHeight);
+    look.logo = ImVec2(height * picture.size.x / picture.size.y, height);
+    look.gap = ImGui::GetStyle().ItemInnerSpacing.x;
   }
-  const float size = ImGui::GetTextLineHeight() + ui::scale::px(10.0f);
+  return look;
+}
+
+/// The app menu's label: spaces as wide as its icon and logo, which are
+/// drawn over them.
+std::string app_menu_label(bool logo) {
+  if (app_icon() == ImTextureID{}) {
+    return "megatoy";
+  }
   const float space = ImGui::CalcTextSize(" ").x;
-  const std::string label =
-      std::string(static_cast<std::size_t>(std::ceil(size / space)), ' ') +
-      "##megatoy";
+  return std::string(static_cast<std::size_t>(
+                         std::ceil(app_menu_look(logo).width() / space)),
+                     ' ') +
+         "##megatoy";
+}
+
+bool begin_app_menu(bool logo) {
+  const ImTextureID icon = app_icon();
+  const std::string label = app_menu_label(logo);
+  if (icon == ImTextureID{}) {
+    return begin_bar_menu(label.c_str());
+  }
+  const AppMenuLook look = app_menu_look(logo);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const ImVec2 start = ImGui::GetCursorScreenPos();
   const float label_width = ImGui::CalcTextSize(label.c_str(), nullptr, true).x;
   const bool open = begin_bar_menu(label.c_str());
   // A menu bar item's label starts half an item spacing in.
   const float x = start.x + ImGui::GetStyle().ItemSpacing.x * 0.5f +
-                  (label_width - size) * 0.5f;
-  const float y = start.y + (ImGui::GetFrameHeight() - size) * 0.5f;
-  draw_list->AddImage(icon, ImVec2(x, y),
-                      ImVec2(x + size, y + size));
+                  (label_width - look.width()) * 0.5f;
+  const float middle = start.y + ImGui::GetFrameHeight() * 0.5f;
+  draw_list->AddImage(icon, ImVec2(x, middle - look.icon * 0.5f),
+                      ImVec2(x + look.icon, middle + look.icon * 0.5f));
+  if (look.logo.x > 0.0f) {
+    const float logo_x = x + look.icon + look.gap;
+    draw_list->AddImage(
+        bar_logo().texture, ImVec2(logo_x, middle - look.logo.y * 0.5f),
+        ImVec2(logo_x + look.logo.x, middle + look.logo.y * 0.5f));
+  }
   return open;
 }
 
@@ -314,11 +358,15 @@ void panel_menu_item(const char *icon, const char *title, bool &shown) {
   }
 }
 
-/// How much of the bar fits: the load graph's width (0 leaves it out), and
-/// how much of the menus and the middle.
+/// How much of the bar fits: the load graph's width (0 leaves it out), how
+/// much of the menus and the middle, whether the LFO menu drops its name and
+/// keeps only On or Off, and whether the app menu has its text logo.
 struct BarFit {
   float graph_width = 0.0f;
   BarCentreFit centre = BarCentreFit::Full;
+  bool lfo_short = false;
+  /// Whether the text logo stands beside the app's icon.
+  bool logo = false;
 };
 
 /// A menu of the bar, named with its icon, or shown as the icon alone.
@@ -329,11 +377,12 @@ struct BarMenu {
     return fit == BarCentreFit::Icon ? icon : full;
   }
 };
-constexpr BarMenu kFileMenu{ICON_FA_FILE " File###File",
-                            ICON_FA_FILE "###File"};
-constexpr BarMenu kEditMenu{ICON_FA_PEN_TO_SQUARE " Edit###Edit",
-                            ICON_FA_PEN_TO_SQUARE "###Edit"};
-constexpr BarMenu kViewMenu{ICON_FA_EYE " View###View", ICON_FA_EYE "###View"};
+constexpr BarMenu kFileMenu{ICON_MEGATOY_FILE " File###File",
+                            ICON_MEGATOY_FILE "###File"};
+constexpr BarMenu kEditMenu{ICON_MEGATOY_PEN_TO_SQUARE " Edit###Edit",
+                            ICON_MEGATOY_PEN_TO_SQUARE "###Edit"};
+constexpr BarMenu kViewMenu{ICON_MEGATOY_EYE " View###View",
+                            ICON_MEGATOY_EYE "###View"};
 
 /// How far a menu in the bar takes the next one along.
 float bar_menu_advance(const char *label) {
@@ -342,19 +391,18 @@ float bar_menu_advance(const char *label) {
 }
 
 /**
- * The LFO menu's label, which says whether the LFO is on. Padded to the
- * width of the wider one, so the menu keeps its size as it switches. Its
- * icon alone is muted while it is off.
+ * The LFO menu's label, which says whether the LFO is on, short of its name
+ * where the bar is narrow. Padded to the width of the wider one, so the menu
+ * keeps its size as it switches.
  */
-std::string lfo_menu_label(BarCentreFit fit, bool on) {
-  if (fit == BarCentreFit::Icon) {
-    return ICON_FA_WAVE_SQUARE "###LFO";
-  }
-  constexpr const char *kOn = ICON_FA_WAVE_SQUARE " LFO On";
-  constexpr const char *kOff = ICON_FA_WAVE_SQUARE " LFO Off";
-  const float widest =
-      std::max(ImGui::CalcTextSize(kOn).x, ImGui::CalcTextSize(kOff).x);
-  std::string label = on ? kOn : kOff;
+std::string lfo_menu_label(bool short_label, bool on) {
+  const char *on_label = short_label ? ICON_MEGATOY_WAVE_SQUARE " On"
+                                     : ICON_MEGATOY_WAVE_SQUARE " LFO On";
+  const char *off_label = short_label ? ICON_MEGATOY_WAVE_SQUARE " Off"
+                                      : ICON_MEGATOY_WAVE_SQUARE " LFO Off";
+  const float widest = std::max(ImGui::CalcTextSize(on_label).x,
+                                ImGui::CalcTextSize(off_label).x);
+  std::string label = on ? on_label : off_label;
   const float space = ImGui::CalcTextSize(" ").x;
   for (float width = ImGui::CalcTextSize(label.c_str()).x;
        width + space * 0.5f < widest; width += space) {
@@ -364,38 +412,42 @@ std::string lfo_menu_label(BarCentreFit fit, bool on) {
 }
 
 /// How far the LFO menu reaches left of the middle, on or off.
-float lfo_menu_advance(BarCentreFit fit) {
-  return std::max(bar_menu_advance(lfo_menu_label(fit, true).c_str()),
-                  bar_menu_advance(lfo_menu_label(fit, false).c_str()));
+float lfo_menu_advance(bool short_label) {
+  return std::max(bar_menu_advance(lfo_menu_label(short_label, true).c_str()),
+                  bar_menu_advance(lfo_menu_label(short_label, false).c_str()));
 }
 
 /**
  * As the bar narrows, the load graph shrinks to the reading it holds and
- * then goes, then the middle loses its note, and then the menus and the
- * middle keep only their icons. Measured from after the app menu.
+ * then goes, then the middle loses its note, then the menus and the middle
+ * keep only their icons, and last the LFO menu keeps only On or Off.
+ * Measured from after the app menu.
  */
 BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const ImGuiStyle &style = ImGui::GetStyle();
   const float spacing = style.ItemSpacing.x;
   const float width = ImGui::GetWindowWidth();
+  // From the bar's start, the app menu first.
   const float menus_start = ImGui::GetCursorPosX();
-  const auto menus_end = [&](BarCentreFit fit) {
-    return menus_start + bar_menu_advance(kFileMenu.label(fit)) +
+  const auto menus_end = [&](BarCentreFit fit, bool logo = false) {
+    return menus_start + bar_menu_advance(app_menu_label(logo).c_str()) +
+           bar_menu_advance(kFileMenu.label(fit)) +
            bar_menu_advance(kEditMenu.label(fit)) +
            bar_menu_advance(kViewMenu.label(fit));
   };
   // The room the middle leaves before a load area `load_width` wide: it sits
   // centred in the bar, but never over the menus.
-  // The LFO menu stands just left of the load area.
-  const auto room = [&](BarCentreFit fit, float load_width) {
-    const float right_start = width - load_width - style.FramePadding.x * 2.0f -
-                              lfo_menu_advance(fit);
+  // The LFO menu stands just left of the load area, named in full.
+  const float lfo_width = lfo_menu_advance(false);
+  const auto room = [&](BarCentreFit fit, float load_width, bool logo = false) {
+    const float right_start =
+        width - load_width - style.FramePadding.x * 2.0f - lfo_width;
     if (!context.bar_centre_size) {
-      return right_start - menus_end(fit);
+      return right_start - menus_end(fit, logo);
     }
     const BarCentreSize size = context.bar_centre_size(fit);
-    const float x =
-        std::max(width * 0.5f - size.centred * 0.5f, menus_end(fit) + spacing);
+    const float x = std::max(width * 0.5f - size.centred * 0.5f,
+                             menus_end(fit, logo) + spacing);
     return right_start - spacing - (x + size.total);
   };
 
@@ -404,6 +456,11 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   const float reading_width = ImGui::CalcTextSize(reading).x;
   const float least = reading_width + style.FramePadding.x * 2.0f;
   const float full = std::max(least, ui::scale::px(kLoadGraphWidth));
+  // The logo is the first to go as the bar narrows: it stands only while
+  // all the rest fits in full.
+  if (room(BarCentreFit::Full, full, true) >= 0.0f) {
+    return {full, BarCentreFit::Full, false, true};
+  }
   const float graph_room = full + room(BarCentreFit::Full, full);
   if (graph_room >= full) {
     return {full, BarCentreFit::Full};
@@ -417,7 +474,10 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   if (room(BarCentreFit::Short, reading_width) >= 0.0f) {
     return {0.0f, BarCentreFit::Short};
   }
-  return {0.0f, BarCentreFit::Icon};
+  if (room(BarCentreFit::Icon, reading_width) >= 0.0f) {
+    return {0.0f, BarCentreFit::Icon};
+  }
+  return {0.0f, BarCentreFit::Icon, true};
 }
 
 void file_menu_items(MainMenuContext &context,
@@ -490,7 +550,7 @@ void file_menu_items(MainMenuContext &context,
     // In the browser a folder is copied in rather than referenced, so it
     // is labelled for what it does.
     const char *label = PreferenceManager::folder_add_is_import()
-                            ? "Import Folder into Workspace..."
+                            ? "Import Folder..."
                             : "Add Folder to Workspace...";
     if (ImGui::MenuItem(label)) {
       context.open_add_folder_dialog = true;
@@ -597,6 +657,12 @@ void view_menu_items(MainMenuContext &context) {
   ImGui::Separator();
 
   if (ImGui::MenuItem("Reset to Default Layout")) {
+    // The views the layout has a place for are shown again, as at first.
+    const UIPreferences defaults;
+    ui_prefs.show_patch_selector = defaults.show_patch_selector;
+    ui_prefs.show_patch_lab = defaults.show_patch_lab;
+    ui_prefs.show_midi_keyboard = defaults.show_midi_keyboard;
+    ui_prefs.show_waveform = defaults.show_waveform;
     context.gui.reset_layout();
   }
 }
@@ -614,7 +680,18 @@ void lfo_menu_items(ym2612::PlaybackSettings &playback) {
                                        "48.1 Hz", "72.2 Hz"};
   const float width =
       named_slider_fit_width("Frequency", "48.1 Hz") + ui::scale::px(48.0f);
+  const float left = ImGui::GetCursorScreenPos().x;
   ImGui::Checkbox("LFO Enabled", &playback.lfo_enable);
+  // The rest of its row, out to the slider's right end, switches it too.
+  const ImVec2 box_max = ImGui::GetItemRectMax();
+  const float rest = left + width - box_max.x;
+  if (rest > 0.0f) {
+    const float height = ImGui::GetItemRectSize().y;
+    ImGui::SameLine(0.0f, 0.0f);
+    if (ImGui::InvisibleButton("##lfo_enabled_rest", ImVec2(rest, height))) {
+      playback.lfo_enable = !playback.lfo_enable;
+    }
+  }
   ImGui::BeginDisabled(!playback.lfo_enable);
   int rate = std::clamp<int>(playback.lfo_frequency, 0, 7);
   ImGui::SetNextItemWidth(width);
@@ -634,9 +711,21 @@ void render_main_menu(MainMenuContext &context) {
   const ImVec2 padding = ImGui::GetStyle().FramePadding;
   const float item_spacing_y = ImGui::GetStyle().ItemSpacing.y;
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                      ImVec2(padding.x, padding.y + ui::scale::px(8.0f)));
+                      ImVec2(padding.x, padding.y + ui::scale::px(6.0f)));
   if (ImGui::BeginMainMenuBar()) {
-    if (begin_app_menu()) {
+    auto &session = context.patch_session;
+    const auto controls =
+        patches::save_controls(session, session.active_document());
+    const bool is_user_patch = controls.saves_in_place;
+    const bool save_disabled = !controls.save_enabled;
+    const LoadWindow load = load_window(context.audio_load.history(),
+                                        ui::scale::px(kLoadGraphWidth));
+    char reading[32];
+    format_load_reading(
+        reading, sizeof(reading), load,
+        audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
+    const BarFit fit = fit_bar(context, reading);
+    if (begin_app_menu(fit.logo)) {
       const bool mac_behavior = io.ConfigMacOSXBehaviors;
 
       if (ImGui::MenuItem("About megatoy")) {
@@ -653,18 +742,6 @@ void render_main_menu(MainMenuContext &context) {
       }
       ui::end_menu();
     }
-    auto &session = context.patch_session;
-    const auto controls =
-        patches::save_controls(session, session.active_document());
-    const bool is_user_patch = controls.saves_in_place;
-    const bool save_disabled = !controls.save_enabled;
-    const LoadWindow load = load_window(context.audio_load.history(),
-                                        ui::scale::px(kLoadGraphWidth));
-    char reading[32];
-    format_load_reading(
-        reading, sizeof(reading), load,
-        audio::load_reading_from_int(context.ui_prefs.audio_load_reading));
-    const BarFit fit = fit_bar(context, reading);
     if (begin_bar_menu(kFileMenu.label(fit.centre))) {
       file_menu_items(context, controls);
       ui::end_menu();
@@ -719,9 +796,9 @@ void render_main_menu(MainMenuContext &context) {
     // back.
     auto &playback = context.patch_session.playback();
     const std::string lfo_label =
-        lfo_menu_label(fit.centre, playback.lfo_enable);
+        lfo_menu_label(fit.lfo_short, playback.lfo_enable);
     const float lfo_x =
-        std::max(menus_end, load_start - lfo_menu_advance(fit.centre));
+        std::max(menus_end, load_start - lfo_menu_advance(fit.lfo_short));
     ImGui::SetCursorPos(ImVec2(lfo_x, row_y));
     const bool lfo_muted = !playback.lfo_enable;
     const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);

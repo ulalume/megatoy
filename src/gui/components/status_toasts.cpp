@@ -4,7 +4,7 @@
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 
-#include <IconsFontAwesome7.h>
+#include "gui/fonts/megatoy_icons.hpp"
 #include <chrono>
 #include <functional>
 #include <imgui.h>
@@ -24,15 +24,15 @@ constexpr std::chrono::seconds kAutoDismiss{4};
 const char *severity_icon(Severity severity) {
   switch (severity) {
   case Severity::Success:
-    return ICON_FA_CIRCLE_CHECK;
+    return ICON_MEGATOY_CIRCLE_CHECK;
   case Severity::Warning:
-    return ICON_FA_TRIANGLE_EXCLAMATION;
+    return ICON_MEGATOY_TRIANGLE_EXCLAMATION;
   case Severity::Error:
-    return ICON_FA_CIRCLE_XMARK;
+    return ICON_MEGATOY_CIRCLE_XMARK;
   case Severity::Info:
     break;
   }
-  return ICON_FA_CIRCLE_INFO;
+  return ICON_MEGATOY_CIRCLE_INFO;
 }
 
 ImVec4 severity_color(Severity severity) {
@@ -118,7 +118,7 @@ void render_status_toasts() {
                               ImGuiChildFlags_AlwaysUseWindowPadding)) {
       // A close mark in the corner, saying what a click on the toast does.
       const ImGuiStyle &style = ImGui::GetStyle();
-      const float close_width = ImGui::CalcTextSize(ICON_FA_XMARK).x;
+      const float close_width = ImGui::CalcTextSize(ICON_MEGATOY_XMARK).x;
       const ImVec2 close_pos(ImGui::GetWindowPos().x + toast_width -
                                  style.WindowPadding.x - close_width,
                              ImGui::GetWindowPos().y + style.WindowPadding.y);
@@ -128,7 +128,7 @@ void render_status_toasts() {
           close_pos,
           hovered ? ImGui::GetColorU32(ImGuiCol_Text)
                   : styles::color_u32(styles::MegatoyCol::TextMuted),
-          ICON_FA_XMARK);
+          ICON_MEGATOY_XMARK);
 
       ImGui::TextColored(accent, "%s", severity_icon(entry.severity));
       ImGui::SameLine();

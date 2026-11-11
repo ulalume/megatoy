@@ -2,21 +2,25 @@
 #include "fonts/icon_font.hpp"
 #include "gui/app_window.hpp"
 #include "gui/areas.hpp"
-#include "gui/components/preview/ssg_preview.hpp"
 #include "gui/imgui_ini_bridge.hpp"
 #include "gui/input/touch.hpp"
 #include "gui/layouts.hpp"
 #if defined(__APPLE__)
 #include "gui/mac_window_menu.hpp"
 #endif
+#include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
+#include "gui/tab_bar_lines.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
+#include "patches/instrument_icons.hpp"
 #include "platform/platform_config.hpp"
+#include <algorithm>
 #include <filesystem>
 #include <imgui.h>
 #if defined(MEGATOY_PLATFORM_WEB)
 #define IMGUI_IMPL_OPENGL_ES3 1
+#include <emscripten.h>
 #include <emscripten/html5.h>
 #endif
 #include <imgui_impl_opengl3.h>
@@ -213,9 +217,6 @@ void GuiManager::shutdown() {
     return;
   }
 
-  // Reset preview textures
-  ui::reset_ssg_preview_textures();
-
   // Cleanup
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
@@ -242,7 +243,58 @@ bool GuiManager::get_should_close() const { return !window_ || should_close_; }
 
 void GuiManager::set_should_close(bool value) { should_close_ = value; }
 
-void GuiManager::begin_frame() {
+namespace {
+
+#if defined(MEGATOY_PLATFORM_WEB)
+// clang-format off
+EM_JS(int, browser_on_apple_system, (), {
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  return /Mac|iPhone|iPad|iOS/i.test(platform) ? 1 : 0;
+});
+// clang-format on
+#endif
+
+/// Whether the system tells no key's release while Command is held.
+bool command_hides_key_releases() {
+#if defined(__APPLE__)
+  return true;
+#elif defined(MEGATOY_PLATFORM_WEB)
+  static const bool apple = browser_on_apple_system() != 0;
+  return apple;
+#else
+  return false;
+#endif
+}
+
+/// How wide the widest instrument icon is drawn at the text's size, worked
+/// out again when that size changes.
+float widest_instrument_icon() {
+  static float font_size = 0.0f;
+  static float widest = 0.0f;
+  if (ImGui::GetFontSize() != font_size) {
+    font_size = ImGui::GetFontSize();
+    widest = ImGui::CalcTextSize(patches::instrument_icons::none_glyph()).x;
+    for (const auto &group : patches::instrument_icons::groups()) {
+      for (const auto &icon : group.icons) {
+        widest = std::max(widest, ImGui::CalcTextSize(icon.glyph).x);
+      }
+    }
+  }
+  return widest;
+}
+
+/// A tab's width showing its icon, the first letter of its name and the
+/// ellipsis after: ImGui keeps a letter that fits with a pixel to spare.
+float shrunk_tab_width() {
+  const ImFont *font = ImGui::GetFont();
+  return ui::window_tab_padding().x * 2.0f + widest_instrument_icon() +
+         ImGui::CalcTextSize(" M").x +
+         ImGui::GetFontBaked()->GetCharAdvance(font->EllipsisChar) + 1.0f;
+}
+
+} // namespace
+
+void GuiManager::begin_frame(bool waveform_shown) {
   if (!initialized_) {
     return;
   }
@@ -258,15 +310,24 @@ void GuiManager::begin_frame() {
   ImGui::GetStyle().TabCloseButtonMinWidthUnselected =
       ImGui::GetIO().MouseSource == ImGuiMouseSource_TouchScreen ? FLT_MAX
                                                                  : 0.0f;
+  // Tabs too many for their bar narrow down to their icon and a letter of
+  // their name before the bar scrolls.
+  ImGui::GetStyle().TabMinWidthShrink = shrunk_tab_width();
   ui::touch::drag_to_scroll();
   ui::layouts::fit_footer_to_width();
+  ui::layouts::fit_footer_to_waveform(waveform_shown);
   ui::layouts::fit_sidebar_to_width();
+  ui::areas::close_empty_main_group();
 
   ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGuiID dockspace_id = viewport->ID;
 
   ui::push_window_tab_padding();
-  ImGui::DockSpaceOverViewport(dockspace_id, viewport);
+  // ImGui draws the room between the areas at rest in the border colour.
+  ImGui::PushStyleColor(
+      ImGuiCol_Border, ui::styles::color(ui::styles::MegatoyCol::AreaSplitter));
+  ui::dock_space_over_viewport(dockspace_id, viewport);
+  ImGui::PopStyleColor();
   ImGui::PopStyleVar();
 
   // An arrangement saved before the areas were fixed may have views where
@@ -314,6 +375,8 @@ void GuiManager::end_frame() {
     ui::save_web_layout_ini();
   }
 
+  ui::finish_tab_bars();
+
   // Rendering
   ImGui::Render();
   int display_w = 0;
@@ -338,6 +401,24 @@ void GuiManager::process_event(const SDL_Event &event) {
   ImGui_ImplSDL3_ProcessEvent(&event);
 
   switch (event.type) {
+  case SDL_EVENT_KEY_UP:
+    // Apple's systems, and the browsers there, tell no key's release while
+    // Command is held, so a key let go before it would stay held: each is
+    // let go with Command. Also one whose press is still queued; ImGui drops
+    // the release of a key already up.
+    if (command_hides_key_releases() &&
+        (event.key.scancode == SDL_SCANCODE_LGUI ||
+         event.key.scancode == SDL_SCANCODE_RGUI)) {
+      ImGuiIO &io = ImGui::GetIO();
+      for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_GamepadStart;
+           ++key) {
+        const auto named = static_cast<ImGuiKey>(key);
+        if (named < ImGuiKey_LeftCtrl || named > ImGuiKey_RightSuper) {
+          io.AddKeyEvent(named, false);
+        }
+      }
+    }
+    break;
   case SDL_EVENT_QUIT:
     should_close_ = true;
     break;
@@ -464,9 +545,6 @@ bool GuiManager::supports_quit() const {
 void GuiManager::set_theme(ui::styles::ThemeId theme) {
   theme_ = theme;
   ui::styles::apply_style(theme_, ui_scale_);
-  if (ImGui::GetCurrentContext() != nullptr) {
-    ui::reset_ssg_preview_textures();
-  }
 }
 
 float GuiManager::display_scale() const {

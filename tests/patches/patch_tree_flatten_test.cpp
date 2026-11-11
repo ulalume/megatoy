@@ -9,7 +9,9 @@
 
 namespace {
 
+using patches::at_least;
 using patches::flatten_visible_rows;
+using patches::matching_patch_rows;
 using patches::TreeRow;
 
 patches::PatchEntry make_file(const std::string &name,
@@ -42,7 +44,8 @@ patches::PatchEntry make_directory(const std::string &name,
 }
 
 /**
- * banks/            lead.dmp (5 stars), fx/ zap.opm (2 stars, "percussion")
+ * banks/            lead.dmp (5 stars, "sawtooth"), fx/ zap.opm (2 stars,
+ *                   "percussion")
  * empty/            no patch files, though not empty on disk
  * fresh/            nothing on disk at all
  * solo.dmp          0 stars
@@ -53,7 +56,8 @@ std::vector<patches::PatchEntry> make_tree() {
       make_file("zap.opm", "banks/fx/zap.opm", 2, "percussion"));
 
   std::vector<patches::PatchEntry> bank_children;
-  bank_children.push_back(make_file("lead.dmp", "banks/lead.dmp", 5, "lead"));
+  bank_children.push_back(
+      make_file("lead.dmp", "banks/lead.dmp", 5, "sawtooth"));
   bank_children.push_back(
       make_directory("fx", "banks/fx", std::move(fx_children)));
 
@@ -76,7 +80,7 @@ std::vector<std::string> paths_of(const std::vector<TreeRow> &rows) {
 
 void test_closed_tree_lists_visible_top_level_only() {
   const auto tree = make_tree();
-  const auto rows = flatten_visible_rows(tree, "", 0, {});
+  const auto rows = flatten_visible_rows(tree, {});
 
   // `empty` holds no file at any depth, and a directory may stand on its own
   // name only while a query is active -- so it is dropped here. `fresh` holds
@@ -93,29 +97,10 @@ void test_closed_tree_lists_visible_top_level_only() {
   CHECK(rows[2].depth == 0);
 }
 
-void test_a_filter_opens_the_directories_down_to_each_match() {
-  const auto tree = make_tree();
-
-  // Nothing is open, yet the match two levels down is shown, with the
-  // directories above it open.
-  const auto by_query = flatten_visible_rows(tree, "zap", 0, {});
-  CHECK(paths_of(by_query) ==
-        std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
-  CHECK(by_query[0].is_open);
-  CHECK(by_query[1].is_open);
-  CHECK(by_query[2].depth == 2);
-
-  // The star filter reaches through the same way.
-  const auto by_stars = flatten_visible_rows(tree, "", 5, {});
-  CHECK(paths_of(by_stars) ==
-        std::vector<std::string>({"banks", "banks/lead.dmp"}));
-  CHECK(by_stars[0].is_open);
-}
-
 void test_open_directory_exposes_direct_children() {
   const auto tree = make_tree();
   const std::unordered_set<std::string> open{"banks"};
-  const auto rows = flatten_visible_rows(tree, "", 0, open);
+  const auto rows = flatten_visible_rows(tree, open);
 
   CHECK(paths_of(rows) ==
         std::vector<std::string>(
@@ -128,7 +113,7 @@ void test_open_directory_exposes_direct_children() {
   CHECK(rows[3].depth == 0);
 
   const std::unordered_set<std::string> open_nested{"banks", "banks/fx"};
-  const auto nested = flatten_visible_rows(tree, "", 0, open_nested);
+  const auto nested = flatten_visible_rows(tree, open_nested);
   CHECK(paths_of(nested) ==
         std::vector<std::string>({"banks", "banks/lead.dmp", "banks/fx",
                                   "banks/fx/zap.opm", "fresh", "solo.dmp"}));
@@ -136,81 +121,14 @@ void test_open_directory_exposes_direct_children() {
   CHECK(!nested[3].is_directory);
 }
 
-void test_star_filter_prunes_emptied_directories() {
-  const auto tree = make_tree();
-  const std::unordered_set<std::string> open{"banks", "banks/fx"};
-  const auto rows = flatten_visible_rows(tree, "", 3, open);
-
-  // fx is open but its only patch is below the threshold, so both the
-  // directory row and its children go away.
-  CHECK(paths_of(rows) ==
-        std::vector<std::string>({"banks", "banks/lead.dmp"}));
-}
-
-void test_query_keeps_the_ancestors_of_a_match() {
-  const auto tree = make_tree();
-  // What is open makes no difference while searching.
-  const std::unordered_set<std::string> open{"banks"};
-  const auto rows = flatten_visible_rows(tree, "zap", 0, open);
-  CHECK(paths_of(rows) ==
-        std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
-
-  const std::unordered_set<std::string> open_nested{"banks", "banks/fx"};
-  const auto nested = flatten_visible_rows(tree, "zap", 0, open_nested);
-  CHECK(paths_of(nested) ==
-        std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
-
-  // Icons are searched alongside names.
-  const auto by_icon = flatten_visible_rows(tree, "percussion", 0, open_nested);
-  CHECK(paths_of(by_icon) ==
-        std::vector<std::string>({"banks", "banks/fx", "banks/fx/zap.opm"}));
-}
-
-void test_directory_name_match_needs_no_visible_files() {
-  const auto tree = make_tree();
-  const auto rows = flatten_visible_rows(tree, "empty", 0, {});
-  CHECK(paths_of(rows) == std::vector<std::string>({"empty"}));
-  CHECK(rows[0].is_directory);
-  CHECK(!rows[0].is_open);
-
-  // Having opened it before changes nothing: with nothing below it to show,
-  // it stays closed while the filter is on.
-  const auto opened = flatten_visible_rows(tree, "empty", 0, {"empty"});
-  CHECK(paths_of(opened) == std::vector<std::string>({"empty"}));
-  CHECK(!opened[0].is_open);
-
-  // ...but a match on a nested directory does not pull in its parent: the
-  // parent is listed only for files below it or a match of its own.
-  const std::unordered_set<std::string> open{"banks"};
-  const auto nested = flatten_visible_rows(tree, "fx", 0, open);
-  CHECK(nested.empty());
-
-  // Opening the matching directory changes nothing: a name-only match never
-  // counts as a visible descendant for the ancestors above it.
-  const auto nested_open =
-      flatten_visible_rows(tree, "fx", 0, {"banks", "banks/fx"});
-  CHECK(nested_open.empty());
-}
-
-void test_a_directory_holding_nothing_is_listed_only_without_filters() {
+void test_a_directory_holding_nothing_is_listed() {
   const auto tree = make_tree();
 
   // Opening it reports the open state and yields no children.
-  const auto opened = flatten_visible_rows(tree, "", 0, {"fresh"});
+  const auto opened = flatten_visible_rows(tree, {"fresh"});
   CHECK(paths_of(opened) ==
         std::vector<std::string>({"banks", "fresh", "solo.dmp"}));
   CHECK(opened[1].is_open);
-
-  // A query it does not match hides it, and so does any star filter.
-  CHECK(paths_of(flatten_visible_rows(tree, "solo", 0, {})) ==
-        std::vector<std::string>({"solo.dmp"}));
-  CHECK(paths_of(flatten_visible_rows(tree, "", 1, {})) ==
-        std::vector<std::string>(
-            {"banks", "banks/lead.dmp", "banks/fx", "banks/fx/zap.opm"}));
-
-  // A query it matches lists it by name, like any other directory.
-  CHECK(paths_of(flatten_visible_rows(tree, "fresh", 0, {})) ==
-        std::vector<std::string>({"fresh"}));
 }
 
 void test_a_directory_holding_only_an_empty_one_is_listed() {
@@ -220,24 +138,42 @@ void test_a_directory_holding_only_an_empty_one_is_listed() {
   std::vector<patches::PatchEntry> tree;
   tree.push_back(make_directory("A", "A", std::move(a_children)));
 
-  CHECK(paths_of(flatten_visible_rows(tree, "", 0, {})) ==
+  CHECK(paths_of(flatten_visible_rows(tree, {})) ==
         std::vector<std::string>({"A"}));
-  const auto opened = flatten_visible_rows(tree, "", 0, {"A"});
+  const auto opened = flatten_visible_rows(tree, {"A"});
   CHECK(paths_of(opened) == std::vector<std::string>({"A", "A/B"}));
   CHECK(opened[1].is_directory);
   CHECK(opened[1].depth == 1);
 
-  CHECK(flatten_visible_rows(tree, "zap", 0, {"A"}).empty());
-  CHECK(flatten_visible_rows(tree, "", 1, {"A"}).empty());
 }
 
 void test_empty_tree_is_handled() {
   const std::vector<patches::PatchEntry> tree;
-  CHECK(flatten_visible_rows(tree, "", 0, {}).empty());
-  CHECK(flatten_visible_rows(tree, "lead", 5, {"banks"}).empty());
+  CHECK(flatten_visible_rows(tree, {}).empty());
 }
 
 } // namespace
+
+void test_matching_patches_stand_in_one_list() {
+  const auto tree = make_tree();
+
+  // No directory rows, every patch at one depth.
+  const auto by_query = matching_patch_rows(tree, "zap", {});
+  CHECK(paths_of(by_query) == std::vector<std::string>({"banks/fx/zap.opm"}));
+  CHECK(!by_query[0].is_directory);
+  CHECK(by_query[0].depth == 1);
+
+  // A folder's name lists what it holds.
+  CHECK(paths_of(matching_patch_rows(tree, "banks", {})) ==
+        std::vector<std::string>({"banks/lead.dmp", "banks/fx/zap.opm"}));
+
+  // The star filter alone lists every patch rated that high.
+  CHECK(paths_of(matching_patch_rows(tree, "", at_least(2))) ==
+        std::vector<std::string>({"banks/lead.dmp", "banks/fx/zap.opm"}));
+  CHECK(paths_of(matching_patch_rows(tree, "banks", at_least(5))) ==
+        std::vector<std::string>({"banks/lead.dmp"}));
+  CHECK(matching_patch_rows(tree, "nothing", {}).empty());
+}
 
 void test_directories_above_an_entry() {
   patches::PatchEntry inner;
@@ -273,18 +209,59 @@ void test_search_key_ignores_surrounding_spaces() {
   CHECK(search_key("").empty());
 }
 
+void test_star_words_ask_for_ratings() {
+  using patches::at_least;
+  using patches::parse_search;
+  using patches::StarFilter;
+  const auto rated = parse_search("Bass *4+ Lead");
+  CHECK(rated.stars == at_least(4));
+  CHECK(rated.text_lower == "bass lead");
+  CHECK(parse_search("*1").stars == StarFilter{1u << 1});
+  CHECK(parse_search("*1").text_lower.empty());
+  CHECK(parse_search("*2 *4 x").stars == StarFilter{(1u << 2) | (1u << 4)});
+  CHECK(parse_search("*2 *4 x").text_lower == "x");
+  CHECK(parse_search("*1 *3+").stars ==
+        StarFilter{at_least(3).ratings | (1u << 1)});
+  // Not rating words.
+  CHECK(!parse_search("*6").stars.active());
+  CHECK(parse_search("*45").text_lower == "*45");
+  CHECK(!parse_search("a*4").stars.active());
+  CHECK(!parse_search("*4++").stars.active());
+  CHECK(parse_search("*").text_lower == "*");
+}
+
+void test_least_stars_round_trips() {
+  using patches::at_least;
+  using patches::least_stars;
+  CHECK(!at_least(0).active());
+  CHECK(least_stars(at_least(3)) == 3);
+  CHECK(least_stars(at_least(1)) == 1);
+  CHECK(least_stars({}) == 0);
+  CHECK(least_stars(patches::StarFilter{1u << 3}) == 0);
+  CHECK(least_stars(patches::StarFilter{1u << 5}) == 5);
+}
+
+void test_least_stars_replace_the_rating_words() {
+  using patches::with_least_stars;
+  CHECK(with_least_stars("", 3) == "*3+ ");
+  CHECK(with_least_stars("bass", 3) == "*3+ bass");
+  CHECK(with_least_stars("bass *3 lead", 5) == "bass *5+ lead");
+  CHECK(with_least_stars("*1 bass *2+", 4) == "*4+ bass ");
+  CHECK(with_least_stars("bass *2+ lead", 0) == "bass lead");
+}
+
 int main() {
   test_closed_tree_lists_visible_top_level_only();
-  test_a_filter_opens_the_directories_down_to_each_match();
   test_open_directory_exposes_direct_children();
-  test_star_filter_prunes_emptied_directories();
-  test_query_keeps_the_ancestors_of_a_match();
-  test_directory_name_match_needs_no_visible_files();
-  test_a_directory_holding_nothing_is_listed_only_without_filters();
+  test_a_directory_holding_nothing_is_listed();
   test_a_directory_holding_only_an_empty_one_is_listed();
   test_empty_tree_is_handled();
+  test_matching_patches_stand_in_one_list();
   test_directories_above_an_entry();
   test_search_key_ignores_surrounding_spaces();
+  test_star_words_ask_for_ratings();
+  test_least_stars_round_trips();
+  test_least_stars_replace_the_rating_words();
 
   std::cout << "All patch tree flatten tests passed\n";
   return 0;

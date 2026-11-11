@@ -9,6 +9,10 @@
 
 namespace ui {
 
+/// The radius of an envelope's drag handles, on the operator graphs and the
+/// Quick Edit sketch alike, before the interface's scale.
+inline constexpr float kEnvelopeHandleRadius = 8.5f;
+
 /**
  * The notes the chip is sounding, as the envelope graph draws them: newest
  * first, timed against the audio thread's own clock.

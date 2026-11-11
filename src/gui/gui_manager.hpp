@@ -53,8 +53,9 @@ public:
    */
   void set_should_close(bool value);
 
-  /// Begin a new frame and apply any requested layout reset.
-  void begin_frame();
+  /// Begin a new frame and apply any requested layout reset; the footer is
+  /// fitted to `waveform_shown`, the waveform's preference.
+  void begin_frame(bool waveform_shown);
 
   /**
    * End frame and render

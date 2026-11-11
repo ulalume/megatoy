@@ -112,7 +112,8 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
                   unsigned int main_dock_id) {
   // The groups have no close-all button: each tab closes on its own, and
   // hiding a view is the View menu's. Nor a tab list: the tabs are few, and
-  // the patch browser's button takes the place at the left when it folds.
+  // the folded patch browser's and waveform's buttons take the place at the
+  // left.
   ImGuiWindowClass window_class;
   window_class.DockNodeFlagsOverrideSet =
       static_cast<ImGuiDockNodeFlags>(node_flags) |
@@ -129,18 +130,27 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
 
   // A tab being dragged is left alone until it is let go.
   const ImGuiWindow *window = ImGui::FindWindowByName(window_name);
-  if (window == nullptr || !window->WasActive ||
-      GImGui->MovingWindow == window) {
+  if (window == nullptr || GImGui->MovingWindow == window) {
     return;
   }
   const ImGuiDockNode *region = main_region();
   if (region == nullptr) {
     return;
   }
-  const bool floating = window->DockNode == nullptr && window->DockId == 0;
-  const bool outside =
-      window->DockNode != nullptr && !is_within(window->DockNode, region);
-  if (!floating && !outside) {
+  bool misplaced = false;
+  if (window->WasActive) {
+    const bool floating = window->DockNode == nullptr && window->DockId == 0;
+    const bool outside =
+        window->DockNode != nullptr && !is_within(window->DockNode, region);
+    misplaced = floating || outside;
+  } else {
+    // Shown again: the group it was last in may have closed since, which
+    // ImGui would open again on its own where the group stood.
+    const ImGuiDockNode *last = find_node(window->DockId);
+    misplaced =
+        last == nullptr || last->IsSplitNode() || !is_within(last, region);
+  }
+  if (!misplaced) {
     return;
   }
   const ImGuiDockNode *target = find_node(main_dock_id);
@@ -148,6 +158,42 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
     target = central_node();
   }
   ImGui::SetNextWindowDockID(target->ID, ImGuiCond_Always);
+}
+
+void close_empty_main_group() {
+  // Left alone while a tab is dragged: it may be dropped back.
+  ImGuiDockNode *central = central_node();
+  if (central == nullptr || !central->IsLeafNode() ||
+      central->Windows.Size > 0 || GImGui->MovingWindow != nullptr) {
+    return;
+  }
+  ImGuiDockNode *parent = central->ParentNode;
+  if (parent == nullptr) {
+    return;
+  }
+  const ImGuiDockNode *region = main_region();
+  if (region == nullptr || !is_within(parent, region)) {
+    return;
+  }
+  // ImGui keeps the central group even when empty, and closes any other
+  // group its last view leaves. A group beside it, one holding views, takes
+  // its place as the central one, and it closes as the others do: the group
+  // beside it grows over its room.
+  ImGuiDockNode *beside = parent->ChildNodes[0] == central
+                              ? parent->ChildNodes[1]
+                              : parent->ChildNodes[0];
+  while (beside != nullptr && beside->IsSplitNode()) {
+    beside = beside->ChildNodes[0]->IsLeafNode() &&
+                     beside->ChildNodes[0]->Windows.Size == 0
+                 ? beside->ChildNodes[1]
+                 : beside->ChildNodes[0];
+  }
+  if (beside == nullptr || beside->Windows.Size == 0) {
+    return;
+  }
+  central->SetLocalFlags(central->LocalFlags & ~ImGuiDockNodeFlags_CentralNode);
+  beside->SetLocalFlags(beside->LocalFlags | ImGuiDockNodeFlags_CentralNode);
+  ImGui::DockBuilderRemoveNode(central->ID);
 }
 
 void refuse_outer_docking(unsigned int dockspace_id) {

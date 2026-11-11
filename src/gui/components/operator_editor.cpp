@@ -119,33 +119,37 @@ void draw_operator_fill(const OperatorEditState &state, int slot,
   if ((fill & IM_COL32_A_MASK) == 0) {
     return;
   }
-  ImGui::GetWindowDrawList()->AddRectFilled(frame_min, frame_max, fill);
+  ImGui::GetWindowDrawList()->AddRectFilled(frame_min, frame_max, fill,
+                                            ImGui::GetStyle().TabRounding);
 }
 
 /**
- * The frame, cut open at the corner the header sits across: the top border
- * runs from past the label, and the left border starts below the checkbox.
+ * The frame, rounded as the tabs are, its top border broken where the header
+ * sits across it, from `gap_from_x` to `gap_to_x`, as a section's line is by
+ * its title.
  *
  * The half-pixel inset is what AddRect does internally; without it the line
  * falls between two pixels and blurs.
  */
-void draw_operator_frame(const ImVec2 &min, const ImVec2 &max,
-                         float top_resume_x, float left_resume_y, ImU32 color) {
+void draw_operator_frame(const ImVec2 &min, const ImVec2 &max, float gap_from_x,
+                         float gap_to_x, ImU32 color) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float left = min.x + 0.5f;
   const float top = min.y + 0.5f;
   const float right = max.x - 0.5f;
   const float bottom = max.y - 0.5f;
+  const float r = std::min(ImGui::GetStyle().TabRounding,
+                           std::min(right - left, bottom - top) * 0.5f);
 
-  if (top_resume_x < right) {
-    draw_list->AddLine(ImVec2(top_resume_x, top), ImVec2(right, top), color);
-  }
-  if (left_resume_y < bottom) {
-    draw_list->AddLine(ImVec2(left, left_resume_y), ImVec2(left, bottom),
-                       color);
-  }
-  draw_list->AddLine(ImVec2(right, top), ImVec2(right, bottom), color);
-  draw_list->AddLine(ImVec2(left, bottom), ImVec2(right, bottom), color);
+  // From the header's right end round the frame to its left end.
+  draw_list->PathLineTo(ImVec2(std::clamp(gap_to_x, left + r, right - r), top));
+  draw_list->PathArcToFast(ImVec2(right - r, top + r), r, 9, 12);
+  draw_list->PathArcToFast(ImVec2(right - r, bottom - r), r, 0, 3);
+  draw_list->PathArcToFast(ImVec2(left + r, bottom - r), r, 3, 6);
+  draw_list->PathArcToFast(ImVec2(left + r, top + r), r, 6, 9);
+  draw_list->PathLineTo(
+      ImVec2(std::clamp(gap_from_x, left + r, right - r), top));
+  draw_list->PathStroke(color, ImDrawFlags_None, 1.0f);
 }
 
 struct FieldLabels {
@@ -839,23 +843,29 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   } else {
     ImGui::Spacing();
   }
+  // The rows side_row_gap() apart, the SSG-EG ones and the rest the spacing
+  // between items, as vslider_height() counts them.
+  const float group_gap = style.ItemSpacing.y;
+  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, side_row_gap());
 
   // SSG Type Envelope Control (0-7)
-  const int ssg_type = op.ssg_type_envelope_control;
-  if (const auto *preview = op.ssg_enable ? get_ssg_preview_texture(ssg_type)
-                                          : get_ssg_preview_off_texture()) {
-    if (preview->valid()) {
-      preview_image(*preview, ImGui::GetFrameHeight());
-    }
-  }
+  // The diagram, as tall as a frame, takes what the checkbox leaves of the
+  // row, down to twice its height; the checkbox is named while the name
+  // fits as well, and the slider below names it anyway.
+  const float ssg_height = ImGui::GetFrameHeight();
+  const float row_room = block_left + content_width - frame_padding() -
+                         ImGui::GetCursorPosX() - style.ItemSpacing.x -
+                         ImGui::GetFrameHeight();
+  const float ssg_name_width =
+      style.ItemInnerSpacing.x + ImGui::CalcTextSize("SSG-EG").x;
+  const float ssg_least_width = ssg_height * 2.0f;
+  const bool ssg_named = row_room - ssg_name_width >= ssg_least_width;
+  ssg_diagram(op.ssg_enable, op.ssg_type_envelope_control,
+              ImVec2(std::max(ssg_named ? row_room - ssg_name_width : row_room,
+                              ssg_least_width),
+                     ssg_height));
   ImGui::SameLine();
 
-  // Named while the name fits before the panel's edge; the slider below
-  // names it anyway.
-  const bool ssg_named = ImGui::GetCursorPosX() + ImGui::GetFrameHeight() +
-                             style.ItemInnerSpacing.x +
-                             ImGui::CalcTextSize("SSG-EG").x <=
-                         block_left + content_width - frame_padding();
   operator_checkbox(widget, ssg_named ? "SSG-EG" : "##SSG-EG", "SSG-EG",
                     &ym2612::OperatorSettings::ssg_enable);
   if (!ssg_named && ImGui::IsItemHovered()) {
@@ -872,14 +882,15 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     ImGui::EndDisabled();
   }
 
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, group_gap - side_row_gap() * 2.0f));
 
   operator_slider(widget, ym2612::OperatorField::KeyScale, "Key Scale", nullptr,
                   nullptr, nullptr);
 
-  static const char *multiple_labels[] = {"0.5", "1",  "2",  "3", "4",  "5",
-                                          "6",   "7",  "8",  "9", "10", "11",
-                                          "12",  "13", "14", "15"};
+  static const char *multiple_labels[] = {
+      "\u00d7\u00bd", "\u00d71",  "\u00d72",  "\u00d73", "\u00d74",  "\u00d75",
+      "\u00d76",      "\u00d77",  "\u00d78",  "\u00d79", "\u00d710", "\u00d711",
+      "\u00d712",     "\u00d713", "\u00d714", "\u00d715"};
   operator_slider(widget, ym2612::OperatorField::Multiple, "Multiple", nullptr,
                   multiple_labels[op.multiple], nullptr);
 
@@ -889,6 +900,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                       op, ym2612::OperatorField::Detune)],
                   nullptr);
 
+  ImGui::PopStyleVar();
   if (beside_rates) {
     ImGui::PopItemWidth();
     ImGui::EndGroup();
@@ -915,15 +927,17 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // and the right border falls outside.
   const float frame_width = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
 
-  // The header straddles the top border, aligned with the sliders in the
-  // sections above rather than indented into the frame.
+  // The header straddles the top border, set in from its left end as the
+  // sections' titles above are.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
   draw_operator_fill(state, slot, block_min, frame_min, frame_width);
-  const OperatorHeader header = render_operator_header(widget, block_min);
-  const float top_resume_x =
+  const float header_x = block_min.x + ImGui::GetStyle().SeparatorTextPadding.x;
+  const OperatorHeader header =
+      render_operator_header(widget, ImVec2(header_x, block_min.y));
+  const float gap_from_x = header_x - header_gap();
+  const float gap_to_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
-  const float left_resume_y = block_min.y + header_height + header_gap();
 
   ImGui::SetCursorScreenPos(
       ImVec2(frame_min.x + frame_padding(),
@@ -998,7 +1012,7 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   }
 
   draw_operator_frame(
-      frame_min, frame_max, top_resume_x, left_resume_y,
+      frame_min, frame_max, gap_from_x, gap_to_x,
       receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
                 : operator_frame_color(state.selection.contains(slot),
                                        state.selection.primary == slot,

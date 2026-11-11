@@ -35,6 +35,8 @@ struct PatchEditorContext {
   /// Show a document's file's new contents, as one undo step.
   std::function<void(patches::DocumentId, const ym2612::Patch &)>
       reload_from_disk;
+  /// As the File menu's New Patch.
+  std::function<void()> new_patch;
 
   OperatorEditState &operator_edit() const {
     return document_ui(document).operator_edit;
@@ -72,6 +74,10 @@ void track_instant_patch_history(PatchEditorContext &context,
 
 /// One editor window per open document, docked together as tabs.
 void render_patch_editors(PatchEditorContext &context, PatchEditorState &state);
+
+/// The buttons among the editors' tabs: the open patches at their left, a
+/// new one at their right. After the views folded there, which go first.
+void render_patch_editor_tab_buttons(PatchEditorContext &context);
 
 /// True while one of the editor windows has the keyboard.
 bool patch_editor_has_focus();

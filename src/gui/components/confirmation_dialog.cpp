@@ -1,5 +1,6 @@
 #include "confirmation_dialog.hpp"
 #include "common.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "modal.hpp"
@@ -59,7 +60,7 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
       }
     }
     ImGui::SetNextItemWidth(combo_width);
-    if (ImGui::BeginCombo("##NewPatchFormat", preview.c_str())) {
+    if (ui::begin_combo("##NewPatchFormat", preview.c_str())) {
       for (const auto &format : prompt.formats) {
         const bool selected = format.extension == prompt.extension;
         if (ImGui::Selectable(format.display_name().c_str(), selected)) {
@@ -69,7 +70,7 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
           ImGui::SetItemDefaultFocus();
         }
       }
-      ImGui::EndCombo();
+      ui::end_combo();
     }
 
     const std::string validation_error = patches::new_patch_name_error(

@@ -42,6 +42,8 @@ std::string iso8601_utc_now();
 namespace sidecar {
 
 inline constexpr const char *kDirectory = ".ym2612";
+/// Where megatoy kept a folder's metadata before, in one file.
+inline constexpr const char *kLegacyDirectory = ".megatoy";
 
 /// The sidecar of `file`, or of the instrument `item` inside it.
 std::filesystem::path path_for(const std::filesystem::path &file,

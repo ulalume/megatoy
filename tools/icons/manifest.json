@@ -1,0 +1,120 @@
+{
+  "ui": [
+    {
+      "name": "piano",
+      "from": "custom"
+    },
+    {
+      "name": "refresh",
+      "from": "iconoven:refresh"
+    },
+    {
+      "name": "plus",
+      "from": "iconoven:plus"
+    },
+    {
+      "name": "arrow-left",
+      "from": "fontawesome:arrow-left"
+    },
+    {
+      "name": "chart-line",
+      "from": "fontawesome:chart-line"
+    },
+    {
+      "name": "circle-check",
+      "from": "fontawesome:circle-check"
+    },
+    {
+      "name": "circle-info",
+      "from": "fontawesome:circle-info"
+    },
+    {
+      "name": "circle-xmark",
+      "from": "fontawesome:circle-xmark"
+    },
+    {
+      "name": "dice",
+      "from": "fontawesome:dice"
+    },
+    {
+      "name": "eye",
+      "from": "fontawesome:eye"
+    },
+    {
+      "name": "file",
+      "from": "fontawesome:file"
+    },
+    {
+      "name": "flask",
+      "from": "fontawesome:flask"
+    },
+    {
+      "name": "folder-plus",
+      "from": "fontawesome:folder-plus"
+    },
+    {
+      "name": "folder-tree",
+      "from": "fontawesome:folder-tree"
+    },
+    {
+      "name": "gear",
+      "from": "fontawesome:gear"
+    },
+    {
+      "name": "magnifying-glass",
+      "from": "fontawesome:magnifying-glass"
+    },
+    {
+      "name": "pen-to-square",
+      "from": "fontawesome:pen-to-square"
+    },
+    {
+      "name": "play",
+      "from": "fontawesome:play"
+    },
+    {
+      "name": "shuffle",
+      "from": "fontawesome:shuffle"
+    },
+    {
+      "name": "star",
+      "from": "fontawesome:star"
+    },
+    {
+      "name": "stop",
+      "from": "fontawesome:stop"
+    },
+    {
+      "name": "triangle-exclamation",
+      "from": "fontawesome:triangle-exclamation"
+    },
+    {
+      "name": "virus",
+      "from": "fontawesome:virus"
+    },
+    {
+      "name": "wave-square",
+      "from": "fontawesome:wave-square"
+    },
+    {
+      "name": "xmark",
+      "from": "fontawesome:xmark"
+    },
+    {
+      "name": "folder",
+      "from": "fontawesome:folder"
+    },
+    {
+      "name": "folder-open",
+      "from": "fontawesome:folder-open"
+    },
+    {
+      "name": "star-outline",
+      "from": "fontawesome-regular:star"
+    },
+    {
+      "name": "list",
+      "from": "fontawesome:list"
+    }
+  ]
+}

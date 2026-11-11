@@ -78,6 +78,18 @@ enum class MegatoyCol : int {
   SectionHeader,
   SectionHeaderHovered,
   SectionHeaderActive,
+  /// The line between a dock node's tabs and its window, in the node with
+  /// the focus and in the others.
+  TabBarLine,
+  TabBarLineDimmed,
+  /// A button among a dock's tabs, such as a folded view's.
+  TabButton,
+  /// Behind the patch browser's search row.
+  BrowserHeaderBg,
+  /// The room between the areas, dragged to resize them, at rest; pointed
+  /// at and dragged it takes ImGuiCol_ResizeGripHovered and
+  /// ImGuiCol_ResizeGripActive.
+  AreaSplitter,
   COUNT
 };
 

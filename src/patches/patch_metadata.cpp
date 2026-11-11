@@ -22,7 +22,6 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr int kOverlayVersion = 1;
-constexpr const char *kLegacyDirectory = ".megatoy";
 constexpr const char *kLegacyFile = "patches.json";
 
 constexpr std::array<std::string_view, 7> kKnownFields = {
@@ -351,7 +350,7 @@ void migrate_folder(const fs::path &folder) {
   // The newer file first, so its fields win over the older one's.
   const std::array<fs::path, 2> legacy_files = {
       folder / kDirectory / kLegacyFile,
-      folder / kLegacyDirectory / kLegacyFile};
+      folder / sidecar::kLegacyDirectory / kLegacyFile};
   for (const auto &legacy : legacy_files) {
     std::error_code ec;
     if (!fs::is_regular_file(legacy, ec)) {

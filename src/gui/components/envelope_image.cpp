@@ -478,6 +478,11 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
   return out;
 }
 
+/// How far from a handle a press takes it, and the least room left between
+/// two of them, before the interface's scale.
+constexpr float kHandleGrab = 10.5f;
+constexpr float kHandleGap = 2.0f;
+
 ui::envelope::EnvelopeHandles
 render_envelope_image(const ym2612::OperatorSettings &op,
                       const UIState::EnvelopeState &slider_state, ImVec2 size,
@@ -699,14 +704,15 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   if (!wanted) {
     return {};
   }
-  // The dots drawn a pixel wider all round than twice the library's size,
-  // and the grab box grown to cover them.
+  // Larger dots than the library's, with a grab box to cover them, and none
+  // drawn over another.
   const ui::envelope::HandleMetrics unscaled;
   const ui::envelope::HandleMetrics metrics{
-      ui::scale::px(unscaled.radius * 2.0f + 1.0f),
-      ui::scale::px(unscaled.grab + 1.0f),
+      ui::scale::px(kEnvelopeHandleRadius),
+      ui::scale::px(kHandleGrab),
       ui::scale::px(unscaled.min_sustain_height),
       ui::scale::px(unscaled.min_sustain_width),
+      ui::scale::px(kHandleGap),
   };
   return ui::envelope::handle_layout(curve, plot, metrics);
 }

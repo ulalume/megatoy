@@ -1,4 +1,5 @@
 #include "theme.hpp"
+#include "gui/app_window.hpp"
 #include "imgui_dark.hpp"
 #include "imgui_light.hpp"
 #include "megatoy_dark.hpp"
@@ -40,8 +41,12 @@ void apply_style(ThemeId id, float scale) {
   style.ScrollbarPadding = 0;
   style.SeparatorTextBorderSize = 1;
   style.DragDropTargetBorderSize = 1;
-  style.FramePadding = ImVec2(4, 4);
-  style.DockingSeparatorSize = 4;
+  style.FramePadding = ImVec2(4, 6);
+  style.DockingSeparatorSize = 8;
+  style.TabBarBorderSize = kTabLineWidth;
+  style.TabRounding = 7;
+  // Tabs are told apart by their fill alone.
+  style.TabBarOverlineSize = 0;
 
   apply_theme(id);
 
@@ -50,28 +55,5 @@ void apply_style(ThemeId id, float scale) {
 }
 
 ThemeId current_theme() { return g_current_theme; }
-
-std::string themed_asset_relative_path(const std::string &filename,
-                                       const std::string &asset_category) {
-  std::string result;
-
-  if (!asset_category.empty()) {
-    result.append(asset_category);
-    if (!result.empty() && result.back() != '/') {
-      result.push_back('/');
-    }
-  }
-
-  const char *subdir = asset_subdirectory(current_theme());
-  if (subdir != nullptr && subdir[0] != '\0') {
-    result.append(subdir);
-    if (!result.empty() && result.back() != '/') {
-      result.push_back('/');
-    }
-  }
-
-  result.append(filename);
-  return result;
-}
 
 } // namespace ui::styles

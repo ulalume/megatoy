@@ -1,5 +1,6 @@
 #include "patch_drop.hpp"
 #include "common.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "modal.hpp"
 #include <algorithm>
 #include <imgui.h>
@@ -36,7 +37,7 @@ void render_patch_drop_feedback(PatchDropContext &context) {
           drop.instruments[static_cast<size_t>(drop.selected_instrument)];
       const char *preview =
           current.name.empty() ? "(No name)" : current.name.c_str();
-      if (ImGui::BeginCombo("Instrument", preview)) {
+      if (ui::begin_combo("Instrument", preview)) {
         for (size_t i = 0; i < drop.instruments.size(); ++i) {
           bool selected = (drop.selected_instrument == static_cast<int>(i));
           const char *label = drop.instruments[i].name.empty()
@@ -49,7 +50,7 @@ void render_patch_drop_feedback(PatchDropContext &context) {
             ImGui::SetItemDefaultFocus();
           }
         }
-        ImGui::EndCombo();
+        ui::end_combo();
       }
 
       align_buttons_right({dialog_button_width(), dialog_button_width()});

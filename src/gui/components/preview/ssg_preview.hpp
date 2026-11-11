@@ -1,16 +1,14 @@
 #pragma once
 
-#include "preview.hpp"
+#include <imgui.h>
 
 namespace ui {
 
-// Returns a cached texture for the given SSG envelope (0-7).
-const PreviewTexture *get_ssg_preview_texture(int envelope_type);
-
-// Returns preview texture for the "off" (disabled) state, or nullptr.
-const PreviewTexture *get_ssg_preview_off_texture();
-
-// Releases GPU resources created for SSG previews.
-void reset_ssg_preview_textures();
+/**
+ * The shape of SSG-EG envelope `envelope_type` (0-7) over four of its
+ * cycles, its outline in the envelope graph's colour over a fill of it, in a
+ * frame. "OFF" while `enabled` is false. Takes `size` as an item.
+ */
+void ssg_diagram(bool enabled, int envelope_type, ImVec2 size);
 
 } // namespace ui

@@ -15,8 +15,4 @@ ThemeId current_theme();
  */
 void apply_style(ThemeId id, float scale);
 
-std::string
-themed_asset_relative_path(const std::string &filename,
-                           const std::string &asset_category = "images");
-
 } // namespace ui::styles

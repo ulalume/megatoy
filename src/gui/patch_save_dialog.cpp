@@ -1,4 +1,5 @@
 #include "patch_save_dialog.hpp"
+#include "gui/components/menu_rows.hpp"
 #include "gui/components/modal.hpp"
 #include "gui/save_as_dialog.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -92,7 +93,7 @@ void render_patch_save_dialog(
     // The label belongs to the row, so it rides on the last field in it.
     ImGui::SameLine();
     ImGui::SetNextItemWidth(row_width - name_width);
-    if (ImGui::BeginCombo("Filename", format_preview.c_str())) {
+    if (ui::begin_combo("Filename", format_preview.c_str())) {
       for (const auto &format : formats) {
         const bool selected = format.extension == state.extension;
         if (ImGui::Selectable(format.display_name().c_str(), selected)) {
@@ -102,7 +103,7 @@ void render_patch_save_dialog(
           ImGui::SetItemDefaultFocus();
         }
       }
-      ImGui::EndCombo();
+      ui::end_combo();
     }
 
     const auto choices = save_as_folder_choices(workspace.folders());
@@ -115,7 +116,7 @@ void render_patch_save_dialog(
         }
       }
       ImGui::SetNextItemWidth(fields_width());
-      if (ImGui::BeginCombo("Folder", folder_preview.c_str())) {
+      if (ui::begin_combo("Folder", folder_preview.c_str())) {
         for (const auto &folder : choices) {
           // Two folders can carry the same display name.
           ImGui::PushID(folder.path.string().c_str());
@@ -129,7 +130,7 @@ void render_patch_save_dialog(
           }
           ImGui::PopID();
         }
-        ImGui::EndCombo();
+        ui::end_combo();
       }
     }
 

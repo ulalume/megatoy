@@ -87,6 +87,7 @@ set(MEGATOY_LOGIC_SOURCES
   src/patches/patch_tree_navigation.cpp
   src/patches/patch_tree_flatten.cpp
   src/patches/patch_filter.cpp
+  src/patches/instrument_icons.cpp
   src/patches/patch_document.cpp
   src/patches/patch_session.cpp
   src/patches/patch_session_documents.cpp
@@ -147,6 +148,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/patch_editor.cpp
   src/gui/components/patch_editor_tools.cpp
   src/gui/components/patch_lab_window.cpp
+  src/gui/components/instrument_icon_picker.cpp
   src/gui/components/patch_selector.cpp
   src/gui/components/patch_selector_shared.cpp
   src/gui/components/patch_tree_view.cpp
@@ -159,12 +161,11 @@ set(MEGATOY_CORE_SOURCES
   src/gui/save_export_actions.cpp
   src/gui/components/status_toasts.cpp
   src/gui/components/preview/algorithm_preview.cpp
-  src/gui/components/preview/preview.cpp
   src/gui/components/preview/ssg_preview.cpp
   src/gui/components/waveform.cpp
   src/gui/gui_manager.cpp
-  src/gui/instrument_icons.cpp
   src/gui/layouts.cpp
+  src/gui/tab_bar_lines.cpp
   src/gui/ui_scale.cpp
   src/gui/ui_renderer.cpp
   src/gui/ui_document_flows.cpp
@@ -236,7 +237,6 @@ target_include_directories(megatoy_core PUBLIC
   ${stb_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_BINARY_DIR}
-  ${iconfontcppheaders_SOURCE_DIR}
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

@@ -238,8 +238,8 @@ add_executable(ui_scale_test tests/gui/ui_scale_test.cpp src/gui/ui_scale.cpp)
 target_include_directories(ui_scale_test PRIVATE src)
 target_link_libraries(ui_scale_test PRIVATE imgui_lib)
 add_test(NAME ui_scale_test COMMAND ui_scale_test)
-add_executable(instrument_icons_test tests/gui/instrument_icons_test.cpp
-               src/gui/instrument_icons.cpp)
+add_executable(instrument_icons_test tests/patches/instrument_icons_test.cpp
+               src/patches/instrument_icons.cpp)
 target_include_directories(instrument_icons_test PRIVATE src)
 target_link_libraries(instrument_icons_test PRIVATE nlohmann_json::nlohmann_json)
 target_compile_definitions(instrument_icons_test PRIVATE

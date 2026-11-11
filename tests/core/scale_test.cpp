@@ -21,6 +21,8 @@ void test_minor_blues() {
 }
 
 void test_every_scale_and_key() {
+  // The scales the preferences kept before more were added keep their
+  // values.
   const std::vector<std::vector<uint8_t>> expected = {
       {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
       {0, 2, 4, 5, 7, 9, 11},
@@ -39,6 +41,7 @@ void test_every_scale_and_key() {
       {0, 4, 5, 7, 11},
   };
   CHECK(expected.size() == static_cast<std::size_t>(Scale::RYUKYU) + 1);
+  CHECK(static_cast<int>(scale_infos().size()) == kScaleCount);
   for (std::size_t scale = 0; scale < expected.size(); ++scale) {
     for (const auto key : all_keys) {
       const auto actual =
@@ -53,13 +56,33 @@ void test_every_scale_and_key() {
     }
   }
   for (const auto key : all_keys) {
-    CHECK(keys_from_scale_and_key(static_cast<Scale>(15), key) ==
+    CHECK(keys_from_scale_and_key(static_cast<Scale>(kScaleCount), key) ==
           keys_from_scale_and_key(Scale::CHROMATIC, Key::C));
   }
 }
 
+void test_scale_list() {
+  // Every scale once, Chromatic first and the families in order.
+  std::vector<int> seen(static_cast<std::size_t>(kScaleCount), 0);
+  int group = -1;
+  for (const ScaleInfo &info : scale_infos()) {
+    ++seen[static_cast<std::size_t>(info.scale)];
+    CHECK(info.group >= group);
+    CHECK(info.group < static_cast<int>(std::size(kScaleGroups)));
+    CHECK(info.steps.empty() == (info.scale == Scale::CHROMATIC));
+    group = info.group;
+  }
+  for (const int count : seen) {
+    CHECK(count == 1);
+  }
+  CHECK(scale_infos().front().scale == Scale::CHROMATIC);
+  CHECK(keys_from_scale_and_key(Scale::BEBOP_DOMINANT, Key::C).size() == 8);
+  std::cout << "test_scale_list passed" << std::endl;
+}
+
 int main() {
   test_every_scale_and_key();
+  test_scale_list();
   test_major_blues();
   test_minor_blues();
   return 0;

@@ -35,6 +35,14 @@ void keep_in_area(Area area, const char *window_name,
                   unsigned int node_flags = 0, unsigned int main_dock_id = 0);
 
 /**
+ * Closes the central group of the main area once it holds no view and was
+ * split off another group of it, as ImGui closes any other group its last
+ * view leaves: a group beside it takes over as the central one. Called before
+ * the dock space is laid out.
+ */
+void close_empty_main_group();
+
+/**
  * Call after the dockspace is submitted. A view dragged over the window then
  * offers only the groups of its own area: the window's outer edges, where a
  * new group would start beside every area, are not offered.

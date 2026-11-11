@@ -8,25 +8,12 @@ namespace patches {
 
 namespace {
 
-/// A directory holding nothing on disk stands on its own while no filter is
-/// active.
-bool listed_while_empty(const PatchEntry &directory,
-                        const std::string &query_lower, int min_star_rating) {
-  return directory.holds_nothing && query_lower.empty() && min_star_rating == 0;
-}
-
-/// Whether anything below keeps the parent listed: a file that passes the
-/// filters, or a directory listed_while_empty().
-bool subtree_keeps_parent(const std::vector<patches::PatchEntry> &items,
-                          const std::string &query_lower, int min_star_rating) {
+/// Whether anything below keeps the parent listed: a file, or a directory
+/// holding nothing on disk, which stands on its own.
+bool subtree_keeps_parent(const std::vector<patches::PatchEntry> &items) {
   for (const auto &item : items) {
-    if (item.is_directory) {
-      if (listed_while_empty(item, query_lower, min_star_rating) ||
-          subtree_keeps_parent(item.children, query_lower, min_star_rating)) {
-        return true;
-      }
-    } else if (entry_passes_star_filter(item, min_star_rating) &&
-               entry_matches_query(item, query_lower)) {
+    if (!item.is_directory || item.holds_nothing ||
+        subtree_keeps_parent(item.children)) {
       return true;
     }
   }
@@ -39,50 +26,28 @@ bool subtree_keeps_parent(const std::vector<patches::PatchEntry> &items,
  * all, so no directory's subtree is walked twice.
  */
 bool collect_level(const std::vector<patches::PatchEntry> &items, int depth,
-                   const std::string &query_lower, int min_star_rating,
                    const std::unordered_set<std::string> &open_directories,
                    std::vector<TreeRow> &out) {
   bool keeps_parent = false;
-  // While filtering, what matched is shown wherever it is: a directory is
-  // open exactly when something below it matched.
-  const bool filtering = !query_lower.empty() || min_star_rating > 0;
-
   for (const auto &item : items) {
-    if (item.is_directory) {
-      const bool is_open =
-          filtering || open_directories.count(item.relative_path) > 0;
-      const std::size_t mark = out.size();
-      out.push_back(TreeRow{&item, depth, true, is_open});
-
-      // A closed directory still has to be searched: what lies below it is
-      // what decides if its own row is drawn.
-      const bool has_children =
-          is_open ? collect_level(item.children, depth + 1, query_lower,
-                                  min_star_rating, open_directories, out)
-                  : subtree_keeps_parent(item.children, query_lower,
-                                         min_star_rating);
-      if (filtering) {
-        out[mark].is_open = has_children;
-      }
-      const bool empty_on_disk =
-          listed_while_empty(item, query_lower, min_star_rating);
-      const bool matches_self =
-          !query_lower.empty() && entry_matches_query(item, query_lower);
-      if (!has_children && !empty_on_disk && !matches_self) {
-        out.resize(mark);
-      }
-      keeps_parent = keeps_parent || has_children || empty_on_disk;
+    if (!item.is_directory) {
+      out.push_back(TreeRow{&item, depth, false, false});
+      keeps_parent = true;
       continue;
     }
-
-    if (!entry_passes_star_filter(item, min_star_rating) ||
-        !entry_matches_query(item, query_lower)) {
-      continue;
+    const bool is_open = open_directories.count(item.relative_path) > 0;
+    const std::size_t mark = out.size();
+    out.push_back(TreeRow{&item, depth, true, is_open});
+    // A closed directory still has to be searched: what lies below it is
+    // what decides if its own row is drawn.
+    const bool has_children =
+        is_open ? collect_level(item.children, depth + 1, open_directories, out)
+                : subtree_keeps_parent(item.children);
+    if (!has_children && !item.holds_nothing) {
+      out.resize(mark);
     }
-    out.push_back(TreeRow{&item, depth, false, false});
-    keeps_parent = true;
+    keeps_parent = keeps_parent || has_children || item.holds_nothing;
   }
-
   return keeps_parent;
 }
 
@@ -90,10 +55,35 @@ bool collect_level(const std::vector<patches::PatchEntry> &items, int depth,
 
 std::vector<TreeRow>
 flatten_visible_rows(const std::vector<patches::PatchEntry> &tree,
-                     const std::string &query_lower, int min_star_rating,
                      const std::unordered_set<std::string> &open_directories) {
   std::vector<TreeRow> rows;
-  collect_level(tree, 0, query_lower, min_star_rating, open_directories, rows);
+  collect_level(tree, 0, open_directories, rows);
+  return rows;
+}
+
+namespace {
+
+void collect_matches(const std::vector<patches::PatchEntry> &items,
+                     const std::string &query_lower, StarFilter shown_stars,
+                     bool matched_above, std::vector<TreeRow> &out) {
+  for (const auto &item : items) {
+    const bool matched = matched_above || query_lower.empty() ||
+                         entry_matches_query(item, query_lower);
+    if (item.is_directory) {
+      collect_matches(item.children, query_lower, shown_stars, matched, out);
+    } else if (matched && entry_passes_star_filter(item, shown_stars)) {
+      out.push_back(TreeRow{&item, 1, false, false});
+    }
+  }
+}
+
+} // namespace
+
+std::vector<TreeRow>
+matching_patch_rows(const std::vector<patches::PatchEntry> &tree,
+                    const std::string &query_lower, StarFilter shown_stars) {
+  std::vector<TreeRow> rows;
+  collect_matches(tree, query_lower, shown_stars, false, rows);
   return rows;
 }
 

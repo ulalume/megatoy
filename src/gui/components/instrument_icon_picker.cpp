@@ -1,0 +1,246 @@
+#include "instrument_icon_picker.hpp"
+
+#include "gui/components/centred_glyph.hpp"
+#include "gui/components/menu_rows.hpp"
+#include "gui/styles/megatoy_style.hpp"
+#include "gui/ui_scale.hpp"
+#include "patches/instrument_icons.hpp"
+
+#include "gui/fonts/megatoy_icons.hpp"
+#include <algorithm>
+#include <cfloat>
+#include <cmath>
+#include <imgui.h>
+#include <imgui_internal.h>
+#include <span>
+#include <string_view>
+#include <vector>
+
+namespace ui {
+namespace {
+
+/// The gap between icons, across and down.
+constexpr float kCellGap = 2.0f;
+/// The gap between rows.
+constexpr float kRowGap = 6.0f;
+
+/// The groups the list sets on one row, under one name.
+constexpr std::string_view kPiano[] = {"Piano", "Organ"};
+constexpr std::string_view kPlucked[] = {"Guitar", "Bass", "Strings"};
+constexpr std::string_view kVoices[] = {"Ensemble", "Brass", "Voice"};
+constexpr std::string_view kWind[] = {"Reed", "Pipe"};
+constexpr std::string_view kSynth[] = {"Synth"};
+constexpr std::string_view kEthnic[] = {"Ethnic"};
+constexpr std::string_view kPercussion[] = {"Chromatic Percussion",
+                                            "Percussive"};
+constexpr std::string_view kDrums[] = {"Drums"};
+constexpr std::string_view kEffects[] = {"Sound Effects"};
+constexpr std::span<const std::string_view> kListRows[] = {
+    kPiano,  kPlucked,    kVoices, kWind,   kSynth,
+    kEthnic, kPercussion, kDrums,  kEffects};
+
+/// One row of the list: its groups' names, and their icons in order.
+struct ListRow {
+  std::string label;
+  std::vector<const patches::instrument_icons::Icon *> icons;
+};
+
+/**
+ * The list's rows: kListRows, then any group it leaves out on a row of its
+ * own.
+ */
+const std::vector<ListRow> &list_rows() {
+  static const std::vector<ListRow> rows = [] {
+    std::vector<ListRow> out;
+    std::vector<const patches::instrument_icons::Group *> placed;
+    const auto add = [&](ListRow &row,
+                         const patches::instrument_icons::Group &group) {
+      row.label += (row.label.empty() ? "" : " / ") + std::string(group.name);
+      for (const auto &icon : group.icons) {
+        row.icons.push_back(&icon);
+      }
+      placed.push_back(&group);
+    };
+    for (const auto names : kListRows) {
+      ListRow row;
+      for (const auto name : names) {
+        for (const auto &group : patches::instrument_icons::groups()) {
+          if (group.name == name) {
+            add(row, group);
+          }
+        }
+      }
+      if (!row.icons.empty()) {
+        out.push_back(std::move(row));
+      }
+    }
+    for (const auto &group : patches::instrument_icons::groups()) {
+      if (std::find(placed.begin(), placed.end(), &group) == placed.end()) {
+        ListRow row;
+        add(row, group);
+        out.push_back(std::move(row));
+      }
+    }
+    return out;
+  }();
+  return rows;
+}
+
+} // namespace
+
+void draw_instrument_icon(std::string_view id, ImVec2 min, ImVec2 max,
+                          float scale) {
+  // Muted, with the none glyph, for a patch without an icon.
+  const auto *icon = patches::instrument_icons::find(id);
+  draw_centred_glyph(
+      icon != nullptr ? icon->glyph : patches::instrument_icons::none_glyph(),
+      min, max,
+      icon != nullptr
+          ? ImGui::GetColorU32(ImGuiCol_Text)
+          : ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)),
+      scale);
+}
+
+std::optional<std::string> instrument_icon_list(const std::string &current) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float cell = std::round(ImGui::GetFontSize() * kLargeIconScale +
+                                style.FramePadding.y * 2.0f);
+  const float gap = scale::px(kCellGap);
+  const float row_gap = scale::px(kRowGap);
+
+  // The names stand in a column at the left, as wide as the longest group's
+  // name; a row naming more than one breaks onto further lines.
+  float label_width = 0.0f;
+  for (const auto &group : patches::instrument_icons::groups()) {
+    label_width = std::max(
+        label_width, ImGui::CalcTextSize(group.name.data(),
+                                         group.name.data() + group.name.size())
+                         .x);
+  }
+  const float icons_x = label_width + style.ItemSpacing.x * 2.0f;
+
+  // The icons on a grid: as many columns as the longest row has icons, or as
+  // the screen leaves room for.
+  std::size_t longest = 1;
+  for (const auto &row : list_rows()) {
+    longest = std::max(longest, row.icons.size());
+  }
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  const float room = viewport->WorkSize.x * 0.9f - icons_x -
+                     style.WindowPadding.x * 2.0f - style.ScrollbarSize;
+  const int columns = std::clamp(static_cast<int>((room + gap) / (cell + gap)),
+                                 1, static_cast<int>(longest));
+  const float width =
+      icons_x + cell * columns + gap * (columns - 1) + style.ScrollbarSize;
+
+  static char filter[32] = "";
+  if (ImGui::IsWindowAppearing()) {
+    filter[0] = '\0';
+    ImGui::SetKeyboardFocusHere();
+  }
+  ImGui::SetNextItemWidth(width);
+  ImGui::InputTextWithHint("##filter",
+                           ICON_MEGATOY_MAGNIFYING_GLASS " Filter...", filter,
+                           sizeof(filter));
+
+  std::optional<std::string> picked;
+  // As tall as a list row.
+  ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+  if (ImGui::Selectable(
+          "None", current.empty(), 0,
+          ImVec2(width, ImGui::GetTextLineHeight() + list_row_spacing()))) {
+    picked = std::string();
+  }
+  ImGui::PopStyleVar();
+
+  // The rows the filter leaves, each its icons and its height, laid out
+  // first so the list knows its height as it opens.
+  ImFont *font = ImGui::GetFont();
+  const float font_size = ImGui::GetFontSize();
+  struct ShownRow {
+    const ListRow *row;
+    std::vector<const patches::instrument_icons::Icon *> icons;
+    float icons_height;
+    ImVec2 label;
+    float height;
+  };
+  std::vector<ShownRow> rows;
+  float total = 0.0f;
+  for (const auto &row : list_rows()) {
+    ShownRow shown{&row, {}, 0.0f, ImVec2(), 0.0f};
+    for (const auto *icon : row.icons) {
+      if (patches::instrument_icons::matches(icon->id, filter)) {
+        shown.icons.push_back(icon);
+      }
+    }
+    if (shown.icons.empty()) {
+      continue;
+    }
+    const auto lines =
+        static_cast<int>((shown.icons.size() + columns - 1) / columns);
+    shown.icons_height = cell * lines + gap * (lines - 1);
+    shown.label =
+        font->CalcTextSizeA(font_size, FLT_MAX, label_width, row.label.c_str());
+    shown.height = std::max(shown.icons_height, shown.label.y);
+    total += shown.height + row_gap;
+    rows.push_back(std::move(shown));
+  }
+
+  // The icons scroll below the filter, up to most of the screen's height.
+  ImGui::BeginChild(
+      "##icons", ImVec2(width, std::min(total, viewport->WorkSize.y * 0.7f)));
+  const ImU32 muted =
+      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  const ImVec2 origin = ImGui::GetCursorScreenPos();
+  float y = origin.y;
+  for (const auto &shown : rows) {
+    ImGui::GetWindowDrawList()->AddText(
+        font, font_size,
+        ImVec2(origin.x, y + (shown.height - shown.label.y) * 0.5f), muted,
+        shown.row->label.c_str(), nullptr, label_width);
+    const float icons_top = y + (shown.height - shown.icons_height) * 0.5f;
+    for (std::size_t i = 0; i < shown.icons.size(); ++i) {
+      const auto column = static_cast<float>(i % columns);
+      const auto line = static_cast<float>(i / columns);
+      ImGui::SetCursorScreenPos(
+          ImVec2(origin.x + icons_x + column * (cell + gap),
+                 icons_top + line * (cell + gap)));
+      const std::string_view id = shown.icons[i]->id;
+      ImGui::PushID(id.data(), id.data() + id.size());
+      if (ImGui::Selectable("##icon", id == current, 0, ImVec2(cell, cell))) {
+        picked = std::string(id);
+      }
+      draw_instrument_icon(id, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                           kLargeIconScale);
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip)) {
+        ImGui::SetTooltip("%s",
+                          patches::instrument_icons::display_name(id).c_str());
+      }
+      ImGui::PopID();
+    }
+    y += shown.height + row_gap;
+  }
+  ImGui::SetCursorScreenPos(ImVec2(origin.x, y));
+  ImGui::Dummy(ImVec2(0.0f, 0.0f));
+  ImGui::EndChild();
+  return picked;
+}
+
+std::optional<std::string> instrument_icon_popup(ImGuiID popup_id,
+                                                 const std::string &current) {
+  const ImRect button(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+  // As tall as the list: a combo's popup is otherwise held to a few rows.
+  ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
+                                      ImVec2(FLT_MAX, FLT_MAX));
+  if (!ImGui::BeginComboPopup(popup_id, button, ImGuiComboFlags_None)) {
+    return std::nullopt;
+  }
+  auto picked = instrument_icon_list(current);
+  if (picked) {
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndCombo();
+  return picked;
+}
+
+} // namespace ui
