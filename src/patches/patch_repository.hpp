@@ -110,6 +110,19 @@ public:
   bool can_move_patch(const PatchEntry &entry,
                       const PatchEntry &destination) const;
   bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
+  /// Copies go into a plain folder of a writable workspace folder, from
+  /// anywhere: another workspace folder, the built-in presets or a bank.
+  bool can_copy_patch(const PatchEntry &entry,
+                      const PatchEntry &destination) const;
+  /**
+   * Copies `entry` into `destination` and returns the copy's path. The copy
+   * keeps the entry's name, or takes "<name> copy", "<name> copy 2", ... when
+   * that is taken. A patch from inside a bank or a package becomes a file of
+   * its own in `extension`.
+   */
+  std::optional<std::filesystem::path> copy_patch(const PatchEntry &entry,
+                                                  const PatchEntry &destination,
+                                                  std::string_view extension);
   /// A relative path as the user sees it: starting with what its folder is
   /// listed as.
   std::string display_path(const std::string &relative) const;

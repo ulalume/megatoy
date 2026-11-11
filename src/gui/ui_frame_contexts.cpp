@@ -213,6 +213,10 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
              const patches::PatchEntry &destination) {
         request_patch_move(ctx, entry, destination);
       },
+      [&ctx](const patches::PatchEntry &entry,
+             const patches::PatchEntry &destination) {
+        request_patch_copy(ctx, entry, destination);
+      },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_duplicate(ctx, entry);
       },

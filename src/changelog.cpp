@@ -18,7 +18,12 @@ constexpr std::string_view kFormatDetails[] = {
 constexpr std::string_view kEnvelopeTimingDetails[] = {
     "Warns when a fast SSG-EG decay can skip the sustain level",
 };
+constexpr std::string_view kLibraryCopyDetails[] = {
+    "From the built-in presets, a bank or a read-only folder, always",
+};
 constexpr ChangelogItem kItems_0_10_0[] = {
+    {"The patch browser is now the Library", {}},
+    {"Drag in the Library with Option (Alt) held to copy", kLibraryCopyDetails},
     {"Envelope graphs follow the chip's timing exactly",
      kEnvelopeTimingDetails},
     {"The keyboard's Major Blues scale plays the right notes", {}},

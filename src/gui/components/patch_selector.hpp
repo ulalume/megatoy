@@ -26,6 +26,7 @@ struct PendingIcon {
 struct PendingMove {
   patches::PatchEntry entry;
   patches::PatchEntry destination;
+  bool copy = false;
 };
 
 /// Drag payload of a browser entry: its repository-relative path.
@@ -61,6 +62,9 @@ struct PatchSelectorContext {
   /// Move an entry into a folder.
   std::function<void(const patches::PatchEntry &, const patches::PatchEntry &)>
       move_patch;
+  /// Copy an entry into a folder.
+  std::function<void(const patches::PatchEntry &, const patches::PatchEntry &)>
+      copy_patch;
   /// Copy the entry's patch to a new file, leaving the editor alone.
   std::function<void(const patches::PatchEntry &)> duplicate_patch;
   /// Ask for a new patch in this folder. Only offered on a folder the
@@ -78,7 +82,7 @@ struct PatchSelectorContext {
   std::optional<PendingMove> pending_move;
 };
 
-// Function to render patch browser panel
+// Function to render library panel
 void render_patch_selector(const char *title, PatchSelectorContext &context);
 
 } // namespace ui

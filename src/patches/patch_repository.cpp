@@ -2,6 +2,8 @@
 #include "formats/patch_loader.hpp"
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/filesystem_patch_storage.hpp"
+#include "patches/patch_entry_actions.hpp"
+#include "patches/patch_write.hpp"
 #include "patches/persistent_parse_cache.hpp"
 #include "platform/import_pipeline.hpp"
 #include "platform/platform_config.hpp"
@@ -335,6 +337,110 @@ bool PatchRepository::move_patch(const PatchEntry &entry,
     return true;
   }
   return false;
+}
+
+namespace {
+
+/// A bank's instrument or a package's version, which has no file of its own.
+bool is_inside_file(const PatchEntry &entry) {
+  return !entry.source_relative_path.empty() ||
+         !entry.container_item_id.empty();
+}
+
+/// `name` in `folder`, or the first of "<stem> copy", "<stem> copy 2", ...
+/// that the folder does not have yet.
+std::filesystem::path unused_copy_path(const std::filesystem::path &folder,
+                                       const std::string &stem,
+                                       const std::string &extension) {
+  std::error_code ec;
+  auto candidate = folder / (stem + extension);
+  for (int n = 1; std::filesystem::exists(candidate, ec) || ec; ++n) {
+    if (ec) {
+      return {};
+    }
+    candidate = folder / (stem + " copy" +
+                          (n == 1 ? std::string() : " " + std::to_string(n)) +
+                          extension);
+  }
+  return candidate;
+}
+
+} // namespace
+
+bool PatchRepository::can_copy_patch(const PatchEntry &entry,
+                                     const PatchEntry &destination) const {
+  if (!destination.is_directory || !destination.format.empty() ||
+      is_inside_file(destination)) {
+    return false;
+  }
+  const auto *owner = workspace_.owner_of(destination.full_path);
+  if (owner == nullptr || !owner->writable ||
+      !vfs_.is_directory(destination.full_path)) {
+    return false;
+  }
+  if (is_inside_file(entry)) {
+    return true;
+  }
+  // A folder does not go inside itself.
+  return destination.relative_path != entry.relative_path &&
+         destination.relative_path.rfind(entry.relative_path + "/", 0) != 0;
+}
+
+std::optional<std::filesystem::path>
+PatchRepository::copy_patch(const PatchEntry &entry,
+                            const PatchEntry &destination,
+                            std::string_view extension) {
+  if (!can_copy_patch(entry, destination)) {
+    return std::nullopt;
+  }
+
+  std::error_code ec;
+  std::filesystem::path target;
+  if (is_inside_file(entry)) {
+    ym2612::Patch patch;
+    if (!load_patch(entry, patch)) {
+      return std::nullopt;
+    }
+    target = unused_copy_path(destination.full_path, entry_stem(entry),
+                              std::string(extension));
+    if (target.empty()) {
+      return std::nullopt;
+    }
+    patch.name = target.stem().string();
+    if (!write_patch(patch, target)) {
+      std::filesystem::remove_all(target, ec);
+      return std::nullopt;
+    }
+    copy_patch_metadata(entry.metadata, target);
+  } else if (std::filesystem::is_directory(entry.full_path, ec)) {
+    // Its sidecars are inside it and go with it.
+    target = unused_copy_path(destination.full_path,
+                              entry.full_path.filename().string(), "");
+    if (target.empty()) {
+      return std::nullopt;
+    }
+    std::filesystem::copy(entry.full_path, target,
+                          std::filesystem::copy_options::recursive, ec);
+    if (ec) {
+      std::filesystem::remove_all(target, ec);
+      return std::nullopt;
+    }
+  } else {
+    target =
+        unused_copy_path(destination.full_path, entry.full_path.stem().string(),
+                         entry.full_path.extension().string());
+    if (target.empty() ||
+        !std::filesystem::copy_file(entry.full_path, target, ec) || ec) {
+      return std::nullopt;
+    }
+    copy_patch_metadata(entry.metadata, target);
+  }
+
+  refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::request_storage_persist();
+#endif
+  return target;
 }
 
 bool PatchRepository::can_edit_metadata(const PatchEntry &entry) const {

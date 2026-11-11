@@ -136,22 +136,55 @@ find_by_relative_path(const std::vector<patches::PatchEntry> &entries,
   return nullptr;
 }
 
-/// Lets the last drawn item be dragged: any patch, to wherever takes one, and
-/// a folder that can be renamed, onto another folder. Workspace folders stay
-/// put.
+/// What dropping the entry being dragged does where it is held, as the
+/// folder under it found last frame.
+enum class DropAction { None, Move, Copy };
+DropAction g_held_drop = DropAction::None;
+
+/**
+ * What dropping `source` into `folder` does. An entry megatoy can move goes
+ * there, or is copied while Option/Alt is held; one it cannot, from the
+ * built-in presets, a read-only folder or inside a bank, is always copied.
+ * Moves stay inside one workspace folder, so into another it is copied too,
+ * but back into its own folder it is only with Option/Alt.
+ */
+DropAction drop_action(const PatchSelectorContext &context,
+                       const patches::PatchEntry &source,
+                       const patches::PatchEntry &folder) {
+  const bool movable = context.move_patch && entry_can_rename(context, source);
+  if (movable && !ImGui::GetIO().KeyAlt) {
+    if (context.session.can_move_patch(source, folder)) {
+      return DropAction::Move;
+    }
+    if (source.full_path.parent_path() == folder.full_path) {
+      return DropAction::None;
+    }
+  }
+  return context.copy_patch && context.repository.can_copy_patch(source, folder)
+             ? DropAction::Copy
+             : DropAction::None;
+}
+
+/// Lets the last drawn item be dragged onto a folder, which moves or copies
+/// it (see drop_action). Workspace folders stay put.
 void entry_drag_source(const PatchSelectorContext &context,
                        const patches::PatchEntry &entry, int depth) {
   if (depth == 0 || !ImGui::IsItemActive()) {
     return;
   }
-  if (entry.is_directory &&
-      (!context.move_patch || !entry_can_rename(context, entry))) {
-    return;
-  }
   if (ImGui::BeginDragDropSource()) {
     ImGui::SetDragDropPayload(kPatchEntryPayload, entry.relative_path.data(),
                               entry.relative_path.size());
+    if (g_held_drop == DropAction::Copy) {
+      ImGui::TextUnformatted(ICON_MEGATOY_PLUS);
+      ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+    }
     ImGui::TextUnformatted(entry.name.c_str());
+    if (context.move_patch && entry_can_rename(context, entry)) {
+      ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors
+                              ? "Option to copy"
+                              : "Alt to copy");
+    }
     ImGui::EndDragDropSource();
   }
 }
@@ -469,7 +502,8 @@ struct DropHover {
  */
 bool row_drop_target(PatchSelectorContext &context,
                      const std::vector<patches::TreeRow> &rows,
-                     std::size_t index, const ImRect &rect, DropHover &hover) {
+                     std::size_t index, const ImRect &rect, DropHover &hover,
+                     DropAction &held) {
   const std::size_t folder_index = patches::drop_folder_index(rows, index);
   if (folder_index == std::string::npos) {
     return false;
@@ -482,28 +516,34 @@ bool row_drop_target(PatchSelectorContext &context,
                                   static_cast<std::size_t>(pending->DataSize));
   const auto *source =
       find_by_relative_path(context.repository.tree(), relative_path);
+  if (source == nullptr) {
+    return false;
+  }
   const auto &folder = *rows[folder_index].entry;
-  if (source == nullptr || !context.session.can_move_patch(*source, folder)) {
+  const DropAction action = drop_action(context, *source, folder);
+  if (action == DropAction::None) {
     return false;
   }
   if (!ImGui::BeginDragDropTargetCustom(
           rect, ImGui::GetID(rows[index].entry->relative_path.c_str()))) {
     return false;
   }
-  bool held = false;
+  bool holding = false;
   if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
           kPatchEntryPayload, ImGuiDragDropFlags_AcceptBeforeDelivery |
                                   ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
     if (payload->IsPreview()) {
       hover = {folder_index};
-      held = true;
+      held = action;
+      holding = true;
     }
     if (payload->IsDelivery()) {
-      context.pending_move = PendingMove{*source, folder};
+      context.pending_move =
+          PendingMove{*source, folder, action == DropAction::Copy};
     }
   }
   ImGui::EndDragDropTarget();
-  return held;
+  return holding;
 }
 
 /// The frame around the folder taking a drop and everything listed under it,
@@ -605,8 +645,9 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
   const ImRect clip = ImGui::GetCurrentWindow()->ClipRect;
   // The tallest a row stands, to find the first one in view.
   const float height = ui::patch_row_height();
-  const bool can_drop = static_cast<bool>(context.move_patch);
+  const bool can_drop = context.move_patch || context.copy_patch;
   std::optional<DropHover> hover;
+  DropAction held_drop = DropAction::None;
   const auto first = static_cast<std::size_t>(
       std::upper_bound(tops.begin(), tops.end() - 1,
                        clip.Min.y - origin.y - height) -
@@ -632,10 +673,11 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
     if (can_drop &&
         row_drop_target(context, rows, index,
                         ImRect(left, top, right, top + row_height_of(row)),
-                        held)) {
+                        held, held_drop)) {
       hover = held;
     }
   }
+  g_held_drop = held_drop;
   ImGui::SetCursorScreenPos(ImVec2(left, origin.y + tops.back()));
   ImGui::Dummy(ImVec2(0.0f, 0.0f));
 

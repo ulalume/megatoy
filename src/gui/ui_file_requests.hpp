@@ -12,6 +12,8 @@ void request_workspace_folder_removal(AppContext &ctx,
 void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry);
 void request_patch_move(AppContext &ctx, const patches::PatchEntry &entry,
                         const patches::PatchEntry &destination);
+void request_patch_copy(AppContext &ctx, const patches::PatchEntry &entry,
+                        const patches::PatchEntry &destination);
 void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry);
 void request_new_patch(AppContext &ctx, const std::filesystem::path &folder);
 void request_new_folder(AppContext &ctx, const std::filesystem::path &parent);

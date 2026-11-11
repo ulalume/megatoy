@@ -67,7 +67,7 @@ struct UIPreferences {
 
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
     // Search and star filters are session-scoped. Excluding them prevents
-    // typing in the patch browser from dirtying the persistent store.
+    // typing in the library from dirtying the persistent store.
     return lhs.show_midi_keyboard == rhs.show_midi_keyboard &&
            lhs.show_patch_selector == rhs.show_patch_selector &&
            lhs.show_preferences == rhs.show_preferences &&

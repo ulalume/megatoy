@@ -156,7 +156,7 @@ void handle_close_shortcut(AppContext &ctx) {
     *shown = false;
     return;
   }
-  if (name == PATCH_BROWSER_TITLE || patch_editor_has_focus()) {
+  if (name == LIBRARY_TITLE || patch_editor_has_focus()) {
     request_close_document(ctx,
                            ctx.services.patch_session.active_document_id());
   }

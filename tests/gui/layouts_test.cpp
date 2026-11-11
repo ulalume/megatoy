@@ -9,7 +9,7 @@ namespace {
 void test_every_view_has_its_area() {
   using ui::areas::Area;
   using ui::areas::area_of;
-  CHECK(area_of(ui::PATCH_BROWSER_TITLE) == Area::Sidebar);
+  CHECK(area_of(ui::LIBRARY_TITLE) == Area::Sidebar);
   CHECK(area_of(ui::PREFERENCES_TITLE) == Area::Main);
   CHECK(area_of(ui::patch_editor_window_title("bass", 1)) == Area::Main);
   CHECK(area_of(ui::patch_editor_window_title("bass", 3)) == Area::Main);

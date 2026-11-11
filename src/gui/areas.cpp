@@ -93,7 +93,7 @@ bool is_editor_window(std::string_view window_name) {
 
 std::optional<Area> area_of(std::string_view window_name) {
   window_name = window_id(window_name);
-  if (window_name == PATCH_BROWSER_TITLE) {
+  if (window_name == LIBRARY_TITLE) {
     return Area::Sidebar;
   }
   if (window_name == PREFERENCES_TITLE || is_editor_window(window_name)) {
@@ -112,7 +112,7 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
                   unsigned int main_dock_id) {
   // The groups have no close-all button: each tab closes on its own, and
   // hiding a view is the View menu's. Nor a tab list: the tabs are few, and
-  // the folded patch browser's and waveform's buttons take the place at the
+  // the folded library's and waveform's buttons take the place at the
   // left.
   ImGuiWindowClass window_class;
   window_class.DockNodeFlagsOverrideSet =

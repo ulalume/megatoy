@@ -189,6 +189,11 @@ add_executable(patch_repository_move_test
 target_include_directories(patch_repository_move_test PRIVATE src)
 target_link_libraries(patch_repository_move_test PRIVATE megatoy_core)
 add_test(NAME patch_repository_move_test COMMAND patch_repository_move_test)
+add_executable(patch_repository_copy_test
+  tests/patches/patch_repository_copy_test.cpp)
+target_include_directories(patch_repository_copy_test PRIVATE src)
+target_link_libraries(patch_repository_copy_test PRIVATE megatoy_core)
+add_test(NAME patch_repository_copy_test COMMAND patch_repository_copy_test)
 add_executable(patch_metadata_test tests/patches/patch_metadata_test.cpp)
 target_include_directories(patch_metadata_test PRIVATE src)
 target_link_libraries(patch_metadata_test PRIVATE megatoy_core)
@@ -379,7 +384,8 @@ add_custom_target(check
           ginpkg_history_test patch_write_test patch_lab_test status_test
           filename_utils_test utf8_utils_test
           patch_repository_delete_test patch_repository_rename_test
-          patch_repository_move_test patch_document_test folder_watcher_test
+          patch_repository_move_test patch_repository_copy_test
+          patch_document_test folder_watcher_test
           patch_metadata_test patch_tree_flatten_test
           document_decisions_test patch_entry_actions_test
           patch_tree_navigation_test patch_lab_sources_test patch_tweak_test

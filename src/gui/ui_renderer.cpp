@@ -104,14 +104,13 @@ void render_all(AppContext &ctx) {
       return (layouts::window_is_narrow() ? icon : full).c_str();
     }
   };
-  static const PanelTitle patch_browser(PATCH_BROWSER_ICON,
-                                        PATCH_BROWSER_TITLE);
+  static const PanelTitle library(LIBRARY_ICON, LIBRARY_TITLE);
   static const PanelTitle preferences(PREFERENCES_ICON, PREFERENCES_TITLE);
   static const PanelTitle soft_keyboard(SOFT_KEYBOARD_ICON,
                                         SOFT_KEYBOARD_TITLE);
   static const PanelTitle patch_lab(PATCH_LAB_ICON, PATCH_LAB_TITLE);
   static const PanelTitle waveform(WAVEFORM_ICON, WAVEFORM_TITLE);
-  render_patch_selector(patch_browser.get(), contexts.patch_selector);
+  render_patch_selector(library.get(), contexts.patch_selector);
   render_preferences_window(preferences.get(), contexts.preferences);
   render_midi_keyboard(soft_keyboard.get(), contexts.midi_keyboard);
   render_patch_lab(patch_lab.get(), contexts.patch_lab, patch_lab_state());

@@ -1,6 +1,6 @@
 #pragma once
 
-// Internals of the patch browser, shared between its sources. Not part of the
+// Internals of the library, shared between its sources. Not part of the
 // public UI surface -- include only from the patch_selector / patch_*_view
 // sources.
 

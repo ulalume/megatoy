@@ -8,6 +8,7 @@
 #include "gui/save_export_actions.hpp"
 #include "patch_actions.hpp"
 #include "patches/filename_utils.hpp"
+#include "patches/patch_entry_actions.hpp"
 #include "patches/patch_write.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
@@ -245,6 +246,36 @@ void request_patch_move(AppContext &ctx, const patches::PatchEntry &entry,
                               });
 }
 
+static void perform_patch_copy(AppContext &ctx,
+                               const patches::PatchEntry &entry,
+                               const patches::PatchEntry &destination) {
+  // A patch inside a bank or a package becomes a file of its own.
+  const auto copy = ctx.services.patch_session.repository().copy_patch(
+      entry, destination, kFallbackSaveAsExtension);
+  if (!copy) {
+    megatoy::status::error("Could not copy \"" + entry.name + "\".");
+    return;
+  }
+  const std::string success =
+      "Copied \"" + entry.name + "\" to \"" + destination.name + "\".";
+  if (!entry.is_directory || !std::filesystem::is_directory(*copy)) {
+    megatoy::status::success(success);
+    return;
+  }
+  report_folder_change(ctx, entry, *copy, "Copying \"" + entry.name + "\"...",
+                       success, "Could not save the copy",
+                       "it is gone after a reload.");
+}
+
+void request_patch_copy(AppContext &ctx, const patches::PatchEntry &entry,
+                        const patches::PatchEntry &destination) {
+  confirm_large_folder_change(ctx, entry, "Copy Folder?",
+                              "Copying may take a while.", "Copy",
+                              [&ctx, entry, destination]() {
+                                perform_patch_copy(ctx, entry, destination);
+                              });
+}
+
 void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
   auto &session = ctx.services.patch_session;
   if (!session.repository().can_rename_patch(entry)) {
@@ -347,20 +378,6 @@ void request_new_folder(AppContext &ctx, const std::filesystem::path &parent) {
       });
 }
 
-/// The name a copy or a download starts from: the file's own stem, or the
-/// instrument's name inside a bank, which has no file of its own.
-static std::string entry_stem(const patches::PatchEntry &entry) {
-  const bool bank_instrument =
-      !entry.source_relative_path.empty() && entry.container_item_id.empty();
-  if (bank_instrument) {
-    const auto sanitized = patches::sanitize_filename(entry.name);
-    if (!sanitized.empty()) {
-      return sanitized;
-    }
-  }
-  return entry.full_path.stem().string();
-}
-
 /// The entry's own folder, when a copy may be written into it.
 static std::optional<std::filesystem::path>
 writable_entry_folder(AppContext &ctx, const patches::PatchEntry &entry) {
@@ -406,7 +423,8 @@ void download_patch_entry(AppContext &ctx, const patches::PatchEntry &entry,
     megatoy::status::error("Could not read \"" + entry.name + "\".");
     return;
   }
-  if (platform::web::download_patch(patch, extension, entry_stem(entry))) {
+  if (platform::web::download_patch(patch, extension,
+                                    patches::entry_stem(entry))) {
     megatoy::status::success("Download started.");
   } else {
     megatoy::status::error("Failed to prepare " + extension + " download.");
@@ -423,7 +441,7 @@ void request_patch_duplicate(AppContext &ctx,
     megatoy::status::error("Could not read \"" + entry.name + "\".");
     return;
   }
-  const std::string stem = duplicate_stem(entry_stem(entry));
+  const std::string stem = duplicate_stem(patches::entry_stem(entry));
   const std::string extension = default_save_as_extension(
       entry.full_path.extension().string(), session.save_formats());
   const auto source_folder = writable_entry_folder(ctx, entry);
