@@ -15,7 +15,7 @@ namespace ym2612 {
  * speakers stay on, and the DAC off, since it would take channel 6 from FM.
  */
 struct PlaybackSettings {
-  bool lfo_enable = false;
+  bool lfo_enable = true;
   uint8_t lfo_frequency = 0;
   /// By display slot, OP1..OP4 as the editor shows them.
   std::array<bool, 4> operator_enable{true, true, true, true};
