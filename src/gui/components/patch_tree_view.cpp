@@ -166,27 +166,53 @@ DropAction drop_action(const PatchSelectorContext &context,
 }
 
 /// Lets the last drawn item be dragged onto a folder, which moves or copies
-/// it (see drop_action). Workspace folders stay put.
-void entry_drag_source(const PatchSelectorContext &context,
-                       const patches::PatchEntry &entry, int depth) {
+/// it (see drop_action). Workspace folders stay put. Only a folder that takes
+/// the entry answers it, opening when it is held over (see spring_open), so
+/// ImGui's own hold-to-open is off.
+void entry_drag_source(const patches::PatchEntry &entry, int depth) {
   if (depth == 0 || !ImGui::IsItemActive()) {
     return;
   }
-  if (ImGui::BeginDragDropSource()) {
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip |
+                                 ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
     ImGui::SetDragDropPayload(kPatchEntryPayload, entry.relative_path.data(),
                               entry.relative_path.size());
-    if (g_held_drop == DropAction::Copy) {
-      ImGui::TextUnformatted(ICON_MEGATOY_PLUS);
-      ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-    }
-    ImGui::TextUnformatted(entry.name.c_str());
-    if (context.move_patch && entry_can_rename(context, entry)) {
-      ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors
-                              ? "Option to copy"
-                              : "Alt to copy");
-    }
     ImGui::EndDragDropSource();
   }
+}
+
+/**
+ * What follows the pointer while an entry is dragged. Drawn here rather than
+ * by its row, which is not drawn while out of view, and ImGui would show
+ * "..." in its place.
+ */
+void draw_drag_tooltip(const PatchSelectorContext &context) {
+  const ImGuiPayload *payload = ImGui::GetDragDropPayload();
+  if (payload == nullptr || !payload->IsDataType(kPatchEntryPayload)) {
+    return;
+  }
+  const std::string relative_path(static_cast<const char *>(payload->Data),
+                                  static_cast<std::size_t>(payload->DataSize));
+  const auto *entry =
+      find_by_relative_path(context.repository.tree(), relative_path);
+  if (entry == nullptr) {
+    return;
+  }
+  // Placed as ImGui places a drag source's own tooltip, close to the pointer.
+  ImGuiContext &g = *GImGui;
+  g.DragDropWithinSource = true;
+  ImGui::BeginTooltip();
+  if (g_held_drop == DropAction::Copy) {
+    ImGui::TextUnformatted(ICON_MEGATOY_PLUS);
+    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+  }
+  ImGui::TextUnformatted(entry->name.c_str());
+  if (context.move_patch && entry_can_rename(context, *entry)) {
+    ImGui::TextDisabled(ImGui::GetIO().ConfigMacOSXBehaviors ? "Option to copy"
+                                                             : "Alt to copy");
+  }
+  ImGui::EndTooltip();
+  g.DragDropWithinSource = false;
 }
 
 /// F2 renames and Delete or Backspace deletes the focused row, wherever its
@@ -449,7 +475,7 @@ void render_directory_row(PatchSelectorContext &context,
   entry_context_menu(context, item,
                      row.depth == 0 &&
                          item.relative_path != kBuiltinPresetRoot);
-  entry_drag_source(context, item, row.depth);
+  entry_drag_source(item, row.depth);
   handle_row_keys(context, item);
   if (open != row.is_open) {
     cache.set_open(item.relative_path, open);
@@ -468,7 +494,7 @@ void render_patch_row(PatchSelectorContext &context,
 
   const bool clicked = patch_row_selectable(item, is_current);
   entry_context_menu(context, item);
-  entry_drag_source(context, item, row.depth);
+  entry_drag_source(item, row.depth);
   handle_row_keys(context, item);
 
   // A click previews the patch, a double click keeps it open.
@@ -495,6 +521,26 @@ PatchTreeCache &tree_cache() {
 struct DropHover {
   std::size_t folder = 0;
 };
+
+/// A closed folder that takes the entry held over it opens after a moment,
+/// as ImGui's hold-to-open does, so the drag can go on into it.
+void spring_open(PatchTreeCache &cache, const patches::TreeRow *held) {
+  constexpr double kHoldToOpen = 0.7;
+  static std::string folder;
+  static double since = 0.0;
+  if (held == nullptr || held->is_open) {
+    folder.clear();
+    return;
+  }
+  const double now = ImGui::GetTime();
+  if (folder != held->entry->relative_path) {
+    folder = held->entry->relative_path;
+    since = now;
+  } else if (now - since >= kHoldToOpen) {
+    cache.set_open(folder, true);
+    folder.clear();
+  }
+}
 
 /**
  * Makes row `index`, across the whole width, take an entry for its folder.
@@ -690,6 +736,8 @@ bool render_patch_tree(const std::vector<patches::PatchEntry> &tree,
                origin.y + tops[hover->folder]),
         ImVec2(right, origin.y + tops[last] + row_height_of(rows[last])));
   }
+  spring_open(cache, hover ? &rows[hover->folder] : nullptr);
+  draw_drag_tooltip(context);
 
   return true;
 }
