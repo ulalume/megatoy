@@ -1013,6 +1013,12 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                                     },
                                     [&context]() { context.commit_history(); }};
     render_operator_command_items(commands);
+    // Whether the operator is heard, as the keyboard's OP switches set it.
+    ImGui::Separator();
+    bool &enabled = context.session.playback()
+                        .operator_enable[static_cast<std::size_t>(slot)];
+    ImGui::MenuItem((operator_slot_label(slot) + " Enabled").c_str(), nullptr,
+                    &enabled);
     ui::end_popup();
   }
 
