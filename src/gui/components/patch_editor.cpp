@@ -326,12 +326,29 @@ void render_lfo_sliders(PatchEditorContext &context, ym2612::Patch &patch,
   ImGui::PopItemWidth();
 }
 
+/// The path where the patch is kept, from `min`, `width` wide: cut short
+/// where it is longer, and then told in full under the pointer.
+void render_header_path(const std::string &path, float width) {
+  const ImVec2 path_min = ImGui::GetCursorScreenPos();
+  const ImVec2 path_max(path_min.x + std::max(width, 0.0f),
+                        path_min.y + ImGui::GetTextLineHeight());
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::TextMuted));
+  ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), path_min, path_max,
+                            path_max.x, path.c_str(), nullptr, nullptr);
+  ImGui::PopStyleColor();
+  ImGui::Dummy(ImVec2(path_max.x - path_min.x, ImGui::GetTextLineHeight()));
+  if (ImGui::CalcTextSize(path.c_str()).x > path_max.x - path_min.x) {
+    ImGui::SetItemTooltip("%s", path.c_str());
+  }
+}
+
 /**
- * The header: the patch's icon; the save buttons with where the patch is
- * kept, cut short where the window is narrow, the rating, and the LFO's
- * sensitivities, one row each; and the algorithm at the right, as tall as
- * the icon. Where the window leaves the algorithm or the sensitivities no
- * room, they go below.
+ * The header beside the patch's icon. Where the window is wide: the save
+ * buttons with where the patch is kept, the rating, and the LFO's
+ * sensitivities, one row each, and the algorithm at the right, as tall as
+ * the icon. Where it is narrow: the save buttons, the path and the rating,
+ * and below, the sensitivities one above the other beside the algorithm.
  */
 void render_document_header(PatchEditorContext &context,
                             patches::PatchDocument &document,
@@ -358,9 +375,9 @@ void render_document_header(PatchEditorContext &context,
   const float buttons_end =
       ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + ImGui::GetScrollX();
 
-  // The rows beside the icon take what the buttons, the stars and the two
-  // sliders need; the algorithm, in full while some room is left over for
-  // the path, the rest.
+  // Wide while the rows beside the icon keep what the buttons, the stars and
+  // the two sliders need beside the algorithm; the algorithm in full while
+  // some room is left over for the path.
   const float lfo_least = lfo_fit_width(kLfoShortNames) * 2.0f + spacing;
   const float taken = std::max(
       {buttons_end - left, editable ? star_rating_width() : 0.0f, lfo_least});
@@ -373,72 +390,66 @@ void render_document_header(PatchEditorContext &context,
   } else if (room >= taken + algorithm_width(kLfoShortNames)) {
     algorithm_names = &kLfoShortNames;
   }
+  const bool wide = algorithm_names != nullptr;
   const float rows_right =
-      algorithm_names != nullptr
-          ? right - algorithm_width(*algorithm_names) - spacing
-          : right;
+      wide ? right - algorithm_width(*algorithm_names) - spacing : right;
 
   const auto &repository = patch_session.repository();
-  const auto relative_path =
-      repository.to_relative_path(document.path()).generic_string();
-  const std::string path =
-      display_preset_path(repository.display_path(relative_path));
-  ImGui::SetCursorPos(
-      ImVec2(buttons_end + spacing, top + style.FramePadding.y));
-  const ImVec2 path_min = ImGui::GetCursorScreenPos();
-  const ImVec2 path_max(
-      path_min.x + std::max(rows_right - (buttons_end + spacing), 0.0f),
-      path_min.y + ImGui::GetTextLineHeight());
-  ImGui::PushStyleColor(ImGuiCol_Text,
-                        styles::color(styles::MegatoyCol::TextMuted));
-  ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), path_min, path_max,
-                            path_max.x, path.c_str(), nullptr, nullptr);
-  ImGui::PopStyleColor();
-  ImGui::Dummy(ImVec2(path_max.x - path_min.x, ImGui::GetTextLineHeight()));
-  // Cut short, it is told in full under the pointer.
-  if (ImGui::CalcTextSize(path.c_str()).x > path_max.x - path_min.x) {
-    ImGui::SetItemTooltip("%s", path.c_str());
+  const std::string path = display_preset_path(repository.display_path(
+      repository.to_relative_path(document.path()).generic_string()));
+  if (wide) {
+    ImGui::SetCursorPos(
+        ImVec2(buttons_end + spacing, top + style.FramePadding.y));
+    render_header_path(path, rows_right - (buttons_end + spacing));
+  } else {
+    ImGui::SetCursorPos(ImVec2(left, top + row + style.FramePadding.y));
+    render_header_path(path, right - left);
   }
 
   if (editable) {
-    ImGui::SetCursorPos(ImVec2(left, top + row));
+    ImGui::SetCursorPos(ImVec2(left, top + row * (wide ? 1.0f : 2.0f)));
     render_header_rating(*entry, ui, edit);
   }
 
-  // Named in full while both fit so, no wider than in the LFO's own row.
-  const float half = (rows_right - left - spacing) * 0.5f;
-  const bool lfo_beside_rating = half >= lfo_fit_width(kLfoShortNames);
-  if (lfo_beside_rating) {
+  if (wide) {
+    // Named in full while both fit so.
+    const float half = (rows_right - left - spacing) * 0.5f;
     const LfoNames &names =
         half >= lfo_fit_width(kLfoFullNames) ? kLfoFullNames : kLfoShortNames;
     ImGui::SetCursorPos(ImVec2(left, top + row * 2.0f));
     render_lfo_sliders(context, patch, names,
                        std::min(half, lfo_slider_width(kLfoFullNames)), true);
-  }
-
-  if (algorithm_names != nullptr) {
     ImGui::SetCursorPos(ImVec2(right - algorithm_width(*algorithm_names), top));
     render_algorithm(context, patch, *algorithm_names, height);
   }
   ImGui::SetCursorPos(ImVec2(left, top));
   ImGui::Dummy(ImVec2(0.0f, height));
-  if (algorithm_names == nullptr) {
-    const LfoNames &names =
-        ImGui::GetContentRegionAvail().x >= algorithm_width(kLfoFullNames)
+
+  if (!wide) {
+    // The sensitivities at the left take what the algorithm leaves them,
+    // the algorithm in full while they keep their short names.
+    const float available = ImGui::GetContentRegionAvail().x;
+    const float least = lfo_fit_width(kLfoShortNames);
+    const LfoNames &alg_names =
+        available - spacing - algorithm_width(kLfoFullNames) >= least
             ? kLfoFullNames
             : kLfoShortNames;
-    render_algorithm(context, patch, names, height);
-  }
-  if (!lfo_beside_rating) {
-    const float available = ImGui::GetContentRegionAvail().x;
-    const bool beside = lfo_least <= available;
-    const LfoNames &names = (beside ? (available - spacing) * 0.5f
-                                    : available) >= lfo_fit_width(kLfoFullNames)
-                                ? kLfoFullNames
-                                : kLfoShortNames;
-    render_lfo_sliders(context, patch, names,
-                       beside ? (available - spacing) * 0.5f : available,
-                       beside);
+    const float column = available - spacing - algorithm_width(alg_names);
+    if (column >= least) {
+      const float column_top = ImGui::GetCursorPosY();
+      const float column_left = ImGui::GetCursorPosX();
+      const LfoNames &names = column >= lfo_fit_width(kLfoFullNames)
+                                  ? kLfoFullNames
+                                  : kLfoShortNames;
+      ImGui::BeginGroup();
+      render_lfo_sliders(context, patch, names, column, false);
+      ImGui::EndGroup();
+      ImGui::SetCursorPos(ImVec2(column_left + column + spacing, column_top));
+      render_algorithm(context, patch, alg_names, height);
+    } else {
+      render_lfo_sliders(context, patch, kLfoShortNames, available, false);
+      render_algorithm(context, patch, kLfoShortNames, height);
+    }
   }
 
   // Written once the header is drawn: a write rebuilds the browser's tree,
