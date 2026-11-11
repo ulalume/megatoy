@@ -170,6 +170,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/ui_renderer.cpp
   src/gui/ui_document_flows.cpp
   src/gui/ui_file_requests.cpp
+  src/gui/library_undo.cpp
   src/gui/ui_frame_contexts.cpp
   src/gui/image/resource_manager.cpp
   src/gui/image/stb_image_impl.cpp

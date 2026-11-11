@@ -6,6 +6,7 @@
 #include "gui/components/status_toasts.hpp"
 #include "gui/components/view_patch_drop.hpp"
 #include "gui/layouts.hpp"
+#include "gui/library_undo.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/web_storage_dialogs.hpp"
 #include "gui/window_title.hpp"
@@ -124,6 +125,7 @@ void render_all(AppContext &ctx) {
   }
 
   render_save_export_popup_host(ctx);
+  library_undo::check(ctx.services.patch_session);
   render_status_toasts();
 
   handle_close_shortcut(ctx);

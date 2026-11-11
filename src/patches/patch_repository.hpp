@@ -46,6 +46,13 @@ struct PatchEntry {
   std::string container_item_id;
 };
 
+/// A patch file as it stood before it was deleted, to put back.
+struct DeletedPatch {
+  std::filesystem::path path;
+  std::string bytes;
+  std::optional<nlohmann::json> metadata;
+};
+
 /**
  * Presents the workspace's folders, plus the built-in presets, as one tree of
  * patches.
@@ -123,6 +130,12 @@ public:
   std::optional<std::filesystem::path> copy_patch(const PatchEntry &entry,
                                                   const PatchEntry &destination,
                                                   std::string_view extension);
+  /// Removes a copy made by copy_patch, file or folder, with its metadata.
+  bool remove_copy(const std::filesystem::path &copy);
+  /// The file `entry` names and its metadata, read before deleting it.
+  std::optional<DeletedPatch> keep_for_restore(const PatchEntry &entry) const;
+  /// Writes a deleted patch back where it was, if nothing has taken its place.
+  bool restore(const DeletedPatch &deleted);
   /// A relative path as the user sees it: starting with what its folder is
   /// listed as.
   std::string display_path(const std::string &relative) const;

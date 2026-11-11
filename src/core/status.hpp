@@ -36,11 +36,12 @@ enum class Severity {
 /**
  * An optional button on the toast. `perform` runs on the UI thread, so it can
  * open a dialog. The rest of the toast still dismisses on click, and a toast
- * carrying an action does not expire on its own.
+ * carrying an action stays until then, or for `lasts` when that is set.
  */
 struct Action {
   std::string label;
   std::function<void()> perform;
+  std::chrono::seconds lasts{0};
 
   bool valid() const { return !label.empty() && perform != nullptr; }
 };
@@ -53,9 +54,9 @@ struct Entry {
   Action action;
 };
 
-/// Post a notification. Also mirrored to stdout/stderr so terminals and the
-/// browser console keep working.
-void post(Severity severity, std::string message, Action action = {});
+/// Post a notification, and return its id. Also mirrored to stdout/stderr so
+/// terminals and the browser console keep working.
+std::uint64_t post(Severity severity, std::string message, Action action = {});
 
 inline void info(std::string message, Action action = {}) {
   post(Severity::Info, std::move(message), std::move(action));
@@ -75,6 +76,9 @@ std::vector<Entry> entries();
 
 /// Remove one entry -- the user closed its toast, or it expired.
 void dismiss(std::uint64_t id);
+
+/// Whether the entry is still to be shown.
+bool shown(std::uint64_t id);
 
 /// Drop everything. For tests.
 void clear();

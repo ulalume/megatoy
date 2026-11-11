@@ -172,6 +172,50 @@ void test_package_version_copy(const fs::path &root) {
   CHECK(loaded.instrument.algorithm == 5);
 }
 
+void test_undo(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto folder = root / "undo";
+  fs::create_directories(folder / "kit" / "inner");
+  fs::create_directories(folder / "low");
+  CHECK(
+      patches::write_patch(make_patch(4), folder / "kit" / "inner" / "x.dmp"));
+  CHECK(patches::write_patch(make_patch(6), folder / "snare.dmp"));
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(folder));
+  patches::PatchRepository repository(file_system, workspace);
+
+  // A copy is taken away again, a folder with everything in it.
+  const auto copied =
+      repository.copy_patch(entry_at(repository, folder / "kit"),
+                            entry_at(repository, folder / "low"), "");
+  CHECK(copied.has_value());
+  CHECK(repository.remove_copy(*copied));
+  CHECK(!fs::exists(folder / "low" / "kit"));
+  CHECK(fs::exists(folder / "kit" / "inner" / "x.dmp"));
+
+  // A deleted patch comes back with its metadata.
+  patches::PatchMetadata metadata;
+  metadata.star_rating = 3;
+  CHECK(repository.update_patch_metadata(
+      repository.to_relative_path(folder / "snare.dmp").generic_string(),
+      metadata));
+  repository.refresh();
+  const auto snare = entry_at(repository, folder / "snare.dmp");
+  const auto kept = repository.keep_for_restore(snare);
+  CHECK(kept.has_value());
+  CHECK(repository.delete_patch(snare));
+  CHECK(!fs::exists(folder / "snare.dmp"));
+  CHECK(repository.restore(*kept));
+  // Not over something that has taken its place since.
+  CHECK(!repository.restore(*kept));
+  const auto restored = entry_at(repository, folder / "snare.dmp");
+  CHECK(restored.metadata.has_value() && restored.metadata->star_rating == 3);
+  ym2612::Patch loaded;
+  CHECK(repository.load_patch(restored, loaded));
+  CHECK(loaded.instrument.algorithm == 6);
+}
+
 } // namespace
 
 int main() {
@@ -186,6 +230,7 @@ int main() {
   test_directory_copy(root);
   test_across_folders(root);
   test_package_version_copy(root);
+  test_undo(root);
 
   fs::remove_all(root);
   std::cout << "All patch repository copy tests passed\n";

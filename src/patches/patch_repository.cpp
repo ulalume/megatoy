@@ -12,7 +12,9 @@
 #endif
 #include "ym2612/patch.hpp"
 #include <algorithm>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <string_view>
 
@@ -441,6 +443,73 @@ PatchRepository::copy_patch(const PatchEntry &entry,
   platform::web::request_storage_persist();
 #endif
   return target;
+}
+
+bool PatchRepository::remove_copy(const std::filesystem::path &copy) {
+  const auto *owner = workspace_.owner_of(copy.parent_path());
+  if (owner == nullptr || !owner->writable) {
+    return false;
+  }
+  std::error_code ec;
+  if (std::filesystem::is_directory(copy, ec)) {
+    // Its sidecars are inside it and go with it.
+    std::filesystem::remove_all(copy, ec);
+  } else if (std::filesystem::remove(copy, ec) && !ec) {
+    sidecar::remove(copy);
+  }
+  if (ec) {
+    return false;
+  }
+  refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::request_storage_persist();
+#endif
+  return true;
+}
+
+std::optional<DeletedPatch>
+PatchRepository::keep_for_restore(const PatchEntry &entry) const {
+  std::ifstream in(entry.full_path, std::ios::binary);
+  if (!in) {
+    return std::nullopt;
+  }
+  DeletedPatch kept;
+  kept.path = entry.full_path;
+  kept.bytes.assign(std::istreambuf_iterator<char>(in),
+                    std::istreambuf_iterator<char>());
+  if (!in.good() && !in.eof()) {
+    return std::nullopt;
+  }
+  kept.metadata = sidecar::read(sidecar::path_for(entry.full_path));
+  return kept;
+}
+
+bool PatchRepository::restore(const DeletedPatch &deleted) {
+  const auto *owner = workspace_.owner_of(deleted.path.parent_path());
+  std::error_code ec;
+  if (owner == nullptr || !owner->writable ||
+      std::filesystem::exists(deleted.path, ec) || ec ||
+      !std::filesystem::is_directory(deleted.path.parent_path(), ec)) {
+    return false;
+  }
+  {
+    std::ofstream out(deleted.path, std::ios::binary);
+    out.write(deleted.bytes.data(),
+              static_cast<std::streamsize>(deleted.bytes.size()));
+    if (!out) {
+      out.close();
+      std::filesystem::remove(deleted.path, ec);
+      return false;
+    }
+  }
+  if (deleted.metadata) {
+    sidecar::write(sidecar::path_for(deleted.path), *deleted.metadata);
+  }
+  refresh();
+#if defined(MEGATOY_PLATFORM_WEB)
+  platform::web::request_storage_persist();
+#endif
+  return true;
 }
 
 bool PatchRepository::can_edit_metadata(const PatchEntry &entry) const {

@@ -52,7 +52,16 @@ ImVec4 severity_color(Severity severity) {
 bool sticky(const megatoy::status::Entry &entry) {
   // Four seconds is enough to notice a result, not to act on an offer.
   return entry.severity == Severity::Warning ||
-         entry.severity == Severity::Error || entry.action.valid();
+         entry.severity == Severity::Error ||
+         (entry.action.valid() && entry.action.lasts.count() == 0);
+}
+
+std::chrono::steady_clock::duration
+lifetime(const megatoy::status::Entry &entry) {
+  if (entry.action.valid() && entry.action.lasts.count() > 0) {
+    return entry.action.lasts;
+  }
+  return kAutoDismiss;
 }
 
 } // namespace
@@ -60,11 +69,16 @@ bool sticky(const megatoy::status::Entry &entry) {
 void render_status_toasts() {
   const auto now = std::chrono::steady_clock::now();
   auto entries = megatoy::status::entries();
+  // The toast under the pointer, which waits to expire until it is left.
+  static std::uint64_t hovered_id = 0;
+  const std::uint64_t was_hovered = hovered_id;
+  hovered_id = 0;
 
   // Expire transient toasts here rather than in the service, so an entry
   // posted while the tab was hidden still gets its time on screen.
   std::erase_if(entries, [&](const megatoy::status::Entry &entry) {
-    if (!sticky(entry) && now - entry.posted_at > kAutoDismiss) {
+    if (!sticky(entry) && entry.id != was_hovered &&
+        now - entry.posted_at > lifetime(entry)) {
       megatoy::status::dismiss(entry.id);
       return true;
     }
@@ -124,6 +138,9 @@ void render_status_toasts() {
                              ImGui::GetWindowPos().y + style.WindowPadding.y);
       const bool hovered =
           ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+      if (hovered) {
+        hovered_id = entry.id;
+      }
       ImGui::GetWindowDrawList()->AddText(
           close_pos,
           hovered ? ImGui::GetColorU32(ImGuiCol_Text)
