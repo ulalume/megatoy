@@ -52,7 +52,6 @@ inline void apply(const Palette &p = Palette{}) {
   const ImVec4 raised = hex(0x212834FF);
   // Quiet marks: slider grabs, graph captions and plots.
   const ImVec4 quiet = faded(hex(0xCBE3FFFF), 0.4f);
-  ImGui::GetStyle().DisabledAlpha = 0.2f;
   ImVec4 *colors = ImGui::GetStyle().Colors;
   colors[ImGuiCol_Text] = faded(p.text, 0.85f);
   colors[ImGuiCol_TextDisabled] = faded(p.text, 0.28f);

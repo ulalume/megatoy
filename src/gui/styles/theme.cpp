@@ -14,6 +14,9 @@ void apply_theme(ThemeId id) {
   if (ImGui::GetCurrentContext() == nullptr) {
     return;
   }
+  // Whatever is disabled, a muted operator among them, fades as far in
+  // every theme.
+  ImGui::GetStyle().DisabledAlpha = 0.2f;
 
   switch (id) {
   case ThemeId::Megatoy:
