@@ -200,17 +200,6 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
     }
   }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  // The browser draws the interface on the thread that renders the audio, so
-  // the time the waveform takes comes out of the same deadline. Where audio
-  // has a thread of its own it cannot, and the item is not offered.
-  const bool waveform_at_best = !ui_prefs.show_waveform;
-  if (ImGui::MenuItem(waveform_at_best ? "Hide Waveform (Already Set)"
-                                       : "Hide Waveform",
-                      nullptr, false, !waveform_at_best)) {
-    ui_prefs.show_waveform = false;
-  }
-#endif
 }
 
 /**
