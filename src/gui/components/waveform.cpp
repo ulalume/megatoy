@@ -156,15 +156,26 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
     return panel.min.y + height * std::clamp(t, 0.0f, 1.0f);
   };
 
+  // The level labels hang below their lines; they go, all together, where
+  // they would touch one another, and any one that would reach the
+  // frequency labels along the foot.
+  const float line_height = ImGui::GetTextLineHeight();
+  const float label_gap = ui::scale::px(1.0f);
+  const bool level_labels =
+      y_for_db(kSpectrumTopDb - 40.0f) - y_for_db(kSpectrumTopDb - 20.0f) >=
+      line_height + label_gap * 2.0f;
+  const float labels_floor = panel.max.y - line_height - label_gap * 2.0f;
   for (float db = kSpectrumTopDb - 20.0f; db > kSpectrumBottomDb; db -= 20.0f) {
     const float y = y_for_db(db);
     panel.draw_list->AddLine(ImVec2(panel.min.x, y), ImVec2(panel.max.x, y),
                              grid);
+    if (!level_labels || y + label_gap + line_height > labels_floor) {
+      continue;
+    }
     char text[16];
     std::snprintf(text, sizeof(text), "%.0f", db);
     panel.draw_list->AddText(
-        ImVec2(panel.min.x + ui::scale::px(3.0f), y + ui::scale::px(1.0f)),
-        label, text);
+        ImVec2(panel.min.x + ui::scale::px(3.0f), y + label_gap), label, text);
   }
 
   for (float hz : {100.0f, 1000.0f, 10000.0f}) {
