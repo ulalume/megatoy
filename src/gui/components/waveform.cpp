@@ -232,15 +232,16 @@ std::string chord_of(const std::vector<ym2612::Note> &notes) {
   return get_chord_name(midi_notes, false, true);
 }
 
-/// The chord at the top of the scope, in the middle.
-void draw_chord(const Panel &panel, const std::string &chord) {
+/// The chord at the top of the graphs, in the middle of the two side by
+/// side, from `left` to `right`.
+void draw_chord(const std::string &chord, float left, float right, float top) {
   if (chord.empty()) {
     return;
   }
   const float width = ImGui::CalcTextSize(chord.c_str()).x;
-  panel.draw_list->AddText(
-      ImVec2(std::round((panel.min.x + panel.max.x - width) * 0.5f),
-             panel.min.y + ui::scale::px(4.0f)),
+  ImGui::GetWindowDrawList()->AddText(
+      ImVec2(std::round((left + right - width) * 0.5f),
+             top + ui::scale::px(4.0f)),
       ImGui::GetColorU32(ImGuiCol_Text), chord.c_str());
 }
 
@@ -341,9 +342,6 @@ void render_waveform(const char *title, WaveformContext &context) {
   const Panel scope_panel =
       begin_panel(panel_size, "##scope", background, border);
   draw_scope(scope_panel, left, right, mono, clipped);
-  draw_chord(scope_panel,
-             chord_of(context.active_notes ? context.active_notes()
-                                           : std::vector<ym2612::Note>{}));
   end_panel(scope_panel);
 
   if (stacked) {
@@ -356,6 +354,12 @@ void render_waveform(const char *title, WaveformContext &context) {
       begin_panel(panel_size, "##spectrum", background, border);
   draw_spectrum(spectrum_panel, context.spectrum, context.sample_rate);
   end_panel(spectrum_panel);
+
+  draw_chord(chord_of(context.active_notes ? context.active_notes()
+                                           : std::vector<ym2612::Note>{}),
+             scope_panel.min.x,
+             stacked ? scope_panel.max.x : spectrum_panel.max.x,
+             scope_panel.min.y);
 
   draw_centred_glyph(ICON_MEGATOY_XMARK, close_min, close_max,
                      close_hovered

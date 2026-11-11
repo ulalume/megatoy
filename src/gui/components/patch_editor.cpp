@@ -328,7 +328,9 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
     }
   };
 
-  ImGui::PushItemWidth(lfo_slider_width(names));
+  // No wider than the column, which a name too long for it is cut short to.
+  ImGui::PushItemWidth(
+      std::min(lfo_slider_width(names), ImGui::GetContentRegionAvail().x));
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::scale::px(kLfoSliderGap));
 
   int ams =
@@ -735,26 +737,29 @@ void render_document_window(PatchEditorContext &context,
 
     // Side by side while each of the two even columns holds the LFO's
     // sliders, named in full or else as AMS, FMS and ALG; one above the
-    // other, in full, after that.
+    // other after that, in full while they fit.
     // The Channel column needs the diagram and the Algorithm slider named
     // beside it, which is shortened with the LFO's.
     const auto available_width = ImGui::GetContentRegionAvail().x;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const auto fits_beside = [&](const LfoNames &names) {
+    const auto section_width = [&](const LfoNames &names) {
       const float diagram_width =
           !names.short_names ? hslider_width()
                              : ui::scale::px(kMinAlgorithmDiagramWidth);
       const float channel_width = diagram_width + spacing +
                                   named_slider_fit_width(names.algorithm, "0");
-      const float column =
-          std::max(lfo_slider_width(names), channel_width) + spacing * 2.0f;
-      return available_width >= column * 2.0f;
+      return std::max(lfo_slider_width(names), channel_width);
+    };
+    const auto fits_beside = [&](const LfoNames &names) {
+      return available_width >= (section_width(names) + spacing * 2.0f) * 2.0f;
     };
     const bool full_beside = fits_beside(kLfoFullNames);
     const bool beside = full_beside || fits_beside(kLfoShortNames);
+    const bool full =
+        full_beside ||
+        (!beside && available_width >= section_width(kLfoFullNames));
     ImGui::Columns(beside ? 2 : 1, "##lfo_channel_columns", false);
-    const LfoNames &names =
-        beside && !full_beside ? kLfoShortNames : kLfoFullNames;
+    const LfoNames &names = full ? kLfoFullNames : kLfoShortNames;
     render_lfo_section(context, patch, names);
     ImGui::NextColumn();
     render_channel_section(context, patch, names);
