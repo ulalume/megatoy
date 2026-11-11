@@ -74,7 +74,7 @@ int main() {
   CHECK(filters.size() == 3);
   CHECK(filters[0].extensions == std::vector<std::string>{"fui"});
   CHECK(filters[1].extensions == std::vector<std::string>{"dmp"});
-  CHECK(filters[2].label == "MML");
+  CHECK(filters[2].label == formats[2].display_name());
 
   // The format is the one the returned name has, or else the one offered.
   CHECK(patches::with_save_extension("lead.FUI", formats, ".dmp") ==

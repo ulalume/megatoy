@@ -172,8 +172,8 @@ SaveResult PatchSession::save_current_patch_as_impl(
   const auto formats = save_formats();
   std::filesystem::path selected;
   const auto dialog = platform::file_dialog::save_file(
-      start_directory, sanitized_name + extension,
-      save_dialog_filters(formats, extension), selected);
+      start_directory, sanitized_name, save_dialog_filters(formats, extension),
+      selected);
   if (dialog == platform::file_dialog::DialogResult::Cancelled) {
     return SaveResult::cancelled();
   }

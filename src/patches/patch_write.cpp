@@ -66,7 +66,7 @@ save_dialog_filters(const std::vector<formats::SaveFormatInfo> &formats,
           return filter.extensions.front() == extension;
         });
     if (!listed) {
-      filters.push_back({format.label, {extension}});
+      filters.push_back({format.display_name(), {extension}});
     }
   };
   for (const auto &format : formats) {

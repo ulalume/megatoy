@@ -1,4 +1,5 @@
 #include "gui_manager.hpp"
+#include "core/utf8_utils.hpp"
 #include "fonts/icon_font.hpp"
 #include "gui/app_window.hpp"
 #include "gui/areas.hpp"
@@ -456,8 +457,7 @@ void GuiManager::process_event(const SDL_Event &event) {
     break;
   case SDL_EVENT_DROP_FILE:
     if (event.drop.data != nullptr) {
-      ui::os_file_drop::add(std::filesystem::path(
-          std::u8string(reinterpret_cast<const char8_t *>(event.drop.data))));
+      ui::os_file_drop::add(megatoy::utf8::to_path(event.drop.data));
     }
     break;
   case SDL_EVENT_DROP_COMPLETE:

@@ -1,4 +1,5 @@
 #include "file_dialog.hpp"
+#include "core/utf8_utils.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -24,11 +25,10 @@ DialogResult pick_folder(const std::filesystem::path &,
   return DialogResult::Cancelled;
 }
 
-DialogResult save_file(const std::filesystem::path &,
-                       const std::string &default_name,
+DialogResult save_file(const std::filesystem::path &, const std::string &stem,
                        const std::vector<FileFilter> &,
                        std::filesystem::path &selected_path) {
-  selected_path = std::filesystem::path(default_name);
+  selected_path = std::filesystem::path(stem);
   return DialogResult::Cancelled;
 }
 
@@ -38,18 +38,13 @@ namespace {
 
 bool g_nfd_initialized = false;
 
-// NFD speaks UTF-8 on every platform. Converting through std::u8string keeps
-// it that way; building a path straight from a narrow char* would decode with
-// the native narrow encoding (the ANSI codepage on Windows) and mangle any
-// non-ASCII path.
+// NFD speaks UTF-8 on every platform.
 std::filesystem::path path_from_utf8(const nfdu8char_t *value) {
-  const std::u8string utf8(reinterpret_cast<const char8_t *>(value));
-  return std::filesystem::path(utf8);
+  return megatoy::utf8::to_path(value);
 }
 
 std::string path_to_utf8(const std::filesystem::path &path) {
-  const std::u8string utf8 = path.u8string();
-  return std::string(reinterpret_cast<const char *>(utf8.data()), utf8.size());
+  return megatoy::utf8::from_path(path);
 }
 
 struct FilterItems {
@@ -147,7 +142,7 @@ DialogResult pick_folder(const std::filesystem::path &default_path,
 // macOS asks with a Format popup of its own: file_dialog_mac.mm.
 #if !defined(__APPLE__)
 DialogResult save_file(const std::filesystem::path &default_dir,
-                       const std::string &default_name,
+                       const std::string &stem,
                        const std::vector<FileFilter> &filters,
                        std::filesystem::path &selected_path) {
   if (!initialize()) {
@@ -165,11 +160,11 @@ DialogResult save_file(const std::filesystem::path &default_dir,
 
   nfdu8char_t *out_path = nullptr;
 #if defined(_WIN32)
-  const std::string &name = default_name;
+  // Windows changes the extension with the format picked.
+  const std::string name = name_with_first_extension(stem, filters);
 #else
-  // GTK gives a name without an extension the picked format's, and leaves
-  // one that has an extension as it is.
-  const std::string name = std::filesystem::path(default_name).stem().string();
+  // GTK adds the picked format's extension to a name that has none.
+  const std::string &name = stem;
 #endif
   const nfdresult_t result =
       NFD_SaveDialogU8(&out_path, filter_ptr, filter_count,
@@ -190,5 +185,12 @@ DialogResult save_file(const std::filesystem::path &default_dir,
 #endif
 
 #endif // __EMSCRIPTEN__
+
+std::string name_with_first_extension(const std::string &stem,
+                                      const std::vector<FileFilter> &filters) {
+  return filters.empty() || filters.front().extensions.empty()
+             ? stem
+             : stem + "." + filters.front().extensions.front();
+}
 
 } // namespace platform::file_dialog

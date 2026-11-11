@@ -649,8 +649,8 @@ void request_patch_duplicate(AppContext &ctx,
   const auto formats = session.save_formats();
   std::filesystem::path selected;
   const auto dialog = platform::file_dialog::save_file(
-      start_directory, stem + extension,
-      patches::save_dialog_filters(formats, extension), selected);
+      start_directory, stem, patches::save_dialog_filters(formats, extension),
+      selected);
   if (dialog == platform::file_dialog::DialogResult::Cancelled) {
     return;
   }

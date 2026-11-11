@@ -1,5 +1,7 @@
 #include "platform/file_dialog.hpp"
 
+#include "core/utf8_utils.hpp"
+
 #import <AppKit/AppKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -37,15 +39,17 @@ namespace platform::file_dialog {
 
 namespace {
 
+/// Empty rather than nil for bytes that are not UTF-8, which a patch's name
+/// from an older format may be.
 NSString *to_ns(const std::string &utf8) {
-  return [NSString stringWithUTF8String:utf8.c_str()];
+  return [[NSString alloc] initWithBytes:utf8.data()
+                                  length:utf8.size()
+                                encoding:NSUTF8StringEncoding]
+             ?: @"";
 }
 
 NSString *to_ns(const std::filesystem::path &path) {
-  const std::u8string utf8 = path.u8string();
-  return [[NSString alloc] initWithBytes:utf8.data()
-                                  length:utf8.size()
-                                encoding:NSUTF8StringEncoding];
+  return to_ns(megatoy::utf8::from_path(path));
 }
 
 NSArray<UTType *> *types_of(const FileFilter &filter) {
@@ -59,15 +63,6 @@ NSArray<UTType *> *types_of(const FileFilter &filter) {
   return types;
 }
 
-/// "DefleMask Preset (.dmp)", as Windows names a file type.
-NSString *title_of(const FileFilter &filter) {
-  std::string title = filter.label + " (";
-  for (std::size_t i = 0; i < filter.extensions.size(); ++i) {
-    title += (i == 0 ? "." : ", .") + filter.extensions[i];
-  }
-  return to_ns(title + ")");
-}
-
 NSView *format_row(NSPopUpButton *popup) {
   NSTextField *label = [NSTextField labelWithString:@"Format:"];
   NSStackView *row = [NSStackView stackViewWithViews:@[ label, popup ]];
@@ -79,7 +74,7 @@ NSView *format_row(NSPopUpButton *popup) {
 } // namespace
 
 DialogResult save_file(const std::filesystem::path &default_dir,
-                       const std::string &default_name,
+                       const std::string &stem,
                        const std::vector<FileFilter> &filters,
                        std::filesystem::path &selected_path) {
   @autoreleasepool {
@@ -101,7 +96,7 @@ DialogResult save_file(const std::filesystem::path &default_dir,
       NSPopUpButton *popup = [[NSPopUpButton alloc] initWithFrame:NSZeroRect
                                                         pullsDown:NO];
       for (const auto &filter : filters) {
-        [popup addItemWithTitle:title_of(filter)];
+        [popup addItemWithTitle:to_ns(filter.label)];
       }
       popup.target = picker;
       popup.action = @selector(formatChosen:);
@@ -112,7 +107,8 @@ DialogResult save_file(const std::filesystem::path &default_dir,
       panel.directoryURL = [NSURL fileURLWithPath:to_ns(default_dir)
                                       isDirectory:YES];
     }
-    panel.nameFieldStringValue = to_ns(default_name);
+    panel.nameFieldStringValue =
+        to_ns(name_with_first_extension(stem, filters));
 
     const NSModalResponse response = [panel runModal];
     [key_window makeKeyAndOrderFront:nil];
@@ -123,8 +119,7 @@ DialogResult save_file(const std::filesystem::path &default_dir,
     if (path == nullptr) {
       return DialogResult::Error;
     }
-    selected_path = std::filesystem::path(
-        std::u8string(reinterpret_cast<const char8_t *>(path)));
+    selected_path = megatoy::utf8::to_path(path);
     return DialogResult::Ok;
   }
 }
