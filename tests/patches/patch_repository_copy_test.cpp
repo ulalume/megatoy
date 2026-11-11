@@ -6,6 +6,7 @@
 #include "workspace/workspace.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <vector>
 
@@ -241,6 +242,38 @@ void test_undo(const fs::path &root) {
   CHECK(!repository.can_delete_patch(entry_at(repository, folder)));
 }
 
+void test_files_from_outside(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto folder = root / "inbox";
+  const auto outside = root / "outside";
+  fs::create_directories(folder);
+  fs::create_directories(outside / "kit");
+  CHECK(patches::write_patch(make_patch(2), outside / "lead.dmp"));
+  CHECK(patches::write_patch(make_patch(3), outside / "kit" / "snare.dmp"));
+  {
+    std::ofstream(outside / "notes.txt") << "not a patch";
+  }
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(folder));
+  patches::PatchRepository repository(file_system, workspace);
+
+  std::size_t skipped = 0;
+  const auto copies = repository.copy_files_in(
+      {outside / "lead.dmp", outside / "kit", outside / "notes.txt"},
+      entry_at(repository, folder), skipped);
+  CHECK(copies.size() == 2);
+  CHECK(skipped == 1);
+  CHECK(fs::exists(folder / "lead.dmp"));
+  CHECK(fs::exists(folder / "kit" / "snare.dmp"));
+  CHECK(!fs::exists(folder / "notes.txt"));
+  CHECK(fs::exists(outside / "lead.dmp"));
+  for (const auto &copy : copies) {
+    CHECK(repository.remove_copy(copy));
+  }
+  CHECK(!fs::exists(folder / "lead.dmp") && !fs::exists(folder / "kit"));
+}
+
 } // namespace
 
 int main() {
@@ -256,6 +289,7 @@ int main() {
   test_across_folders(root);
   test_package_version_copy(root);
   test_undo(root);
+  test_files_from_outside(root);
 
   fs::remove_all(root);
   std::cout << "All patch repository copy tests passed\n";
