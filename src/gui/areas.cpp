@@ -119,9 +119,9 @@ void keep_in_area(Area area, const char *window_name, unsigned int node_flags,
       static_cast<ImGuiDockNodeFlags>(node_flags) |
       ImGuiDockNodeFlags_NoCloseButton | ImGuiDockNodeFlags_NoWindowMenuButton;
   if (area != Area::Main) {
-    window_class.DockNodeFlagsOverrideSet |=
-        ImGuiDockNodeFlags_NoUndocking | ImGuiDockNodeFlags_NoDockingSplit |
-        ImGuiDockNodeFlags_NoDockingOverMe;
+    window_class.DockNodeFlagsOverrideSet |= ImGuiDockNodeFlags_NoUndocking |
+                                             ImGuiDockNodeFlags_NoDockingSplit |
+                                             ImGuiDockNodeFlags_NoDockingOverMe;
   }
   ImGui::SetNextWindowClass(&window_class);
   if (area != Area::Main) {
@@ -207,6 +207,24 @@ void refuse_outer_docking(unsigned int dockspace_id) {
 }
 
 bool layout_fits_areas() {
+  // A side view the arrangement does not know, one added since or saved
+  // under another name, would open floating.
+  std::set<std::string_view> side_views;
+  ImGuiContext &g = *GImGui;
+  for (ImGuiWindowSettings *settings = g.SettingsWindows.begin();
+       settings != nullptr; settings = g.SettingsWindows.next_chunk(settings)) {
+    const auto area = area_of(settings->GetName());
+    if (!settings->WantDelete && area && *area != Area::Main) {
+      side_views.insert(window_id(settings->GetName()));
+    }
+  }
+  for (const char *view :
+       {LIBRARY_ID, WAVEFORM_TITLE, SOFT_KEYBOARD_TITLE, PATCH_LAB_TITLE}) {
+    if (!side_views.contains(view)) {
+      return false;
+    }
+  }
+
   const ImGuiID dockspace_id = ImGui::GetMainViewport()->ID;
   std::map<ImGuiID, std::set<Area>> areas_in_node;
   std::map<Area, std::set<ImGuiID>> side_nodes;
