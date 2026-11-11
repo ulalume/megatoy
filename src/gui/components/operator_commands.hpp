@@ -2,6 +2,7 @@
 
 #include "gui/components/operator_selection.hpp"
 #include "ym2612/operator_edit.hpp"
+#include <array>
 #include <functional>
 #include <string>
 
@@ -17,6 +18,9 @@ struct OperatorEditState {
   /// applied next frame.
   float frame_height = 0.0f;
   float pending_frame_height = 0.0f;
+  /// Each operator's own frame height, where they stack and do not share
+  /// one. Measured while drawing, applied next frame.
+  std::array<float, 4> stacked_height{};
   /// Set when an operator acts on a click, so "clicked on nothing" can tell
   /// an operator's background from a real miss. Both look alike to ImGui.
   bool click_claimed = false;

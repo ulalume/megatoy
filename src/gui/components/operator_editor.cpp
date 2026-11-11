@@ -105,12 +105,11 @@ ImU32 operator_fill_color(bool selected, bool hovered) {
 /// last frame's are used.
 void draw_operator_fill(const OperatorEditState &state, int slot,
                         const ImVec2 &block_min, const ImVec2 &frame_min,
-                        float frame_width) {
-  if (state.frame_height <= 0.0f) {
+                        float frame_width, float frame_height) {
+  if (frame_height <= 0.0f) {
     return;
   }
-  const ImVec2 frame_max(frame_min.x + frame_width,
-                         frame_min.y + state.frame_height);
+  const ImVec2 frame_max(frame_min.x + frame_width, frame_min.y + frame_height);
   const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
                        ImGui::IsMouseHoveringRect(block_min, frame_max) &&
                        !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive();
@@ -957,7 +956,10 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
   if (sounds) {
-    draw_operator_fill(state, slot, block_min, frame_min, frame_width);
+    // Drawn under the contents, so to last frame's height.
+    draw_operator_fill(state, slot, block_min, frame_min, frame_width,
+                       stacked ? state.stacked_height[slot]
+                               : state.frame_height);
   }
   const float header_x = block_min.x + ImGui::GetStyle().SeparatorTextPadding.x;
   ImGui::BeginDisabled(!sounds);
@@ -983,7 +985,9 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // line up. From the previous frame; measuring and applying in one would
   // need two passes. Stacked, each is as tall as it needs.
   float frame_height = content_height;
-  if (!stacked) {
+  if (stacked) {
+    state.stacked_height[slot] = content_height;
+  } else {
     state.pending_frame_height =
         std::max(state.pending_frame_height, content_height);
     frame_height = std::max(content_height, state.frame_height);
