@@ -157,7 +157,10 @@ void entry_context_menu(PatchSelectorContext &context,
     if (actions.rename && ImGui::MenuItem("Rename...")) {
       context.rename_patch(entry);
     }
-    if (actions.delete_patch && ImGui::MenuItem("Delete...")) {
+    if (actions.delete_patch &&
+        ImGui::MenuItem(entry.is_directory && entry.format.empty()
+                            ? "Delete Folder..."
+                            : "Delete...")) {
       context.delete_patch(entry);
     }
   }

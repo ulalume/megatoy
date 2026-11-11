@@ -467,24 +467,72 @@ bool PatchRepository::remove_copy(const std::filesystem::path &copy) {
   return true;
 }
 
-std::optional<DeletedPatch>
-PatchRepository::keep_for_restore(const PatchEntry &entry) const {
-  std::ifstream in(entry.full_path, std::ios::binary);
+namespace {
+
+std::optional<std::string> read_bytes(const std::filesystem::path &file) {
+  std::ifstream in(file, std::ios::binary);
   if (!in) {
     return std::nullopt;
   }
-  DeletedPatch kept;
-  kept.path = entry.full_path;
-  kept.bytes.assign(std::istreambuf_iterator<char>(in),
+  std::string bytes((std::istreambuf_iterator<char>(in)),
                     std::istreambuf_iterator<char>());
-  if (!in.good() && !in.eof()) {
+  if (in.bad()) {
     return std::nullopt;
   }
-  kept.metadata = sidecar::read(sidecar::path_for(entry.full_path));
+  return bytes;
+}
+
+bool write_bytes(const std::filesystem::path &file, const std::string &bytes) {
+  std::ofstream out(file, std::ios::binary);
+  out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+  return static_cast<bool>(out);
+}
+
+} // namespace
+
+std::optional<DeletedEntry>
+PatchRepository::keep_for_restore(const PatchEntry &entry,
+                                  std::uintmax_t limit) const {
+  DeletedEntry kept;
+  kept.path = entry.full_path;
+  std::error_code ec;
+  if (!std::filesystem::is_directory(entry.full_path, ec)) {
+    auto bytes = read_bytes(entry.full_path);
+    if (!bytes) {
+      return std::nullopt;
+    }
+    kept.files.push_back({{}, std::move(*bytes)});
+    kept.metadata = sidecar::read(sidecar::path_for(entry.full_path));
+    return kept;
+  }
+
+  kept.is_directory = true;
+  std::uintmax_t total = 0;
+  for (std::filesystem::recursive_directory_iterator it(entry.full_path, ec),
+       end;
+       !ec && it != end; it.increment(ec)) {
+    const auto relative = it->path().lexically_relative(entry.full_path);
+    if (it->is_directory(ec)) {
+      kept.folders.push_back(relative);
+      continue;
+    }
+    auto bytes = read_bytes(it->path());
+    if (!bytes) {
+      return std::nullopt;
+    }
+    total += bytes->size();
+    if (total > limit) {
+      return std::nullopt;
+    }
+    kept.files.push_back({relative, std::move(*bytes)});
+  }
+  if (ec) {
+    return std::nullopt;
+  }
   return kept;
 }
 
-bool PatchRepository::restore(const DeletedPatch &deleted) {
+bool PatchRepository::restore(const DeletedEntry &deleted) {
   const auto *owner = workspace_.owner_of(deleted.path.parent_path());
   std::error_code ec;
   if (owner == nullptr || !owner->writable ||
@@ -492,15 +540,28 @@ bool PatchRepository::restore(const DeletedPatch &deleted) {
       !std::filesystem::is_directory(deleted.path.parent_path(), ec)) {
     return false;
   }
-  {
-    std::ofstream out(deleted.path, std::ios::binary);
-    out.write(deleted.bytes.data(),
-              static_cast<std::streamsize>(deleted.bytes.size()));
-    if (!out) {
-      out.close();
-      std::filesystem::remove(deleted.path, ec);
-      return false;
+  bool written = true;
+  if (deleted.is_directory) {
+    written = std::filesystem::create_directory(deleted.path, ec) && !ec;
+    for (const auto &folder : deleted.folders) {
+      if (!written) {
+        break;
+      }
+      std::filesystem::create_directories(deleted.path / folder, ec);
+      written = !ec;
     }
+  }
+  for (const auto &file : deleted.files) {
+    if (!written) {
+      break;
+    }
+    written = write_bytes(file.relative.empty() ? deleted.path
+                                                : deleted.path / file.relative,
+                          file.bytes);
+  }
+  if (!written) {
+    std::filesystem::remove_all(deleted.path, ec);
+    return false;
   }
   if (deleted.metadata) {
     sidecar::write(sidecar::path_for(deleted.path), *deleted.metadata);

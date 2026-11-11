@@ -236,9 +236,9 @@ bool FilesystemPatchStorage::move_patch(const PatchEntry &entry,
 }
 
 bool FilesystemPatchStorage::can_delete_patch(const PatchEntry &entry) const {
-  // A directory can be renamed but not deleted: deleting one would take
-  // everything inside it.
-  return can_rename_patch(entry) && !vfs_.is_directory(entry.full_path);
+  // A folder goes with everything in it, but the workspace folder itself is
+  // only taken out of the workspace.
+  return can_rename_patch(entry) && entry.relative_path != root_label_;
 }
 
 bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
@@ -247,6 +247,10 @@ bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
   }
 
   std::error_code ec;
+  if (vfs_.is_directory(entry.full_path)) {
+    // Its sidecars are inside it and go with it.
+    return std::filesystem::remove_all(entry.full_path, ec) > 0 && !ec;
+  }
   if (!std::filesystem::remove(entry.full_path, ec) || ec) {
     return false;
   }

@@ -23,6 +23,7 @@
 #endif
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -92,41 +93,6 @@ void request_workspace_folder_removal(AppContext &ctx,
 #endif
 }
 
-void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
-  if (!ctx.services.patch_session.repository().can_delete_patch(entry)) {
-    return;
-  }
-
-  const std::string location =
-      megatoy::platform::is_web() ? "from browser storage" : "from disk";
-  ctx.ui_state().danger_confirmation_state.request(
-      "Delete Patch?",
-      "Delete \"" + entry.name + "\"?\n\nThis deletes it " + location + ".",
-      "Delete", [&ctx, entry]() {
-        auto &session = ctx.services.patch_session;
-        auto kept = session.repository().keep_for_restore(entry);
-        if (!session.delete_patch(entry)) {
-          megatoy::status::error("Could not delete \"" + entry.name + "\".");
-          return;
-        }
-        const std::string message = "Deleted \"" + entry.name + "\".";
-        if (!kept) {
-          megatoy::status::success(message);
-          return;
-        }
-        const auto path = kept->path;
-        library_undo::offer(
-            message, {path},
-            [&ctx, kept = std::move(*kept), name = entry.name]() {
-              if (!ctx.services.patch_session.repository().restore(kept)) {
-                megatoy::status::error("Could not restore \"" + name + "\".");
-                return;
-              }
-              megatoy::status::success("Restored \"" + name + "\".");
-            });
-      });
-}
-
 /// Patches under an entry, for telling the user what a rename will cost.
 static std::size_t count_patches(const patches::PatchEntry &entry) {
   if (!entry.is_directory) {
@@ -166,6 +132,99 @@ static void confirm_large_folder_change(AppContext &ctx,
   (void)button;
 #endif
   action();
+}
+
+/**
+ * Runs `done` once browser storage has a change to many files, behind a
+ * modal; elsewhere the change is already on disk.
+ */
+static void after_storage_has(const std::string &progress,
+                              std::function<void()> done,
+                              const std::string &failure) {
+#if defined(MEGATOY_PLATFORM_WEB)
+  const bool started = platform::web::begin_awaited_flush(
+      progress, "Saving the change to browser storage.",
+      [done, failure](bool ok, std::string error) {
+        if (ok) {
+          done();
+        } else {
+          megatoy::status::error(failure + ": " + error);
+        }
+      });
+  if (!started) {
+    megatoy::status::warning("Another storage operation is in progress.");
+  }
+#else
+  (void)progress;
+  (void)failure;
+  done();
+#endif
+}
+
+static void perform_patch_deletion(AppContext &ctx,
+                                   const patches::PatchEntry &entry) {
+  auto &session = ctx.services.patch_session;
+  auto kept = session.repository().keep_for_restore(entry);
+  if (!session.delete_patch(entry)) {
+    megatoy::status::error("Could not delete \"" + entry.name + "\".");
+    return;
+  }
+  const std::string message = "Deleted \"" + entry.name + "\".";
+  std::function<void()> report = [message]() {
+    megatoy::status::success(message);
+  };
+  if (kept) {
+    const auto path = kept->path;
+    // Shared, not copied, by the callbacks it passes through.
+    auto restore =
+        [&ctx,
+         kept = std::make_shared<const patches::DeletedEntry>(std::move(*kept)),
+         name = entry.name]() {
+          if (!ctx.services.patch_session.repository().restore(*kept)) {
+            megatoy::status::error("Could not restore \"" + name + "\".");
+            return;
+          }
+          const std::string restored = "Restored \"" + name + "\".";
+          if (!kept->is_directory) {
+            megatoy::status::success(restored);
+            return;
+          }
+          after_storage_has(
+              "Restoring \"" + name + "\"...",
+              [restored]() { megatoy::status::success(restored); },
+              "Could not save the restore");
+        };
+    report = [message, path, restore]() {
+      library_undo::offer(message, {path}, restore);
+    };
+  }
+  if (!entry.is_directory || !entry.format.empty()) {
+    report();
+    return;
+  }
+  after_storage_has("Deleting \"" + entry.name + "\"...", report,
+                    "Could not save the deletion");
+}
+
+void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
+  if (!ctx.services.patch_session.repository().can_delete_patch(entry)) {
+    return;
+  }
+
+  const std::string location =
+      megatoy::platform::is_web() ? "from browser storage" : "from disk";
+  const bool folder = entry.is_directory && entry.format.empty();
+  const std::size_t patches = folder ? count_patches(entry) : 0;
+  const std::string what =
+      !folder        ? "it"
+      : patches == 0 ? "the folder"
+                     : "the folder and the " + std::to_string(patches) +
+                           (patches == 1 ? " patch" : " patches") + " in it";
+  ctx.ui_state().danger_confirmation_state.request(
+      folder ? "Delete Folder?" : "Delete Patch?",
+      "Delete \"" + entry.name + "\"?\n\nThis deletes " + what + " " +
+          location + ".",
+      "Delete", [&ctx, entry]() { perform_patch_deletion(ctx, entry); });
 }
 
 /// After a folder changed path, report once browser storage has it: IndexedDB

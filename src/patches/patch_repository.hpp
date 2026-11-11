@@ -46,10 +46,19 @@ struct PatchEntry {
   std::string container_item_id;
 };
 
-/// A patch file as it stood before it was deleted, to put back.
-struct DeletedPatch {
+/// A patch file or a folder as it stood before it was deleted, to put back.
+struct DeletedEntry {
+  struct File {
+    /// Below the folder; empty for the file itself.
+    std::filesystem::path relative;
+    std::string bytes;
+  };
   std::filesystem::path path;
-  std::string bytes;
+  bool is_directory = false;
+  /// A folder's folders, its empty ones among them, below it.
+  std::vector<std::filesystem::path> folders;
+  std::vector<File> files;
+  /// A file's own metadata. A folder's is among its files.
   std::optional<nlohmann::json> metadata;
 };
 
@@ -132,10 +141,14 @@ public:
                                                   std::string_view extension);
   /// Removes a copy made by copy_patch, file or folder, with its metadata.
   bool remove_copy(const std::filesystem::path &copy);
-  /// The file `entry` names and its metadata, read before deleting it.
-  std::optional<DeletedPatch> keep_for_restore(const PatchEntry &entry) const;
-  /// Writes a deleted patch back where it was, if nothing has taken its place.
-  bool restore(const DeletedPatch &deleted);
+  /// What `entry` holds, read before deleting it: the file and its metadata,
+  /// or the folder and everything in it. Nothing for a folder holding more
+  /// than `limit` bytes.
+  std::optional<DeletedEntry>
+  keep_for_restore(const PatchEntry &entry,
+                   std::uintmax_t limit = 64u << 20) const;
+  /// Writes a deleted entry back where it was, if nothing has taken its place.
+  bool restore(const DeletedEntry &deleted);
   /// A relative path as the user sees it: starting with what its folder is
   /// listed as.
   std::string display_path(const std::string &relative) const;

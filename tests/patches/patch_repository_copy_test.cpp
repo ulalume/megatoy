@@ -214,6 +214,31 @@ void test_undo(const fs::path &root) {
   ym2612::Patch loaded;
   CHECK(repository.load_patch(restored, loaded));
   CHECK(loaded.instrument.algorithm == 6);
+
+  // So does a folder, with everything in it, its empty folders and its
+  // patches' metadata too.
+  fs::create_directories(folder / "kit" / "empty");
+  CHECK(repository.update_patch_metadata(
+      repository.to_relative_path(folder / "kit" / "inner" / "x.dmp")
+          .generic_string(),
+      metadata));
+  repository.refresh();
+  const auto kit = entry_at(repository, folder / "kit");
+  CHECK(repository.can_delete_patch(kit));
+  const auto kept_kit = repository.keep_for_restore(kit);
+  CHECK(kept_kit.has_value() && kept_kit->is_directory);
+  CHECK(repository.delete_patch(kit));
+  CHECK(!fs::exists(folder / "kit"));
+  CHECK(repository.restore(*kept_kit));
+  CHECK(fs::is_directory(folder / "kit" / "empty"));
+  const auto x = entry_at(repository, folder / "kit" / "inner" / "x.dmp");
+  CHECK(x.metadata.has_value() && x.metadata->star_rating == 3);
+
+  // Too large to keep: no undo offered.
+  CHECK(!repository.keep_for_restore(kit, 1).has_value());
+
+  // The workspace folder itself is only taken out of the workspace.
+  CHECK(!repository.can_delete_patch(entry_at(repository, folder)));
 }
 
 } // namespace
