@@ -101,14 +101,15 @@ void render_all(AppContext &ctx) {
   struct PanelTitle {
     std::string full;
     std::string icon;
-    PanelTitle(const char *icon_glyph, const char *title)
-        : full(panel_window_title(icon_glyph, title)),
-          icon(panel_window_title(icon_glyph, title, true)) {}
+    PanelTitle(const char *icon_glyph, const char *title,
+               const char *id = nullptr)
+        : full(panel_window_title(icon_glyph, title, false, id)),
+          icon(panel_window_title(icon_glyph, title, true, id)) {}
     const char *get() const {
       return (layouts::window_is_narrow() ? icon : full).c_str();
     }
   };
-  static const PanelTitle library(LIBRARY_ICON, LIBRARY_TITLE);
+  static const PanelTitle library(LIBRARY_ICON, LIBRARY_TITLE, LIBRARY_ID);
   static const PanelTitle preferences(PREFERENCES_ICON, PREFERENCES_TITLE);
   static const PanelTitle soft_keyboard(SOFT_KEYBOARD_ICON,
                                         SOFT_KEYBOARD_TITLE);

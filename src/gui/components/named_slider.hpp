@@ -105,11 +105,10 @@ inline bool named_vslider_int(const char *label, const ImVec2 &size, int *value,
 
   const char *name_end = ImGui::FindRenderedTextEnd(label);
   const ImVec2 name_size = ImGui::CalcTextSize(label, name_end);
-  draw_list->AddText(
-      ImVec2(IM_ROUND(centre_x - name_size.x * 0.5f),
-             max_corner.y - style.FramePadding.y - name_size.y),
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)), label,
-      name_end);
+  draw_list->AddText(ImVec2(IM_ROUND(centre_x - name_size.x * 0.5f),
+                            max_corner.y - style.FramePadding.y - name_size.y),
+                     styles::color_u32(styles::MegatoyCol::TextMuted), label,
+                     name_end);
   return changed;
 }
 

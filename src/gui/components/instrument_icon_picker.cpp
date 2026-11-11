@@ -95,9 +95,8 @@ void draw_instrument_icon(std::string_view id, ImVec2 min, ImVec2 max,
   draw_centred_glyph(
       icon != nullptr ? icon->glyph : patches::instrument_icons::none_glyph(),
       min, max,
-      icon != nullptr
-          ? ImGui::GetColorU32(ImGuiCol_Text)
-          : ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)),
+      icon != nullptr ? ImGui::GetColorU32(ImGuiCol_Text)
+                      : styles::color_u32(styles::MegatoyCol::TextMuted),
       scale);
 }
 
@@ -189,8 +188,7 @@ std::optional<std::string> instrument_icon_list(const std::string &current) {
   // The icons scroll below the filter, up to most of the screen's height.
   ImGui::BeginChild(
       "##icons", ImVec2(width, std::min(total, viewport->WorkSize.y * 0.7f)));
-  const ImU32 muted =
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  const ImU32 muted = styles::color_u32(styles::MegatoyCol::TextMuted);
   const ImVec2 origin = ImGui::GetCursorScreenPos();
   float y = origin.y;
   for (const auto &shown : rows) {

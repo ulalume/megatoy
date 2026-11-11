@@ -100,29 +100,26 @@ void render_header_icon(const patches::PatchEntry *entry, bool editable,
                         float size, MetadataEdit &edit) {
   const std::string icon =
       entry != nullptr && entry->metadata ? entry->metadata->icon : "";
-  // Framed as the algorithm diagram is.
-  const auto frame = []() {
-    ImGui::GetWindowDrawList()->AddRect(
-        ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
-        styles::color_u32(styles::MegatoyCol::PreviewBorder));
-  };
-  if (!editable) {
-    ImGui::Dummy(ImVec2(size, size));
-    draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
-                         kHeaderIconScale);
-    frame();
-    return;
-  }
   const ImGuiID popup_id = ImGui::GetID("##icon_picker");
-  // No fill at rest: the icon stands alone until the pointer is over it.
-  ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
-  if (ImGui::Button("##icon", ImVec2(size, size))) {
-    ImGui::OpenPopupEx(popup_id);
+  if (editable) {
+    // No fill at rest: the icon stands alone until the pointer is over it.
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+    if (ImGui::Button("##icon", ImVec2(size, size))) {
+      ImGui::OpenPopupEx(popup_id);
+    }
+    ImGui::PopStyleColor();
+  } else {
+    ImGui::Dummy(ImVec2(size, size));
   }
-  ImGui::PopStyleColor();
   draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
                        kHeaderIconScale);
-  frame();
+  // Framed as the algorithm diagram is.
+  ImGui::GetWindowDrawList()->AddRect(
+      ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+      styles::color_u32(styles::MegatoyCol::PreviewBorder));
+  if (!editable) {
+    return;
+  }
   if (patches::instrument_icons::known(icon)) {
     ImGui::SetItemTooltip(
         "Icon: %s", patches::instrument_icons::display_name(icon).c_str());
@@ -227,12 +224,16 @@ constexpr const char *kFmsDepths[] = {"0 cent",   "±3.4 cent", "±6.7 cent",
                                       "±10 cent", "±14 cent",  "±20 cent",
                                       "±40 cent", "±80 cent"};
 
-/// The LFO section's sliders: one width for the two, wide enough for either
-/// name with its widest depth.
-float lfo_slider_width(const LfoNames &names) {
-  return std::max({hslider_width(),
-                   named_slider_fit_width(names.ams, "-11.8 dB"),
-                   named_slider_fit_width(names.fms, "±80 cent")});
+/// The width each of the LFO's two sliders needs for its name and its
+/// widest depth.
+float lfo_fit_width(const LfoNames &names) {
+  return std::max(named_slider_fit_width(names.ams, "-11.8 dB"),
+                  named_slider_fit_width(names.fms, "±80 cent"));
+}
+
+/// The names in full where `room` is at least `full_needs`, short otherwise.
+const LfoNames &names_fitting(float room, float full_needs) {
+  return room >= full_needs ? kLfoFullNames : kLfoShortNames;
 }
 
 /// The algorithm diagram's width, which the Algorithm slider below it takes
@@ -243,10 +244,12 @@ float algorithm_width(const LfoNames &names) {
                   named_slider_fit_width(names.algorithm, "0"));
 }
 
-/// The algorithm diagram over the Algorithm slider, `height` tall together.
+/// The algorithm diagram over the Algorithm slider, `height` tall together,
+/// no wider than the room left.
 void render_algorithm(PatchEditorContext &context, ym2612::Patch &patch,
                       const LfoNames &names, float height) {
-  const float width = algorithm_width(names);
+  const float width =
+      std::min(algorithm_width(names), ImGui::GetContentRegionAvail().x);
   const float slider_height =
       ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
   ImGui::BeginGroup();
@@ -264,13 +267,6 @@ void render_algorithm(PatchEditorContext &context, ym2612::Patch &patch,
     patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
   }
   ImGui::EndGroup();
-}
-
-/// The width each of the LFO's two sliders needs for its name and its
-/// widest depth.
-float lfo_fit_width(const LfoNames &names) {
-  return std::max(named_slider_fit_width(names.ams, "-11.8 dB"),
-                  named_slider_fit_width(names.fms, "±80 cent"));
 }
 
 /**
@@ -414,10 +410,10 @@ void render_document_header(PatchEditorContext &context,
   if (wide) {
     // Named in full while both fit so.
     const float half = (rows_right - left - spacing) * 0.5f;
-    const LfoNames &names =
-        half >= lfo_fit_width(kLfoFullNames) ? kLfoFullNames : kLfoShortNames;
+    const LfoNames &names = names_fitting(half, lfo_fit_width(kLfoFullNames));
     // Against the algorithm, at the right of the rows.
-    const float width = std::min(half, lfo_slider_width(kLfoFullNames));
+    const float width =
+        std::min(half, std::max(hslider_width(), lfo_fit_width(kLfoFullNames)));
     ImGui::SetCursorPos(
         ImVec2(rows_right - width * 2.0f - spacing, top + row * 2.0f));
     render_lfo_sliders(context, patch, names, width, true);
@@ -432,17 +428,14 @@ void render_document_header(PatchEditorContext &context,
     // the algorithm in full while they keep their short names.
     const float available = ImGui::GetContentRegionAvail().x;
     const float least = lfo_fit_width(kLfoShortNames);
-    const LfoNames &alg_names =
-        available - spacing - algorithm_width(kLfoFullNames) >= least
-            ? kLfoFullNames
-            : kLfoShortNames;
+    const LfoNames &alg_names = names_fitting(available - spacing - least,
+                                              algorithm_width(kLfoFullNames));
     const float column = available - spacing - algorithm_width(alg_names);
     if (column >= least) {
       const float column_top = ImGui::GetCursorPosY();
       const float column_left = ImGui::GetCursorPosX();
-      const LfoNames &names = column >= lfo_fit_width(kLfoFullNames)
-                                  ? kLfoFullNames
-                                  : kLfoShortNames;
+      const LfoNames &names =
+          names_fitting(column, lfo_fit_width(kLfoFullNames));
       // Level with the algorithm's foot: FMS beside its slider.
       ImGui::SetCursorPos(ImVec2(column_left, column_top + height - row * 2.0f +
                                                   style.ItemSpacing.y));

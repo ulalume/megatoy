@@ -81,38 +81,12 @@ void build_default_layout(unsigned int dockspace_id) {
     }
   }
   ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, dock_main_id);
-  ImGui::DockBuilderDockWindow(ui::LIBRARY_TITLE, dock_id_left);
+  ImGui::DockBuilderDockWindow(ui::LIBRARY_ID, dock_id_left);
 
   ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);
   ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
 
   ImGui::DockBuilderDockWindow(ui::WAVEFORM_TITLE, doc_id_down_left);
-}
-
-void adopt_former_names() {
-  struct Rename {
-    const char *former;
-    const char *current;
-  };
-  static constexpr Rename kRenames[] = {{"Patch Browser", ui::LIBRARY_TITLE}};
-  for (const auto &rename : kRenames) {
-    const ImGuiID former_id = ImHashStr(rename.former);
-    const ImGuiWindowSettings *former =
-        ImGui::FindWindowSettingsByID(former_id);
-    if (former == nullptr || former->WantDelete ||
-        ImGui::FindWindowSettingsByID(ImHashStr(rename.current)) != nullptr) {
-      continue;
-    }
-    const ImGuiWindowSettings saved = *former;
-    // Creating settings may move the others, so the former is found again.
-    ImGuiWindowSettings *adopted = ImGui::CreateNewWindowSettings(
-        ui::panel_window_id(rename.current).c_str());
-    const ImGuiID adopted_id = adopted->ID;
-    *adopted = saved;
-    adopted->ID = adopted_id;
-    ImGui::FindWindowSettingsByID(former_id)->WantDelete = true;
-    ImGui::MarkIniSettingsDirty();
-  }
 }
 
 void fit_footer_to_width() {
@@ -228,7 +202,7 @@ void fit_sidebar_to_width() {
   if (window_is_narrow()) {
     return;
   }
-  const ImGuiWindow *browser = ImGui::FindWindowByName(ui::LIBRARY_TITLE);
+  const ImGuiWindow *browser = ImGui::FindWindowByName(ui::LIBRARY_ID);
   if (browser == nullptr || !browser->WasActive ||
       browser->DockNode == nullptr) {
     return;

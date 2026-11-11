@@ -9,10 +9,6 @@ namespace ui::layouts {
  */
 bool window_is_narrow();
 
-/// Gives a view the settings saved under its former name, so a saved
-/// arrangement keeps it where it was. Called once the settings are loaded.
-void adopt_former_names();
-
 /// Docks the default arrangement into the empty dockspace `dockspace_id`.
 void build_default_layout(unsigned int dockspace_id);
 

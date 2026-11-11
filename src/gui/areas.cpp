@@ -93,7 +93,7 @@ bool is_editor_window(std::string_view window_name) {
 
 std::optional<Area> area_of(std::string_view window_name) {
   window_name = window_id(window_name);
-  if (window_name == LIBRARY_TITLE) {
+  if (window_name == LIBRARY_ID) {
     return Area::Sidebar;
   }
   if (window_name == PREFERENCES_TITLE || is_editor_window(window_name)) {

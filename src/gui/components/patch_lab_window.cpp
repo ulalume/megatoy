@@ -580,8 +580,7 @@ bool lab_list_row(const char *icon, bool muted_icon, const char *text,
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float inset = style.FramePadding.x;
   const ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
-  const ImU32 muted_color =
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  const ImU32 muted_color = styles::color_u32(styles::MegatoyCol::TextMuted);
   draw_list->AddText(ImVec2(row.x + inset, row.y),
                      muted_icon ? muted_color : text_color, icon);
   const float text_x =

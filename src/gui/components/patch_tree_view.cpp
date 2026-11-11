@@ -273,8 +273,7 @@ float rating_width(int stars, bool compact) {
 /// A patch's rating, its right end at `right`, centred on `centre_y`.
 void draw_rating(int stars, bool compact, float right, float centre_y) {
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  const ImU32 muted =
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  const ImU32 muted = styles::color_u32(styles::MegatoyCol::TextMuted);
   const float width = rating_width(stars, compact);
   if (!compact) {
     draw_list->AddText(
@@ -364,10 +363,9 @@ bool patch_row_selectable(const patches::PatchEntry &item, bool selected) {
   const float format_x = name_x + std::min(name_size.x, name_room) + gap;
   draw_list->PushClipRect(ImVec2(format_x, pos.y),
                           ImVec2(limit, pos.y + height), true);
-  draw_list->AddText(
-      ImVec2(format_x, text_y),
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)),
-      item.format.c_str());
+  draw_list->AddText(ImVec2(format_x, text_y),
+                     styles::color_u32(styles::MegatoyCol::TextMuted),
+                     item.format.c_str());
   draw_list->PopClipRect();
   return clicked;
 }
@@ -437,8 +435,7 @@ void render_directory_row(PatchSelectorContext &context,
     // A bank or a package is a file listing its instruments: named as a
     // patch is, its format muted after its name.
     const bool file = !item.format.empty();
-    const ImU32 muted =
-        ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+    const ImU32 muted = styles::color_u32(styles::MegatoyCol::TextMuted);
     const ImU32 color =
         heading || file ? ImGui::GetColorU32(ImGuiCol_Text) : muted;
     // Every row's name stands at the same distance past its arrow or icon.
@@ -465,7 +462,7 @@ void render_directory_row(PatchSelectorContext &context,
           ImVec2(name_x + ImGui::CalcTextSize(display_name.c_str()).x +
                      style.ItemSpacing.x,
                  text_y),
-          ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted)),
+          styles::color_u32(styles::MegatoyCol::TextMuted),
           item.telling_parents.c_str());
     }
   }

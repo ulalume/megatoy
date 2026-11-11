@@ -14,9 +14,6 @@ void apply_theme(ThemeId id) {
   if (ImGui::GetCurrentContext() == nullptr) {
     return;
   }
-  // Whatever is disabled, a muted operator among them, fades as far in
-  // every theme.
-  ImGui::GetStyle().DisabledAlpha = 0.2f;
 
   switch (id) {
   case ThemeId::Megatoy:
@@ -50,6 +47,9 @@ void apply_style(ThemeId id, float scale) {
   style.TabRounding = 7;
   // Tabs are told apart by their fill alone.
   style.TabBarOverlineSize = 0;
+  // Whatever is disabled, a muted operator among them, fades as far in
+  // every theme.
+  style.DisabledAlpha = 0.2f;
 
   apply_theme(id);
 

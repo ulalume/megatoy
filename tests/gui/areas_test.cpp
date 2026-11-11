@@ -51,7 +51,7 @@ void test_saved_layout_accepts_main_splits_and_shared_side_tabs() {
   ImGuiID second_main = 0;
   ImGui::DockBuilderSplitNode(main, ImGuiDir_Right, 0.5f, &first_main,
                               &second_main);
-  ImGui::DockBuilderDockWindow(ui::LIBRARY_TITLE, env.left);
+  ImGui::DockBuilderDockWindow(ui::LIBRARY_ID, env.left);
   ImGui::DockBuilderDockWindow("Warm###Patch Editor", first_main);
   ImGui::DockBuilderDockWindow("Cold###Patch Editor 2", second_main);
   ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, second_main);
@@ -63,7 +63,7 @@ void test_saved_layout_accepts_main_splits_and_shared_side_tabs() {
 
 void test_saved_layout_rejects_mixed_areas_and_separate_side_tabs() {
   TestEnvironment env;
-  ImGui::DockBuilderDockWindow(ui::LIBRARY_TITLE, env.left);
+  ImGui::DockBuilderDockWindow(ui::LIBRARY_ID, env.left);
   ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, env.left);
   CHECK(!ui::areas::layout_fits_areas());
   ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, env.right);

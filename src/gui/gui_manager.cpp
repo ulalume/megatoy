@@ -325,7 +325,6 @@ void GuiManager::begin_frame(bool waveform_shown) {
   // they no longer go; it is laid out afresh.
   if (check_loaded_layout_ && !(first_frame_ && !web_layout_loaded_)) {
     check_loaded_layout_ = false;
-    ui::layouts::adopt_former_names();
     if (!ui::areas::layout_fits_areas()) {
       first_frame_ = true;
       web_layout_loaded_ = false;
