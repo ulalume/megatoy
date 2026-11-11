@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -698,9 +699,12 @@ render_envelope_image(const ym2612::OperatorSettings &op,
   // The handles are the editor's to place, so all that is settled here is
   // where they would go. They keep out of the way until the pointer is on the
   // graph or its operator is selected, and stay up for as long as one is held
-  // wherever the pointer wanders off to.
-  const bool wanted =
-      selected || state.handle_active || ImGui::IsWindowHovered();
+  // wherever the pointer wanders off to. A disabled graph, a muted
+  // operator's, shows none.
+  const bool disabled = (ImGui::GetCurrentContext()->CurrentItemFlags &
+                         ImGuiItemFlags_Disabled) != 0;
+  const bool wanted = !disabled && (selected || state.handle_active ||
+                                    ImGui::IsWindowHovered());
   if (!wanted) {
     return {};
   }

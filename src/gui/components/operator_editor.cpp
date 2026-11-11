@@ -927,6 +927,11 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
 
   ImGui::PushID(slot);
 
+  // A muted operator is drawn faint and answers only its context menu, which
+  // turns it back on.
+  const bool sounds = context.session.playback()
+                          .operator_enable[static_cast<std::size_t>(slot)];
+
   const ImVec2 block_min = ImGui::GetCursorScreenPos();
   // Not GetColumnWidth(): a column clips its draw list tighter than that,
   // and the right border falls outside.
@@ -936,10 +941,14 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // sections' titles above are.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
-  draw_operator_fill(state, slot, block_min, frame_min, frame_width);
+  if (sounds) {
+    draw_operator_fill(state, slot, block_min, frame_min, frame_width);
+  }
   const float header_x = block_min.x + ImGui::GetStyle().SeparatorTextPadding.x;
+  ImGui::BeginDisabled(!sounds);
   const OperatorHeader header =
       render_operator_header(widget, ImVec2(header_x, block_min.y));
+  ImGui::EndDisabled();
   const float gap_from_x = header_x - header_gap();
   const float gap_to_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
@@ -972,7 +981,8 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // the label should select too.
   const bool frame_hovered =
       window_hovered && ImGui::IsMouseHoveringRect(block_min, frame_max);
-  const bool on_background = frame_hovered && !ImGui::IsAnyItemHovered();
+  const bool on_background =
+      sounds && frame_hovered && !ImGui::IsAnyItemHovered();
   // Not while something is being dragged, so a slider drag that wanders out
   // does not light up the operator it passes over.
   const bool background_hovered = on_background && !ImGui::IsAnyItemActive();
@@ -994,8 +1004,9 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       state, context.document, slot,
       on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left));
 
-  const bool receiving = operator_drop_target(context, patch.instrument, slot,
-                                              block_min, frame_max);
+  const bool receiving =
+      sounds && operator_drop_target(context, patch.instrument, slot, block_min,
+                                     frame_max);
 
   // Anywhere in the frame, including on a slider, which ignores right-click.
   if (frame_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
@@ -1015,19 +1026,20 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
     render_operator_command_items(commands);
     // Whether the operator is heard, as the keyboard's OP switches set it.
     ImGui::Separator();
-    bool &enabled = context.session.playback()
-                        .operator_enable[static_cast<std::size_t>(slot)];
-    ImGui::MenuItem((operator_slot_label(slot) + " Enabled").c_str(), nullptr,
-                    &enabled);
+    if (ImGui::MenuItem(("Mute " + operator_slot_label(slot)).c_str(), nullptr,
+                        !sounds)) {
+      context.session.playback()
+          .operator_enable[static_cast<std::size_t>(slot)] = !sounds;
+    }
     ui::end_popup();
   }
 
-  draw_operator_frame(
-      frame_min, frame_max, gap_from_x, gap_to_x,
-      receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
-                : operator_frame_color(state.selection.contains(slot),
-                                       state.selection.primary == slot,
-                                       background_hovered));
+  draw_operator_frame(frame_min, frame_max, gap_from_x, gap_to_x,
+                      receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
+                                : operator_frame_color(
+                                      sounds && state.selection.contains(slot),
+                                      sounds && state.selection.primary == slot,
+                                      background_hovered));
 
   ImGui::PopID();
 }

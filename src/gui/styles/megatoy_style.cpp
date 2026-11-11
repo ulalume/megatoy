@@ -80,7 +80,8 @@ const ImVec4 &color(MegatoyCol col) {
 }
 
 ImU32 color_u32(MegatoyCol col) {
-  return ImGui::ColorConvertFloat4ToU32(color(col));
+  // Faded as ImGui's own colours are, inside a disabled block among them.
+  return ImGui::GetColorU32(color(col));
 }
 
 } // namespace ui::styles
