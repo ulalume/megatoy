@@ -184,16 +184,20 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
     context.open_sound_preferences = true;
   }
 
-  const int largest_buffer =
-      kAudioBufferChoices[std::size(kAudioBufferChoices) - 1];
-  const int buffer_frames = ui_prefs.audio_buffer_frames > 0
-                                ? ui_prefs.audio_buffer_frames
-                                : context.default_audio_buffer_frames;
-  const bool buffer_at_best = buffer_frames >= largest_buffer;
-  if (ImGui::MenuItem(buffer_at_best ? "Increase Buffer Size (Already Set)"
-                                     : "Increase Buffer Size...",
-                      nullptr, false, !buffer_at_best)) {
-    context.open_sound_preferences = true;
+  // Only where the app chooses the buffer: the web's audio worklet renders
+  // in the browser's own fixed blocks.
+  if (context.default_audio_buffer_frames > 0) {
+    const int largest_buffer =
+        kAudioBufferChoices[std::size(kAudioBufferChoices) - 1];
+    const int buffer_frames = ui_prefs.audio_buffer_frames > 0
+                                  ? ui_prefs.audio_buffer_frames
+                                  : context.default_audio_buffer_frames;
+    const bool buffer_at_best = buffer_frames >= largest_buffer;
+    if (ImGui::MenuItem(buffer_at_best ? "Increase Buffer Size (Already Set)"
+                                       : "Increase Buffer Size...",
+                        nullptr, false, !buffer_at_best)) {
+      context.open_sound_preferences = true;
+    }
   }
 
 #if defined(MEGATOY_PLATFORM_WEB)
