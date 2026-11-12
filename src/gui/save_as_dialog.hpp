@@ -4,6 +4,7 @@
 // the choices can be checked without an ImGui frame.
 
 #include "formats/patch_registry.hpp"
+#include "patches/filename_utils.hpp"
 #include "workspace/workspace.hpp"
 
 #include <filesystem>
@@ -18,10 +19,9 @@ namespace ui {
 inline constexpr std::string_view kFallbackSaveAsExtension = ".dmp";
 
 /// The name used when there is none to start from.
-inline constexpr std::string_view kFallbackSaveAsStem = "patch";
+inline constexpr std::string_view kFallbackSaveAsStem = patches::kFallbackStem;
 
-/// The name a copy of `stem` opens with.
-std::string duplicate_stem(std::string_view stem);
+using patches::duplicate_stem;
 
 /// The format the dialog opens on: the patch's own when it is writable.
 std::string

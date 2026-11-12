@@ -5,14 +5,12 @@
 #include "app_state.hpp"
 #include "audio/audio_command.hpp"
 #include "core/status.hpp"
-#include "drop_actions.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/frame_requests.hpp"
 #include "gui/input/history_shortcuts.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
 #include "midi/midi_input_manager.hpp"
-#include "patch_actions.hpp"
 #include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -28,38 +26,11 @@
 #endif
 #include "runtime_context.hpp"
 #include <algorithm>
-#include <filesystem>
 #include <imgui.h>
 #include <iostream>
 #include <utility>
 
 namespace {
-
-void handle_file_drop(void *user_pointer, int count, const char **paths) {
-  if (paths == nullptr || count <= 0) {
-    return;
-  }
-
-  auto *context = static_cast<AppContext *>(user_pointer);
-  if (context == nullptr) {
-    return;
-  }
-
-  for (int i = 0; i < count; ++i) {
-    if (paths[i] == nullptr) {
-      continue;
-    }
-
-    drop_actions::Environment env{context->services, context->ui_state(),
-                                  [context](const ym2612::Patch &patch,
-                                            const std::filesystem::path &path) {
-                                    patch_actions::open_dropped_patch(
-                                        *context, patch, path);
-                                  }};
-
-    drop_actions::handle_drop(env, std::filesystem::path(paths[i]));
-  }
-}
 
 void draw_frame(RuntimeContext &runtime);
 
@@ -255,7 +226,6 @@ int main(int argc, char *argv[]) {
   services.initialize_app(app_state);
   MEGATOY_APP_STORAGE AppContext app_context{services, app_state};
 
-  services.gui_manager.set_drop_callback(&app_context, handle_file_drop);
   // Lambdas cannot capture statics on the web build; a reference with
   // automatic storage duration is capturable on both platforms.
   AppServices &services_ref = services;

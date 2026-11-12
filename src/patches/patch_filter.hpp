@@ -1,6 +1,6 @@
 #pragma once
 
-// The patch browser's search and star predicates.
+// The library's search and star predicates.
 
 #include "patches/patch_repository.hpp"
 

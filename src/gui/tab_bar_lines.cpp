@@ -23,6 +23,12 @@ std::vector<ImGuiID> &lit_before() {
   return nodes;
 }
 
+/// The buttons among the tabs that show a fill only under the pointer.
+std::vector<ImGuiID> &unfilled_buttons() {
+  static std::vector<ImGuiID> buttons;
+  return buttons;
+}
+
 bool is_pointed_at(ImGuiID id) {
   const ImGuiContext &g = *GImGui;
   return id != 0 && (g.HoveredId == id || g.HoveredIdPreviousFrame == id ||
@@ -82,10 +88,14 @@ void draw_tab_bar(ImDrawList *draw_list, const ImGuiDockNode &node,
     const bool shown = tab.ID != 0 && tab.ID == bar.VisibleTabId;
     const bool pointed = !shown && is_pointed_at(tab.ID);
     // A button among the tabs keeps a fill of its own, such as a folded
-    // view's at the left; one at the right, an action's, shows one only
-    // under the pointer.
+    // view's at the left; one at the right, an action's, and one left
+    // unfilled show one only under the pointer.
     const bool button = (tab.Flags & ImGuiTabItemFlags_Button) != 0;
-    if (button && !pointed && (tab.Flags & ImGuiTabItemFlags_Trailing) != 0) {
+    const bool unfilled =
+        (tab.Flags & ImGuiTabItemFlags_Trailing) != 0 ||
+        std::find(unfilled_buttons().begin(), unfilled_buttons().end(),
+                  tab.ID) != unfilled_buttons().end();
+    if (button && !pointed && unfilled) {
       continue;
     }
     const ImU32 color =
@@ -150,6 +160,13 @@ ImGuiID dock_space_over_viewport(ImGuiID dockspace_id,
   });
   ImGui::End();
   return dockspace_id;
+}
+
+void leave_button_unfilled(ImGuiID tab_id) {
+  auto &buttons = unfilled_buttons();
+  if (std::find(buttons.begin(), buttons.end(), tab_id) == buttons.end()) {
+    buttons.push_back(tab_id);
+  }
 }
 
 void keep_tab_bar_lit() {

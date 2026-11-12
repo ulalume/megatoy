@@ -8,13 +8,16 @@
 
 namespace ui {
 constexpr char PATCH_EDITOR_TITLE[] = "Patch Editor";
-constexpr char PATCH_BROWSER_TITLE[] = "Patch Browser";
+constexpr char LIBRARY_TITLE[] = "Library";
+/// The Library's window id, which saved layouts know it by: its name before
+/// it was the Library.
+constexpr char LIBRARY_ID[] = "Patch Browser";
 constexpr char SOFT_KEYBOARD_TITLE[] = "Soft Keyboard";
 constexpr char WAVEFORM_TITLE[] = "Waveform";
 constexpr char PREFERENCES_TITLE[] = "Preferences";
 constexpr char PATCH_LAB_TITLE[] = "Patch Lab";
 
-constexpr char PATCH_BROWSER_ICON[] = ICON_MEGATOY_FOLDER_TREE;
+constexpr char LIBRARY_ICON[] = ICON_MEGATOY_FOLDER_TREE;
 constexpr char SOFT_KEYBOARD_ICON[] = ICON_MEGATOY_PIANO;
 constexpr char WAVEFORM_ICON[] = ICON_MEGATOY_CHART_LINE;
 constexpr char PREFERENCES_ICON[] = ICON_MEGATOY_GEAR;
@@ -27,11 +30,13 @@ inline std::string panel_window_id(const char *title) {
 }
 
 /// A panel's title with its icon in front, or the icon alone. The window
-/// keeps `title` as its id, so saved layouts still place it.
+/// keeps `id`, its title unless given, as its id, so saved layouts still
+/// place it.
 inline std::string panel_window_title(const char *icon, const char *title,
-                                      bool icon_only = false) {
+                                      bool icon_only = false,
+                                      const char *id = nullptr) {
   return std::string(icon) + (icon_only ? "" : std::string(" ") + title) +
-         panel_window_id(title);
+         panel_window_id(id != nullptr ? id : title);
 }
 
 /// What a window's name keeps after "###", or the whole name.

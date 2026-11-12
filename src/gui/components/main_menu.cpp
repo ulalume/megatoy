@@ -21,6 +21,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
+#include "ym2612/operator_edit.hpp"
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -70,13 +71,14 @@ LoadWindow load_window(const audio::LoadMeter::History &history, float width) {
   const std::size_t used = std::min(history.count, wanted);
   const std::size_t first = history.count - used;
   const std::size_t columns = std::min<std::size_t>(
-      kMaxLoadColumns, std::max<std::size_t>(2, static_cast<std::size_t>(width)));
+      kMaxLoadColumns,
+      std::max<std::size_t>(2, static_cast<std::size_t>(width)));
   out.count = std::min(columns, used);
   out.latest = history.values[history.count - 1];
   double total = 0.0;
   for (std::size_t i = 0; i < used; ++i) {
-    const std::size_t column = out.count < 2 ? 0
-                                             : i * (out.count - 1) / (used - 1);
+    const std::size_t column =
+        out.count < 2 ? 0 : i * (out.count - 1) / (used - 1);
     const float value = history.values[first + i];
     out.columns[column] = std::max(out.columns[column], value);
     out.dropouts[column] = out.dropouts[column] || audio::is_dropout(value);
@@ -184,29 +186,21 @@ void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
     context.open_sound_preferences = true;
   }
 
-  const int largest_buffer =
-      kAudioBufferChoices[std::size(kAudioBufferChoices) - 1];
-  const int buffer_frames = ui_prefs.audio_buffer_frames > 0
-                                ? ui_prefs.audio_buffer_frames
-                                : context.default_audio_buffer_frames;
-  const bool buffer_at_best = buffer_frames >= largest_buffer;
-  if (ImGui::MenuItem(buffer_at_best ? "Increase Buffer Size (Already Set)"
-                                     : "Increase Buffer Size...",
-                      nullptr, false, !buffer_at_best)) {
-    context.open_sound_preferences = true;
+  // Only where the app chooses the buffer: the web's audio worklet renders
+  // in the browser's own fixed blocks.
+  if (context.default_audio_buffer_frames > 0) {
+    const int largest_buffer =
+        kAudioBufferChoices[std::size(kAudioBufferChoices) - 1];
+    const int buffer_frames = ui_prefs.audio_buffer_frames > 0
+                                  ? ui_prefs.audio_buffer_frames
+                                  : context.default_audio_buffer_frames;
+    const bool buffer_at_best = buffer_frames >= largest_buffer;
+    if (ImGui::MenuItem(buffer_at_best ? "Increase Buffer Size (Already Set)"
+                                       : "Increase Buffer Size...",
+                        nullptr, false, !buffer_at_best)) {
+      context.open_sound_preferences = true;
+    }
   }
-
-#if defined(MEGATOY_PLATFORM_WEB)
-  // The browser draws the interface on the thread that renders the audio, so
-  // the time the waveform takes comes out of the same deadline. Where audio
-  // has a thread of its own it cannot, and the item is not offered.
-  const bool waveform_at_best = !ui_prefs.show_waveform;
-  if (ImGui::MenuItem(waveform_at_best ? "Hide Waveform (Already Set)"
-                                       : "Hide Waveform",
-                      nullptr, false, !waveform_at_best)) {
-    ui_prefs.show_waveform = false;
-  }
-#endif
 }
 
 /**
@@ -234,15 +228,14 @@ float render_audio_load(MainMenuContext &context, const LoadWindow &window,
     clicked = ImGui::IsItemClicked();
     hovered = ImGui::IsItemHovered();
     draw_load_graph(panel, window);
-    panel.draw_list->AddText(
-        ImVec2(panel.min.x + style.FramePadding.x,
-               panel.min.y + (size.y - row) * 0.5f),
-        ImGui::GetColorU32(ImGuiCol_Text), reading);
+    panel.draw_list->AddText(ImVec2(panel.min.x + style.FramePadding.x,
+                                    panel.min.y + (size.y - row) * 0.5f),
+                             ImGui::GetColorU32(ImGuiCol_Text), reading);
     end_panel(panel);
   } else {
     // Text in the bar is drawn the frame padding below the cursor.
-    ImGui::SetCursorPos(ImVec2(
-        x, (ImGui::GetWindowHeight() - row) * 0.5f - style.FramePadding.y));
+    ImGui::SetCursorPos(ImVec2(x, (ImGui::GetWindowHeight() - row) * 0.5f -
+                                      style.FramePadding.y));
     ImGui::TextUnformatted(reading);
     clicked = ImGui::IsItemClicked();
     hovered = ImGui::IsItemHovered();
@@ -417,6 +410,9 @@ float lfo_menu_advance(bool short_label) {
                   bar_menu_advance(lfo_menu_label(short_label, false).c_str()));
 }
 
+/// The operators' menu label, its text drawn over it in colours of its own.
+constexpr char kOperatorMenuLabel[] = "OP 1234###Operators";
+
 /**
  * As the bar narrows, the load graph shrinks to the reading it holds and
  * then goes, then the middle loses its note, then the menus and the middle
@@ -437,8 +433,10 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   };
   // The room the middle leaves before a load area `load_width` wide: it sits
   // centred in the bar, but never over the menus.
-  // The LFO menu stands just left of the load area, named in full.
-  const float lfo_width = lfo_menu_advance(false);
+  // The LFO menu and the operators' stand just left of the load area, the
+  // LFO named in full.
+  const float lfo_width =
+      lfo_menu_advance(false) + bar_menu_advance(kOperatorMenuLabel);
   const auto room = [&](BarCentreFit fit, float load_width, bool logo = false) {
     const float right_start =
         width - load_width - style.FramePadding.x * 2.0f - lfo_width;
@@ -527,8 +525,7 @@ void file_menu_items(MainMenuContext &context,
   if (save_disabled)
     ImGui::EndDisabled();
 
-  const char *save_as_shortcut =
-      mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
+  const char *save_as_shortcut = mac_behavior ? "Shift+Cmd+S" : "Shift+Ctrl+S";
   if (controls.show_save_as &&
       ImGui::MenuItem("Save As...", save_as_shortcut)) {
     request_save_as(context.save_state);
@@ -540,8 +537,7 @@ void file_menu_items(MainMenuContext &context,
   const char *close_shortcut = megatoy::platform::is_web()
                                    ? nullptr
                                    : (mac_behavior ? "Cmd+W" : "Ctrl+W");
-  if (ImGui::MenuItem("Close Patch", close_shortcut) &&
-      context.close_patch) {
+  if (ImGui::MenuItem("Close Patch", close_shortcut) && context.close_patch) {
     context.close_patch();
   }
 
@@ -557,8 +553,8 @@ void file_menu_items(MainMenuContext &context,
     }
 
     const auto &folders = context.preferences.workspace().folders();
-    const bool has_removable_folder = std::any_of(
-        folders.begin(), folders.end(), [&](const auto &folder) {
+    const bool has_removable_folder =
+        std::any_of(folders.begin(), folders.end(), [&](const auto &folder) {
           return !context.preferences.workspace_folder_is_protected(
               folder.path);
         });
@@ -567,8 +563,7 @@ void file_menu_items(MainMenuContext &context,
     if (ui::begin_menu(remove_label, has_removable_folder)) {
       std::optional<std::filesystem::path> to_remove;
       for (const auto &folder : folders) {
-        if (context.preferences.workspace_folder_is_protected(
-                folder.path)) {
+        if (context.preferences.workspace_folder_is_protected(folder.path)) {
           continue;
         }
         if (ImGui::MenuItem(folder.path.string().c_str())) {
@@ -591,7 +586,7 @@ void edit_menu_items(MainMenuContext &context) {
   const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
   const char *redo_shortcut = mac_behavior ? "Cmd+Shift+Z" : "Ctrl+Shift+Z";
 
-  std::string undo_label = "Undo";
+  std::string undo_label = ICON_MEGATOY_UNDO " Undo";
   if (history.can_undo()) {
     std::string_view change = history.undo_label();
     if (!change.empty()) {
@@ -607,7 +602,7 @@ void edit_menu_items(MainMenuContext &context) {
     }
   }
 
-  std::string redo_label = "Redo";
+  std::string redo_label = ICON_MEGATOY_REDO " Redo";
   if (history.can_redo()) {
     std::string_view change = history.redo_label();
     if (!change.empty()) {
@@ -645,8 +640,7 @@ void view_menu_items(MainMenuContext &context) {
     ImGui::Separator();
   }
 
-  panel_menu_item(PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE,
-                  ui_prefs.show_patch_selector);
+  panel_menu_item(LIBRARY_ICON, LIBRARY_TITLE, ui_prefs.show_patch_selector);
   panel_menu_item(PATCH_LAB_ICON, PATCH_LAB_TITLE, ui_prefs.show_patch_lab);
   panel_menu_item(SOFT_KEYBOARD_ICON, SOFT_KEYBOARD_TITLE,
                   ui_prefs.show_midi_keyboard);
@@ -667,12 +661,94 @@ void view_menu_items(MainMenuContext &context) {
   }
 }
 
+/// Which operators sound, as the LFO's settings how the patch is played
+/// rather than the patch. A carrier is marked so; the menu stays open as
+/// they are switched.
+void operator_menu_items(std::array<bool, 4> &enabled, uint8_t algorithm) {
+  ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+  // "Carrier" stands where a shortcut would, in the items' own colour.
+  ImGui::PushStyleColor(ImGuiCol_TextDisabled,
+                        ImGui::GetStyleColorVec4(ImGuiCol_Text));
+  for (int slot = 0; slot < 4; ++slot) {
+    const std::string name = "OP" + std::to_string(slot + 1);
+    bool &on = enabled[static_cast<std::size_t>(slot)];
+    if (ImGui::MenuItem(
+            name.c_str(),
+            ym2612::is_carrier(slot, algorithm) ? "Carrier" : nullptr, on)) {
+      on = !on;
+    }
+  }
+  ImGui::PopStyleColor();
+  ImGui::PopItemFlag();
+}
+
+/// Whether every operator that reaches the output is muted, leaving the
+/// patch silent.
+bool carriers_muted(const std::array<bool, 4> &enabled, uint8_t algorithm) {
+  for (int slot = 0; slot < 4; ++slot) {
+    if (ym2612::is_carrier(slot, algorithm) &&
+        enabled[static_cast<std::size_t>(slot)]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
- * The LFO's switch and rate. They are how the patch is played rather than
- * the patch, so they mark nothing modified and are not saved with it
- * (ym2612/playback.hpp).
+ * The operators' menu, its label "OP 1234" with a muted one's number faint,
+ * in the warning colour when every carrier is muted.
+ * The label is laid out unseen and drawn over afterwards, so the menu's
+ * highlight stays underneath.
  */
-/// The LFO's switch and its rate, one width.
+void operator_menu(std::array<bool, 4> &enabled, uint8_t algorithm,
+                   const ImVec2 &padding, float item_spacing_y) {
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImGuiWindow *bar = ImGui::GetCurrentWindow();
+  // A menu bar item's label starts half an item spacing in.
+  const ImVec2 text_pos(bar->DC.CursorPos.x +
+                            IM_TRUNC(ImGui::GetStyle().ItemSpacing.x * 0.5f),
+                        bar->DC.CursorPos.y + bar->DC.CurrLineTextBaseOffset);
+  const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+  if (begin_bar_menu(kOperatorMenuLabel)) {
+    ImGui::PushStyleColor(ImGuiCol_Text, text);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, padding);
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, item_spacing_y);
+    operator_menu_items(enabled, algorithm);
+    if (carriers_muted(enabled, algorithm)) {
+      ImGui::Separator();
+      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusWarning),
+                         "All carriers muted: no sound");
+    }
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    ui::end_menu();
+  }
+  ImGui::PopStyleColor();
+
+  ImVec2 pos = text_pos;
+  const auto put = [&](const char *part, ImU32 color) {
+    draw_list->AddText(pos, color, part);
+    pos.x += ImGui::CalcTextSize(part).x;
+  };
+  // In the warning colour while nothing can be heard.
+  const ImU32 shown = carriers_muted(enabled, algorithm)
+                          ? styles::color_u32(styles::MegatoyCol::StatusWarning)
+                          : ImGui::GetColorU32(text);
+  put("OP ", shown);
+  for (int slot = 0; slot < 4; ++slot) {
+    const char digit[] = {static_cast<char>('1' + slot), '\0'};
+    put(digit, enabled[static_cast<std::size_t>(slot)]
+                   ? shown
+                   : styles::color_u32(styles::MegatoyCol::TextMuted));
+  }
+}
+
+/**
+ * The LFO's switch and rate, one width. They are how the patch is played
+ * rather than the patch, so they mark nothing modified and are not saved with
+ * it (ym2612/playback.hpp).
+ */
 void lfo_menu_items(ym2612::PlaybackSettings &playback) {
   // The chip's eight rates.
   static const char *const kRates[] = {"3.98 Hz", "5.56 Hz", "6.02 Hz",
@@ -797,8 +873,13 @@ void render_main_menu(MainMenuContext &context) {
     auto &playback = context.patch_session.playback();
     const std::string lfo_label =
         lfo_menu_label(fit.lfo_short, playback.lfo_enable);
-    const float lfo_x =
-        std::max(menus_end, load_start - lfo_menu_advance(fit.lfo_short));
+    // Side by side even where the bar is too narrow for both, the LFO's
+    // first.
+    const float lfo_advance = lfo_menu_advance(fit.lfo_short);
+    const float operators_x =
+        std::max(menus_end + lfo_advance,
+                 load_start - bar_menu_advance(kOperatorMenuLabel));
+    const float lfo_x = operators_x - lfo_advance;
     ImGui::SetCursorPos(ImVec2(lfo_x, row_y));
     const bool lfo_muted = !playback.lfo_enable;
     const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
@@ -820,6 +901,11 @@ void render_main_menu(MainMenuContext &context) {
     if (lfo_muted) {
       ImGui::PopStyleColor();
     }
+
+    ImGui::SetCursorPos(ImVec2(operators_x, row_y));
+    operator_menu(playback.operator_enable,
+                  session.current_patch().instrument.algorithm, padding,
+                  item_spacing_y);
 
     if (context.bar_centre) {
       context.bar_centre(fit.centre, menus_end, lfo_x, row_y);

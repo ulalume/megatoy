@@ -49,8 +49,8 @@ void close_empty_main_group();
  */
 void refuse_outer_docking(unsigned int dockspace_id);
 
-/// Whether no tab group mixes areas and each side area's views share one,
-/// judged from the saved arrangement just loaded.
+/// Whether the saved arrangement just loaded places every side view, no tab
+/// group mixes areas, and each side area's views share one.
 bool layout_fits_areas();
 
 } // namespace ui::areas

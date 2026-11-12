@@ -30,6 +30,11 @@ struct UIState {
     std::filesystem::path pending_instruments_path;
     std::vector<ym2612::Patch> instruments;
     int selected_instrument = 0;
+    /// Where a dropped file's patch goes.
+    using ApplyPatch = std::function<void(const ym2612::Patch &,
+                                          const std::filesystem::path &)>;
+    /// Where the instrument picked goes.
+    ApplyPatch apply;
   } drop_state;
 
   struct EnvelopeState {

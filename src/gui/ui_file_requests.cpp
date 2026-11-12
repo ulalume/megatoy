@@ -2,15 +2,20 @@
 
 #include "app_services.hpp"
 #include "core/status.hpp"
+#include "core/utf8_utils.hpp"
 #include "gui/components/common.hpp"
+#include "gui/components/file_manager.hpp"
+#include "gui/library_undo.hpp"
 #include "gui/patch_save_dialog.hpp"
 #include "gui/save_as_dialog.hpp"
 #include "gui/save_export_actions.hpp"
 #include "patch_actions.hpp"
 #include "patches/filename_utils.hpp"
+#include "patches/patch_entry_actions.hpp"
 #include "patches/patch_write.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
+#include "platform/trash.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_folder_delete.hpp"
 #include "platform/web/web_storage_bootstrap.hpp"
@@ -19,8 +24,10 @@
 #include "system/path_service.hpp"
 #include "workspace/path_policy.hpp"
 #endif
+#include <algorithm>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -90,26 +97,6 @@ void request_workspace_folder_removal(AppContext &ctx,
 #endif
 }
 
-void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
-  if (!ctx.services.patch_session.repository().can_delete_patch(entry)) {
-    return;
-  }
-
-  const std::string location =
-      megatoy::platform::is_web() ? "from browser storage" : "from disk";
-  ctx.ui_state().danger_confirmation_state.request(
-      "Delete Patch?",
-      "Delete \"" + entry.name + "\"?\n\nThis permanently deletes it " +
-          location + ". This cannot be undone.",
-      "Delete", [&ctx, entry]() {
-        if (!ctx.services.patch_session.delete_patch(entry)) {
-          megatoy::status::error("Could not delete \"" + entry.name + "\".");
-          return;
-        }
-        megatoy::status::success("Deleted \"" + entry.name + "\".");
-      });
-}
-
 /// Patches under an entry, for telling the user what a rename will cost.
 static std::size_t count_patches(const patches::PatchEntry &entry) {
   if (!entry.is_directory) {
@@ -151,69 +138,233 @@ static void confirm_large_folder_change(AppContext &ctx,
   action();
 }
 
-/// After a folder changed path, report once browser storage has it: IndexedDB
-/// keys files by path, so every patch under the folder is rewritten. Elsewhere
-/// the change is already on disk.
-static void
-report_folder_change(AppContext &ctx, const patches::PatchEntry &entry,
-                     const std::filesystem::path &new_path,
-                     const std::string &progress, const std::string &success,
-                     const std::string &failure, const std::string &undone) {
+/**
+ * Runs `done` once browser storage has a change to many files, behind a
+ * modal; elsewhere the change is on disk already. When storage could not
+ * keep it, `failed` runs and the user is told `failure`, with `undone` on
+ * what that leaves.
+ */
+static void after_storage_has(const std::string &progress,
+                              std::function<void()> done,
+                              const std::string &failure,
+                              const std::string &undone = {},
+                              std::function<void()> failed = {}) {
 #if defined(MEGATOY_PLATFORM_WEB)
-  const auto old_path = entry.full_path;
-  const bool was_workspace_folder =
-      ctx.services.preference_manager.workspace().find(new_path) != nullptr;
   const bool started = platform::web::begin_awaited_flush(
       progress, "Saving the change to browser storage.",
-      [&ctx, new_path, old_path, was_workspace_folder, success, failure,
-       undone](bool ok, std::string error) {
+      [done, failure, undone, failed](bool ok, std::string error) {
         if (ok) {
-          megatoy::status::success(success);
+          done();
           return;
         }
-        // Storage kept the old path, so the workspace has to point there
-        // again or a reload finds the folder missing.
-        if (was_workspace_folder) {
-          ctx.services.preference_manager.rename_workspace_folder(new_path,
-                                                                  old_path);
+        if (failed) {
+          failed();
         }
-        megatoy::status::error(failure + ": " + error + " -- " + undone);
+        megatoy::status::error(failure + ": " + error +
+                               (undone.empty() ? "" : " -- " + undone));
       });
   if (!started) {
     megatoy::status::warning("Another storage operation is in progress.");
   }
 #else
-  (void)ctx;
-  (void)entry;
-  (void)new_path;
   (void)progress;
   (void)failure;
   (void)undone;
-  megatoy::status::success(success);
+  (void)failed;
+  done();
 #endif
+}
+
+/// Tells the user a change in the Library is done, offering to undo it when
+/// `undo` is given. `touched` is what the change made.
+static void report_done(const std::string &message,
+                        std::vector<std::filesystem::path> touched,
+                        std::function<void()> undo) {
+  if (undo) {
+    library_undo::offer(message, std::move(touched), std::move(undo));
+  } else {
+    megatoy::status::success(message);
+  }
+}
+
+/// A folder moved or renamed to `new_path` that storage could not keep:
+/// IndexedDB still has it at `old_path`, so a workspace folder registered
+/// there has to point back or a reload finds it missing.
+static std::function<void()>
+workspace_rollback(AppContext &ctx, const std::filesystem::path &old_path,
+                   const std::filesystem::path &new_path) {
+  if (ctx.services.preference_manager.workspace().find(new_path) == nullptr) {
+    return {};
+  }
+  return [&ctx, old_path, new_path]() {
+    ctx.services.preference_manager.rename_workspace_folder(new_path, old_path);
+  };
+}
+
+/// Puts `kept` back and gives the documents `detached` their file again.
+static std::function<void()>
+restoring(AppContext &ctx, patches::DeletedEntry kept,
+          std::vector<patches::PatchSession::DetachedDocument> detached,
+          std::string name) {
+  // Shared, not copied, by the callbacks it passes through.
+  return [&ctx,
+          kept = std::make_shared<const patches::DeletedEntry>(std::move(kept)),
+          detached = std::move(detached), name = std::move(name)]() {
+    auto &session = ctx.services.patch_session;
+    if (!session.repository().restore(*kept)) {
+      megatoy::status::error("Could not restore \"" + name + "\".");
+      return;
+    }
+    session.reattach(detached);
+    const std::string restored = "Restored \"" + name + "\".";
+    if (!kept->is_directory) {
+      megatoy::status::success(restored);
+      return;
+    }
+    after_storage_has(
+        "Restoring \"" + name + "\"...",
+        [restored]() { megatoy::status::success(restored); },
+        "Could not save the restore");
+  };
+}
+
+static void perform_patch_deletion(AppContext &ctx,
+                                   const patches::PatchEntry &entry) {
+  auto &session = ctx.services.patch_session;
+  std::optional<patches::DeletedEntry> kept;
+  std::vector<patches::PatchSession::DetachedDocument> detached;
+  std::string message;
+  if (platform::trash::available()) {
+    const std::string trash = platform::trash::name();
+    kept = session.trash_patch(entry, &detached);
+    if (!kept) {
+      megatoy::status::post(
+          megatoy::status::Severity::Error,
+          "Could not move \"" + entry.name + "\" to the " + trash + ".",
+          {ui::reveal_in_file_manager_label(), [path = entry.full_path]() {
+             ui::reveal_in_file_manager(megatoy::utf8::from_path(path));
+           }});
+      return;
+    }
+    message = "Moved \"" + entry.name + "\" to the " + trash + ".";
+    // Gone from here, but with no word of where to put it back from.
+    if (kept->trashed.empty()) {
+      kept.reset();
+    }
+  } else {
+    kept = session.repository().keep_for_restore(entry);
+    if (!session.delete_patch(entry, &detached)) {
+      megatoy::status::error("Could not delete \"" + entry.name + "\".");
+      return;
+    }
+    message = "Deleted \"" + entry.name + "\".";
+  }
+  auto undo =
+      kept ? restoring(ctx, std::move(*kept), std::move(detached), entry.name)
+           : std::function<void()>();
+  const bool folder = entry.is_directory && entry.format.empty();
+  if (!folder) {
+    report_done(message, {entry.full_path}, std::move(undo));
+    return;
+  }
+  after_storage_has(
+      "Deleting \"" + entry.name + "\"...",
+      [message, path = entry.full_path, undo]() {
+        report_done(message, {path}, undo);
+      },
+      "Could not save the deletion");
+}
+
+void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
+  const auto &repository = ctx.services.patch_session.repository();
+  if (!repository.can_delete_patch(entry)) {
+    return;
+  }
+
+  const bool folder = entry.is_directory && entry.format.empty();
+  const std::size_t patches = folder ? count_patches(entry) : 0;
+  const std::string what =
+      !folder        ? "it"
+      : patches == 0 ? "the folder"
+                     : "the folder and the " + std::to_string(patches) +
+                           (patches == 1 ? " patch" : " patches") + " in it";
+  const auto unlisted =
+      folder ? repository.unlisted_files(entry) : std::optional<std::size_t>(0);
+  const std::string others =
+      !unlisted ? "\n\nIt may also hold files the Library does not show, "
+                  "which go with it."
+      : *unlisted == 0 ? ""
+                       : "\n\nIt also holds " + std::to_string(*unlisted) +
+                             (*unlisted == 1 ? " file" : " files") +
+                             " the Library does not show, which go with it.";
+  const auto perform = [&ctx, entry]() { perform_patch_deletion(ctx, entry); };
+  if (platform::trash::available()) {
+    const std::string trash = platform::trash::name();
+    ctx.ui_state().danger_confirmation_state.request(
+        "Move to " + trash + "?",
+        "Move \"" + entry.name + "\" to the " + trash + "?\n\nThis moves " +
+            what + " to the " + trash + "." + others,
+        "Move to " + trash, perform);
+    return;
+  }
+  const std::string location =
+      megatoy::platform::is_web() ? "from browser storage" : "from disk";
+  ctx.ui_state().danger_confirmation_state.request(
+      folder ? "Delete Folder?" : "Delete Patch?",
+      "Delete \"" + entry.name + "\"?\n\nThis deletes " + what + " " +
+          location + "." + others,
+      "Delete", perform);
+}
+
+/// The entry listed at `path`, as the tree has it now, copied: the change it
+/// is passed to rebuilds the tree.
+static std::optional<patches::PatchEntry>
+entry_at(AppContext &ctx, const std::filesystem::path &path) {
+  const auto *entry =
+      ctx.services.patch_session.repository().find_by_full_path(path);
+  return entry != nullptr ? std::optional(*entry) : std::nullopt;
 }
 
 static void perform_patch_rename(AppContext &ctx,
                                  const patches::PatchEntry &entry,
-                                 const std::string &new_stem) {
+                                 const std::string &new_stem, bool undoable) {
   if (!ctx.services.patch_session.rename_patch(entry, new_stem)) {
     megatoy::status::error("Could not rename \"" + entry.name + "\".");
     return;
   }
-  const std::string success = "Renamed to \"" + new_stem + "\".";
+  const std::string old_stem = entry.is_directory
+                                   ? entry.full_path.filename().string()
+                                   : entry.full_path.stem().string();
+  const auto renamed =
+      entry.full_path.parent_path() /
+      (entry.is_directory ? new_stem
+                          : new_stem + entry.full_path.extension().string());
+  std::function<void()> undo;
+  if (undoable) {
+    undo = [&ctx, renamed, old_stem]() {
+      if (const auto now = entry_at(ctx, renamed)) {
+        perform_patch_rename(ctx, *now, old_stem, false);
+      } else {
+        megatoy::status::error("Could not undo the rename.");
+      }
+    };
+  }
+  const std::string message = "Renamed to \"" + new_stem + "\".";
   if (!entry.is_directory) {
-    megatoy::status::success(success);
+    report_done(message, {renamed}, std::move(undo));
     return;
   }
-  report_folder_change(ctx, entry, entry.full_path.parent_path() / new_stem,
-                       "Renaming \"" + entry.name + "\"...", success,
-                       "Could not save the rename",
-                       "the old name comes back after a reload.");
+  after_storage_has(
+      "Renaming \"" + entry.name + "\"...",
+      [message, renamed, undo]() { report_done(message, {renamed}, undo); },
+      "Could not save the rename", "the old name comes back after a reload.",
+      workspace_rollback(ctx, entry.full_path, renamed));
 }
 
 static void perform_patch_move(AppContext &ctx,
                                const patches::PatchEntry &entry,
-                               const patches::PatchEntry &destination) {
+                               const patches::PatchEntry &destination,
+                               bool undoable) {
   const auto target = destination.full_path / entry.full_path.filename();
   std::error_code error;
   if (std::filesystem::exists(target, error)) {
@@ -225,24 +376,139 @@ static void perform_patch_move(AppContext &ctx,
     megatoy::status::error("Could not move \"" + entry.name + "\".");
     return;
   }
-  const std::string success =
+  std::function<void()> undo;
+  if (undoable) {
+    undo = [&ctx, target, from = entry.full_path.parent_path()]() {
+      const auto moved = entry_at(ctx, target);
+      const auto back = entry_at(ctx, from);
+      if (moved && back) {
+        perform_patch_move(ctx, *moved, *back, false);
+      } else {
+        megatoy::status::error("Could not undo the move.");
+      }
+    };
+  }
+  const std::string message =
       "Moved \"" + entry.name + "\" to \"" + destination.name + "\".";
   if (!entry.is_directory) {
-    megatoy::status::success(success);
+    report_done(message, {target}, std::move(undo));
     return;
   }
-  report_folder_change(ctx, entry, target, "Moving \"" + entry.name + "\"...",
-                       success, "Could not save the move",
-                       "it moves back after a reload.");
+  after_storage_has(
+      "Moving \"" + entry.name + "\"...",
+      [message, target, undo]() { report_done(message, {target}, undo); },
+      "Could not save the move", "it moves back after a reload.",
+      workspace_rollback(ctx, entry.full_path, target));
 }
 
 void request_patch_move(AppContext &ctx, const patches::PatchEntry &entry,
                         const patches::PatchEntry &destination) {
-  confirm_large_folder_change(ctx, entry, "Move Folder?",
-                              "Moving may take a while.", "Move",
+  confirm_large_folder_change(
+      ctx, entry, "Move Folder?", "Moving may take a while.", "Move",
+      [&ctx, entry, destination]() {
+        perform_patch_move(ctx, entry, destination, true);
+      });
+}
+
+static bool any_folder(const std::vector<std::filesystem::path> &paths) {
+  return std::any_of(paths.begin(), paths.end(), [](const auto &path) {
+    std::error_code ec;
+    return std::filesystem::is_directory(path, ec);
+  });
+}
+
+/// Undo for copies just made: they are taken away again, and on the web a
+/// folder among them waits for browser storage.
+static std::function<void()>
+undo_copies(AppContext &ctx, std::vector<std::filesystem::path> copies) {
+  // Shared, not copied, by the toast that holds it.
+  return [&ctx,
+          copies = std::make_shared<const std::vector<std::filesystem::path>>(
+              std::move(copies))]() {
+    const bool folders = any_folder(*copies);
+    if (!ctx.services.patch_session.remove_copies(*copies)) {
+      megatoy::status::error("Could not remove every copy.");
+      return;
+    }
+    const std::string removed =
+        copies->size() == 1 ? "Removed the copy." : "Removed the copies.";
+    if (!folders) {
+      megatoy::status::success(removed);
+      return;
+    }
+    after_storage_has(
+        "Removing the copy...",
+        [removed]() { megatoy::status::success(removed); },
+        "Could not save the removal", "the copy comes back after a reload.");
+  };
+}
+
+/// Tells the user about copies just made, with Undo, once browser storage
+/// has a folder among them.
+static void report_copies(AppContext &ctx, const std::string &message,
+                          const std::vector<std::filesystem::path> &copies,
+                          const std::string &destination) {
+  auto undo = undo_copies(ctx, copies);
+  if (!any_folder(copies)) {
+    report_done(message, copies, std::move(undo));
+    return;
+  }
+  after_storage_has(
+      "Copying to \"" + destination + "\"...",
+      [message, copies, undo]() { report_done(message, copies, undo); },
+      "Could not save the copy", "it is gone after a reload.");
+}
+
+static void perform_patch_copy(AppContext &ctx,
+                               const patches::PatchEntry &entry,
+                               const patches::PatchEntry &destination) {
+  // A patch inside a bank or a package becomes a file of its own.
+  const auto copy = ctx.services.patch_session.repository().copy_patch(
+      entry, destination, kFallbackSaveAsExtension);
+  if (!copy) {
+    megatoy::status::error("Could not copy \"" + entry.name + "\".");
+    return;
+  }
+  report_copies(
+      ctx, "Copied \"" + entry.name + "\" to \"" + destination.name + "\".",
+      {*copy}, destination.name);
+}
+
+void request_patch_copy(AppContext &ctx, const patches::PatchEntry &entry,
+                        const patches::PatchEntry &destination) {
+  confirm_large_folder_change(ctx, entry, "Copy Folder?",
+                              "Copying may take a while.", "Copy",
                               [&ctx, entry, destination]() {
-                                perform_patch_move(ctx, entry, destination);
+                                perform_patch_copy(ctx, entry, destination);
                               });
+}
+
+void request_files_copy(AppContext &ctx,
+                        const std::vector<std::filesystem::path> &files,
+                        const patches::PatchEntry &destination) {
+  std::size_t skipped = 0;
+  const auto copies = ctx.services.patch_session.repository().copy_files_in(
+      files, destination, skipped);
+  if (copies.empty()) {
+    const std::string what =
+        files.size() == 1 ? "\"" + files.front().filename().string() + "\""
+                          : "what was dropped";
+    megatoy::status::warning("Nothing in " + what +
+                             " is a patch megatoy reads, so nothing was "
+                             "copied.");
+    return;
+  }
+  const std::string unread =
+      skipped == 0 ? ""
+                   : " " + std::to_string(skipped) +
+                         (skipped == 1 ? " item holds" : " items hold") +
+                         " no patch megatoy reads.";
+  report_copies(ctx,
+                (copies.size() == 1
+                     ? "Copied \"" + copies.front().filename().string() + "\""
+                     : "Copied " + std::to_string(copies.size()) + " items") +
+                    " to \"" + destination.name + "\"." + unread,
+                copies, destination.name);
 }
 
 void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
@@ -264,7 +530,7 @@ void request_patch_rename(AppContext &ctx, const patches::PatchEntry &entry) {
         confirm_large_folder_change(
             ctx, entry, "Rename Folder?", "Renaming may take a while.",
             "Rename", [&ctx, entry, new_stem]() {
-              perform_patch_rename(ctx, entry, new_stem);
+              perform_patch_rename(ctx, entry, new_stem, true);
             });
       },
       [entry, is_directory](const std::string &new_stem) {
@@ -347,20 +613,6 @@ void request_new_folder(AppContext &ctx, const std::filesystem::path &parent) {
       });
 }
 
-/// The name a copy or a download starts from: the file's own stem, or the
-/// instrument's name inside a bank, which has no file of its own.
-static std::string entry_stem(const patches::PatchEntry &entry) {
-  const bool bank_instrument =
-      !entry.source_relative_path.empty() && entry.container_item_id.empty();
-  if (bank_instrument) {
-    const auto sanitized = patches::sanitize_filename(entry.name);
-    if (!sanitized.empty()) {
-      return sanitized;
-    }
-  }
-  return entry.full_path.stem().string();
-}
-
 /// The entry's own folder, when a copy may be written into it.
 static std::optional<std::filesystem::path>
 writable_entry_folder(AppContext &ctx, const patches::PatchEntry &entry) {
@@ -406,7 +658,8 @@ void download_patch_entry(AppContext &ctx, const patches::PatchEntry &entry,
     megatoy::status::error("Could not read \"" + entry.name + "\".");
     return;
   }
-  if (platform::web::download_patch(patch, extension, entry_stem(entry))) {
+  if (platform::web::download_patch(patch, extension,
+                                    patches::entry_stem(entry))) {
     megatoy::status::success("Download started.");
   } else {
     megatoy::status::error("Failed to prepare " + extension + " download.");
@@ -423,7 +676,7 @@ void request_patch_duplicate(AppContext &ctx,
     megatoy::status::error("Could not read \"" + entry.name + "\".");
     return;
   }
-  const std::string stem = duplicate_stem(entry_stem(entry));
+  const std::string stem = duplicate_stem(patches::entry_stem(entry));
   const std::string extension = default_save_as_extension(
       entry.full_path.extension().string(), session.save_formats());
   const auto source_folder = writable_entry_folder(ctx, entry);
@@ -443,14 +696,11 @@ void request_patch_duplicate(AppContext &ctx,
 #else
   const auto start_directory = default_save_as_folder(
       source_folder, ctx.services.preference_manager.last_save_directory());
-  const auto format = session.find_save_format(extension);
-  const std::vector<platform::file_dialog::FileFilter> filters{
-      {format ? format->label : "megatoy", {extension.substr(1)}},
-      {"All Files", {"*"}}};
-
+  const auto formats = session.save_formats();
   std::filesystem::path selected;
   const auto dialog = platform::file_dialog::save_file(
-      start_directory, stem + extension, filters, selected);
+      start_directory, stem, patches::save_dialog_filters(formats, extension),
+      selected);
   if (dialog == platform::file_dialog::DialogResult::Cancelled) {
     return;
   }
@@ -460,7 +710,7 @@ void request_patch_duplicate(AppContext &ctx,
   }
 
   selected =
-      patches::append_extension_if_missing(std::move(selected), extension);
+      patches::with_save_extension(std::move(selected), formats, extension);
   patch.name = selected.stem().string();
   if (!patches::write_patch(patch, selected)) {
     megatoy::status::error("Failed to write " + selected.string());

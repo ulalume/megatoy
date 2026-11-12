@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace ui {
 
@@ -21,11 +22,6 @@ struct PendingRating {
 struct PendingIcon {
   std::string relative_path;
   std::string icon;
-};
-
-struct PendingMove {
-  patches::PatchEntry entry;
-  patches::PatchEntry destination;
 };
 
 /// Drag payload of a browser entry: its repository-relative path.
@@ -61,6 +57,13 @@ struct PatchSelectorContext {
   /// Move an entry into a folder.
   std::function<void(const patches::PatchEntry &, const patches::PatchEntry &)>
       move_patch;
+  /// Copy an entry into a folder.
+  std::function<void(const patches::PatchEntry &, const patches::PatchEntry &)>
+      copy_patch;
+  /// Copy files from outside into a folder.
+  std::function<void(const std::vector<std::filesystem::path> &,
+                     const patches::PatchEntry &)>
+      copy_files_in;
   /// Copy the entry's patch to a new file, leaving the editor alone.
   std::function<void(const patches::PatchEntry &)> duplicate_patch;
   /// Ask for a new patch in this folder. Only offered on a folder the
@@ -74,11 +77,13 @@ struct PatchSelectorContext {
   std::optional<PendingIcon> pending_icon;
   /// The entry whose icon its menu's Icon... asked to pick, by path.
   std::optional<std::string> pending_icon_picker;
+  /// The entry its menu's Duplicate... asked to copy, by path.
+  std::optional<std::string> pending_duplicate;
   /// A drop in the tree, carried out once the tree is no longer being drawn.
-  std::optional<PendingMove> pending_move;
+  std::function<void()> pending_drop;
 };
 
-// Function to render patch browser panel
+// Function to render library panel
 void render_patch_selector(const char *title, PatchSelectorContext &context);
 
 } // namespace ui

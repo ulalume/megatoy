@@ -25,8 +25,7 @@ void draw_stars(ImVec2 min, float height, int filled) {
   const float star = ImGui::CalcTextSize(ICON_MEGATOY_STAR).x;
   const float step = star + scale::px(kStarGap);
   const ImU32 lit = ImGui::GetColorU32(ImGuiCol_Text);
-  const ImU32 faint =
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  const ImU32 faint = styles::color_u32(styles::MegatoyCol::TextMuted);
   for (int i = 0; i < 5; ++i) {
     const float left = min.x + step * i;
     draw_centred_glyph(i < filled ? ICON_MEGATOY_STAR

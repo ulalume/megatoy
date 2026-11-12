@@ -169,16 +169,11 @@ SaveResult PatchSession::save_current_patch_as_impl(
   const auto start_directory =
       writable_source_folder().value_or(preferences_.last_save_directory());
 
-  std::vector<platform::file_dialog::FileFilter> filters;
-  auto selected_format = find_save_format(extension);
-  const std::string filter_label =
-      selected_format ? selected_format->label : "megatoy";
-  filters.push_back({filter_label, {extension.substr(1)}});
-  filters.push_back({"All Files", {"*"}});
-
+  const auto formats = save_formats();
   std::filesystem::path selected;
   const auto dialog = platform::file_dialog::save_file(
-      start_directory, sanitized_name + extension, filters, selected);
+      start_directory, sanitized_name, save_dialog_filters(formats, extension),
+      selected);
   if (dialog == platform::file_dialog::DialogResult::Cancelled) {
     return SaveResult::cancelled();
   }
@@ -186,7 +181,7 @@ SaveResult PatchSession::save_current_patch_as_impl(
     return SaveResult::error("Failed to save patch");
   }
 
-  selected = append_extension_if_missing(std::move(selected), extension);
+  selected = with_save_extension(std::move(selected), formats, extension);
   auto patch_to_write = written_patch();
   patch_to_write.name = selected.stem().string();
   if (!patches::write_patch(patch_to_write, selected)) {
@@ -274,21 +269,6 @@ SaveResult PatchSession::create_folder_in(const std::filesystem::path &parent,
   platform::web::request_storage_persist();
 #endif
   return SaveResult::success(target);
-}
-
-std::optional<SaveFormatInfo>
-PatchSession::find_save_format(const std::string &extension) const {
-  auto formats = formats::PatchRegistry::instance().save_formats();
-  std::string ext_norm = extension;
-  if (!ext_norm.empty() && ext_norm.front() != '.') {
-    ext_norm = "." + ext_norm;
-  }
-  for (const auto &fmt : formats) {
-    if (fmt.extension == ext_norm) {
-      return fmt;
-    }
-  }
-  return std::nullopt;
 }
 
 std::vector<SaveFormatInfo> PatchSession::save_formats() const {

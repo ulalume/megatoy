@@ -1,8 +1,21 @@
 #include "patch_entry_actions.hpp"
+#include "patches/filename_utils.hpp"
 
 #include "patch_session.hpp"
 
 namespace patches {
+
+std::string entry_stem(const PatchEntry &entry) {
+  const bool bank_instrument =
+      !entry.source_relative_path.empty() && entry.container_item_id.empty();
+  if (bank_instrument) {
+    const auto sanitized = sanitize_filename(entry.name);
+    if (!sanitized.empty()) {
+      return sanitized;
+    }
+  }
+  return entry.full_path.stem().string();
+}
 
 bool entry_can_rename(const PatchRepository &repository,
                       const PatchEntry &entry, bool has_action,

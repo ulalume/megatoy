@@ -84,7 +84,7 @@ enum class MegatoyCol : int {
   TabBarLineDimmed,
   /// A button among a dock's tabs, such as a folded view's.
   TabButton,
-  /// Behind the patch browser's search row.
+  /// Behind the library's search row.
   BrowserHeaderBg,
   /// The room between the areas, dragged to resize them, at rest; pointed
   /// at and dragged it takes ImGuiCol_ResizeGripHovered and

@@ -1,6 +1,6 @@
 #include "platform/native/desktop_platform_services.hpp"
 
-#include "audio/sdl_audio_transport.hpp"
+#include "audio/native_audio_transport.hpp"
 #include "midi/rtmidi_backend.hpp"
 #include "update/release_provider.hpp"
 #include <memory>
@@ -15,7 +15,7 @@ platform::StdFileSystem &DesktopPlatformServices::file_system() {
 
 std::unique_ptr<AudioTransport>
 DesktopPlatformServices::create_audio_transport() {
-  return std::make_unique<SdlAudioTransport>();
+  return make_native_audio_transport();
 }
 
 std::unique_ptr<MidiBackend> DesktopPlatformServices::create_midi_backend() {

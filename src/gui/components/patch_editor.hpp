@@ -2,6 +2,7 @@
 
 #include "app_state.hpp"
 #include "gui/save_export_state.hpp"
+#include "history/history_manager.hpp"
 #include "patches/patch_session.hpp"
 #include <functional>
 #include <imgui.h>
@@ -37,6 +38,11 @@ struct PatchEditorContext {
       reload_from_disk;
   /// As the File menu's New Patch.
   std::function<void()> new_patch;
+  /// A document's undo history, and its Undo and Redo, which make the
+  /// document the active one first.
+  std::function<history::HistoryManager &(patches::DocumentId)> history;
+  std::function<void(patches::DocumentId)> undo;
+  std::function<void(patches::DocumentId)> redo;
 
   OperatorEditState &operator_edit() const {
     return document_ui(document).operator_edit;

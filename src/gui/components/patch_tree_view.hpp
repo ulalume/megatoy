@@ -1,6 +1,6 @@
 #pragma once
 
-// The patch browser's folder-hierarchy view. Internal to the selector.
+// The library's folder-hierarchy view. Internal to the selector.
 
 #include "patch_selector.hpp"
 #include "patches/patch_filter.hpp"

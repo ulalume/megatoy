@@ -2,10 +2,13 @@
 #include "platform/platform_config.hpp"
 
 #include "app_services.hpp"
+#include "drop_actions.hpp"
 #include "gui/components/folder_scan_dialog.hpp"
 #include "gui/components/status_toasts.hpp"
 #include "gui/components/view_patch_drop.hpp"
 #include "gui/layouts.hpp"
+#include "gui/library_undo.hpp"
+#include "gui/os_file_drop.hpp"
 #include "gui/save_export_actions.hpp"
 #include "gui/web_storage_dialogs.hpp"
 #include "gui/window_title.hpp"
@@ -80,6 +83,7 @@ void render_all(AppContext &ctx) {
         status.enable_button_disabled;
   }
 
+  os_file_drop::submit_source();
   render_main_menu(contexts.main_menu);
   render_patch_drop_feedback(contexts.patch_drop);
   render_confirmation_dialog(contexts.confirmation);
@@ -97,21 +101,21 @@ void render_all(AppContext &ctx) {
   struct PanelTitle {
     std::string full;
     std::string icon;
-    PanelTitle(const char *icon_glyph, const char *title)
-        : full(panel_window_title(icon_glyph, title)),
-          icon(panel_window_title(icon_glyph, title, true)) {}
+    PanelTitle(const char *icon_glyph, const char *title,
+               const char *id = nullptr)
+        : full(panel_window_title(icon_glyph, title, false, id)),
+          icon(panel_window_title(icon_glyph, title, true, id)) {}
     const char *get() const {
       return (layouts::window_is_narrow() ? icon : full).c_str();
     }
   };
-  static const PanelTitle patch_browser(PATCH_BROWSER_ICON,
-                                        PATCH_BROWSER_TITLE);
+  static const PanelTitle library(LIBRARY_ICON, LIBRARY_TITLE, LIBRARY_ID);
   static const PanelTitle preferences(PREFERENCES_ICON, PREFERENCES_TITLE);
   static const PanelTitle soft_keyboard(SOFT_KEYBOARD_ICON,
                                         SOFT_KEYBOARD_TITLE);
   static const PanelTitle patch_lab(PATCH_LAB_ICON, PATCH_LAB_TITLE);
   static const PanelTitle waveform(WAVEFORM_ICON, WAVEFORM_TITLE);
-  render_patch_selector(patch_browser.get(), contexts.patch_selector);
+  render_patch_selector(library.get(), contexts.patch_selector);
   render_preferences_window(preferences.get(), contexts.preferences);
   render_midi_keyboard(soft_keyboard.get(), contexts.midi_keyboard);
   render_patch_lab(patch_lab.get(), contexts.patch_lab, patch_lab_state());
@@ -125,6 +129,14 @@ void render_all(AppContext &ctx) {
   }
 
   render_save_export_popup_host(ctx);
+  // Files let go where nothing takes them open as a drop always did.
+  if (auto dropped = os_file_drop::take(); !dropped.empty()) {
+    auto env = make_drop_environment(ctx);
+    for (const auto &path : dropped) {
+      drop_actions::handle_drop(env, path);
+    }
+  }
+  library_undo::check(ctx.services.patch_session);
   render_status_toasts();
 
   handle_close_shortcut(ctx);

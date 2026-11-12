@@ -59,6 +59,15 @@ std::string new_patch_name_error(const std::string &stem,
                                  std::string_view extension,
                                  const std::filesystem::path &folder);
 
+/// Whether `lhs` and `rhs` are the same but for case.
+bool equals_case_insensitive(std::string_view lhs, std::string_view rhs);
+
+/// The name used when there is none to start from.
+inline constexpr std::string_view kFallbackStem = "patch";
+
+/// The name a copy of `stem` takes: "<stem> copy".
+std::string duplicate_stem(std::string_view stem);
+
 /**
  * `base`, or the first of `base 2`, `base 3`, ... that is not among
  * `existing_names`. Names are compared ignoring case, as some filesystems do.

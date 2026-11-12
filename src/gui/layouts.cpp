@@ -81,7 +81,7 @@ void build_default_layout(unsigned int dockspace_id) {
     }
   }
   ImGui::DockBuilderDockWindow(ui::PREFERENCES_TITLE, dock_main_id);
-  ImGui::DockBuilderDockWindow(ui::PATCH_BROWSER_TITLE, dock_id_left);
+  ImGui::DockBuilderDockWindow(ui::LIBRARY_ID, dock_id_left);
 
   ImGui::DockBuilderDockWindow(ui::SOFT_KEYBOARD_TITLE, doc_id_down);
   ImGui::DockBuilderDockWindow(ui::PATCH_LAB_TITLE, doc_id_down);
@@ -202,7 +202,7 @@ void fit_sidebar_to_width() {
   if (window_is_narrow()) {
     return;
   }
-  const ImGuiWindow *browser = ImGui::FindWindowByName(ui::PATCH_BROWSER_TITLE);
+  const ImGuiWindow *browser = ImGui::FindWindowByName(ui::LIBRARY_ID);
   if (browser == nullptr || !browser->WasActive ||
       browser->DockNode == nullptr) {
     return;
@@ -230,6 +230,6 @@ void fit_sidebar_to_width() {
   sidebar.set = width;
 }
 
-float patch_browser_min_width() { return ui::scale::px(kBrowserMinWidth); }
+float library_min_width() { return ui::scale::px(kBrowserMinWidth); }
 
 } // namespace ui::layouts

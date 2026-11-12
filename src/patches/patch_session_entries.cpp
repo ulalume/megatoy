@@ -1,6 +1,7 @@
 #include "patch_session.hpp"
 
 #include <algorithm>
+#include <system_error>
 #include <utility>
 
 namespace patches {
@@ -165,22 +166,83 @@ bool PatchSession::rename_patch(const PatchEntry &entry,
   return true;
 }
 
-bool PatchSession::delete_patch(const PatchEntry &entry) {
-  std::vector<DocumentId> showing;
+template <typename Remove>
+auto PatchSession::detaching(const PatchEntry &entry,
+                             std::vector<DetachedDocument> *detached,
+                             Remove &&remove) {
+  std::vector<DetachedDocument> showing;
   for (const auto &document : documents_) {
     if (selection_belongs_to_entry(document->selection_path(), entry)) {
-      showing.push_back(document->id());
+      showing.push_back(
+          {document->id(), document->path(), document->selection_path()});
     }
   }
-  if (!repository_->delete_patch(entry)) {
-    return false;
+  auto removed = remove();
+  if (!removed) {
+    return removed;
   }
-  for (const auto id : showing) {
-    if (auto *document = find_document(id)) {
+  for (const auto &shown : showing) {
+    if (auto *document = find_document(shown.id)) {
       set_document_path(*document, {});
     }
   }
-  return true;
+  if (detached != nullptr) {
+    *detached = std::move(showing);
+  }
+  return removed;
+}
+
+bool PatchSession::delete_patch(const PatchEntry &entry,
+                                std::vector<DetachedDocument> *detached) {
+  return detaching(entry, detached,
+                   [&] { return repository_->delete_patch(entry); });
+}
+
+std::optional<DeletedEntry>
+PatchSession::trash_patch(const PatchEntry &entry,
+                          std::vector<DetachedDocument> *detached) {
+  return detaching(entry, detached,
+                   [&] { return repository_->trash_patch(entry); });
+}
+
+void PatchSession::reattach(const std::vector<DetachedDocument> &detached) {
+  for (const auto &shown : detached) {
+    auto *document = find_document(shown.id);
+    if (document == nullptr || !document->path().empty()) {
+      continue;
+    }
+    document->set_path(shown.path);
+    document->set_selection_path(shown.selection_path);
+    remember_disk_time(*document);
+  }
+}
+
+bool PatchSession::remove_copies(
+    const std::vector<std::filesystem::path> &copies) {
+  std::vector<std::pair<DocumentId, std::filesystem::path>> showing;
+  for (const auto &document : documents_) {
+    if (document->path().empty()) {
+      continue;
+    }
+    auto file = repository_->to_absolute_path(document->path());
+    const bool copied =
+        std::any_of(copies.begin(), copies.end(), [&](const auto &copy) {
+          const auto relative = file.lexically_relative(copy);
+          return !relative.empty() && *relative.begin() != "..";
+        });
+    if (copied) {
+      showing.emplace_back(document->id(), std::move(file));
+    }
+  }
+  const bool removed = repository_->remove_copies(copies);
+  for (const auto &[id, file] : showing) {
+    std::error_code ec;
+    auto *document = find_document(id);
+    if (document != nullptr && !std::filesystem::exists(file, ec)) {
+      set_document_path(*document, {});
+    }
+  }
+  return removed;
 }
 
 bool PatchSession::can_move_patch(const PatchEntry &entry,

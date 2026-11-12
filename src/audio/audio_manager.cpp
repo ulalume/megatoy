@@ -2,21 +2,13 @@
 
 #if !defined(MEGATOY_PLATFORM_WEB)
 
+#include "audio/native_audio_transport.hpp"
 #include "audio/performance.hpp"
-#include "audio/sdl_audio_transport.hpp"
 #include <algorithm>
 #include <iostream>
 #include <memory>
 
-namespace {
-
-std::unique_ptr<AudioTransport> make_default_transport() {
-  return std::make_unique<SdlAudioTransport>();
-}
-
-} // namespace
-
-AudioManager::AudioManager() : AudioManager(make_default_transport()) {}
+AudioManager::AudioManager() : AudioManager(make_native_audio_transport()) {}
 
 AudioManager::AudioManager(std::unique_ptr<AudioTransport> transport)
     : engine_(), transport_(std::move(transport)) {}
@@ -29,7 +21,7 @@ bool AudioManager::initialize(uint32_t sample_rate, int buffer_frames) {
   }
 
   if (!transport_) {
-    transport_ = make_default_transport();
+    transport_ = make_native_audio_transport();
   }
 
   if (!engine_.initialize(sample_rate)) {

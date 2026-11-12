@@ -339,6 +339,94 @@ void test_scan_lists_folders_that_hold_nothing(const fs::path &root) {
   CHECK(empty->holds_nothing);
 }
 
+// The system's Trash is stood in for by a folder: what restore() does with
+// a trashed entry is move it and its sidecars back.
+void test_restore_from_trash(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto writable = root / "trash_restore";
+  const auto trash = root / "trash_restore_bin";
+  fs::create_directories(writable);
+  fs::create_directories(trash);
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(writable));
+  patches::PatchRepository repository(file_system, workspace);
+
+  ym2612::Patch patch;
+  patch.name = "lead";
+  const auto saved = repository.save_patch(patch, patch.name,
+                                           /*overwrite=*/true, ".dmp");
+  CHECK(saved.status == patches::SavePatchResult::Status::Success);
+  patches::PatchMetadata metadata;
+  metadata.star_rating = 4;
+  CHECK(repository.update_patch_metadata(
+      repository.to_relative_path(saved.path).generic_string(), metadata));
+  const auto sidecar = patches::sidecar::path_for(saved.path);
+  CHECK(patches::sidecar::roots_of(saved.path) ==
+        std::vector<fs::path>{sidecar});
+
+  const auto put_in_trash = [&]() {
+    patches::DeletedEntry deleted;
+    deleted.path = saved.path;
+    deleted.trashed = trash / "lead.dmp";
+    deleted.trashed_sidecars.push_back({sidecar, trash / "lead.dmp.json"});
+    fs::rename(saved.path, deleted.trashed);
+    fs::rename(sidecar, deleted.trashed_sidecars[0].in_trash);
+    patches::sidecar::prune_folders_of(saved.path);
+    return deleted;
+  };
+
+  auto deleted = put_in_trash();
+  CHECK(!fs::exists(sidecar.parent_path()));
+  CHECK(repository.restore(deleted));
+  CHECK(fs::exists(saved.path));
+  CHECK(!fs::exists(deleted.trashed));
+  CHECK(fs::exists(sidecar));
+  CHECK(!fs::exists(deleted.trashed_sidecars[0].in_trash));
+  CHECK(find_entry(repository.tree(), saved.path) != nullptr);
+
+  // Put back by hand first, as the Finder does: its sidecars follow.
+  deleted = put_in_trash();
+  fs::rename(deleted.trashed, saved.path);
+  CHECK(repository.restore(deleted));
+  CHECK(fs::exists(sidecar));
+
+  // Nothing is put back over a file that has taken its place.
+  deleted = put_in_trash();
+  fs::copy_file(deleted.trashed, saved.path);
+  CHECK(!repository.restore(deleted));
+  CHECK(fs::exists(deleted.trashed));
+}
+
+void test_unlisted_files(const fs::path &root) {
+  platform::StdFileSystem file_system;
+  const auto writable = root / "unlisted";
+  const auto folder = writable / "mixed";
+  fs::create_directories(folder / "inner");
+  fs::create_directories(folder / ".hidden");
+
+  ym2612::Patch patch;
+  patch.name = "bass";
+  CHECK(patches::write_patch(patch, folder / "bass.dmp"));
+  CHECK(patches::write_patch(patch, folder / "inner" / "bass.dmp"));
+  for (const auto &other : {folder / "notes.txt", folder / "inner" / "take.wav",
+                            folder / ".DS_Store", folder / "Thumbs.db",
+                            folder / ".hidden" / "secret.txt"}) {
+    std::ofstream(other) << "x";
+  }
+
+  megatoy::workspace::Workspace workspace;
+  CHECK(workspace.add(writable));
+  patches::PatchRepository repository(file_system, workspace);
+  const auto *listed = find_named(repository.tree(), "unlisted");
+  CHECK(listed != nullptr);
+  const auto *entry = find_named(listed->children, "mixed");
+  CHECK(entry != nullptr);
+  CHECK(repository.unlisted_files(*entry) == std::optional<std::size_t>(2));
+  // Too many to look at all of.
+  CHECK(!repository.unlisted_files(*entry, 3));
+}
+
 } // namespace
 
 int main() {
@@ -355,6 +443,8 @@ int main() {
   test_container_parse_cache_invalidates_on_change(root);
   test_repository_revision_tracks_refresh(root);
   test_scan_lists_folders_that_hold_nothing(root);
+  test_restore_from_trash(root);
+  test_unlisted_files(root);
 
   fs::remove_all(root);
   std::cout << "All patch repository delete tests passed\n";

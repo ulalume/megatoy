@@ -15,8 +15,9 @@ namespace ym2612 {
  * speakers stay on, and the DAC off, since it would take channel 6 from FM.
  */
 struct PlaybackSettings {
-  bool lfo_enable = false;
-  uint8_t lfo_frequency = 0;
+  bool lfo_enable = true;
+  /// 6.02 Hz, the rate the mod wheel's vibrato takes with the LFO off.
+  uint8_t lfo_frequency = 2;
   /// By display slot, OP1..OP4 as the editor shows them.
   std::array<bool, 4> operator_enable{true, true, true, true};
 

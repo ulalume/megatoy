@@ -138,9 +138,7 @@ void test_directory_rename(const fs::path &root) {
   CHECK(folder != nullptr);
   CHECK(folder->is_directory);
 
-  // A directory can be renamed but not deleted.
   CHECK(repository.can_rename_patch(*folder));
-  CHECK(!repository.can_delete_patch(*folder));
 
   const auto folder_entry = *folder;
   CHECK(repository.rename_patch(folder_entry, "low"));

@@ -11,6 +11,7 @@
 #include "patches/patch_entry_actions.hpp"
 #include "patches/patch_filter.hpp"
 #include "platform/platform_config.hpp"
+#include "platform/trash.hpp"
 #include "star_rating.hpp"
 
 #include "gui/fonts/megatoy_icons.hpp"
@@ -114,8 +115,9 @@ void entry_context_menu(PatchSelectorContext &context,
         context.save_current_patch_as();
       }
     }
+    // Written once the tree is drawn, as a rating is.
     if (actions.duplicate && ImGui::MenuItem("Duplicate...")) {
-      context.duplicate_patch(entry);
+      context.pending_duplicate = entry.relative_path;
     }
     if (download_extension) {
       if (actions.is_current) {
@@ -148,8 +150,8 @@ void entry_context_menu(PatchSelectorContext &context,
   // callback is simply absent on platforms without one.
   if (begin_group(actions.reveal)) {
     if (ImGui::MenuItem(ui::reveal_in_file_manager_label())) {
-      context.reveal_in_file_manager(
-          context.repository.to_absolute_path(entry.relative_path));
+      // An instrument inside a bank shows the bank, the file it is in.
+      context.reveal_in_file_manager(entry.full_path);
     }
   }
 
@@ -157,7 +159,12 @@ void entry_context_menu(PatchSelectorContext &context,
     if (actions.rename && ImGui::MenuItem("Rename...")) {
       context.rename_patch(entry);
     }
-    if (actions.delete_patch && ImGui::MenuItem("Delete...")) {
+    const std::string delete_label =
+        platform::trash::available()
+            ? std::string("Move to ") + platform::trash::name() + "..."
+        : entry.is_directory && entry.format.empty() ? "Delete Folder..."
+                                                     : "Delete...";
+    if (actions.delete_patch && ImGui::MenuItem(delete_label.c_str())) {
       context.delete_patch(entry);
     }
   }

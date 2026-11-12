@@ -21,7 +21,6 @@
 #include <vector>
 
 namespace ui::renderer_detail {
-namespace {
 
 drop_actions::Environment make_drop_environment(AppContext &ctx) {
   return {
@@ -30,6 +29,8 @@ drop_actions::Environment make_drop_environment(AppContext &ctx) {
         patch_actions::open_dropped_patch(ctx, patch, path);
       }};
 }
+
+namespace {
 
 UIState::DocumentUi &active_document_ui(AppContext &ctx) {
   return ctx.ui_state().document_ui(
@@ -142,7 +143,12 @@ PatchLabContext make_patch_lab_context(AppContext &ctx) {
           [&ctx](const std::string &label, const std::string &merge_key) {
             patch_actions::begin_change(ctx, label, merge_key);
           },
-          [&ctx]() { patch_actions::commit_change(ctx); }};
+          [&ctx]() { patch_actions::commit_change(ctx); },
+          [&ctx](const std::filesystem::path &path,
+                 drop_actions::ApplyPatchFn apply) {
+            auto env = make_drop_environment(ctx);
+            drop_actions::handle_drop_into(env, path, std::move(apply));
+          }};
 }
 
 PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
@@ -213,6 +219,14 @@ PatchSelectorContext make_patch_selector_context(AppContext &ctx) {
              const patches::PatchEntry &destination) {
         request_patch_move(ctx, entry, destination);
       },
+      [&ctx](const patches::PatchEntry &entry,
+             const patches::PatchEntry &destination) {
+        request_patch_copy(ctx, entry, destination);
+      },
+      [&ctx](const std::vector<std::filesystem::path> &files,
+             const patches::PatchEntry &destination) {
+        request_files_copy(ctx, files, destination);
+      },
       [&ctx](const patches::PatchEntry &entry) {
         request_patch_duplicate(ctx, entry);
       },
@@ -242,7 +256,6 @@ MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
       [&ctx](const ym2612::Note &note) {
         return ctx.services.audio_manager.note_sounding(note);
       },
-      ctx.services.patch_session.playback().operator_enable,
   };
 }
 
@@ -321,6 +334,18 @@ FrameContexts::FrameContexts(AppContext &ctx)
     patch_actions::reload_from_disk(ctx, document, patch);
   };
   patch_editor.new_patch = [&ctx]() { patch_actions::new_patch(ctx); };
+  patch_editor.history =
+      [&ctx](patches::DocumentId document) -> history::HistoryManager & {
+    return ctx.services.histories[document];
+  };
+  patch_editor.undo = [&ctx](patches::DocumentId document) {
+    patch_actions::activate_document(ctx, document);
+    ctx.services.histories[document].undo(ctx);
+  };
+  patch_editor.redo = [&ctx](patches::DocumentId document) {
+    patch_actions::activate_document(ctx, document);
+    ctx.services.histories[document].redo(ctx);
+  };
 }
 
 } // namespace ui::renderer_detail

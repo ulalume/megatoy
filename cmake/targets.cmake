@@ -170,6 +170,8 @@ set(MEGATOY_CORE_SOURCES
   src/gui/ui_renderer.cpp
   src/gui/ui_document_flows.cpp
   src/gui/ui_file_requests.cpp
+  src/gui/library_undo.cpp
+  src/gui/os_file_drop.cpp
   src/gui/ui_frame_contexts.cpp
   src/gui/image/resource_manager.cpp
   src/gui/image/stb_image_impl.cpp
@@ -207,6 +209,7 @@ else()
     src/gui/components/folder_scan_dialog.cpp
   )
   list(APPEND MEGATOY_LOGIC_SOURCES
+    src/audio/native_audio_transport.cpp
     src/audio/sdl_audio_transport.cpp
     src/midi/rtmidi_backend.cpp
     src/patches/background_folder_scan.cpp
@@ -215,12 +218,23 @@ else()
 endif()
 # Add platform-specific source files
 if(APPLE)
-  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm)
+  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.mm
+                                    src/platform/file_dialog_mac.mm
+                                    src/platform/trash_mac.mm
+                                    src/audio/core_audio_transport.cpp)
+  set_source_files_properties(src/platform/file_dialog_mac.mm
+                              src/platform/trash_mac.mm
+    PROPERTIES COMPILE_OPTIONS -fobjc-arc)
   list(APPEND MEGATOY_CORE_SOURCES src/gui/mac_window_menu.mm)
-elseif(WIN32)
-  list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
 else()
   list(APPEND MEGATOY_LOGIC_SOURCES src/system/open_default_browser.cpp)
+  if(WIN32)
+    list(APPEND MEGATOY_LOGIC_SOURCES src/platform/trash_windows.cpp)
+  elseif(UNIX AND NOT EMSCRIPTEN)
+    list(APPEND MEGATOY_LOGIC_SOURCES src/platform/trash_linux.cpp)
+  else()
+    list(APPEND MEGATOY_LOGIC_SOURCES src/platform/trash.cpp)
+  endif()
 endif()
 
 add_library(megatoy_logic STATIC ${MEGATOY_LOGIC_SOURCES})
@@ -282,7 +296,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     efsw
   )
   if(WIN32)
-    target_link_libraries(megatoy_logic PUBLIC shell32)
+    target_link_libraries(megatoy_logic PUBLIC shell32 ole32 uuid)
   endif()
 endif()
 
@@ -290,8 +304,11 @@ if(APPLE)
   target_link_libraries(megatoy_logic PUBLIC
     "-framework AppKit"
     "-framework ApplicationServices"
+    "-framework AudioToolbox"
+    "-framework CoreAudio"
     "-framework CoreFoundation"
     "-framework Foundation"
+    "-framework UniformTypeIdentifiers"
   )
 endif()
 

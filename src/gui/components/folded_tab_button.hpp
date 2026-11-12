@@ -49,14 +49,16 @@ inline void keep_leading_order(ImGuiTabBar &bar, ImGuiID id) {
 
 /**
  * Draws a button with `icon` among `node`'s tabs, its title as a tooltip,
- * `width` wide: at their left with ImGuiTabItemFlags_Leading, at the bar's
- * right end with ImGuiTabItemFlags_Trailing. A button added to a dock's tab bar
- * does not take clicks itself, so the caller reads them from what this returns.
- * Nothing when the node has no tab bar to add to.
+ * `width` wide, with a fill of its own unless not `filled`: at their left with
+ * ImGuiTabItemFlags_Leading, at the bar's right end with
+ * ImGuiTabItemFlags_Trailing. A button added to a dock's tab bar does not take
+ * clicks itself, so the caller reads them from what this returns. Nothing when
+ * the node has no tab bar to add to.
  */
 inline std::optional<FoldedTabButton>
 tab_bar_button(ImGuiDockNode *node, const char *id, const char *icon,
-               const char *title, ImGuiTabItemFlags placement, float width) {
+               const char *title, ImGuiTabItemFlags placement, float width,
+               bool filled = true) {
   if (node == nullptr || !ImGui::DockNodeBeginAmendTabBar(node)) {
     return std::nullopt;
   }
@@ -65,6 +67,9 @@ tab_bar_button(ImGuiDockNode *node, const char *id, const char *icon,
     if (ImGuiTabItem *tab = ImGui::TabBarFindTabByID(bar, ImGui::GetID(id))) {
       tab->Offset = trailing_tab_offset(*bar, *tab);
     }
+  }
+  if (!filled) {
+    leave_button_unfilled(ImGui::GetID(id));
   }
   push_window_tab_padding();
   push_clear_tab_bar_colors();
@@ -97,13 +102,12 @@ tab_bar_button(ImGuiDockNode *node, const char *id, const char *icon,
 }
 
 /// A folded view's button at the left of `node`'s tabs, as wide as the tabs
-/// beside it are tall, its fill drawn with theirs.
-inline std::optional<FoldedTabButton> folded_tab_button(ImGuiDockNode *node,
-                                                        const char *id,
-                                                        const char *icon,
-                                                        const char *title) {
+/// beside it are tall, its fill drawn with theirs unless not `filled`.
+inline std::optional<FoldedTabButton>
+folded_tab_button(ImGuiDockNode *node, const char *id, const char *icon,
+                  const char *title, bool filled = true) {
   return tab_bar_button(node, id, icon, title, ImGuiTabItemFlags_Leading,
-                        unshown_tab_height());
+                        unshown_tab_height(), filled);
 }
 
 /**

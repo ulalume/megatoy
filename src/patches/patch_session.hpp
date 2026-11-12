@@ -284,11 +284,30 @@ public:
   SaveResult create_folder_in(const std::filesystem::path &parent,
                               const std::string &name);
   bool rename_patch(const PatchEntry &entry, const std::string &new_stem);
+  /// A document a deletion left without its file, and where it showed it.
+  struct DetachedDocument {
+    DocumentId id;
+    std::string path;
+    std::string selection_path;
+  };
   /**
    * Delete `entry` from the repository. Every document showing it, or
-   * something inside it, loses its path and becomes an unsaved patch.
+   * something inside it, loses its path and becomes an unsaved patch; those
+   * go in `detached` when it is given.
    */
-  bool delete_patch(const PatchEntry &entry);
+  bool delete_patch(const PatchEntry &entry,
+                    std::vector<DetachedDocument> *detached = nullptr);
+  /// Move `entry` to the system's Trash, detaching documents as
+  /// delete_patch() does, and return what puts it back.
+  std::optional<DeletedEntry>
+  trash_patch(const PatchEntry &entry,
+              std::vector<DetachedDocument> *detached = nullptr);
+  /// Give the documents a deletion detached their files again, once those
+  /// are back, unless they have been saved elsewhere since.
+  void reattach(const std::vector<DetachedDocument> &detached);
+  /// Remove copies the repository made. Every document showing one that is
+  /// gone, or something inside it, becomes an unsaved patch.
+  bool remove_copies(const std::vector<std::filesystem::path> &copies);
   /**
    * Move `entry` into the folder `destination`, within one workspace folder.
    * Every open document follows when it was the entry or inside it, as does
@@ -297,8 +316,6 @@ public:
   bool can_move_patch(const PatchEntry &entry,
                       const PatchEntry &destination) const;
   bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
-  std::optional<SaveFormatInfo>
-  find_save_format(const std::string &extension) const;
   std::vector<SaveFormatInfo> save_formats() const;
 
   // Note management
@@ -333,6 +350,11 @@ public:
   writable_source_folder(const PatchDocument &document) const;
 
 private:
+  /// Runs `remove`, which takes `entry` off the disk, and detaches the
+  /// documents that showed it once it has.
+  template <typename Remove>
+  auto detaching(const PatchEntry &entry,
+                 std::vector<DetachedDocument> *detached, Remove &&remove);
   /// default_patch() together with the file it came from, empty when the
   /// built-in defaults were used.
   struct DefaultPatch {

@@ -46,6 +46,30 @@ struct PatchEntry {
   std::string container_item_id;
 };
 
+/// A patch file or a folder as it stood before it was deleted, with the
+/// metadata that went with it, to put back.
+struct DeletedEntry {
+  struct File {
+    std::filesystem::path path;
+    std::string bytes;
+  };
+  std::filesystem::path path;
+  bool is_directory = false;
+  /// Something put in the system's Trash, and where the Trash keeps it.
+  struct Trashed {
+    std::filesystem::path path;
+    std::filesystem::path in_trash;
+  };
+  /// Where the system's Trash keeps it, when it went there.
+  std::filesystem::path trashed;
+  /// A file's sidecars that went to the Trash with it.
+  std::vector<Trashed> trashed_sidecars;
+  /// A folder's folders, its empty ones among them.
+  std::vector<std::filesystem::path> folders;
+  /// The file itself, or the folder's files, with their sidecars.
+  std::vector<File> files;
+};
+
 /**
  * Presents the workspace's folders, plus the built-in presets, as one tree of
  * patches.
@@ -73,6 +97,9 @@ public:
 
   /// Exact selection path first, then the first entry from that source.
   const PatchEntry *find_entry(const std::string &relative_path) const;
+  /// The entry listed at `path` itself, a workspace folder among them; not an
+  /// instrument inside a bank, which shares its bank's path.
+  const PatchEntry *find_by_full_path(const std::filesystem::path &path) const;
 
   bool load_patch(const PatchEntry &entry, ym2612::Patch &patch) const;
   bool has_directory_changed() const;
@@ -110,6 +137,46 @@ public:
   bool can_move_patch(const PatchEntry &entry,
                       const PatchEntry &destination) const;
   bool move_patch(const PatchEntry &entry, const PatchEntry &destination);
+  /// Copies go into a plain folder of a writable workspace folder, from
+  /// anywhere: another workspace folder, the built-in presets or a bank.
+  bool takes_copies(const PatchEntry &destination) const;
+  bool can_copy_patch(const PatchEntry &entry,
+                      const PatchEntry &destination) const;
+  /**
+   * Copies `entry` into `destination` and returns the copy's path. The copy
+   * keeps the entry's name, or takes "<name> copy", "<name> copy 2", ... when
+   * that is taken. A patch from inside a bank or a package becomes a file of
+   * its own in `extension`.
+   */
+  std::optional<std::filesystem::path> copy_patch(const PatchEntry &entry,
+                                                  const PatchEntry &destination,
+                                                  std::string_view extension);
+  /// Copies files and folders from outside into `destination`, as
+  /// copy_patch names them, and returns the copies. A folder brings only the
+  /// files a format reads. A file no format reads, and a folder holding
+  /// none, is left out, counted in `skipped` with those that fail.
+  std::vector<std::filesystem::path>
+  copy_files_in(const std::vector<std::filesystem::path> &files,
+                const PatchEntry &destination, std::size_t &skipped);
+  /// Removes copies made by copy_patch or copy_files_in, files or folders,
+  /// with their metadata.
+  bool remove_copies(const std::vector<std::filesystem::path> &copies);
+  /// What `entry` holds, read before deleting it: the file and its metadata,
+  /// or the folder and everything in it. Nothing for a folder holding more
+  /// than `limit` bytes.
+  std::optional<DeletedEntry>
+  keep_for_restore(const PatchEntry &entry,
+                   std::uintmax_t limit = 64u << 20) const;
+  /// Moves `entry` to the system's Trash, and returns what puts it back.
+  /// Nothing when there is no Trash or it cannot go there.
+  std::optional<DeletedEntry> trash_patch(const PatchEntry &entry);
+  /// Puts a deleted entry back where it was, if nothing has taken its place.
+  bool restore(const DeletedEntry &deleted);
+  /// How many files in `folder` the Library does not list: neither patches
+  /// nor hidden files such as the metadata or the system's own. Nothing when
+  /// it holds `limit` files or more, which are not all looked at.
+  std::optional<std::size_t> unlisted_files(const PatchEntry &folder,
+                                            std::size_t limit = 10000) const;
   /// A relative path as the user sees it: starting with what its folder is
   /// listed as.
   std::string display_path(const std::string &relative) const;
@@ -129,6 +196,11 @@ public:
 
 private:
   static constexpr const char *kBuiltinRootName = "presets";
+
+  /// After a change on disk: list it, and on the web have it kept.
+  void changed();
+  /// restore() for an entry in the system's Trash.
+  bool restore_from_trash(const DeletedEntry &deleted);
 
   void rebuild_storages();
   void index_tree();

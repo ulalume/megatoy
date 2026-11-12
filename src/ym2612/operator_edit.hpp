@@ -18,6 +18,12 @@ inline int operator_register_index(int slot) {
   return static_cast<int>(all_operator_indices[static_cast<size_t>(slot)]);
 }
 
+/// Whether the operator in display `slot` reaches the output under
+/// `algorithm`, rather than only feeding other operators.
+inline bool is_carrier(int slot, uint8_t algorithm) {
+  return operator_register_index(slot) >= algorithm_modulator_count[algorithm];
+}
+
 inline OperatorSettings &operator_at(ChannelInstrument &instrument, int slot) {
   return instrument.operators[operator_register_index(slot)];
 }

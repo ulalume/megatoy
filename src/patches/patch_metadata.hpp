@@ -71,8 +71,21 @@ bool write(const std::filesystem::path &sidecar, const nlohmann::json &entry);
 /// Move the sidecars of the file `from` to those of the file `to`.
 bool move(const std::filesystem::path &from, const std::filesystem::path &to);
 
+/// Copy the sidecars of the file `from` to those of the file `to`.
+bool copy(const std::filesystem::path &from, const std::filesystem::path &to);
+
+/// The sidecar files of the file `file`: its own and its instruments'.
+std::vector<std::filesystem::path> files_of(const std::filesystem::path &file);
+
 /// Remove the sidecars of the file `file`.
 void remove(const std::filesystem::path &file);
+
+/// The sidecars of the file `file` as they lie on disk, those there are: its
+/// own, and the folder of its instruments'.
+std::vector<std::filesystem::path> roots_of(const std::filesystem::path &file);
+
+/// Remove the sidecar folders the file `file`'s sidecars leave empty.
+void prune_folders_of(const std::filesystem::path &file);
 
 /**
  * Split the single-file metadata at `<folder>/.ym2612/patches.json` and

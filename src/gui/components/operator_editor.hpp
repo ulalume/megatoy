@@ -10,15 +10,10 @@
 
 namespace ui {
 
-/// The vertical sliders stand a pixel apart, and share out among them the
-/// room six of them a text height and 8 px wide, at the spacing between
-/// items, would take, on whole pixels.
+/// The vertical sliders stand a pixel apart, each as wide as a horizontal
+/// slider is tall.
 inline float vslider_gap() { return scale::px(1.0f); }
-inline float vslider_width() {
-  const float room = (ImGui::GetFontSize() + scale::px(8.0f)) * 6.0f +
-                     ImGui::GetStyle().ItemSpacing.y * 5.0f;
-  return std::floor((room - vslider_gap() * 5.0f) / 6.0f);
-}
+inline float vslider_width() { return ImGui::GetFrameHeight(); }
 /// The room between the rows of the column beside the sliders.
 inline float side_row_gap() { return scale::px(1.0f); }
 /// As tall as the column beside the sliders: five rows of controls, three of
@@ -44,11 +39,13 @@ struct PatchEditorContext;
  *
  * The operator draws itself inside a border that doubles as its selection
  * state, and every widget in it feeds the selection: see
- * note_operator_edit() for what an edit does to the group.
+ * note_operator_edit() for what an edit does to the group. `stacked` is
+ * the one-column layout, where an operator outside the selection shows only
+ * its graph, and a tap on it selects it.
  */
 void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
-                            const EnvelopeVoices &voices);
+                            const EnvelopeVoices &voices, bool stacked);
 
 /// Give each selected operator what the others in the selection light, as
 /// UIState::EnvelopeState::echoed. Called before the operators are drawn.

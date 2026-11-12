@@ -100,20 +100,10 @@ ImU32 operator_fill_color(bool selected, bool hovered) {
   return styles::color_u32(MegatoyCol::OperatorBg);
 }
 
-/// The frame's fill, drawn before the contents so it lies under them. Their
-/// size and whether one of them is hovered are only known after, so the
-/// last frame's are used.
+/// The frame's fill, under the pointer or not.
 void draw_operator_fill(const OperatorEditState &state, int slot,
-                        const ImVec2 &block_min, const ImVec2 &frame_min,
-                        float frame_width) {
-  if (state.frame_height <= 0.0f) {
-    return;
-  }
-  const ImVec2 frame_max(frame_min.x + frame_width,
-                         frame_min.y + state.frame_height);
-  const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
-                       ImGui::IsMouseHoveringRect(block_min, frame_max) &&
-                       !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive();
+                        const ImVec2 &frame_min, const ImVec2 &frame_max,
+                        bool hovered) {
   const ImU32 fill =
       operator_fill_color(state.selection.contains(slot), hovered);
   if ((fill & IM_COL32_A_MASK) == 0) {
@@ -581,13 +571,6 @@ struct OperatorHeader {
   bool name_clicked;
 };
 
-/// Whether the operator in display `slot` reaches the output under
-/// `algorithm`, rather than only feeding other operators.
-bool is_carrier(int slot, uint8_t algorithm) {
-  return ym2612::operator_register_index(slot) >=
-         ym2612::algorithm_modulator_count[algorithm];
-}
-
 /// Inside an open drag source: what is carried and the tooltip that follows
 /// the pointer.
 void carry_operator(patches::DocumentId document, int slot) {
@@ -698,8 +681,8 @@ bool operator_drop_target(PatchEditorContext &context,
     const std::string to = operator_slot_label(slot);
     const std::string label =
         copy ? "Copy " + from + " to " + to
-             : "Swap " + operator_slot_label(std::min(source, slot)) +
-                   " and " + operator_slot_label(std::max(source, slot));
+             : "Swap " + operator_slot_label(std::min(source, slot)) + " and " +
+                   operator_slot_label(std::max(source, slot));
     // Taken before the step opens: opening it makes this patch the active one.
     const auto copied = ym2612::copy_operator(
         from_other_patch ? source_document->patch().instrument : instrument,
@@ -759,9 +742,11 @@ void render_envelope_sliders(OperatorWidget &widget,
   ImGui::EndGroup();
 }
 
+/// Draws the graph alone, without its handles, where the operator is
+/// `folded`.
 void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                               int slot, UIState::EnvelopeState &envelope_state,
-                              const EnvelopeVoices &voices) {
+                              const EnvelopeVoices &voices, bool folded) {
   auto &state = context.operator_edit();
   auto &instrument = patch.instrument;
   auto &op = ym2612::operator_at(instrument, slot);
@@ -775,6 +760,19 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   if (!sounds) {
     ImGui::BeginDisabled();
   }
+  if (folded) {
+    render_envelope_image(
+        op, envelope_state,
+        ImVec2(content_width - frame_padding(), envelope_graph_height()),
+        voices, ym2612::is_carrier(slot, instrument.algorithm), false);
+    envelope_state.handles = UIState::EnvelopeState::HandleLit{};
+    envelope_state.handle_active = false;
+    end_envelope_image();
+    if (!sounds) {
+      ImGui::EndDisabled();
+    }
+    return;
+  }
   ImGui::PushItemWidth(hslider_width());
 
   const float row_left = ImGui::GetCursorPosX();
@@ -784,11 +782,16 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
     // Feedback belongs to the channel, not to an operator -- there is one of
     // it, and OP1's panel is only where it is drawn. So it spreads nowhere,
     // but it still leads: editing it makes OP1 the primary operator. It
-    // takes the rest of the row, out to the graph's right edge.
+    // stands at the row's right, out to the graph's right edge, no wider
+    // than kFeedbackMaxWidth.
+    constexpr float kFeedbackMaxWidth = 150.0f;
     ImGui::SameLine();
     const float row_end = row_left + content_width - frame_padding();
-    ImGui::SetNextItemWidth(
-        std::max(row_end - ImGui::GetCursorPosX(), ImGui::GetFrameHeight()));
+    const float width = std::max(std::min(row_end - ImGui::GetCursorPosX(),
+                                          ui::scale::px(kFeedbackMaxWidth)),
+                                 ImGui::GetFrameHeight());
+    ImGui::SetCursorPosX(std::max(row_end - width, ImGui::GetCursorPosX()));
+    ImGui::SetNextItemWidth(width);
     int feedback = instrument.feedback;
     const bool feedback_changed = named_slider_int("Feedback", &feedback, 0, 7);
     if (ImGui::IsItemActivated()) {
@@ -808,7 +811,7 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   const float block_left = ImGui::GetCursorPosX();
   // Carriers reach the output; modulators only feed other operators. Which
   // is which moves with the algorithm, so the graph says it on every one.
-  const bool carrier = is_carrier(slot, instrument.algorithm);
+  const bool carrier = ym2612::is_carrier(slot, instrument.algorithm);
   const ImVec2 graph_size(content_width - frame_padding(),
                           envelope_graph_height());
   const ui::envelope::EnvelopeHandles handles =
@@ -828,21 +831,21 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   const float sliders_top = ImGui::GetCursorPosY();
   render_envelope_sliders(widget, envelope_state);
 
-  // SSG-EG and the controls under it stand in the room right of RR, out to
-  // the graph's right edge, as tall as the sliders, when that is wide enough
-  // for the narrowest of them; otherwise they go under the sliders.
+  // SSG-EG and the controls under it stand in the room right of RR, as tall
+  // as the sliders, when that is wide enough for the narrowest of them;
+  // otherwise they go under the sliders. Either way they reach the graph's
+  // right edge.
+  const float side_right = block_left + content_width - frame_padding();
   const float side_left = block_left + hslider_width() + style.ItemSpacing.x;
-  const float side_room =
-      block_left + content_width - frame_padding() - side_left;
   const bool beside_rates =
-      side_room >= named_slider_fit_width("SSG EG Type", "0");
+      side_right - side_left >= named_slider_fit_width("SSG EG Type", "0");
   if (beside_rates) {
     ImGui::SetCursorPos(ImVec2(side_left, sliders_top));
     ImGui::BeginGroup();
-    ImGui::PushItemWidth(side_room);
   } else {
     ImGui::Spacing();
   }
+  ImGui::PushItemWidth(side_right - ImGui::GetCursorPosX());
   // The rows side_row_gap() apart, the SSG-EG ones and the rest the spacing
   // between items, as vslider_height() counts them.
   const float group_gap = style.ItemSpacing.y;
@@ -901,8 +904,8 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
                   nullptr);
 
   ImGui::PopStyleVar();
+  ImGui::PopItemWidth();
   if (beside_rates) {
-    ImGui::PopItemWidth();
     ImGui::EndGroup();
   }
   ImGui::PopItemWidth();
@@ -916,11 +919,16 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
 
 void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                             int slot, UIState::EnvelopeState &envelope_state,
-                            const EnvelopeVoices &voices) {
+                            const EnvelopeVoices &voices, bool stacked) {
   auto &state = context.operator_edit();
   OperatorWidget widget{context, patch.instrument, slot};
 
   ImGui::PushID(slot);
+
+  // A muted operator is drawn faint and answers only its context menu, which
+  // turns it back on.
+  const bool sounds = context.session.playback()
+                          .operator_enable[static_cast<std::size_t>(slot)];
 
   const ImVec2 block_min = ImGui::GetCursorScreenPos();
   // Not GetColumnWidth(): a column clips its draw list tighter than that,
@@ -931,10 +939,16 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // sections' titles above are.
   const float header_height = ImGui::GetFrameHeight();
   const ImVec2 frame_min(block_min.x, block_min.y + header_height * 0.5f);
-  draw_operator_fill(state, slot, block_min, frame_min, frame_width);
+  // The fill goes under the contents once their height is known.
+  ImDrawListSplitter layers;
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  layers.Split(draw_list, 2);
+  layers.SetCurrentChannel(draw_list, 1);
   const float header_x = block_min.x + ImGui::GetStyle().SeparatorTextPadding.x;
+  ImGui::BeginDisabled(!sounds);
   const OperatorHeader header =
       render_operator_header(widget, ImVec2(header_x, block_min.y));
+  ImGui::EndDisabled();
   const float gap_from_x = header_x - header_gap();
   const float gap_to_x =
       std::min(header.end_x + header_gap(), frame_min.x + frame_width);
@@ -943,16 +957,20 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       ImVec2(frame_min.x + frame_padding(),
              block_min.y + header_height + frame_padding()));
   ImGui::BeginGroup();
-  render_operator_contents(context, patch, slot, envelope_state, voices);
+  // Stacked, an operator not being edited shows its graph alone.
+  render_operator_contents(context, patch, slot, envelope_state, voices,
+                           stacked && !state.selection.contains(slot));
   ImGui::EndGroup();
 
   const float content_height =
       ImGui::GetItemRectMax().y - frame_min.y + frame_padding();
+  // Side by side, all four drawn to the tallest one's height so the borders
+  // line up. From the previous frame; measuring and applying in one would
+  // need two passes. Stacked, each is as tall as it needs.
   state.pending_frame_height =
       std::max(state.pending_frame_height, content_height);
-  // All four drawn to the tallest one's height so the borders line up. From
-  // the previous frame; measuring and applying in one would need two passes.
-  const float frame_height = std::max(content_height, state.frame_height);
+  const float frame_height =
+      stacked ? content_height : std::max(content_height, state.frame_height);
   const ImVec2 frame_max(frame_min.x + frame_width, frame_min.y + frame_height);
   // Claim the full block so the columns row and the scroll extent account
   // for the header, the padding and any borrowed height.
@@ -967,10 +985,16 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
   // the label should select too.
   const bool frame_hovered =
       window_hovered && ImGui::IsMouseHoveringRect(block_min, frame_max);
-  const bool on_background = frame_hovered && !ImGui::IsAnyItemHovered();
+  const bool on_background =
+      sounds && frame_hovered && !ImGui::IsAnyItemHovered();
   // Not while something is being dragged, so a slider drag that wanders out
   // does not light up the operator it passes over.
   const bool background_hovered = on_background && !ImGui::IsAnyItemActive();
+  layers.SetCurrentChannel(draw_list, 0);
+  if (sounds) {
+    draw_operator_fill(state, slot, frame_min, frame_max, background_hovered);
+  }
+  layers.Merge(draw_list);
 
   if (header.name_clicked ||
       (on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left))) {
@@ -985,12 +1009,13 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
       scroll_reveal::request(block_min.y, frame_max.y);
     }
   }
-  drag_from_background(
-      state, context.document, slot,
-      on_background && ImGui::IsMouseClicked(ImGuiMouseButton_Left));
+  drag_from_background(state, context.document, slot,
+                       on_background &&
+                           ImGui::IsMouseClicked(ImGuiMouseButton_Left));
 
-  const bool receiving = operator_drop_target(context, patch.instrument, slot,
-                                              block_min, frame_max);
+  const bool receiving =
+      sounds && operator_drop_target(context, patch.instrument, slot, block_min,
+                                     frame_max);
 
   // Anywhere in the frame, including on a slider, which ignores right-click.
   if (frame_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
@@ -1008,15 +1033,22 @@ void render_operator_editor(PatchEditorContext &context, ym2612::Patch &patch,
                                     },
                                     [&context]() { context.commit_history(); }};
     render_operator_command_items(commands);
+    // Whether the operator is heard, as the operators' menu sets it.
+    ImGui::Separator();
+    if (ImGui::MenuItem(("Mute " + operator_slot_label(slot)).c_str(), nullptr,
+                        !sounds)) {
+      context.session.playback()
+          .operator_enable[static_cast<std::size_t>(slot)] = !sounds;
+    }
     ui::end_popup();
   }
 
-  draw_operator_frame(
-      frame_min, frame_max, gap_from_x, gap_to_x,
-      receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
-                : operator_frame_color(state.selection.contains(slot),
-                                       state.selection.primary == slot,
-                                       background_hovered));
+  draw_operator_frame(frame_min, frame_max, gap_from_x, gap_to_x,
+                      receiving ? ImGui::GetColorU32(ImGuiCol_DragDropTarget)
+                                : operator_frame_color(
+                                      sounds && state.selection.contains(slot),
+                                      sounds && state.selection.primary == slot,
+                                      background_hovered));
 
   ImGui::PopID();
 }

@@ -40,6 +40,10 @@ struct EntryMenuActions {
   bool remove_folder = false;
 };
 
+/// The name a copy or a download starts from: the file's own stem, or the
+/// instrument's name inside a bank, which has no file of its own.
+std::string entry_stem(const PatchEntry &entry);
+
 bool entry_can_rename(const PatchRepository &repository,
                       const PatchEntry &entry, bool has_action,
                       bool protected_folder);

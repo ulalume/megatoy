@@ -52,7 +52,6 @@ inline void apply(const Palette &p = Palette{}) {
   const ImVec4 raised = hex(0x212834FF);
   // Quiet marks: slider grabs, graph captions and plots.
   const ImVec4 quiet = faded(hex(0xCBE3FFFF), 0.4f);
-  ImGui::GetStyle().DisabledAlpha = 0.2f;
   ImVec4 *colors = ImGui::GetStyle().Colors;
   colors[ImGuiCol_Text] = faded(p.text, 0.85f);
   colors[ImGuiCol_TextDisabled] = faded(p.text, 0.28f);
@@ -75,7 +74,7 @@ inline void apply(const Palette &p = Palette{}) {
   colors[ImGuiCol_CheckMark] = faded(p.text, 0.78f);
   colors[ImGuiCol_CheckboxSelectedBg] = faded(p.accent, 0.25f);
   colors[ImGuiCol_SliderGrab] = quiet;
-  colors[ImGuiCol_SliderGrabActive] = p.text;
+  colors[ImGuiCol_SliderGrabActive] = quiet;
   colors[ImGuiCol_Button] = faded(p.button, 0.18f);
   colors[ImGuiCol_ButtonHovered] = faded(p.accent, 0.86f);
   colors[ImGuiCol_ButtonActive] = p.accent;

@@ -236,9 +236,9 @@ bool FilesystemPatchStorage::move_patch(const PatchEntry &entry,
 }
 
 bool FilesystemPatchStorage::can_delete_patch(const PatchEntry &entry) const {
-  // A directory can be renamed but not deleted: deleting one would take
-  // everything inside it.
-  return can_rename_patch(entry) && !vfs_.is_directory(entry.full_path);
+  // A folder goes with everything in it, but the workspace folder itself is
+  // only taken out of the workspace.
+  return can_rename_patch(entry) && entry.relative_path != root_label_;
 }
 
 bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
@@ -247,6 +247,10 @@ bool FilesystemPatchStorage::delete_patch(const PatchEntry &entry) {
   }
 
   std::error_code ec;
+  if (vfs_.is_directory(entry.full_path)) {
+    // Its sidecars are inside it and go with it.
+    return std::filesystem::remove_all(entry.full_path, ec) > 0 && !ec;
+  }
   if (!std::filesystem::remove(entry.full_path, ec) || ec) {
     return false;
   }
@@ -433,7 +437,9 @@ bool FilesystemPatchStorage::scan_directory(
     return std::lexicographical_compare(
         filename_a.begin(), filename_a.end(), filename_b.begin(),
         filename_b.end(),
-        [](char a, char b) { return std::tolower(a) < std::tolower(b); });
+        [](unsigned char a, unsigned char b) {
+          return std::tolower(a) < std::tolower(b);
+        });
   });
 
   for (const auto &entry : entries) {
@@ -469,9 +475,7 @@ bool FilesystemPatchStorage::scan_directory(
         return false;
       }
 
-      std::string extension = path.extension().string();
-      std::transform(extension.begin(), extension.end(), extension.begin(),
-                     ::tolower);
+      const std::string extension = lowercase_extension(path);
 
       const auto format = formats::adapter::format_for_extension(extension);
       const bool is_ginpkg = extension == ".ginpkg";
@@ -641,9 +645,7 @@ bool FilesystemPatchStorage::scan_directory(
 
 std::string
 FilesystemPatchStorage::detect_format(const std::filesystem::path &file_path) {
-  std::string extension = file_path.extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 ::tolower);
+  const std::string extension = lowercase_extension(file_path);
 
   // Derived from the format library rather than a local table, so a format
   // added there is labelled here without another edit. A stale copy of this
@@ -663,9 +665,7 @@ FilesystemPatchStorage::detect_format(const std::filesystem::path &file_path) {
 
 bool FilesystemPatchStorage::is_supported_file(
     const std::filesystem::path &file_path) {
-  std::string extension = file_path.extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 ::tolower);
+  const std::string extension = lowercase_extension(file_path);
 
   const auto &supported = platform::import_pipeline::supported_extensions();
   return std::find(supported.begin(), supported.end(), extension) !=

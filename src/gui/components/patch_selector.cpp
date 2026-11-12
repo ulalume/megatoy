@@ -107,7 +107,7 @@ void render_tree(PatchSelectorContext &context) {
   ImGui::EndChild();
 }
 
-/// Everything inside the patch browser, whether a window or folded away.
+/// Everything inside the library, whether a window or folded away.
 void render_patch_selector_contents(PatchSelectorContext &context) {
   if (context.workspace_is_empty && context.add_folder) {
     render_empty_workspace_prompt(context);
@@ -154,15 +154,20 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
     context.remove_folder(folder);
   }
 
-  if (context.pending_move && context.move_patch) {
-    const auto move = std::move(*context.pending_move);
-    context.pending_move.reset();
-    if (move.entry.is_directory) {
-      follow_tree_directory(move.entry.relative_path,
-                            move.destination.relative_path + "/" +
-                                move.entry.full_path.filename().string());
+  if (context.pending_drop) {
+    const auto drop = std::move(context.pending_drop);
+    context.pending_drop = nullptr;
+    drop();
+  }
+
+  if (context.pending_duplicate) {
+    const auto path = std::move(*context.pending_duplicate);
+    context.pending_duplicate.reset();
+    if (const auto *entry = context.session.find_entry(path);
+        entry != nullptr && context.duplicate_patch) {
+      // Copied: the write rebuilds the tree, and the entry with it.
+      context.duplicate_patch(patches::PatchEntry(*entry));
     }
-    context.move_patch(move.entry, move.destination);
   }
 
   if (context.pending_rating) {
@@ -191,18 +196,18 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
 }
 
 /**
- * The patch browser folded into a button at the left of the editors' tabs.
+ * The library folded into a button at the left of the editors' tabs.
  * It opens the browser as a menu does, over the editor at its least width,
  * and leaves it open while patches are chosen so each shows behind it; a
  * click outside closes it.
  */
 void render_folded_patch_selector(PatchSelectorContext &context) {
-  static const ImGuiID popup_id = ImHashStr("##folded_patch_browser");
+  static const ImGuiID popup_id = ImHashStr("##folded_library");
   static bool open_at_press = false;
 
   const auto button = folded_tab_button(
       ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID),
-      "##folded_patch_browser", PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE);
+      "##folded_library", LIBRARY_ICON, LIBRARY_TITLE);
   if (!button) {
     return;
   }
@@ -212,8 +217,8 @@ void render_folded_patch_selector(PatchSelectorContext &context) {
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   const float bottom = viewport->WorkPos.y + viewport->WorkSize.y;
   ImGui::SetNextWindowPos(below);
-  ImGui::SetNextWindowSize(ImVec2(layouts::patch_browser_min_width(),
-                                  ImMax(0.0f, bottom - below.y)));
+  ImGui::SetNextWindowSize(
+      ImVec2(layouts::library_min_width(), ImMax(0.0f, bottom - below.y)));
   if (!ImGui::BeginPopupEx(popup_id,
                            ImGuiWindowFlags_NoTitleBar |
                                ImGuiWindowFlags_NoMove |
@@ -229,13 +234,13 @@ void render_folded_patch_selector(PatchSelectorContext &context) {
   ImGui::EndPopup();
 }
 
-/// The closed patch browser as the same button, a click on which brings
+/// The closed library as the same button, a click on which brings
 /// the sidebar back.
 void render_closed_patch_selector(bool &show) {
   static bool pressed = false;
   const auto button = folded_tab_button(
       ImGui::DockBuilderGetCentralNode(ImGui::GetMainViewport()->ID),
-      "##folded_patch_browser", PATCH_BROWSER_ICON, PATCH_BROWSER_TITLE);
+      "##folded_library", LIBRARY_ICON, LIBRARY_TITLE);
   if (folded_tab_button_clicked(button, pressed)) {
     show = true;
   }

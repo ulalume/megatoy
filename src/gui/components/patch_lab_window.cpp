@@ -8,6 +8,7 @@
 #include "gui/components/menu_rows.hpp"
 #include "gui/components/side_list.hpp"
 #include "gui/fonts/megatoy_icons.hpp"
+#include "gui/os_file_drop.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
@@ -181,11 +182,11 @@ float centred_start(float left, float right, float icon_width,
 
 /// A slot for one source: a click lists what it can take, and a patch
 /// dragged from the browser drops into it.
-void render_source_slot(const char *id,
-                        const patches::PatchSession &session,
+void render_source_slot(const char *id, const PatchLabContext &context,
                         const std::vector<EntryDisplay> &entries,
                         PatchLabSource &source, std::string &filter_text,
                         float width) {
+  const patches::PatchSession &session = context.session;
   std::string name;
   std::string icon;
   if (!source.empty() &&
@@ -210,6 +211,22 @@ void render_source_slot(const char *id,
       if (session.find_entry(path) != nullptr &&
           ImGui::AcceptDragDropPayload(kPatchEntryPayload) != nullptr) {
         source = {.entry_path = path};
+      }
+    } else if (payload != nullptr &&
+               payload->IsDataType(os_file_drop::kPayload) &&
+               context.load_dropped_file &&
+               ImGui::AcceptDragDropPayload(os_file_drop::kPayload) !=
+                   nullptr) {
+      // A file from outside: its patch as it is now, the first file of
+      // several.
+      if (const auto files = os_file_drop::take(); !files.empty()) {
+        context.load_dropped_file(
+            files.front(), [&source](const ym2612::Patch &patch,
+                                     const std::filesystem::path &path) {
+              source = {.patch = patch,
+                        .label = patch.name.empty() ? path.stem().string()
+                                                    : patch.name};
+            });
       }
     }
     ImGui::EndDragDropTarget();
@@ -288,10 +305,10 @@ void render_source_slots(PatchLabContext &context, PatchLabState &state,
                          const std::vector<EntryDisplay> &entries) {
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   const float width = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
-  render_source_slot("a", context.session, entries, state.mix.source_a,
+  render_source_slot("a", context, entries, state.mix.source_a,
                      state.picker_filter, width);
   ImGui::SameLine();
-  render_source_slot("b", context.session, entries, state.mix.source_b,
+  render_source_slot("b", context, entries, state.mix.source_b,
                      state.picker_filter, width);
 }
 
@@ -563,8 +580,7 @@ bool lab_list_row(const char *icon, bool muted_icon, const char *text,
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const float inset = style.FramePadding.x;
   const ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
-  const ImU32 muted_color =
-      ImGui::GetColorU32(styles::color(styles::MegatoyCol::TextMuted));
+  const ImU32 muted_color = styles::color_u32(styles::MegatoyCol::TextMuted);
   draw_list->AddText(ImVec2(row.x + inset, row.y),
                      muted_icon ? muted_color : text_color, icon);
   const float text_x =

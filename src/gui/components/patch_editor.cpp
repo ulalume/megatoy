@@ -27,6 +27,7 @@
 #include "view_patch_drop.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <optional>
@@ -88,6 +89,9 @@ struct MetadataEdit {
   std::optional<int> rating;
 };
 
+/// The header's icon against the text, filling the header's three rows.
+constexpr float kHeaderIconScale = 3.0f;
+
 /**
  * The patch's instrument icon, large, at the start of the header. A button
  * that picks another for a patch the browser lists in a folder that keeps
@@ -97,21 +101,26 @@ void render_header_icon(const patches::PatchEntry *entry, bool editable,
                         float size, MetadataEdit &edit) {
   const std::string icon =
       entry != nullptr && entry->metadata ? entry->metadata->icon : "";
-  if (!editable) {
+  const ImGuiID popup_id = ImGui::GetID("##icon_picker");
+  if (editable) {
+    // No fill at rest: the icon stands alone until the pointer is over it.
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+    if (ImGui::Button("##icon", ImVec2(size, size))) {
+      ImGui::OpenPopupEx(popup_id);
+    }
+    ImGui::PopStyleColor();
+  } else {
     ImGui::Dummy(ImVec2(size, size));
-    draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
-                         kLargeIconScale);
+  }
+  draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                       kHeaderIconScale);
+  // Framed as the algorithm diagram is.
+  ImGui::GetWindowDrawList()->AddRect(
+      ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+      styles::color_u32(styles::MegatoyCol::PreviewBorder));
+  if (!editable) {
     return;
   }
-  const ImGuiID popup_id = ImGui::GetID("##icon_picker");
-  // No fill at rest: the icon stands alone until the pointer is over it.
-  ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
-  if (ImGui::Button("##icon", ImVec2(size, size))) {
-    ImGui::OpenPopupEx(popup_id);
-  }
-  ImGui::PopStyleColor();
-  draw_instrument_icon(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
-                       kLargeIconScale);
   if (patches::instrument_icons::known(icon)) {
     ImGui::SetItemTooltip(
         "Icon: %s", patches::instrument_icons::display_name(icon).c_str());
@@ -138,7 +147,48 @@ void render_header_rating(const patches::PatchEntry &entry,
   }
 }
 
-/// Save, and Save As... where it is offered, as one row.
+/// An icon-only button for Undo or Redo, square, faint when there is nothing
+/// to take back or do again. Named in full by its tooltip.
+void render_history_button(
+    const char *id, const char *icon, bool enabled, std::string_view label,
+    const std::function<void(patches::DocumentId)> &action,
+    patches::DocumentId document) {
+  ImGui::BeginDisabled(!enabled);
+  const std::string text = std::string(icon) + id;
+  const float side = ImGui::GetFrameHeight();
+  if (ImGui::Button(text.c_str(), ImVec2(side, side)) && action) {
+    action(document);
+  }
+  ImGui::EndDisabled();
+  if (enabled && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%.*s", static_cast<int>(label.size()), label.data());
+  }
+}
+
+/// Undo and Redo of the document the editor shows, 1 px apart.
+void render_history_buttons(PatchEditorContext &context) {
+  if (!context.history) {
+    return;
+  }
+  const auto &history = context.history(context.document);
+  const auto named = [](const char *action, std::string_view change) {
+    return change.empty() ? std::string(action)
+                          : std::string(action) + " " + std::string(change);
+  };
+  ImGui::SameLine();
+  render_history_button("##undo", ICON_MEGATOY_UNDO, history.can_undo(),
+                        named("Undo", history.can_undo() ? history.undo_label()
+                                                         : std::string_view()),
+                        context.undo, context.document);
+  ImGui::SameLine(0.0f, ui::scale::px(1.0f));
+  render_history_button("##redo", ICON_MEGATOY_REDO, history.can_redo(),
+                        named("Redo", history.can_redo() ? history.redo_label()
+                                                         : std::string_view()),
+                        context.redo, context.document);
+}
+
+/// Save, and Save As... where it is offered, as one row, with Undo and Redo
+/// after them.
 void render_save_buttons(PatchEditorContext &context,
                          patches::PatchDocument &document,
                          const patches::SaveControls &controls,
@@ -191,83 +241,11 @@ void render_save_buttons(PatchEditorContext &context,
 #endif
     }
   }
+  render_history_buttons(context);
 }
 
-/**
- * The header: the patch's icon; the save buttons, with the rating at the
- * row's right, over where the patch is kept, cut short where the window is
- * narrow. The rating goes below only when the buttons leave it no room.
- */
-void render_document_header(PatchEditorContext &context,
-                            patches::PatchDocument &document,
-                            UIState::DocumentUi &ui, PatchEditorState &state,
-                            bool is_active) {
-  auto &patch_session = context.session;
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const auto *entry = patch_session.document_entry(document);
-  const bool editable =
-      entry != nullptr && patch_session.repository().can_edit_metadata(*entry);
-
-  // Two lines tall: the save buttons' and the path's.
-  const float height = ImGui::GetFrameHeight() + style.ItemSpacing.y +
-                       ImGui::GetTextLineHeight();
-  const float top = ImGui::GetCursorPosY();
-  MetadataEdit edit;
-  render_header_icon(entry, editable, height, edit);
-
-  ImGui::SameLine();
-  const float left = ImGui::GetCursorPosX();
-  const float right = left + ImGui::GetContentRegionAvail().x;
-  const auto controls = patches::save_controls(patch_session, document);
-  render_save_buttons(context, document, controls, state);
-  const float buttons_end =
-      ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + ImGui::GetScrollX();
-  const bool rating_beside =
-      editable &&
-      right - buttons_end - style.ItemSpacing.x >= star_rating_width();
-  if (rating_beside) {
-    ImGui::SetCursorPos(ImVec2(right - star_rating_width(), top));
-    render_header_rating(*entry, ui, edit);
-  }
-
-  const auto &repository = patch_session.repository();
-  const auto relative_path =
-      repository.to_relative_path(document.path()).generic_string();
-  const std::string path =
-      display_preset_path(repository.display_path(relative_path));
-  ImGui::SetCursorPos(
-      ImVec2(left, top + ImGui::GetFrameHeight() + style.ItemSpacing.y));
-  const ImVec2 path_min = ImGui::GetCursorScreenPos();
-  const ImVec2 path_max(path_min.x + std::max(right - left, 0.0f),
-                        path_min.y + ImGui::GetTextLineHeight());
-  ImGui::PushStyleColor(ImGuiCol_Text,
-                        styles::color(styles::MegatoyCol::TextMuted));
-  ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), path_min, path_max,
-                            path_max.x, path.c_str(), nullptr, nullptr);
-  ImGui::PopStyleColor();
-  ImGui::Dummy(ImVec2(path_max.x - path_min.x, ImGui::GetTextLineHeight()));
-
-  if (editable && !rating_beside) {
-    render_header_rating(*entry, ui, edit);
-  }
-
-  // Written once the header is drawn: a write rebuilds the browser's tree,
-  // and `entry` with it.
-  if (edit.icon) {
-    patch_session.set_entry_icon(*entry, *edit.icon);
-  } else if (edit.rating) {
-    patch_session.set_entry_rating(*entry, *edit.rating);
-  }
-
-  // Render popups in the same window/ID stack as the actions that open them.
-  // They act on the active document, so only its window holds them.
-  if (is_active) {
-    render_save_export_popups(patch_session, state);
-  }
-}
-
-/// The LFO and Channel sections' sliders' names, in full or as AMS, FMS and
-/// ALG.
+/// The names of the LFO's sliders and of the Algorithm slider, in full or as
+/// AMS, FMS and ALG.
 struct LfoNames {
   const char *ams;
   const char *fms;
@@ -279,37 +257,70 @@ constexpr LfoNames kLfoFullNames{"Amplitude Modulation Sensitivity",
                                  "Algorithm", false};
 constexpr LfoNames kLfoShortNames{"AMS", "FMS", "ALG", true};
 
-/// The space between the LFO section's two sliders, before the interface's
-/// scale.
-constexpr float kLfoSliderGap = 1.0f;
-
 /// The narrowest the algorithm diagram is drawn, where the names are short.
 constexpr float kMinAlgorithmDiagramWidth = 112.0f;
 
 /// How far each sensitivity moves the sound: the volume only down from where
 /// it stands, the pitch either way.
 constexpr const char *kAmsDepths[] = {"0 dB", "-1.4 dB", "-5.9 dB", "-11.8 dB"};
-constexpr const char *kFmsDepths[] = {
-    "0 cent",        "\u00b13.4 cent", "\u00b16.7 cent", "\u00b110 cent",
-    "\u00b114 cent", "\u00b120 cent",  "\u00b140 cent",  "\u00b180 cent"};
+constexpr const char *kFmsDepths[] = {"0 cent",   "±3.4 cent", "±6.7 cent",
+                                      "±10 cent", "±14 cent",  "±20 cent",
+                                      "±40 cent", "±80 cent"};
 
-/// The LFO section's sliders: one width for the two, wide enough for either
-/// name with its widest depth.
-float lfo_slider_width(const LfoNames &names) {
-  return std::max({hslider_width(),
-                   named_slider_fit_width(names.ams, "-11.8 dB"),
-                   named_slider_fit_width(names.fms, "\u00b180 cent")});
+/// The width each of the LFO's two sliders needs for its name and its
+/// widest depth.
+float lfo_fit_width(const LfoNames &names) {
+  return std::max(named_slider_fit_width(names.ams, "-11.8 dB"),
+                  named_slider_fit_width(names.fms, "±80 cent"));
 }
 
-void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
-                        const LfoNames &names) {
-  // The LFO's switch and rate are how the patch is played, set from the
-  // menu bar; what the patch holds is how far it follows the LFO.
-  ImGui::SeparatorText("LFO");
+/// The names in full where `room` is at least `full_needs`, short otherwise.
+const LfoNames &names_fitting(float room, float full_needs) {
+  return room >= full_needs ? kLfoFullNames : kLfoShortNames;
+}
 
+/// The algorithm diagram's width, which the Algorithm slider below it takes
+/// too, wide enough for its name.
+float algorithm_width(const LfoNames &names) {
+  return std::max(names.short_names ? ui::scale::px(kMinAlgorithmDiagramWidth)
+                                    : hslider_width(),
+                  named_slider_fit_width(names.algorithm, "0"));
+}
+
+/// The algorithm diagram over the Algorithm slider, `height` tall together,
+/// no wider than the room left.
+void render_algorithm(PatchEditorContext &context, ym2612::Patch &patch,
+                      const LfoNames &names, float height) {
+  const float width =
+      std::min(algorithm_width(names), ImGui::GetContentRegionAvail().x);
+  const float slider_height =
+      ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
+  ImGui::BeginGroup();
+  algorithm_diagram(patch.instrument.algorithm,
+                    ImVec2(width, std::max(height - slider_height, 0.0f)));
+  int algorithm = patch.instrument.algorithm;
+  ImGui::SetNextItemWidth(width);
+  const bool algorithm_changed =
+      named_slider_int(names.algorithm, &algorithm, 0, 7);
+  if (names.short_names) {
+    ImGui::SetItemTooltip("%s", kLfoFullNames.algorithm);
+  }
+  track_patch_history(context, "Algorithm", "instrument.algorithm");
+  if (algorithm_changed) {
+    patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
+  }
+  ImGui::EndGroup();
+}
+
+/**
+ * The LFO's two sensitivities, `width` wide each, side by side or one above
+ * the other.
+ */
+void render_lfo_sliders(PatchEditorContext &context, ym2612::Patch &patch,
+                        const LfoNames &names, float width, bool beside) {
   // The sensitivities do nothing while the LFO is off, which is said by the
-  // one being touched.
-  // A short name is told in full there too.
+  // one being touched. A short name is told in full there too. The LFO's
+  // switch and rate are how the patch is played, set from the menu bar.
   const bool lfo_on = context.session.playback().lfo_enable;
   const bool short_names = names.short_names;
   const auto tell = [&](const char *full_name) {
@@ -328,11 +339,7 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
     }
   };
 
-  // No wider than the column, which a name too long for it is cut short to.
-  ImGui::PushItemWidth(
-      std::min(lfo_slider_width(names), ImGui::GetContentRegionAvail().x));
-  ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::scale::px(kLfoSliderGap));
-
+  ImGui::PushItemWidth(width);
   int ams =
       std::clamp<int>(patch.channel.amplitude_modulation_sensitivity, 0, 3);
   bool ams_changed = named_slider_int(names.ams, &ams, 0, 3, kAmsDepths[ams]);
@@ -343,6 +350,9 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
     patch.channel.amplitude_modulation_sensitivity = static_cast<uint8_t>(ams);
   }
 
+  if (beside) {
+    ImGui::SameLine();
+  }
   int fms =
       std::clamp<int>(patch.channel.frequency_modulation_sensitivity, 0, 7);
   bool fms_changed = named_slider_int(names.fms, &fms, 0, 7, kFmsDepths[fms]);
@@ -352,52 +362,150 @@ void render_lfo_section(PatchEditorContext &context, ym2612::Patch &patch,
   if (fms_changed) {
     patch.channel.frequency_modulation_sensitivity = static_cast<uint8_t>(fms);
   }
-
-  ImGui::PopStyleVar();
   ImGui::PopItemWidth();
-  ImGui::Spacing();
 }
 
-void render_channel_section(PatchEditorContext &context, ym2612::Patch &patch,
-                            const LfoNames &names) {
-  ImGui::SeparatorText("Channel");
-  ImGui::PushItemWidth(hslider_width());
-
-  // The slider stands beside the diagram, as tall as it, at the spacing
-  // between any two items, and the two as tall as the LFO's sliders. With
-  // the names short, the diagram narrows down to its least to leave the
-  // slider its own.
-  const float diagram_height =
-      ImGui::GetFrameHeight() * 2.0f + ui::scale::px(kLfoSliderGap);
-  float diagram_width = ImGui::CalcItemWidth();
-  if (names.short_names) {
-    diagram_width = std::clamp(
-        ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x -
-            named_slider_fit_width(names.algorithm, "0"),
-        ui::scale::px(kMinAlgorithmDiagramWidth), diagram_width);
+/// The path where the patch is kept, from `min`, `width` wide: cut short
+/// where it is longer, and then told in full under the pointer.
+void render_header_path(const std::string &path, float width) {
+  const ImVec2 path_min = ImGui::GetCursorScreenPos();
+  const ImVec2 path_max(path_min.x + std::max(width, 0.0f),
+                        path_min.y + ImGui::GetTextLineHeight());
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::TextMuted));
+  ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), path_min, path_max,
+                            path_max.x, path.c_str(), nullptr, nullptr);
+  ImGui::PopStyleColor();
+  ImGui::Dummy(ImVec2(path_max.x - path_min.x, ImGui::GetTextLineHeight()));
+  if (ImGui::CalcTextSize(path.c_str()).x > path_max.x - path_min.x) {
+    ImGui::SetItemTooltip("%s", path.c_str());
   }
-  algorithm_diagram(patch.instrument.algorithm,
-                    ImVec2(diagram_width, diagram_height));
+}
+
+/**
+ * The header beside the patch's icon. Where the window is wide: the save
+ * buttons with where the patch is kept, the rating, and the LFO's
+ * sensitivities, one row each, and the algorithm at the right, as tall as
+ * the icon. Where it is narrow: the save buttons, the path and the rating,
+ * and below, the sensitivities one above the other beside the algorithm.
+ */
+void render_document_header(PatchEditorContext &context,
+                            patches::PatchDocument &document,
+                            ym2612::Patch &patch, UIState::DocumentUi &ui,
+                            PatchEditorState &state, bool is_active) {
+  auto &patch_session = context.session;
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float spacing = style.ItemSpacing.x;
+  const auto *entry = patch_session.document_entry(document);
+  const bool editable =
+      entry != nullptr && patch_session.repository().can_edit_metadata(*entry);
+
+  const float row = ImGui::GetFrameHeight() + style.ItemSpacing.y;
+  const float height = row * 3.0f - style.ItemSpacing.y;
+  const float top = ImGui::GetCursorPosY();
+  MetadataEdit edit;
+  render_header_icon(entry, editable, height, edit);
+
   ImGui::SameLine();
-  ImGui::PushStyleVarY(
-      ImGuiStyleVar_FramePadding,
-      std::max((diagram_height - ImGui::GetFontSize()) * 0.5f, 0.0f));
+  const float left = ImGui::GetCursorPosX();
+  const float right = left + ImGui::GetContentRegionAvail().x;
+  const auto controls = patches::save_controls(patch_session, document);
+  render_save_buttons(context, document, controls, state);
+  const float buttons_end =
+      ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + ImGui::GetScrollX();
 
-  int algorithm = patch.instrument.algorithm;
-  ImGui::SetNextItemWidth(
-      std::min(ImGui::CalcItemWidth(), ImGui::GetContentRegionAvail().x));
-  bool algorithm_changed = named_slider_int(names.algorithm, &algorithm, 0, 7);
-  if (names.short_names) {
-    ImGui::SetItemTooltip("%s", kLfoFullNames.algorithm);
+  // Wide while the rows beside the icon keep what the buttons, the stars and
+  // the two sliders need beside the algorithm; the algorithm in full while
+  // some room is left over for the path.
+  const float lfo_least = lfo_fit_width(kLfoShortNames) * 2.0f + spacing;
+  const float taken = std::max(
+      {buttons_end - left, editable ? star_rating_width() : 0.0f, lfo_least});
+  const float room = right - left - spacing;
+  const LfoNames *algorithm_names = nullptr;
+  if (room >= taken + algorithm_width(kLfoFullNames) &&
+      room >= buttons_end - left + ui::scale::px(120.0f) +
+                  algorithm_width(kLfoFullNames)) {
+    algorithm_names = &kLfoFullNames;
+  } else if (room >= taken + algorithm_width(kLfoShortNames)) {
+    algorithm_names = &kLfoShortNames;
   }
-  ImGui::PopStyleVar();
-  track_patch_history(context, "Algorithm", "instrument.algorithm");
-  if (algorithm_changed) {
-    patch.instrument.algorithm = static_cast<uint8_t>(algorithm);
-  }
-  ImGui::PopItemWidth();
+  const bool wide = algorithm_names != nullptr;
+  const float rows_right =
+      wide ? right - algorithm_width(*algorithm_names) - spacing : right;
 
-  ImGui::Spacing();
+  const auto &repository = patch_session.repository();
+  const std::string path = display_preset_path(repository.display_path(
+      repository.to_relative_path(document.path()).generic_string()));
+  if (wide) {
+    ImGui::SetCursorPos(
+        ImVec2(buttons_end + spacing, top + style.FramePadding.y));
+    render_header_path(path, rows_right - (buttons_end + spacing));
+  } else {
+    ImGui::SetCursorPos(ImVec2(left, top + row + style.FramePadding.y));
+    render_header_path(path, right - left);
+  }
+
+  if (editable) {
+    ImGui::SetCursorPos(ImVec2(left, top + row * (wide ? 1.0f : 2.0f)));
+    render_header_rating(*entry, ui, edit);
+  }
+
+  if (wide) {
+    // Named in full while both fit so.
+    const float half = (rows_right - left - spacing) * 0.5f;
+    const LfoNames &names = names_fitting(half, lfo_fit_width(kLfoFullNames));
+    // Against the algorithm, at the right of the rows.
+    const float width =
+        std::min(half, std::max(hslider_width(), lfo_fit_width(kLfoFullNames)));
+    ImGui::SetCursorPos(
+        ImVec2(rows_right - width * 2.0f - spacing, top + row * 2.0f));
+    render_lfo_sliders(context, patch, names, width, true);
+    ImGui::SetCursorPos(ImVec2(right - algorithm_width(*algorithm_names), top));
+    render_algorithm(context, patch, *algorithm_names, height);
+  }
+  ImGui::SetCursorPos(ImVec2(left, top));
+  ImGui::Dummy(ImVec2(0.0f, height));
+
+  if (!wide) {
+    // The sensitivities at the left take what the algorithm leaves them,
+    // the algorithm in full while they keep their short names.
+    const float available = ImGui::GetContentRegionAvail().x;
+    const float least = lfo_fit_width(kLfoShortNames);
+    const LfoNames &alg_names = names_fitting(available - spacing - least,
+                                              algorithm_width(kLfoFullNames));
+    const float column = available - spacing - algorithm_width(alg_names);
+    if (column >= least) {
+      const float column_top = ImGui::GetCursorPosY();
+      const float column_left = ImGui::GetCursorPosX();
+      const LfoNames &names =
+          names_fitting(column, lfo_fit_width(kLfoFullNames));
+      // Level with the algorithm's foot: FMS beside its slider.
+      ImGui::SetCursorPos(ImVec2(column_left, column_top + height - row * 2.0f +
+                                                  style.ItemSpacing.y));
+      ImGui::BeginGroup();
+      render_lfo_sliders(context, patch, names, column, false);
+      ImGui::EndGroup();
+      ImGui::SetCursorPos(ImVec2(column_left + column + spacing, column_top));
+      render_algorithm(context, patch, alg_names, height);
+    } else {
+      render_lfo_sliders(context, patch, kLfoShortNames, available, false);
+      render_algorithm(context, patch, kLfoShortNames, height);
+    }
+  }
+
+  // Written once the header is drawn: a write rebuilds the browser's tree,
+  // and `entry` with it.
+  if (edit.icon) {
+    patch_session.set_entry_icon(*entry, *edit.icon);
+  } else if (edit.rating) {
+    patch_session.set_entry_rating(*entry, *edit.rating);
+  }
+
+  // Render popups in the same window/ID stack as the actions that open them.
+  // They act on the active document, so only its window holds them.
+  if (is_active) {
+    render_save_export_popups(patch_session, state);
+  }
 }
 
 void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
@@ -405,13 +513,10 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
 
   const auto avail_width = ImGui::GetContentRegionAvail().x;
   const float column_min_width = ui::scale::px(250.0f);
-  if (avail_width > column_min_width * 4) {
-    ImGui::Columns(4, "operation_columns", false);
-  } else if (avail_width > column_min_width * 2) {
-    ImGui::Columns(2, "operation_columns", false);
-  } else {
-    ImGui::Columns(1, "operation_columns", false);
-  }
+  const int columns = avail_width > column_min_width * 4   ? 4
+                      : avail_width > column_min_width * 2 ? 2
+                                                           : 1;
+  ImGui::Columns(columns, "operation_columns", false);
 
   // The four frames share one height so their borders line up; each operator
   // reports what it needed and the tallest wins the next frame.
@@ -420,7 +525,7 @@ void render_operator_section(PatchEditorContext &context, ym2612::Patch &patch,
   echo_selection_highlights(context);
   for (int slot = 0; slot < 4; slot++) {
     render_operator_editor(context, patch, slot, context.envelope_state(slot),
-                           voices);
+                           voices, columns == 1);
 
     ImGui::Spacing();
     ImGui::NextColumn();
@@ -568,8 +673,7 @@ void assign_window_slots(PatchEditorContext &context) {
  * it had unsaved changes: take the file's contents, or keep the edits and
  * count the file's contents as what they differ from.
  */
-void render_disk_change_bar(PatchEditorContext &context,
-                            patches::DocumentId id,
+void render_disk_change_bar(PatchEditorContext &context, patches::DocumentId id,
                             UIState::DocumentUi &ui) {
   ImGui::AlignTextToFramePadding();
   ImGui::TextColored(styles::color(styles::MegatoyCol::TextHighlight),
@@ -732,38 +836,8 @@ void render_document_window(PatchEditorContext &context,
     if (ui.disk_version) {
       render_disk_change_bar(context, id, ui);
     }
-    render_document_header(context, document, ui, state, is_active);
+    render_document_header(context, document, patch, ui, state, is_active);
     ImGui::Spacing();
-
-    // Side by side while each of the two even columns holds the LFO's
-    // sliders, named in full or else as AMS, FMS and ALG; one above the
-    // other after that, in full while they fit.
-    // The Channel column needs the diagram and the Algorithm slider named
-    // beside it, which is shortened with the LFO's.
-    const auto available_width = ImGui::GetContentRegionAvail().x;
-    const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const auto section_width = [&](const LfoNames &names) {
-      const float diagram_width =
-          !names.short_names ? hslider_width()
-                             : ui::scale::px(kMinAlgorithmDiagramWidth);
-      const float channel_width = diagram_width + spacing +
-                                  named_slider_fit_width(names.algorithm, "0");
-      return std::max(lfo_slider_width(names), channel_width);
-    };
-    const auto fits_beside = [&](const LfoNames &names) {
-      return available_width >= (section_width(names) + spacing * 2.0f) * 2.0f;
-    };
-    const bool full_beside = fits_beside(kLfoFullNames);
-    const bool beside = full_beside || fits_beside(kLfoShortNames);
-    const bool full =
-        full_beside ||
-        (!beside && available_width >= section_width(kLfoFullNames));
-    ImGui::Columns(beside ? 2 : 1, "##lfo_channel_columns", false);
-    const LfoNames &names = full ? kLfoFullNames : kLfoShortNames;
-    render_lfo_section(context, patch, names);
-    ImGui::NextColumn();
-    render_channel_section(context, patch, names);
-    ImGui::Columns(1);
     // Only the active document is what the chip is playing.
     render_operator_section(context, patch,
                             is_active ? frame.voices : EnvelopeVoices{});
@@ -970,8 +1044,9 @@ void render_open_patches_button(PatchEditorContext &context,
                                 ImGuiDockNode *node) {
   static const ImGuiID popup_id = ImHashStr("##open_patches");
   static bool open_at_press = false;
-  const auto button = folded_tab_button(node, "##open_patches",
-                                        ICON_MEGATOY_LIST, "Open Patches");
+  const auto button =
+      folded_tab_button(node, "##open_patches", ICON_MEGATOY_ANGLE_DOWN,
+                        "Open Patches", /*filled=*/false);
   if (!button) {
     return;
   }

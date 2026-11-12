@@ -10,6 +10,9 @@
 #include "../test_check.hpp"
 #include <filesystem>
 #include <iostream>
+#include <iterator>
+#include <string>
+#include <vector>
 
 int main() {
   using patches::can_overwrite_in_place;
@@ -61,6 +64,51 @@ int main() {
     CHECK(!loaded.patches.empty());
     CHECK(loaded.patches[0].instrument.algorithm == 5);
   }
+
+  // Nothing but the files asked for is left in the folder.
+  CHECK(std::distance(std::filesystem::directory_iterator(dir),
+                      std::filesystem::directory_iterator()) == 3);
+
+  // A package is written at the path given, whatever its stem ends in.
+  CHECK(patches::write_patch(patch, dir / "twice.ginpkg.ginpkg"));
+  CHECK(std::filesystem::exists(dir / "twice.ginpkg.ginpkg"));
+  CHECK(!std::filesystem::exists(dir / "twice.ginpkg"));
+
+  // A write that fails leaves the file as it was.
+  for (const char *name : {"out.dmp", "out.mml", "out.ginpkg"}) {
+    const auto path = dir / name;
+    const auto size = std::filesystem::file_size(path);
+    const auto blocker = dir / ("." + std::string(name) + ".tmp");
+    std::filesystem::create_directories(blocker / "held");
+    ym2612::Patch other = patch;
+    other.instrument.algorithm = 2;
+    CHECK(!patches::write_patch(other, path));
+    CHECK(std::filesystem::file_size(path) == size);
+    const auto loaded = formats::load_patch_from_file(path);
+    CHECK(!loaded.patches.empty());
+    CHECK(loaded.patches[0].instrument.algorithm == 5);
+    std::filesystem::remove_all(blocker);
+  }
+
+  // The save dialog offers every format once, the patch's own first.
+  const std::vector<formats::SaveFormatInfo> formats{
+      {".dmp", "DefleMask Preset", false},
+      {".fui", "Furnace Instrument", false},
+      {".mml", "MML", true},
+      {".dmp", "DefleMask Preset", true}};
+  const auto filters = patches::save_dialog_filters(formats, ".fui");
+  CHECK(filters.size() == 3);
+  CHECK(filters[0].extensions == std::vector<std::string>{"fui"});
+  CHECK(filters[1].extensions == std::vector<std::string>{"dmp"});
+  CHECK(filters[2].label == formats[2].display_name());
+
+  // The format is the one the returned name has, or else the one offered.
+  CHECK(patches::with_save_extension("lead.FUI", formats, ".dmp") ==
+        std::filesystem::path("lead.FUI"));
+  CHECK(patches::with_save_extension("lead", formats, ".dmp") ==
+        std::filesystem::path("lead.dmp"));
+  CHECK(patches::with_save_extension("lead.txt", formats, ".dmp") ==
+        std::filesystem::path("lead.txt.dmp"));
 
   std::filesystem::remove_all(dir);
   std::cout << "All patch write tests passed\n";

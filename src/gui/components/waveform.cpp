@@ -156,17 +156,37 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
     return panel.min.y + height * std::clamp(t, 0.0f, 1.0f);
   };
 
+  // The level labels hang below their lines; they go, all together, where
+  // they would touch one another, and any one that would reach the
+  // frequency labels along the foot.
+  const float line_height = ImGui::GetTextLineHeight();
+  const float label_gap = ui::scale::px(1.0f);
+  const bool level_labels =
+      y_for_db(kSpectrumTopDb - 40.0f) - y_for_db(kSpectrumTopDb - 20.0f) >=
+      line_height + label_gap * 2.0f;
+  const float labels_floor = panel.max.y - line_height - label_gap * 2.0f;
   for (float db = kSpectrumTopDb - 20.0f; db > kSpectrumBottomDb; db -= 20.0f) {
     const float y = y_for_db(db);
     panel.draw_list->AddLine(ImVec2(panel.min.x, y), ImVec2(panel.max.x, y),
                              grid);
+    if (!level_labels || y + label_gap + line_height > labels_floor) {
+      continue;
+    }
     char text[16];
     std::snprintf(text, sizeof(text), "%.0f", db);
     panel.draw_list->AddText(
-        ImVec2(panel.min.x + ui::scale::px(3.0f), y + ui::scale::px(1.0f)),
-        label, text);
+        ImVec2(panel.min.x + ui::scale::px(3.0f), y + label_gap), label, text);
   }
 
+  // The frequency labels stand right of their lines along the foot; they
+  // go, all together, where one would touch the next, and any one that would
+  // run past the right edge.
+  struct FrequencyLabel {
+    float x;
+    const char *text;
+    float width;
+  };
+  std::vector<FrequencyLabel> frequency_labels;
   for (float hz : {100.0f, 1000.0f, 10000.0f}) {
     if (hz >= nyquist) {
       continue;
@@ -175,10 +195,26 @@ void draw_spectrum(const Panel &panel, const audio::SpectrumAnalyzer &spectrum,
     panel.draw_list->AddLine(ImVec2(x, panel.min.y), ImVec2(x, panel.max.y),
                              grid);
     const char *text = hz < 1000.0f ? "100" : (hz < 10000.0f ? "1k" : "10k");
-    panel.draw_list->AddText(
-        ImVec2(x + ui::scale::px(2.0f),
-               panel.max.y - ImGui::GetTextLineHeight() - ui::scale::px(1.0f)),
-        label, text);
+    frequency_labels.push_back(
+        {x + ui::scale::px(2.0f), text, ImGui::CalcTextSize(text).x});
+  }
+  const float frequency_gap = ui::scale::px(4.0f);
+  bool frequency_labels_fit = true;
+  for (std::size_t i = 1; i < frequency_labels.size(); ++i) {
+    const auto &before = frequency_labels[i - 1];
+    if (before.x + before.width + frequency_gap > frequency_labels[i].x) {
+      frequency_labels_fit = false;
+    }
+  }
+  if (frequency_labels_fit) {
+    for (const auto &item : frequency_labels) {
+      if (item.x + item.width > panel.max.x - label_gap) {
+        continue;
+      }
+      panel.draw_list->AddText(
+          ImVec2(item.x, panel.max.y - line_height - label_gap), label,
+          item.text);
+    }
   }
 
   // One column per pixel, each taking the loudest bin that maps to it, so

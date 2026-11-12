@@ -1,5 +1,6 @@
 #pragma once
 
+#include "drop_actions.hpp"
 #include "gui/components/confirmation_dialog.hpp"
 #include "gui/components/main_menu.hpp"
 #include "gui/components/midi_keyboard.hpp"
@@ -13,6 +14,9 @@
 struct AppContext;
 
 namespace ui::renderer_detail {
+
+/// Where a dropped file goes when no place took it: the editor.
+drop_actions::Environment make_drop_environment(AppContext &ctx);
 
 /// References and callbacks for windows, retained for one AppContext.
 struct FrameContexts {
