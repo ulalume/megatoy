@@ -661,9 +661,11 @@ bool PatchRepository::restore(const DeletedEntry &deleted) {
       break;
     }
     const auto out = vfs_.open_write(file.path);
-    written =
-        out && out->write(file.bytes.data(),
-                          static_cast<std::streamsize>(file.bytes.size()));
+    // Flushed here, where a write the disk has no room for can be seen.
+    written = out &&
+              out->write(file.bytes.data(),
+                         static_cast<std::streamsize>(file.bytes.size())) &&
+              out->flush();
   }
   if (!written) {
     std::error_code ec;
