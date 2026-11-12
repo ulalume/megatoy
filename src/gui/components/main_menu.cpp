@@ -693,8 +693,21 @@ void operator_menu_items(std::array<bool, 4> &enabled, uint8_t algorithm) {
   ImGui::PopItemFlag();
 }
 
+/// Whether every operator that reaches the output is muted, leaving the
+/// patch silent.
+bool carriers_muted(const std::array<bool, 4> &enabled, uint8_t algorithm) {
+  for (int slot = 0; slot < 4; ++slot) {
+    if (is_carrier(slot, algorithm) &&
+        enabled[static_cast<std::size_t>(slot)]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
- * The operators' menu, its label "OP 1234" with a muted one's number faint.
+ * The operators' menu, its label "OP 1234" with a muted one's number faint,
+ * in the warning colour when every carrier is muted.
  * The label is laid out unseen and drawn over afterwards, so the menu's
  * highlight stays underneath.
  */
@@ -713,6 +726,11 @@ void operator_menu(std::array<bool, 4> &enabled, uint8_t algorithm,
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, padding);
     ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, item_spacing_y);
     operator_menu_items(enabled, algorithm);
+    if (carriers_muted(enabled, algorithm)) {
+      ImGui::Separator();
+      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusWarning),
+                         "All carriers muted: no sound");
+    }
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
     ui::end_menu();
@@ -724,11 +742,15 @@ void operator_menu(std::array<bool, 4> &enabled, uint8_t algorithm,
     draw_list->AddText(pos, color, part);
     pos.x += ImGui::CalcTextSize(part).x;
   };
-  put("OP ", ImGui::GetColorU32(text));
+  // In the warning colour while nothing can be heard.
+  const ImU32 shown = carriers_muted(enabled, algorithm)
+                          ? styles::color_u32(styles::MegatoyCol::StatusWarning)
+                          : ImGui::GetColorU32(text);
+  put("OP ", shown);
   for (int slot = 0; slot < 4; ++slot) {
     const char digit[] = {static_cast<char>('1' + slot), '\0'};
     put(digit, enabled[static_cast<std::size_t>(slot)]
-                   ? ImGui::GetColorU32(text)
+                   ? shown
                    : styles::color_u32(styles::MegatoyCol::TextMuted));
   }
 }
