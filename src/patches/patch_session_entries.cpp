@@ -1,6 +1,7 @@
 #include "patch_session.hpp"
 
 #include <algorithm>
+#include <system_error>
 #include <utility>
 
 namespace patches {
@@ -214,6 +215,34 @@ void PatchSession::reattach(const std::vector<DetachedDocument> &detached) {
     document->set_selection_path(shown.selection_path);
     remember_disk_time(*document);
   }
+}
+
+bool PatchSession::remove_copies(
+    const std::vector<std::filesystem::path> &copies) {
+  std::vector<std::pair<DocumentId, std::filesystem::path>> showing;
+  for (const auto &document : documents_) {
+    if (document->path().empty()) {
+      continue;
+    }
+    auto file = repository_->to_absolute_path(document->path());
+    const bool copied =
+        std::any_of(copies.begin(), copies.end(), [&](const auto &copy) {
+          const auto relative = file.lexically_relative(copy);
+          return !relative.empty() && *relative.begin() != "..";
+        });
+    if (copied) {
+      showing.emplace_back(document->id(), std::move(file));
+    }
+  }
+  const bool removed = repository_->remove_copies(copies);
+  for (const auto &[id, file] : showing) {
+    std::error_code ec;
+    auto *document = find_document(id);
+    if (document != nullptr && !std::filesystem::exists(file, ec)) {
+      set_document_path(*document, {});
+    }
+  }
+  return removed;
 }
 
 bool PatchSession::can_move_patch(const PatchEntry &entry,

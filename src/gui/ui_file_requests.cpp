@@ -420,7 +420,7 @@ undo_copies(AppContext &ctx, std::vector<std::filesystem::path> copies) {
           copies = std::make_shared<const std::vector<std::filesystem::path>>(
               std::move(copies))]() {
     const bool folders = any_folder(*copies);
-    if (!ctx.services.patch_session.repository().remove_copies(*copies)) {
+    if (!ctx.services.patch_session.remove_copies(*copies)) {
       megatoy::status::error("Could not remove every copy.");
       return;
     }

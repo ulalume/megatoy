@@ -305,6 +305,9 @@ public:
   /// Give the documents a deletion detached their files again, once those
   /// are back, unless they have been saved elsewhere since.
   void reattach(const std::vector<DetachedDocument> &detached);
+  /// Remove copies the repository made. Every document showing one that is
+  /// gone, or something inside it, becomes an unsaved patch.
+  bool remove_copies(const std::vector<std::filesystem::path> &copies);
   /**
    * Move `entry` into the folder `destination`, within one workspace folder.
    * Every open document follows when it was the entry or inside it, as does

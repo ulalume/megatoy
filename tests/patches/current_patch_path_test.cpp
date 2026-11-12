@@ -197,6 +197,48 @@ void test_move_follows_the_current_patch() {
 
 // A workspace folder is registered by path, so renaming one has to move the
 // registration with it or the folder comes back missing.
+void test_removed_copies_leave_their_documents_unsaved() {
+  LaunchedEnvironment env("current_patch_path_test");
+  auto &repository = env.session.repository();
+  const auto shelf = env.folder / "shelf";
+  std::filesystem::create_directories(env.folder / "strings");
+  std::filesystem::create_directories(shelf);
+  auto patch = env.session.current_patch();
+  CHECK(patches::write_patch(patch, env.folder / "violin.dmp"));
+  CHECK(patches::write_patch(patch, env.folder / "strings" / "cello.dmp"));
+  CHECK(patches::write_patch(patch, shelf / "kept.dmp"));
+  repository.refresh();
+
+  const auto copy_into_shelf = [&](const std::filesystem::path &source) {
+    const auto *entry = find_patch_entry(repository.tree(), source);
+    const auto *into = find_patch_entry(repository.tree(), shelf);
+    CHECK(entry != nullptr && into != nullptr);
+    const auto copied = repository.copy_patch(*entry, *into, ".dmp");
+    CHECK(copied.has_value());
+    return *copied;
+  };
+  const auto file_copy = copy_into_shelf(env.folder / "violin.dmp");
+  const auto folder_copy = copy_into_shelf(env.folder / "strings");
+
+  // One document on each copy, and one on a file that stays.
+  const auto path_of = [&](const std::filesystem::path &file) {
+    return repository.to_relative_path(file).generic_string();
+  };
+  const auto on_file = env.open(path_of(file_copy)).id();
+  const auto on_folder = env.open(path_of(folder_copy / "cello.dmp")).id();
+  const auto on_kept = env.open(path_of(shelf / "kept.dmp")).id();
+
+  CHECK(env.session.remove_copies({file_copy, folder_copy}));
+  CHECK(!std::filesystem::exists(file_copy));
+  CHECK(!std::filesystem::exists(folder_copy));
+  CHECK(env.session.find_document(on_file)->path().empty());
+  CHECK(env.session.find_document(on_folder)->path().empty());
+  CHECK(env.session.find_document(on_kept)->path() ==
+        path_of(shelf / "kept.dmp"));
+  CHECK(std::filesystem::exists(env.folder / "violin.dmp"));
+  CHECK(std::filesystem::exists(env.folder / "strings" / "cello.dmp"));
+}
+
 void test_workspace_root_rename_follows_the_preference() {
   LaunchedEnvironment env("current_patch_path_test");
   const auto *root =
@@ -320,6 +362,7 @@ int main() {
   test_current_patch_path_recording();
   test_folder_rename_follows_the_current_patch();
   test_move_follows_the_current_patch();
+  test_removed_copies_leave_their_documents_unsaved();
   test_workspace_root_rename_follows_the_preference();
   test_restore_last_patch();
   test_missing_last_patch_falls_back_silently();
