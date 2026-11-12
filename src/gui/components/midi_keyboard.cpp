@@ -302,44 +302,6 @@ const char *typing_label(const MidiKeyboardState &state) {
                                           : state.typing_range_label.c_str();
 }
 
-/**
- * The operators' switches, OP1 to OP4, as megamml's keyboard has them: lit
- * while the operator sounds, an outline while it is muted. How the patch is
- * played, not the patch (ym2612/playback.hpp).
- */
-void render_operator_switches(std::array<bool, 4> &enabled) {
-  const ImGuiStyle &style = ImGui::GetStyle();
-  ImGui::AlignTextToFramePadding();
-  ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "OP");
-  const float size = ImGui::GetFrameHeight();
-  for (std::size_t i = 0; i < enabled.size(); ++i) {
-    ImGui::SameLine(0.0f,
-                    i == 0 ? style.ItemInnerSpacing.x : ui::scale::px(1.0f));
-    const bool on = enabled[i];
-    if (!on) {
-      ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
-      ImGui::PushStyleColor(ImGuiCol_Text,
-                            styles::color(styles::MegatoyCol::TextMuted));
-      ImGui::PushStyleColor(ImGuiCol_Border,
-                            styles::color(styles::MegatoyCol::EnvelopeGrid));
-      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, ui::scale::px(1.0f));
-    }
-    const char label[] = {static_cast<char>('1' + i), '\0'};
-    ImGui::PushID(static_cast<int>(i));
-    if (ImGui::Button(label, ImVec2(size, size))) {
-      enabled[i] = !on;
-    }
-    ImGui::PopID();
-    if (!on) {
-      ImGui::PopStyleVar();
-      ImGui::PopStyleColor(3);
-    }
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("OP%d", static_cast<int>(i) + 1);
-    }
-  }
-}
-
 std::pair<ImGuiKey, ImGuiKey>
 octave_keys_for_layout(TypingKeyboardLayout layout,
                        const PreferenceManager::UIPreferences &prefs) {
@@ -465,10 +427,6 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     }
     refresh_state(context.state, input, typing_layout, custom_layout);
   }
-
-  ImGui::SameLine();
-
-  render_operator_switches(context.operator_enable);
 
   // The octave buttons and the slider take the rest of the row, a pixel
   // apart, or a row of their own when too little is left.

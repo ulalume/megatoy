@@ -21,6 +21,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "ym2612/chip.hpp"
+#include "ym2612/operator_edit.hpp"
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -409,6 +410,16 @@ float lfo_menu_advance(bool short_label) {
                   bar_menu_advance(lfo_menu_label(short_label, false).c_str()));
 }
 
+/// Whether the operator in display `slot` reaches the output under
+/// `algorithm`.
+bool is_carrier(int slot, uint8_t algorithm) {
+  return ym2612::operator_register_index(slot) >=
+         ym2612::algorithm_modulator_count[algorithm];
+}
+
+/// The operators' menu label, its text drawn over it in colours of its own.
+constexpr char kOperatorMenuLabel[] = "OP 1234###Operators";
+
 /**
  * As the bar narrows, the load graph shrinks to the reading it holds and
  * then goes, then the middle loses its note, then the menus and the middle
@@ -429,8 +440,10 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
   };
   // The room the middle leaves before a load area `load_width` wide: it sits
   // centred in the bar, but never over the menus.
-  // The LFO menu stands just left of the load area, named in full.
-  const float lfo_width = lfo_menu_advance(false);
+  // The LFO menu and the operators' stand just left of the load area, the
+  // LFO named in full.
+  const float lfo_width =
+      lfo_menu_advance(false) + bar_menu_advance(kOperatorMenuLabel);
   const auto room = [&](BarCentreFit fit, float load_width, bool logo = false) {
     const float right_start =
         width - load_width - style.FramePadding.x * 2.0f - lfo_width;
@@ -660,6 +673,68 @@ void view_menu_items(MainMenuContext &context) {
  * the patch, so they mark nothing modified and are not saved with it
  * (ym2612/playback.hpp).
  */
+/// Which operators sound. A carrier is marked so; the menu stays open as
+/// they are switched.
+void operator_menu_items(std::array<bool, 4> &enabled, uint8_t algorithm) {
+  ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+  for (int slot = 0; slot < 4; ++slot) {
+    const std::string name = "OP" + std::to_string(slot + 1);
+    bool &on = enabled[static_cast<std::size_t>(slot)];
+    if (ImGui::MenuItem(name.c_str(),
+                        is_carrier(slot, algorithm) ? "Carrier" : nullptr,
+                        on)) {
+      on = !on;
+    }
+  }
+  ImGui::PopItemFlag();
+}
+
+/**
+ * The operators' menu, its label "OP 1234": a carrier's number in the
+ * carriers' colour while the menu is not lit, a muted one's faint. The label is
+ * laid out unseen and drawn over afterwards, so the menu's highlight stays
+ * underneath.
+ */
+void operator_menu(std::array<bool, 4> &enabled, uint8_t algorithm,
+                   const ImVec2 &padding, float item_spacing_y) {
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImGuiWindow *bar = ImGui::GetCurrentWindow();
+  // A menu bar item's label starts half an item spacing in.
+  const ImVec2 text_pos(bar->DC.CursorPos.x +
+                            IM_TRUNC(ImGui::GetStyle().ItemSpacing.x * 0.5f),
+                        bar->DC.CursorPos.y + bar->DC.CurrLineTextBaseOffset);
+  const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+  const bool open = begin_bar_menu(kOperatorMenuLabel);
+  // Lit, the highlight is the carriers' colour too.
+  const bool lit = open || ImGui::IsItemHovered();
+  if (open) {
+    ImGui::PushStyleColor(ImGuiCol_Text, text);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, padding);
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, item_spacing_y);
+    operator_menu_items(enabled, algorithm);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    ui::end_menu();
+  }
+  ImGui::PopStyleColor();
+
+  ImVec2 pos = text_pos;
+  const auto put = [&](const char *part, ImU32 color) {
+    draw_list->AddText(pos, color, part);
+    pos.x += ImGui::CalcTextSize(part).x;
+  };
+  put("OP ", ImGui::GetColorU32(text));
+  for (int slot = 0; slot < 4; ++slot) {
+    const char digit[] = {static_cast<char>('1' + slot), '\0'};
+    put(digit, !enabled[static_cast<std::size_t>(slot)]
+                   ? styles::color_u32(styles::MegatoyCol::TextMuted)
+               : is_carrier(slot, algorithm) && !lit
+                   ? styles::color_u32(styles::MegatoyCol::CarrierBadge)
+                   : ImGui::GetColorU32(text));
+  }
+}
+
 /// The LFO's switch and its rate, one width.
 void lfo_menu_items(ym2612::PlaybackSettings &playback) {
   // The chip's eight rates.
@@ -785,8 +860,10 @@ void render_main_menu(MainMenuContext &context) {
     auto &playback = context.patch_session.playback();
     const std::string lfo_label =
         lfo_menu_label(fit.lfo_short, playback.lfo_enable);
+    const float operators_x =
+        std::max(menus_end, load_start - bar_menu_advance(kOperatorMenuLabel));
     const float lfo_x =
-        std::max(menus_end, load_start - lfo_menu_advance(fit.lfo_short));
+        std::max(menus_end, operators_x - lfo_menu_advance(fit.lfo_short));
     ImGui::SetCursorPos(ImVec2(lfo_x, row_y));
     const bool lfo_muted = !playback.lfo_enable;
     const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
@@ -808,6 +885,11 @@ void render_main_menu(MainMenuContext &context) {
     if (lfo_muted) {
       ImGui::PopStyleColor();
     }
+
+    ImGui::SetCursorPos(ImVec2(operators_x, row_y));
+    operator_menu(playback.operator_enable,
+                  session.current_patch().instrument.algorithm, padding,
+                  item_spacing_y);
 
     if (context.bar_centre) {
       context.bar_centre(fit.centre, menus_end, lfo_x, row_y);

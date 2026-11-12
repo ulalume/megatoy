@@ -256,7 +256,6 @@ MidiKeyboardContext make_midi_keyboard_context(AppContext &ctx) {
       [&ctx](const ym2612::Note &note) {
         return ctx.services.audio_manager.note_sounding(note);
       },
-      ctx.services.patch_session.playback().operator_enable,
   };
 }
 
