@@ -265,9 +265,14 @@ bool GinPackage::Save(const std::filesystem::path &path) const {
     }
   }
 
+  // Written beside `path` and moved over it once whole, so a write that
+  // fails leaves the package there with its versions. Hidden, so a scan of
+  // the folder passes it by.
+  const auto temporary =
+      path.parent_path() / ("." + path.filename().string() + ".tmp");
   mz_zip_archive archive;
   std::memset(&archive, 0, sizeof(archive));
-  const std::string native_path = to_native_string(path);
+  const std::string native_path = to_native_string(temporary);
   if (!mz_zip_writer_init_file(&archive, native_path.c_str(), 0)) {
     std::cerr << "Failed to open ginpkg for writing: " << path << std::endl;
     return false;
@@ -300,9 +305,12 @@ bool GinPackage::Save(const std::filesystem::path &path) const {
 
   bool finalize_ok = mz_zip_writer_finalize_archive(&archive) != 0;
   bool end_ok = mz_zip_writer_end(&archive) != 0;
-  if (!(ok && finalize_ok && end_ok)) {
-    std::error_code remove_error;
-    std::filesystem::remove(path, remove_error);
+  std::error_code error;
+  if (ok && finalize_ok && end_ok) {
+    std::filesystem::rename(temporary, path, error);
+  }
+  if (!(ok && finalize_ok && end_ok) || error) {
+    std::filesystem::remove(temporary, error);
     std::cerr << "Failed to finalize ginpkg: " << path << std::endl;
     return false;
   }
@@ -327,8 +335,14 @@ build_package_path(const std::filesystem::path &patches_dir,
 const std::optional<std::filesystem::path>
 save_patch(const std::filesystem::path &patches_dir, const ym2612::Patch &patch,
            const std::string &filename, const std::string &comment) {
+  return save_patch_at(build_package_path(patches_dir, filename), patch,
+                       comment);
+}
+
+const std::optional<std::filesystem::path>
+save_patch_at(const std::filesystem::path &package_path,
+              const ym2612::Patch &patch, const std::string &comment) {
   try {
-    auto package_path = build_package_path(patches_dir, filename);
     GinPackage package;
     if (std::filesystem::exists(package_path)) {
       if (!package.Load(package_path)) {

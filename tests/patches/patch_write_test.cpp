@@ -10,6 +10,7 @@
 #include "../test_check.hpp"
 #include <filesystem>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -62,6 +63,31 @@ int main() {
           loaded.status == formats::PatchLoadStatus::MultiInstrument);
     CHECK(!loaded.patches.empty());
     CHECK(loaded.patches[0].instrument.algorithm == 5);
+  }
+
+  // Nothing but the files asked for is left in the folder.
+  CHECK(std::distance(std::filesystem::directory_iterator(dir),
+                      std::filesystem::directory_iterator()) == 3);
+
+  // A package is written at the path given, whatever its stem ends in.
+  CHECK(patches::write_patch(patch, dir / "twice.ginpkg.ginpkg"));
+  CHECK(std::filesystem::exists(dir / "twice.ginpkg.ginpkg"));
+  CHECK(!std::filesystem::exists(dir / "twice.ginpkg"));
+
+  // A write that fails leaves the file as it was.
+  for (const char *name : {"out.dmp", "out.mml", "out.ginpkg"}) {
+    const auto path = dir / name;
+    const auto size = std::filesystem::file_size(path);
+    const auto blocker = dir / ("." + std::string(name) + ".tmp");
+    std::filesystem::create_directories(blocker / "held");
+    ym2612::Patch other = patch;
+    other.instrument.algorithm = 2;
+    CHECK(!patches::write_patch(other, path));
+    CHECK(std::filesystem::file_size(path) == size);
+    const auto loaded = formats::load_patch_from_file(path);
+    CHECK(!loaded.patches.empty());
+    CHECK(loaded.patches[0].instrument.algorithm == 5);
+    std::filesystem::remove_all(blocker);
   }
 
   // The save dialog offers every format once, the patch's own first.
