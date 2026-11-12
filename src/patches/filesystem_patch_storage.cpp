@@ -437,7 +437,9 @@ bool FilesystemPatchStorage::scan_directory(
     return std::lexicographical_compare(
         filename_a.begin(), filename_a.end(), filename_b.begin(),
         filename_b.end(),
-        [](char a, char b) { return std::tolower(a) < std::tolower(b); });
+        [](unsigned char a, unsigned char b) {
+          return std::tolower(a) < std::tolower(b);
+        });
   });
 
   for (const auto &entry : entries) {
@@ -473,9 +475,7 @@ bool FilesystemPatchStorage::scan_directory(
         return false;
       }
 
-      std::string extension = path.extension().string();
-      std::transform(extension.begin(), extension.end(), extension.begin(),
-                     ::tolower);
+      const std::string extension = lowercase_extension(path);
 
       const auto format = formats::adapter::format_for_extension(extension);
       const bool is_ginpkg = extension == ".ginpkg";
@@ -645,9 +645,7 @@ bool FilesystemPatchStorage::scan_directory(
 
 std::string
 FilesystemPatchStorage::detect_format(const std::filesystem::path &file_path) {
-  std::string extension = file_path.extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 ::tolower);
+  const std::string extension = lowercase_extension(file_path);
 
   // Derived from the format library rather than a local table, so a format
   // added there is labelled here without another edit. A stale copy of this
@@ -667,9 +665,7 @@ FilesystemPatchStorage::detect_format(const std::filesystem::path &file_path) {
 
 bool FilesystemPatchStorage::is_supported_file(
     const std::filesystem::path &file_path) {
-  std::string extension = file_path.extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 ::tolower);
+  const std::string extension = lowercase_extension(file_path);
 
   const auto &supported = platform::import_pipeline::supported_extensions();
   return std::find(supported.begin(), supported.end(), extension) !=
