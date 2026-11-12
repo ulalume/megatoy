@@ -428,47 +428,29 @@ void render_midi_keyboard(const char *title, MidiKeyboardContext &context) {
     refresh_state(context.state, input, typing_layout, custom_layout);
   }
 
-  // The octave buttons and the slider take the rest of the row, a pixel
-  // apart, or a row of their own when too little is left.
-  const float octave_gap = ui::scale::px(1.0f);
-  const float octave_button_width = ImGui::GetFrameHeight();
+  // The slider takes the rest of the row, or a row of its own when too
+  // little is left.
   ImGui::SameLine();
-  if (ImGui::GetContentRegionAvail().x <
-      (octave_button_width + octave_gap) * 2.0f + ui::scale::px(120.0f)) {
+  if (ImGui::GetContentRegionAvail().x < ui::scale::px(120.0f)) {
     ImGui::NewLine();
   }
   int current_key_octave = static_cast<int>(input.keyboard_typing_octave);
-  const auto set_typing_octave = [&](int octave) {
-    input.keyboard_typing_octave = static_cast<uint8_t>(octave);
-    context.ui_prefs.midi_keyboard_typing_octave = octave;
-    refresh_state(context.state, input, typing_layout, custom_layout);
-  };
-  // Each button names the key that does the same.
-  const auto octave_button = [&](const char *id, ImGuiDir dir, int step,
-                                 const char *name, ImGuiKey key) {
-    const int to = current_key_octave + step;
-    ImGui::BeginDisabled(to < 0 || to > 7);
-    if (ImGui::ArrowButton(id, dir)) {
-      set_typing_octave(to);
-    }
-    ImGui::EndDisabled();
-    if (ImGui::BeginItemTooltip()) {
-      ImGui::Text("%s: %s", name,
-                  key == ImGuiKey_None ? "Unassigned"
-                                       : short_key_name(key).c_str());
-      ImGui::EndTooltip();
-    }
-    ImGui::SameLine(0.0f, octave_gap);
-  };
-  octave_button("##octave_down", ImGuiDir_Left, -1, "Octave Down",
-                octave_keys.first);
-  octave_button("##octave_up", ImGuiDir_Right, 1, "Octave Up",
-                octave_keys.second);
-  current_key_octave = static_cast<int>(input.keyboard_typing_octave);
   ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
   if (ImGui::SliderInt("##Typing", &current_key_octave, 0, 7,
                        typing_label(context.state))) {
-    set_typing_octave(current_key_octave);
+    input.keyboard_typing_octave = static_cast<uint8_t>(current_key_octave);
+    context.ui_prefs.midi_keyboard_typing_octave = current_key_octave;
+    refresh_state(context.state, input, typing_layout, custom_layout);
+  }
+  // It names the keys that move it.
+  if (ImGui::BeginItemTooltip()) {
+    const auto key_name = [](ImGuiKey key) {
+      return key == ImGuiKey_None ? std::string("Unassigned")
+                                  : short_key_name(key);
+    };
+    ImGui::Text("Octave down: %s", key_name(octave_keys.first).c_str());
+    ImGui::Text("Octave up: %s", key_name(octave_keys.second).c_str());
+    ImGui::EndTooltip();
   }
 
   // Scrollable keyboard area, a pixel below the controls.
