@@ -677,6 +677,9 @@ void view_menu_items(MainMenuContext &context) {
 /// they are switched.
 void operator_menu_items(std::array<bool, 4> &enabled, uint8_t algorithm) {
   ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+  // "Carrier" stands where a shortcut would, in the items' own colour.
+  ImGui::PushStyleColor(ImGuiCol_TextDisabled,
+                        ImGui::GetStyleColorVec4(ImGuiCol_Text));
   for (int slot = 0; slot < 4; ++slot) {
     const std::string name = "OP" + std::to_string(slot + 1);
     bool &on = enabled[static_cast<std::size_t>(slot)];
@@ -686,14 +689,14 @@ void operator_menu_items(std::array<bool, 4> &enabled, uint8_t algorithm) {
       on = !on;
     }
   }
+  ImGui::PopStyleColor();
   ImGui::PopItemFlag();
 }
 
 /**
- * The operators' menu, its label "OP 1234": a carrier's number in the
- * carriers' colour while the menu is not lit, a muted one's faint. The label is
- * laid out unseen and drawn over afterwards, so the menu's highlight stays
- * underneath.
+ * The operators' menu, its label "OP 1234" with a muted one's number faint.
+ * The label is laid out unseen and drawn over afterwards, so the menu's
+ * highlight stays underneath.
  */
 void operator_menu(std::array<bool, 4> &enabled, uint8_t algorithm,
                    const ImVec2 &padding, float item_spacing_y) {
@@ -705,10 +708,7 @@ void operator_menu(std::array<bool, 4> &enabled, uint8_t algorithm,
                         bar->DC.CursorPos.y + bar->DC.CurrLineTextBaseOffset);
   const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-  const bool open = begin_bar_menu(kOperatorMenuLabel);
-  // Lit, the highlight is the carriers' colour too.
-  const bool lit = open || ImGui::IsItemHovered();
-  if (open) {
+  if (begin_bar_menu(kOperatorMenuLabel)) {
     ImGui::PushStyleColor(ImGuiCol_Text, text);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, padding);
     ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, item_spacing_y);
@@ -727,11 +727,9 @@ void operator_menu(std::array<bool, 4> &enabled, uint8_t algorithm,
   put("OP ", ImGui::GetColorU32(text));
   for (int slot = 0; slot < 4; ++slot) {
     const char digit[] = {static_cast<char>('1' + slot), '\0'};
-    put(digit, !enabled[static_cast<std::size_t>(slot)]
-                   ? styles::color_u32(styles::MegatoyCol::TextMuted)
-               : is_carrier(slot, algorithm) && !lit
-                   ? styles::color_u32(styles::MegatoyCol::CarrierBadge)
-                   : ImGui::GetColorU32(text));
+    put(digit, enabled[static_cast<std::size_t>(slot)]
+                   ? ImGui::GetColorU32(text)
+                   : styles::color_u32(styles::MegatoyCol::TextMuted));
   }
 }
 
