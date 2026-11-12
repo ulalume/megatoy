@@ -410,13 +410,6 @@ float lfo_menu_advance(bool short_label) {
                   bar_menu_advance(lfo_menu_label(short_label, false).c_str()));
 }
 
-/// Whether the operator in display `slot` reaches the output under
-/// `algorithm`.
-bool is_carrier(int slot, uint8_t algorithm) {
-  return ym2612::operator_register_index(slot) >=
-         ym2612::algorithm_modulator_count[algorithm];
-}
-
 /// The operators' menu label, its text drawn over it in colours of its own.
 constexpr char kOperatorMenuLabel[] = "OP 1234###Operators";
 
@@ -668,12 +661,8 @@ void view_menu_items(MainMenuContext &context) {
   }
 }
 
-/**
- * The LFO's switch and rate. They are how the patch is played rather than
- * the patch, so they mark nothing modified and are not saved with it
- * (ym2612/playback.hpp).
- */
-/// Which operators sound. A carrier is marked so; the menu stays open as
+/// Which operators sound, as the LFO's settings how the patch is played
+/// rather than the patch. A carrier is marked so; the menu stays open as
 /// they are switched.
 void operator_menu_items(std::array<bool, 4> &enabled, uint8_t algorithm) {
   ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
@@ -683,9 +672,9 @@ void operator_menu_items(std::array<bool, 4> &enabled, uint8_t algorithm) {
   for (int slot = 0; slot < 4; ++slot) {
     const std::string name = "OP" + std::to_string(slot + 1);
     bool &on = enabled[static_cast<std::size_t>(slot)];
-    if (ImGui::MenuItem(name.c_str(),
-                        is_carrier(slot, algorithm) ? "Carrier" : nullptr,
-                        on)) {
+    if (ImGui::MenuItem(
+            name.c_str(),
+            ym2612::is_carrier(slot, algorithm) ? "Carrier" : nullptr, on)) {
       on = !on;
     }
   }
@@ -697,7 +686,7 @@ void operator_menu_items(std::array<bool, 4> &enabled, uint8_t algorithm) {
 /// patch silent.
 bool carriers_muted(const std::array<bool, 4> &enabled, uint8_t algorithm) {
   for (int slot = 0; slot < 4; ++slot) {
-    if (is_carrier(slot, algorithm) &&
+    if (ym2612::is_carrier(slot, algorithm) &&
         enabled[static_cast<std::size_t>(slot)]) {
       return false;
     }
@@ -755,7 +744,11 @@ void operator_menu(std::array<bool, 4> &enabled, uint8_t algorithm,
   }
 }
 
-/// The LFO's switch and its rate, one width.
+/**
+ * The LFO's switch and rate, one width. They are how the patch is played
+ * rather than the patch, so they mark nothing modified and are not saved with
+ * it (ym2612/playback.hpp).
+ */
 void lfo_menu_items(ym2612::PlaybackSettings &playback) {
   // The chip's eight rates.
   static const char *const kRates[] = {"3.98 Hz", "5.56 Hz", "6.02 Hz",
@@ -880,10 +873,13 @@ void render_main_menu(MainMenuContext &context) {
     auto &playback = context.patch_session.playback();
     const std::string lfo_label =
         lfo_menu_label(fit.lfo_short, playback.lfo_enable);
+    // Side by side even where the bar is too narrow for both, the LFO's
+    // first.
+    const float lfo_advance = lfo_menu_advance(fit.lfo_short);
     const float operators_x =
-        std::max(menus_end, load_start - bar_menu_advance(kOperatorMenuLabel));
-    const float lfo_x =
-        std::max(menus_end, operators_x - lfo_menu_advance(fit.lfo_short));
+        std::max(menus_end + lfo_advance,
+                 load_start - bar_menu_advance(kOperatorMenuLabel));
+    const float lfo_x = operators_x - lfo_advance;
     ImGui::SetCursorPos(ImVec2(lfo_x, row_y));
     const bool lfo_muted = !playback.lfo_enable;
     const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
