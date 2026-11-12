@@ -126,6 +126,7 @@ void render_status_toasts() {
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
 
     const float toast_width = ui::scale::px(kToastWidth);
+    bool button_hovered = false;
     if (ImGui::BeginChild("toast", ImVec2(toast_width, 0.0f),
                           ImGuiChildFlags_Borders |
                               ImGuiChildFlags_AutoResizeY |
@@ -160,6 +161,7 @@ void render_status_toasts() {
           action_to_perform = entry.action.perform;
           megatoy::status::dismiss(entry.id);
         }
+        button_hovered = ImGui::IsItemHovered();
       }
     }
     ImGui::EndChild();
@@ -168,7 +170,7 @@ void render_status_toasts() {
     if (ImGui::IsItemClicked()) {
       megatoy::status::dismiss(entry.id);
     }
-    if (ImGui::IsItemHovered() && sticky(entry)) {
+    if (ImGui::IsItemHovered() && sticky(entry) && !button_hovered) {
       ImGui::SetTooltip("Click to dismiss");
     }
 
