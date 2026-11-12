@@ -629,7 +629,8 @@ PatchRepository::trash_patch(const PatchEntry &entry) {
   // or stay where they are, still its, if they cannot.
   if (!kept.is_directory) {
     for (auto &path : sidecar::roots_of(entry.full_path)) {
-      if (auto in_trash = platform::trash::move_to_trash(path)) {
+      if (auto in_trash = platform::trash::move_to_trash(path);
+          in_trash && !in_trash->empty()) {
         kept.trashed_sidecars.push_back(
             {std::move(path), std::move(*in_trash)});
       }
@@ -685,8 +686,7 @@ bool PatchRepository::restore_from_trash(const DeletedEntry &deleted) {
     if (vfs_.exists(deleted.path)) {
       return false;
     }
-    std::filesystem::rename(deleted.trashed, deleted.path, ec);
-    if (ec) {
+    if (!platform::trash::put_back(deleted.trashed, deleted.path)) {
       return false;
     }
   }
@@ -696,7 +696,7 @@ bool PatchRepository::restore_from_trash(const DeletedEntry &deleted) {
       continue;
     }
     std::filesystem::create_directories(sidecar.path.parent_path(), ec);
-    std::filesystem::rename(sidecar.in_trash, sidecar.path, ec);
+    platform::trash::put_back(sidecar.in_trash, sidecar.path);
   }
   changed();
   return true;

@@ -7,9 +7,15 @@ namespace platform::trash {
 
 bool available() { return false; }
 
+const char *name() { return "Trash"; }
+
 std::optional<std::filesystem::path>
 move_to_trash(const std::filesystem::path &) {
   return std::nullopt;
+}
+
+bool put_back(const std::filesystem::path &, const std::filesystem::path &) {
+  return false;
 }
 
 } // namespace platform::trash

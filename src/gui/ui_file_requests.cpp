@@ -235,17 +235,22 @@ static void perform_patch_deletion(AppContext &ctx,
   std::vector<patches::PatchSession::DetachedDocument> detached;
   std::string message;
   if (platform::trash::available()) {
+    const std::string trash = platform::trash::name();
     kept = session.trash_patch(entry, &detached);
     if (!kept) {
       megatoy::status::post(
           megatoy::status::Severity::Error,
-          "Could not move \"" + entry.name + "\" to the Trash.",
+          "Could not move \"" + entry.name + "\" to the " + trash + ".",
           {ui::reveal_in_file_manager_label(), [path = entry.full_path]() {
              ui::reveal_in_file_manager(megatoy::utf8::from_path(path));
            }});
       return;
     }
-    message = "Moved \"" + entry.name + "\" to the Trash.";
+    message = "Moved \"" + entry.name + "\" to the " + trash + ".";
+    // Gone from here, but with no word of where to put it back from.
+    if (kept->trashed.empty()) {
+      kept.reset();
+    }
   } else {
     kept = session.repository().keep_for_restore(entry);
     if (!session.delete_patch(entry, &detached)) {
@@ -294,11 +299,12 @@ void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
                              " the Library does not show, which go with it.";
   const auto perform = [&ctx, entry]() { perform_patch_deletion(ctx, entry); };
   if (platform::trash::available()) {
+    const std::string trash = platform::trash::name();
     ctx.ui_state().danger_confirmation_state.request(
-        "Move to Trash?",
-        "Move \"" + entry.name + "\" to the Trash?\n\nThis moves " + what +
-            " to the Trash." + others,
-        "Move to Trash", perform);
+        "Move to " + trash + "?",
+        "Move \"" + entry.name + "\" to the " + trash + "?\n\nThis moves " +
+            what + " to the " + trash + "." + others,
+        "Move to " + trash, perform);
     return;
   }
   const std::string location =

@@ -8,6 +8,8 @@ namespace platform::trash {
 
 bool available() { return true; }
 
+const char *name() { return "Trash"; }
+
 std::optional<std::filesystem::path>
 move_to_trash(const std::filesystem::path &path) {
   @autoreleasepool {
@@ -22,6 +24,13 @@ move_to_trash(const std::filesystem::path &path) {
     }
     return megatoy::utf8::to_path(trashed.fileSystemRepresentation);
   }
+}
+
+bool put_back(const std::filesystem::path &in_trash,
+              const std::filesystem::path &path) {
+  std::error_code ec;
+  std::filesystem::rename(in_trash, path, ec);
+  return !ec;
 }
 
 } // namespace platform::trash

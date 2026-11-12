@@ -159,11 +159,12 @@ void entry_context_menu(PatchSelectorContext &context,
     if (actions.rename && ImGui::MenuItem("Rename...")) {
       context.rename_patch(entry);
     }
-    const char *delete_label = platform::trash::available() ? "Move to Trash..."
-                               : entry.is_directory && entry.format.empty()
-                                   ? "Delete Folder..."
-                                   : "Delete...";
-    if (actions.delete_patch && ImGui::MenuItem(delete_label)) {
+    const std::string delete_label =
+        platform::trash::available()
+            ? std::string("Move to ") + platform::trash::name() + "..."
+        : entry.is_directory && entry.format.empty() ? "Delete Folder..."
+                                                     : "Delete...";
+    if (actions.delete_patch && ImGui::MenuItem(delete_label.c_str())) {
       context.delete_patch(entry);
     }
   }
