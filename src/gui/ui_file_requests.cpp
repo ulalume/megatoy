@@ -283,12 +283,15 @@ void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
       : patches == 0 ? "the folder"
                      : "the folder and the " + std::to_string(patches) +
                            (patches == 1 ? " patch" : " patches") + " in it";
-  const std::size_t unlisted = folder ? repository.unlisted_files(entry) : 0;
+  const auto unlisted =
+      folder ? repository.unlisted_files(entry) : std::optional<std::size_t>(0);
   const std::string others =
-      unlisted == 0 ? ""
-                    : "\n\nIt also holds " + std::to_string(unlisted) +
-                          (unlisted == 1 ? " file" : " files") +
-                          " the Library does not show, which go with it.";
+      !unlisted ? "\n\nIt may also hold files the Library does not show, "
+                  "which go with it."
+      : *unlisted == 0 ? ""
+                       : "\n\nIt also holds " + std::to_string(*unlisted) +
+                             (*unlisted == 1 ? " file" : " files") +
+                             " the Library does not show, which go with it.";
   const auto perform = [&ctx, entry]() { perform_patch_deletion(ctx, entry); };
   if (platform::trash::available()) {
     ctx.ui_state().danger_confirmation_state.request(

@@ -55,9 +55,15 @@ struct DeletedEntry {
   };
   std::filesystem::path path;
   bool is_directory = false;
-  /// Where the system's Trash keeps it, when it went there. `files` then
-  /// holds only a file's sidecars, which stay out of the Trash.
+  /// Something put in the system's Trash, and where the Trash keeps it.
+  struct Trashed {
+    std::filesystem::path path;
+    std::filesystem::path in_trash;
+  };
+  /// Where the system's Trash keeps it, when it went there.
   std::filesystem::path trashed;
+  /// A file's sidecars that went to the Trash with it.
+  std::vector<Trashed> trashed_sidecars;
   /// A folder's folders, its empty ones among them.
   std::vector<std::filesystem::path> folders;
   /// The file itself, or the folder's files, with their sidecars.
@@ -167,8 +173,10 @@ public:
   /// Puts a deleted entry back where it was, if nothing has taken its place.
   bool restore(const DeletedEntry &deleted);
   /// How many files in `folder` the Library does not list: neither patches
-  /// nor hidden files such as the metadata or the system's own.
-  std::size_t unlisted_files(const PatchEntry &folder) const;
+  /// nor hidden files such as the metadata or the system's own. Nothing when
+  /// it holds `limit` files or more, which are not all looked at.
+  std::optional<std::size_t> unlisted_files(const PatchEntry &folder,
+                                            std::size_t limit = 10000) const;
   /// A relative path as the user sees it: starting with what its folder is
   /// listed as.
   std::string display_path(const std::string &relative) const;
@@ -191,9 +199,8 @@ private:
 
   /// After a change on disk: list it, and on the web have it kept.
   void changed();
-  /// Reads `paths` into `files`; false when one cannot be read.
-  bool read_files(const std::vector<std::filesystem::path> &paths,
-                  std::vector<DeletedEntry::File> &files) const;
+  /// restore() for an entry in the system's Trash.
+  bool restore_from_trash(const DeletedEntry &deleted);
 
   void rebuild_storages();
   void index_tree();

@@ -396,9 +396,10 @@ std::filesystem::path copy_path_into(const std::filesystem::path &source,
 /// `target` with the folders they are in. How many, none leaving no
 /// `target` behind.
 /// Calls `visit` with each file in `folder` and the folders inside it, past
-/// hidden ones: the metadata's, and the system's such as .DS_Store.
+/// hidden ones: the metadata's, and the system's such as .DS_Store. Stops
+/// when `visit` returns false, and then returns false.
 template <typename Visit>
-void for_each_visible_file(const std::filesystem::path &folder, Visit &&visit) {
+bool for_each_visible_file(const std::filesystem::path &folder, Visit &&visit) {
   std::error_code ec;
   for (std::filesystem::recursive_directory_iterator it(folder, ec), end;
        !ec && it != end; it.increment(ec)) {
@@ -408,10 +409,11 @@ void for_each_visible_file(const std::filesystem::path &folder, Visit &&visit) {
       }
       continue;
     }
-    if (it->is_regular_file(ec)) {
-      visit(it->path());
+    if (it->is_regular_file(ec) && !visit(it->path())) {
+      return false;
     }
   }
+  return true;
 }
 
 bool is_readable(const std::filesystem::path &file) {
@@ -431,16 +433,17 @@ std::size_t copy_readable_tree(const std::filesystem::path &source,
   std::size_t copied = 0;
   for_each_visible_file(source, [&](const std::filesystem::path &path) {
     if (!is_readable(path)) {
-      return;
+      return true;
     }
     const auto copy = target / path.lexically_relative(source);
     std::error_code ec;
     std::filesystem::create_directories(copy.parent_path(), ec);
     if (ec || !std::filesystem::copy_file(path, copy, ec) || ec) {
-      return;
+      return true;
     }
     sidecar::copy(path, copy);
     ++copied;
+    return true;
   });
   if (copied == 0) {
     std::error_code ec;
@@ -598,24 +601,15 @@ PatchRepository::keep_for_restore(const PatchEntry &entry,
       return std::nullopt;
     }
   }
-  if (!read_files(files, kept.files)) {
-    return std::nullopt;
+  for (const auto &file : files) {
+    const auto in = vfs_.open_read(file);
+    if (!in) {
+      return std::nullopt;
+    }
+    kept.files.push_back({file, std::string(std::istreambuf_iterator<char>(*in),
+                                            std::istreambuf_iterator<char>())});
   }
   return kept;
-}
-
-bool PatchRepository::read_files(
-    const std::vector<std::filesystem::path> &paths,
-    std::vector<DeletedEntry::File> &files) const {
-  for (const auto &path : paths) {
-    const auto in = vfs_.open_read(path);
-    if (!in) {
-      return false;
-    }
-    files.push_back({path, std::string(std::istreambuf_iterator<char>(*in),
-                                       std::istreambuf_iterator<char>())});
-  }
-  return true;
 }
 
 std::optional<DeletedEntry>
@@ -626,44 +620,37 @@ PatchRepository::trash_patch(const PatchEntry &entry) {
   DeletedEntry kept;
   kept.path = entry.full_path;
   kept.is_directory = vfs_.is_directory(entry.full_path);
-  // A folder's sidecars are inside it and go with it; a file's stay here.
-  if (!kept.is_directory &&
-      !read_files(sidecar::files_of(entry.full_path), kept.files)) {
-    return std::nullopt;
-  }
   auto trashed = platform::trash::move_to_trash(entry.full_path);
   if (!trashed) {
     return std::nullopt;
   }
-  if (!kept.is_directory) {
-    sidecar::remove(entry.full_path);
-  }
   kept.trashed = std::move(*trashed);
+  // A folder's sidecars are inside it and went with it. A file's follow it,
+  // or stay where they are, still its, if they cannot.
+  if (!kept.is_directory) {
+    for (auto &path : sidecar::roots_of(entry.full_path)) {
+      if (auto in_trash = platform::trash::move_to_trash(path)) {
+        kept.trashed_sidecars.push_back(
+            {std::move(path), std::move(*in_trash)});
+      }
+    }
+    sidecar::prune_folders_of(entry.full_path);
+  }
   changed();
   return kept;
 }
 
 bool PatchRepository::restore(const DeletedEntry &deleted) {
   const auto *owner = workspace_.owner_of(deleted.path.parent_path());
-  if (owner == nullptr || !owner->writable || vfs_.exists(deleted.path) ||
+  if (owner == nullptr || !owner->writable ||
       !vfs_.is_directory(deleted.path.parent_path())) {
     return false;
   }
   if (!deleted.trashed.empty()) {
-    std::error_code ec;
-    std::filesystem::rename(deleted.trashed, deleted.path, ec);
-    if (ec) {
-      return false;
-    }
-    // The file is back whether or not its metadata can follow.
-    for (const auto &file : deleted.files) {
-      if (const auto out = vfs_.open_write(file.path)) {
-        out->write(file.bytes.data(),
-                   static_cast<std::streamsize>(file.bytes.size()));
-      }
-    }
-    changed();
-    return true;
+    return restore_from_trash(deleted);
+  }
+  if (vfs_.exists(deleted.path)) {
+    return false;
   }
   bool written = !deleted.is_directory || vfs_.create_directories(deleted.path);
   for (const auto &folder : deleted.folders) {
@@ -687,14 +674,47 @@ bool PatchRepository::restore(const DeletedEntry &deleted) {
   return true;
 }
 
-std::size_t PatchRepository::unlisted_files(const PatchEntry &folder) const {
+bool PatchRepository::restore_from_trash(const DeletedEntry &deleted) {
+  std::error_code ec;
+  // Put back already, as the Finder does, it needs only its sidecars.
+  const bool put_back = !std::filesystem::exists(deleted.trashed, ec) &&
+                        vfs_.exists(deleted.path);
+  if (!put_back) {
+    if (vfs_.exists(deleted.path)) {
+      return false;
+    }
+    std::filesystem::rename(deleted.trashed, deleted.path, ec);
+    if (ec) {
+      return false;
+    }
+  }
+  // The file is back whether or not its metadata can follow.
+  for (const auto &sidecar : deleted.trashed_sidecars) {
+    if (std::filesystem::exists(sidecar.path, ec)) {
+      continue;
+    }
+    std::filesystem::create_directories(sidecar.path.parent_path(), ec);
+    std::filesystem::rename(sidecar.in_trash, sidecar.path, ec);
+  }
+  changed();
+  return true;
+}
+
+std::optional<std::size_t>
+PatchRepository::unlisted_files(const PatchEntry &folder,
+                                std::size_t limit) const {
+  std::size_t seen = 0;
   std::size_t unlisted = 0;
-  for_each_visible_file(folder.full_path,
-                        [&unlisted](const std::filesystem::path &file) {
-                          if (!is_readable(file) && !is_system_file(file)) {
-                            ++unlisted;
-                          }
-                        });
+  const bool all_seen = for_each_visible_file(
+      folder.full_path, [&](const std::filesystem::path &file) {
+        if (!is_readable(file) && !is_system_file(file)) {
+          ++unlisted;
+        }
+        return ++seen < limit;
+      });
+  if (!all_seen) {
+    return std::nullopt;
+  }
   return unlisted;
 }
 

@@ -386,6 +386,22 @@ void remove(const fs::path &file) {
   prune(entry.parent_path());
 }
 
+std::vector<fs::path> roots_of(const fs::path &file) {
+  std::vector<fs::path> roots;
+  std::error_code ec;
+  if (const auto entry = path_for(file); fs::is_regular_file(entry, ec)) {
+    roots.push_back(entry);
+  }
+  if (const auto items = items_path_for(file); fs::is_directory(items, ec)) {
+    roots.push_back(items);
+  }
+  return roots;
+}
+
+void prune_folders_of(const fs::path &file) {
+  prune(path_for(file).parent_path());
+}
+
 void migrate_folder(const fs::path &folder) {
   // The newer file first, so its fields win over the older one's.
   const std::array<fs::path, 2> legacy_files = {
