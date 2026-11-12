@@ -77,6 +77,8 @@ struct PatchSelectorContext {
   std::optional<PendingIcon> pending_icon;
   /// The entry whose icon its menu's Icon... asked to pick, by path.
   std::optional<std::string> pending_icon_picker;
+  /// The entry its menu's Duplicate... asked to copy, by path.
+  std::optional<std::string> pending_duplicate;
   /// A drop in the tree, carried out once the tree is no longer being drawn.
   std::function<void()> pending_drop;
 };

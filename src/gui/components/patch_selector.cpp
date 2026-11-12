@@ -160,6 +160,16 @@ void render_patch_selector_contents(PatchSelectorContext &context) {
     drop();
   }
 
+  if (context.pending_duplicate) {
+    const auto path = std::move(*context.pending_duplicate);
+    context.pending_duplicate.reset();
+    if (const auto *entry = context.session.find_entry(path);
+        entry != nullptr && context.duplicate_patch) {
+      // Copied: the write rebuilds the tree, and the entry with it.
+      context.duplicate_patch(patches::PatchEntry(*entry));
+    }
+  }
+
   if (context.pending_rating) {
     const auto rating = std::move(*context.pending_rating);
     context.pending_rating.reset();

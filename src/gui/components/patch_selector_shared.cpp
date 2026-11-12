@@ -115,8 +115,9 @@ void entry_context_menu(PatchSelectorContext &context,
         context.save_current_patch_as();
       }
     }
+    // Written once the tree is drawn, as a rating is.
     if (actions.duplicate && ImGui::MenuItem("Duplicate...")) {
-      context.duplicate_patch(entry);
+      context.pending_duplicate = entry.relative_path;
     }
     if (download_extension) {
       if (actions.is_current) {
