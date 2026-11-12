@@ -16,7 +16,8 @@ namespace ym2612 {
  */
 struct PlaybackSettings {
   bool lfo_enable = true;
-  uint8_t lfo_frequency = 0;
+  /// 6.02 Hz, the rate the mod wheel's vibrato takes with the LFO off.
+  uint8_t lfo_frequency = 2;
   /// By display slot, OP1..OP4 as the editor shows them.
   std::array<bool, 4> operator_enable{true, true, true, true};
 
