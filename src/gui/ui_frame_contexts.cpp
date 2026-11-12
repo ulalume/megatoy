@@ -334,9 +334,18 @@ FrameContexts::FrameContexts(AppContext &ctx)
     patch_actions::reload_from_disk(ctx, document, patch);
   };
   patch_editor.new_patch = [&ctx]() { patch_actions::new_patch(ctx); };
-  patch_editor.history = main_menu.history;
-  patch_editor.undo = main_menu.undo;
-  patch_editor.redo = main_menu.redo;
+  patch_editor.history =
+      [&ctx](patches::DocumentId document) -> history::HistoryManager & {
+    return ctx.services.histories[document];
+  };
+  patch_editor.undo = [&ctx](patches::DocumentId document) {
+    patch_actions::activate_document(ctx, document);
+    ctx.services.histories[document].undo(ctx);
+  };
+  patch_editor.redo = [&ctx](patches::DocumentId document) {
+    patch_actions::activate_document(ctx, document);
+    ctx.services.histories[document].redo(ctx);
+  };
 }
 
 } // namespace ui::renderer_detail

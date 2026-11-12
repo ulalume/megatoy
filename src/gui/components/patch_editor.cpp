@@ -149,14 +149,15 @@ void render_header_rating(const patches::PatchEntry &entry,
 
 /// An icon-only button for Undo or Redo, square, faint when there is nothing
 /// to take back or do again. Named in full by its tooltip.
-void render_history_button(const char *id, const char *icon, bool enabled,
-                           std::string_view label,
-                           const std::function<void()> &action) {
+void render_history_button(
+    const char *id, const char *icon, bool enabled, std::string_view label,
+    const std::function<void(patches::DocumentId)> &action,
+    patches::DocumentId document) {
   ImGui::BeginDisabled(!enabled);
   const std::string text = std::string(icon) + id;
   const float side = ImGui::GetFrameHeight();
   if (ImGui::Button(text.c_str(), ImVec2(side, side)) && action) {
-    action();
+    action(document);
   }
   ImGui::EndDisabled();
   if (enabled && ImGui::IsItemHovered()) {
@@ -164,12 +165,12 @@ void render_history_button(const char *id, const char *icon, bool enabled,
   }
 }
 
-/// Undo and Redo as the Edit menu has them, 1 px apart.
+/// Undo and Redo of the document the editor shows, 1 px apart.
 void render_history_buttons(PatchEditorContext &context) {
   if (!context.history) {
     return;
   }
-  const auto &history = context.history();
+  const auto &history = context.history(context.document);
   const auto named = [](const char *action, std::string_view change) {
     return change.empty() ? std::string(action)
                           : std::string(action) + " " + std::string(change);
@@ -178,12 +179,12 @@ void render_history_buttons(PatchEditorContext &context) {
   render_history_button("##undo", ICON_MEGATOY_UNDO, history.can_undo(),
                         named("Undo", history.can_undo() ? history.undo_label()
                                                          : std::string_view()),
-                        context.undo);
+                        context.undo, context.document);
   ImGui::SameLine(0.0f, ui::scale::px(1.0f));
   render_history_button("##redo", ICON_MEGATOY_REDO, history.can_redo(),
                         named("Redo", history.can_redo() ? history.redo_label()
                                                          : std::string_view()),
-                        context.redo);
+                        context.redo, context.document);
 }
 
 /// Save, and Save As... where it is offered, as one row, with Undo and Redo

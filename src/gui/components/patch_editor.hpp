@@ -38,10 +38,11 @@ struct PatchEditorContext {
       reload_from_disk;
   /// As the File menu's New Patch.
   std::function<void()> new_patch;
-  /// As the Edit menu's Undo and Redo.
-  std::function<history::HistoryManager &()> history;
-  std::function<void()> undo;
-  std::function<void()> redo;
+  /// A document's undo history, and its Undo and Redo, which make the
+  /// document the active one first.
+  std::function<history::HistoryManager &(patches::DocumentId)> history;
+  std::function<void(patches::DocumentId)> undo;
+  std::function<void(patches::DocumentId)> redo;
 
   OperatorEditState &operator_edit() const {
     return document_ui(document).operator_edit;
