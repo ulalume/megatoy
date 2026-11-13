@@ -15,22 +15,27 @@ constexpr std::string_view kFormatDetails[] = {
     ".spat, .tyi and .y12 can also be saved",
 };
 
-constexpr std::string_view kEnvelopeTimingDetails[] = {
+constexpr std::string_view kEnvelopeAccuracyDetails[] = {
+    "The dots can be dragged with SSG-EG on",
     "Warns when a fast SSG-EG decay can skip the sustain level",
 };
-constexpr std::string_view kLibraryCopyDetails[] = {
-    "From the built-in presets, a bank or a read-only folder, always",
+constexpr std::string_view kPlaybackDetails[] = {
+    "macOS: about 9 ms to the device, from about 35",
+    "Web: no more crackling while the page is busy",
 };
 constexpr ChangelogItem kItems_0_10_0[] = {
-    {"Notes sound sooner on macOS: about 9 ms to the device, from about 35",
+    {"Easier to use on phones and in narrow windows", {}},
+    {"Open several patches at once, each in its own tab", {}},
+    {"Give patches cute instrument icons", {}},
+    {"Quick Edit in the patch editor shapes a whole patch with five sliders",
      {}},
-    {"The patch browser is now the Library", {}},
-    {"Drag in the Library with Option (Alt) held to copy", kLibraryCopyDetails},
-    {"Delete folders inside the Library's folders", {}},
-    {"Undo a delete, move, copy or rename in the Library from its toast", {}},
-    {"Envelope graphs follow the chip's timing exactly",
-     kEnvelopeTimingDetails},
-    {"The keyboard's Major Blues scale plays the right notes", {}},
+    {"Envelope graphs are more accurate", kEnvelopeAccuracyDetails},
+    {"Smoother playback on the web and macOS", kPlaybackDetails},
+    {"20 more scales on the Soft Keyboard", {}},
+    {"Added 41 built-in FM patches", {}},
+    {"The LFO and operator switches are in the menu bar, and no longer saved "
+     "in patches",
+     {}},
 };
 
 constexpr ChangelogItem kItems_0_9_3[] = {
