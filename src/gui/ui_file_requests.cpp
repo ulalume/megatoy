@@ -74,7 +74,8 @@ void request_workspace_folder_removal(AppContext &ctx,
               if (!ok) {
                 megatoy::status::error(
                     "Could not persist the deletion: " + error +
-                    " -- the folder may reappear after a reload.");
+                        " -- the folder may reappear after a reload.",
+                    megatoy::status::lasts::kUntilClosed);
                 return;
               }
               if (!ctx.services.preference_manager.remove_workspace_folder(
@@ -241,6 +242,7 @@ static void perform_patch_deletion(AppContext &ctx,
       megatoy::status::post(
           megatoy::status::Severity::Error,
           "Could not move \"" + entry.name + "\" to the " + trash + ".",
+          megatoy::status::lasts::kUntilClosed,
           {ui::reveal_in_file_manager_label(), [path = entry.full_path]() {
              ui::reveal_in_file_manager(megatoy::utf8::from_path(path));
            }});
@@ -494,8 +496,9 @@ void request_files_copy(AppContext &ctx,
         files.size() == 1 ? "\"" + files.front().filename().string() + "\""
                           : "what was dropped";
     megatoy::status::warning("Nothing in " + what +
-                             " is a patch megatoy reads, so nothing was "
-                             "copied.");
+                                 " is a patch megatoy reads, so nothing was "
+                                 "copied.",
+                             megatoy::status::lasts::kMedium);
     return;
   }
   const std::string unread =

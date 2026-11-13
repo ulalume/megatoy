@@ -14,7 +14,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE void
 megatoy_storage_persist_failed(const char *error) {
   megatoy::status::error(
       "Could not persist browser storage: " +
-      std::string(error != nullptr ? error : "unknown storage error"));
+          std::string(error != nullptr ? error : "unknown storage error"),
+      megatoy::status::lasts::kUntilClosed);
 }
 
 /// A committed flush is the only proof a deletion reached IndexedDB, so it is

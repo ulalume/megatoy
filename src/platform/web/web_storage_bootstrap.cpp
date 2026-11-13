@@ -24,7 +24,8 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
   if (storage_load_failed()) {
     megatoy::status::error(
         "Could not read browser storage -- running without saving. Your "
-        "stored patches are untouched; reload to retry.");
+        "stored patches are untouched; reload to retry.",
+        megatoy::status::lasts::kUntilClosed);
     if (storage_root.empty()) {
       return false;
     }
@@ -48,7 +49,8 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
     megatoy::status::error(
         "Persistent storage unavailable -- changes will not survive a "
         "reload. (" +
-        ec.message() + ")");
+            ec.message() + ")",
+        megatoy::status::lasts::kUntilClosed);
     return false;
   }
 
@@ -57,8 +59,8 @@ bool bootstrap_workspace(megatoy::workspace::Workspace &workspace,
   if (!existed) {
     std::filesystem::create_directories(home, ec);
     if (ec) {
-      megatoy::status::error("Could not create \"My Patches\": " +
-                             ec.message());
+      megatoy::status::error("Could not create \"My Patches\": " + ec.message(),
+                             megatoy::status::lasts::kUntilClosed);
       return false;
     }
   }
