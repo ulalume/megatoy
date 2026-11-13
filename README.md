@@ -1,7 +1,7 @@
 <p align="center">
   <img src="dist/icon.svg" width="200" alt="">
   <br>
-  <img src="docs/text_logo.svg" width="240" alt="megatoy">
+  <img src="docs/text_logo.svg" width="200" alt="megatoy">
 </p>
 
 <p align="center">
@@ -11,8 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" width="80%" alt="megatoy on the desktop">
-  <img src="docs/screenshot_mobile.png" width="19%" alt="megatoy on a phone">
+  <img src="docs/screenshot.png" width="100%" alt="megatoy on the desktop">
 </p>
 
 ## Features
@@ -27,7 +26,7 @@
 ## Patches
 
 Add folders with **File ▸ Add Folder to Workspace...**, or drop a file on the window.
-Stars and icons are kept in `.ym2612/<file name>.json` next to each patch, shared with other tools.
+Stars and icons are kept in `.ym2612/<file name>.json` next to each patch.
 
 <details>
 <summary>Formats</summary>
