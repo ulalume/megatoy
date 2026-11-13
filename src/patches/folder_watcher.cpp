@@ -42,13 +42,15 @@ bool is_hidden(const std::filesystem::path &relative) {
 struct FolderWatcher::Impl : efsw::FileWatchListener {
   using Clock = std::chrono::steady_clock;
 
-  efsw::FileWatcher watcher;
   bool started = false;
   std::map<efsw::WatchID, std::filesystem::path> roots;
 
   std::mutex mutex;
   bool pending = false;
   Clock::time_point last_change{};
+
+  // Last, so it goes first: its thread may still be reporting until it stops.
+  efsw::FileWatcher watcher;
 
   void handleFileAction(efsw::WatchID id, const std::string &dir,
                         const std::string &filename, efsw::Action action,
