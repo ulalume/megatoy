@@ -189,10 +189,14 @@ void draw_frame(RuntimeContext &runtime) {
   if (current_prefs.audio_buffer_frames != saved_prefs.audio_buffer_frames &&
       !services.audio_manager.set_buffer_frames(
           current_prefs.audio_buffer_frames)) {
-    megatoy::status::error(
-        services.audio_manager.is_running()
-            ? "Audio device would not reopen at that buffer size."
-            : "Audio device unavailable -- megatoy is running without sound.");
+    if (services.audio_manager.is_running()) {
+      megatoy::status::error(
+          "Audio device would not reopen at that buffer size.");
+    } else {
+      megatoy::status::error(
+          "Audio device unavailable -- megatoy is running without sound.",
+          megatoy::status::lasts::kUntilClosed);
+    }
     // Show the size the device is actually using.
     app_state.ui_state().prefs.audio_buffer_frames =
         services.audio_manager.buffer_frames();

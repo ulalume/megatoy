@@ -4,9 +4,9 @@
 #include "changelog_gate.hpp"
 #include "core/status.hpp"
 #include "gui/components/changelog_dialog.hpp"
-#include "project_info.hpp"
 #include "patches/background_folder_scan.hpp"
 #include "platform/platform_config.hpp"
+#include "project_info.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
 #include "platform/web/web_patch_url.hpp"
 #endif
@@ -67,7 +67,7 @@ void announce_version_change(PreferenceManager &preferences) {
   const std::string message = stored.empty()
                                   ? "Welcome to megatoy " + current + "."
                                   : "Updated to megatoy " + current + ".";
-  megatoy::status::info(message,
+  megatoy::status::info(message, megatoy::status::lasts::kLong,
                         {"What's New", [] { ui::open_changelog_dialog(); }});
 }
 
@@ -105,7 +105,8 @@ void AppServices::initialize_app(AppState &state) {
           SampleRate,
           preference_manager.ui_preferences().audio_buffer_frames)) {
     megatoy::status::error(
-        "Audio device unavailable -- megatoy is running without sound.");
+        "Audio device unavailable -- megatoy is running without sound.",
+        megatoy::status::lasts::kUntilClosed);
   } else {
     patch_session.apply_patch_to_audio();
   }

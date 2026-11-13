@@ -1,4 +1,4 @@
-// The notification service: ordering, the bound, and dismissal.
+// The notification service: ordering, lifetimes, the bound, and dismissal.
 
 #include "core/status.hpp"
 
@@ -23,6 +23,13 @@ int main() {
   CHECK(entries[0].severity == Severity::Info);
   CHECK(entries[3].message == "four");
   CHECK(entries[3].severity == Severity::Error);
+
+  // Results and hints go quickly, failures stay longer.
+  using namespace megatoy::status::lasts;
+  CHECK(entries[0].lasts == kShort);
+  CHECK(entries[1].lasts == kShort);
+  CHECK(entries[2].lasts == kShort);
+  CHECK(entries[3].lasts == kLong);
 
   // Ids are unique and increasing.
   CHECK(entries[0].id < entries[1].id);

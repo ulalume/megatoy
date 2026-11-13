@@ -19,7 +19,6 @@ using megatoy::status::Severity;
 constexpr float kToastWidth = 340.0f;
 constexpr float kMargin = 12.0f;
 constexpr int kMaxVisible = 5;
-constexpr std::chrono::seconds kAutoDismiss{4};
 
 const char *severity_icon(Severity severity) {
   switch (severity) {
@@ -50,18 +49,7 @@ ImVec4 severity_color(Severity severity) {
 }
 
 bool sticky(const megatoy::status::Entry &entry) {
-  // Four seconds is enough to notice a result, not to act on an offer.
-  return entry.severity == Severity::Warning ||
-         entry.severity == Severity::Error ||
-         (entry.action.valid() && entry.action.lasts.count() == 0);
-}
-
-std::chrono::steady_clock::duration
-lifetime(const megatoy::status::Entry &entry) {
-  if (entry.action.valid() && entry.action.lasts.count() > 0) {
-    return entry.action.lasts;
-  }
-  return kAutoDismiss;
+  return entry.lasts == megatoy::status::lasts::kUntilClosed;
 }
 
 } // namespace
@@ -78,7 +66,7 @@ void render_status_toasts() {
   // posted while the tab was hidden still gets its time on screen.
   std::erase_if(entries, [&](const megatoy::status::Entry &entry) {
     if (!sticky(entry) && entry.id != was_hovered &&
-        now - entry.posted_at > lifetime(entry)) {
+        now - entry.posted_at > entry.lasts) {
       megatoy::status::dismiss(entry.id);
       return true;
     }
@@ -157,7 +145,7 @@ void render_status_toasts() {
 
       if (entry.action.valid()) {
         ImGui::Spacing();
-        if (ImGui::Button(entry.action.label.c_str())) {
+        if (ImGui::Button(entry.action.label.c_str(), ImVec2(-FLT_MIN, 0.0f))) {
           action_to_perform = entry.action.perform;
           megatoy::status::dismiss(entry.id);
         }
