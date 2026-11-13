@@ -108,10 +108,8 @@ jobs:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: ctest --test-dir build-asan --timeout 120 --output-on-failure
 
-  # By far the slowest job, so pull requests leave it to main and the releases.
   build-macos-arm64:
     name: Build macOS (arm64)
-    if: github.event_name != 'pull_request'
     runs-on: macos-15
     steps:
       - name: Checkout
