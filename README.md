@@ -10,7 +10,10 @@
   <a href="https://github.com/ulalume/megatoy/releases">Download</a>
 </p>
 
-![megatoy](docs/screenshot.png)
+<p align="center">
+  <img src="docs/screenshot.png" width="80%" alt="megatoy on the desktop">
+  <img src="docs/screenshot_mobile.png" width="19%" alt="megatoy on a phone">
+</p>
 
 ## Features
 
