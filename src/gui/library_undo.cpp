@@ -13,7 +13,6 @@ namespace ui::library_undo {
 
 namespace {
 
-constexpr std::chrono::seconds kOffered{8};
 /// How often what the offer would undo is looked at on disk.
 constexpr std::chrono::milliseconds kCheckEvery{250};
 
@@ -93,14 +92,12 @@ void offer(std::string message, std::vector<std::filesystem::path> touched,
   for (const auto &path : touched) {
     made.touched.push_back(snapshot(path));
   }
-  made.toast = megatoy::status::post(megatoy::status::Severity::Success,
-                                     std::move(message),
-                                     {"Undo",
-                                      [undo = std::move(undo)]() {
-                                        g_offer.reset();
-                                        undo();
-                                      },
-                                      kOffered});
+  made.toast = megatoy::status::post(
+      megatoy::status::Severity::Success, std::move(message),
+      megatoy::status::lasts::kMedium, {"Undo", [undo = std::move(undo)]() {
+                                          g_offer.reset();
+                                          undo();
+                                        }});
   g_offer = std::move(made);
 }
 

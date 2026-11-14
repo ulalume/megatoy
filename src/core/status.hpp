@@ -35,40 +35,57 @@ enum class Severity {
 
 /**
  * An optional button on the toast. `perform` runs on the UI thread, so it can
- * open a dialog. The rest of the toast still dismisses on click, and a toast
- * carrying an action stays until then, or for `lasts` when that is set.
+ * open a dialog. The rest of the toast still dismisses on click.
  */
 struct Action {
   std::string label;
   std::function<void()> perform;
-  std::chrono::seconds lasts{0};
 
   bool valid() const { return !label.empty() && perform != nullptr; }
 };
+
+/// How long a toast stays on screen, not counting while it is pointed at.
+namespace lasts {
+/// A result, or a hint about what to do instead.
+inline constexpr std::chrono::seconds kShort{6};
+/// Something to read through, or to undo.
+inline constexpr std::chrono::seconds kMedium{8};
+/// An operation that failed.
+inline constexpr std::chrono::seconds kLong{12};
+/// A state that goes on, or a button that stays useful: until it is closed.
+inline constexpr std::chrono::seconds kUntilClosed{0};
+} // namespace lasts
 
 struct Entry {
   std::uint64_t id = 0;
   Severity severity = Severity::Info;
   std::string message;
   std::chrono::steady_clock::time_point posted_at{};
+  std::chrono::seconds lasts = lasts::kUntilClosed;
   Action action;
 };
 
 /// Post a notification, and return its id. Also mirrored to stdout/stderr so
 /// terminals and the browser console keep working.
-std::uint64_t post(Severity severity, std::string message, Action action = {});
+std::uint64_t post(Severity severity, std::string message,
+                   std::chrono::seconds lasts, Action action = {});
 
-inline void info(std::string message, Action action = {}) {
-  post(Severity::Info, std::move(message), std::move(action));
+inline void info(std::string message,
+                 std::chrono::seconds lasts = lasts::kShort,
+                 Action action = {}) {
+  post(Severity::Info, std::move(message), lasts, std::move(action));
 }
-inline void success(std::string message) {
-  post(Severity::Success, std::move(message));
+inline void success(std::string message,
+                    std::chrono::seconds lasts = lasts::kShort) {
+  post(Severity::Success, std::move(message), lasts);
 }
-inline void warning(std::string message) {
-  post(Severity::Warning, std::move(message));
+inline void warning(std::string message,
+                    std::chrono::seconds lasts = lasts::kShort) {
+  post(Severity::Warning, std::move(message), lasts);
 }
-inline void error(std::string message) {
-  post(Severity::Error, std::move(message));
+inline void error(std::string message,
+                  std::chrono::seconds lasts = lasts::kLong) {
+  post(Severity::Error, std::move(message), lasts);
 }
 
 /// Entries not yet dismissed, oldest first. Bounded; old entries fall off.

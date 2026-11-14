@@ -57,8 +57,8 @@ bool PreferenceManager::remove_workspace_folder(
   return true;
 }
 
-bool PreferenceManager::rename_workspace_folder(const std::filesystem::path &from,
-                                                const std::filesystem::path &to) {
+bool PreferenceManager::rename_workspace_folder(
+    const std::filesystem::path &from, const std::filesystem::path &to) {
   if (workspace_folder_is_protected(from)) {
     return false;
   }
@@ -150,8 +150,9 @@ void PreferenceManager::add_chosen_workspace_folder(
   const std::string folder_name = folder.filename().string();
   if (const auto *outer = workspace_.enclosing(folder)) {
     megatoy::status::warning("\"" + folder_name +
-                             "\" is already in the workspace, inside \"" +
-                             outer->name + "\".");
+                                 "\" is already in the workspace, inside \"" +
+                                 outer->name + "\".",
+                             megatoy::status::lasts::kMedium);
     return;
   }
   const auto inside = workspace_.enclosed_by(folder);
@@ -159,8 +160,9 @@ void PreferenceManager::add_chosen_workspace_folder(
   for (const auto *inner : inside) {
     if (workspace_folder_is_protected(inner->path)) {
       megatoy::status::warning("\"" + folder_name + "\" holds \"" +
-                               inner->name +
-                               "\", which cannot leave the workspace.");
+                                   inner->name +
+                                   "\", which cannot leave the workspace.",
+                               megatoy::status::lasts::kMedium);
       return;
     }
     replaced += (replaced.empty() ? "\"" : ", \"") + inner->name + "\"";
@@ -192,7 +194,8 @@ void PreferenceManager::add_chosen_workspace_folder(
   }
   if (!confirm) {
     megatoy::status::warning("\"" + folder_name +
-                             "\" holds folders already in the workspace.");
+                                 "\" holds folders already in the workspace.",
+                             megatoy::status::lasts::kMedium);
     return;
   }
   confirm("\"" + folder_name + "\" holds " + replaced +
