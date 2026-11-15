@@ -106,6 +106,7 @@ constexpr float kSketchHandleReach = kEnvelopeHandleRadius * 2.0f;
 
 /// Where the sketch draws the envelope's corners, from its rough shape.
 struct SketchPoints {
+  ImVec2 min, max; ///< The sketch's own box.
   float left, right, top, floor;
   ImVec2 peak;     ///< The end of the attack.
   ImVec2 knee;     ///< The end of the decay.
@@ -118,6 +119,8 @@ struct SketchPoints {
 SketchPoints sketch_points(const patch_lab::TweakShape &shape,
                            const ImVec2 &min, const ImVec2 &size) {
   SketchPoints p;
+  p.min = min;
+  p.max = ImVec2(min.x + size.x, min.y + size.y);
   const float pad = ui::scale::px(4.0f);
   p.left = min.x + pad;
   p.right = min.x + size.x - pad;
@@ -155,12 +158,18 @@ struct SketchPointer {
   bool held = false;
 };
 
-/// The sketch's handles where `p` puts them.
+/// The sketch's handles where `p` puts them, each kept whole inside the
+/// sketch as the operator graph's are.
 std::array<std::pair<SketchHandle, ImVec2>, 3>
 sketch_handles(const SketchPoints &p) {
-  return {{{SketchHandle::Peak, p.peak},
-           {SketchHandle::Knee, p.knee},
-           {SketchHandle::Release, p.release}}};
+  const float radius = ui::scale::px(kEnvelopeHandleRadius);
+  const auto inside = [&](ImVec2 at) {
+    return ImVec2(std::clamp(at.x, p.min.x + radius, p.max.x - radius),
+                  std::clamp(at.y, p.min.y + radius, p.max.y - radius));
+  };
+  return {{{SketchHandle::Peak, inside(p.peak)},
+           {SketchHandle::Knee, inside(p.knee)},
+           {SketchHandle::Release, inside(p.release)}}};
 }
 
 /// The handle nearest `mouse` within reach, or none.
