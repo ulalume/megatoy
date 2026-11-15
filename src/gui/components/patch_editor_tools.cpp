@@ -149,12 +149,10 @@ SketchPoints sketch_points(const patch_lab::TweakShape &shape,
 /// (decay) and the release's end (release).
 enum class SketchHandle { None, Peak, Knee, Release };
 
-/// The sketch's handle under the pointer or held, and whether the sketch is
-/// pointed at at all, which shows its handles.
+/// The sketch's handle under the pointer or held.
 struct SketchPointer {
   SketchHandle handle = SketchHandle::None;
   bool held = false;
-  bool over = false;
 };
 
 /// The sketch's handles where `p` puts them.
@@ -220,10 +218,9 @@ void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
   const auto is_lit = [&lit](patch_lab::Tweak tweak) {
     return lit[static_cast<int>(tweak)] != SliderState::None;
   };
-  const auto curve_color = [&](patch_lab::Tweak tweak) {
-    return styles::color_u32(is_lit(tweak) || is_lit(patch_lab::Tweak::Volume)
-                                 ? styles::MegatoyCol::EnvelopeCurveActive
-                                 : styles::MegatoyCol::EnvelopeCurve);
+  const auto curve_color = [](bool on) {
+    return styles::color_u32(on ? styles::MegatoyCol::EnvelopeCurveActive
+                                : styles::MegatoyCol::EnvelopeCurve);
   };
 
   draw_list->AddTriangleFilled(
@@ -234,16 +231,22 @@ void draw_quick_edit_sketch(const ym2612::ChannelInstrument &instrument,
 
   const float thickness = ui::scale::px(1.5f);
   draw_list->AddLine(ImVec2(p.left, p.floor), p.peak,
-                     curve_color(patch_lab::Tweak::Attack), thickness);
-  draw_list->AddLine(p.peak, p.knee, curve_color(patch_lab::Tweak::Decay),
-                     thickness);
-  draw_list->AddLine(p.knee, p.held_end, curve_color(patch_lab::Tweak::Volume),
-                     thickness);
-
-  // The handles, while the sketch is pointed at, as the operator graph's.
-  if (!pointer.over && !pointer.held) {
-    return;
+                     curve_color(is_lit(patch_lab::Tweak::Attack)), thickness);
+  draw_list->AddLine(p.peak, p.knee,
+                     curve_color(is_lit(patch_lab::Tweak::Decay)), thickness);
+  // Release moves the sustain rate too, where there is one.
+  draw_list->AddLine(
+      p.knee, p.held_end,
+      curve_color(is_lit(patch_lab::Tweak::Release) && shape->hold > 0.0f),
+      thickness);
+  // The levels, as the operator graph's TL and SL.
+  if (is_lit(patch_lab::Tweak::Volume)) {
+    draw_level_rule(draw_list, p.peak.y, p.left, p.right);
   }
+  if (is_lit(patch_lab::Tweak::Decay)) {
+    draw_level_rule(draw_list, p.knee.y, p.left, p.right);
+  }
+
   const float radius = ui::scale::px(kEnvelopeHandleRadius);
   for (const auto &[handle, at] : sketch_handles(p)) {
     draw_list->AddCircleFilled(
@@ -266,7 +269,7 @@ SketchPointer drag_quick_edit_sketch(PatchEditorContext &context,
   auto &base = context.document_ui(context.document).quick_edit_base;
   ImGui::InvisibleButton("##quick_edit_sketch", size);
   SketchPointer pointer;
-  pointer.over = ImGui::IsItemHovered();
+  const bool over = ImGui::IsItemHovered();
   const auto shape = patch_lab::tweak_shape(instrument);
   if (!shape) {
     return pointer;
@@ -338,7 +341,7 @@ SketchPointer drag_quick_edit_sketch(PatchEditorContext &context,
     pointer.held = true;
     return pointer;
   }
-  if (!pointer.over) {
+  if (!over) {
     return pointer;
   }
   // Under the pointer: the nearest handle within reach.

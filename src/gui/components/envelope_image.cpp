@@ -350,22 +350,13 @@ void draw_held_line(ImDrawList *draw_list, const EnvelopeCurve &curve,
 void draw_level_markers(ImDrawList *draw_list, const EnvelopeCurve &curve,
                         const UIState::EnvelopeState &state,
                         const PlotArea &plot) {
-  const float thickness = ui::scale::px(1.0f);
-  const float dash = ui::scale::px(3.0f);
-  const auto rule = [&](double out, ImU32 color) {
-    const float y = plot.y_of(out);
-    for (float x = plot.min.x; x < plot.max.x; x += dash * 2.0f) {
-      draw_list->AddLine(ImVec2(x, y),
-                         ImVec2(std::min(x + dash, plot.max.x), y), color,
-                         thickness);
-    }
-  };
-
   if (state.total_level != UIState::EnvelopeState::SliderState::None) {
-    rule(curve.peak_out, color_from_slider_state(state.total_level));
+    draw_level_rule(draw_list, plot.y_of(curve.peak_out), plot.min.x,
+                    plot.max.x);
   }
   if (state.sustain_level != UIState::EnvelopeState::SliderState::None) {
-    rule(curve.sustain_out, color_from_slider_state(state.sustain_level));
+    draw_level_rule(draw_list, plot.y_of(curve.sustain_out), plot.min.x,
+                    plot.max.x);
   }
 }
 
@@ -481,7 +472,7 @@ EnvelopeVoices collect_envelope_voices(const VoiceActivityFrame &frame) {
 
 /// How far from a handle a press takes it, and the least room left between
 /// two of them, before the interface's scale.
-constexpr float kHandleGrab = 10.5f;
+constexpr float kHandleGrab = 14.7f;
 constexpr float kHandleGap = 2.0f;
 
 ui::envelope::EnvelopeHandles
@@ -730,6 +721,18 @@ void draw_envelope_handle(const ui::envelope::EnvelopeHandles &handles,
       styles::color_u32(state == UIState::EnvelopeState::SliderState::None
                             ? styles::MegatoyCol::EnvelopeHandle
                             : styles::MegatoyCol::EnvelopeHandleActive));
+}
+
+void draw_level_rule(ImDrawList *draw_list, float y, float left,
+                     float right) {
+  const float thickness = ui::scale::px(1.0f);
+  const float dash = ui::scale::px(3.0f);
+  const ImU32 color =
+      styles::color_u32(styles::MegatoyCol::EnvelopeCurveActive);
+  for (float x = left; x < right; x += dash * 2.0f) {
+    draw_list->AddLine(ImVec2(x, y), ImVec2(std::min(x + dash, right), y),
+                       color, thickness);
+  }
 }
 
 void end_envelope_image() { ImGui::EndChild(); }

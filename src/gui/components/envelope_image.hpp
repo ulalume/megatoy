@@ -11,7 +11,11 @@ namespace ui {
 
 /// The radius of an envelope's drag handles, on the operator graphs and the
 /// Quick Edit sketch alike, before the interface's scale.
-inline constexpr float kEnvelopeHandleRadius = 8.5f;
+inline constexpr float kEnvelopeHandleRadius = 11.9f;
+
+/// A lit level, such as TL or SL: a dashed rule across at `y`, on the
+/// operator graphs and the Quick Edit sketch alike.
+void draw_level_rule(ImDrawList *draw_list, float y, float left, float right);
 
 /**
  * The notes the chip is sounding, as the envelope graph draws them: newest
