@@ -67,7 +67,7 @@ void handle_drop(Environment &env, const std::filesystem::path &path) {
   auto &drop = env.ui_state.drop_state;
 
   // A dropped directory is a workspace addition, not a patch load: the same
-  // gesture as dragging a folder into an editor. Files keep the old behavior.
+  // gesture as dragging a folder into an editor.
   std::error_code ec;
   if (std::filesystem::is_directory(path, ec)) {
 #if defined(MEGATOY_PLATFORM_WEB)

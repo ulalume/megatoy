@@ -266,7 +266,7 @@ int main(int argc, char *argv[]) {
   MEGATOY_APP_STORAGE MidiInputManager midi(
       platform_services.create_midi_backend());
   // Performance messages go straight from the driver's thread to the audio
-  // thread, so their timing no longer depends on how fast the UI is drawing.
+  // thread, so their timing does not depend on how fast the UI is drawing.
   midi.set_note_sink([&services_ref](const MidiMessage &message) {
     auto &services = services_ref;
     for (const auto &command : midi_commands::from_message(message)) {

@@ -3,7 +3,6 @@
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/patch_write.hpp"
-#include "platform/host.hpp"
 #include "platform/platform_config.hpp"
 #include <utility>
 
@@ -55,8 +54,7 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
         current_patch().name = patch_to_write.name;
         mark_as_clean();
         remember_disk_time(active_document());
-        repository_->refresh();
-        platform::host::files_written();
+        repository_->changed();
         return SaveResult::success(absolute);
       }
       return SaveResult::error("Failed to write " + absolute.string());
@@ -212,8 +210,7 @@ SaveResult PatchSession::create_patch_in(const std::filesystem::path &folder,
     return SaveResult::error("Failed to write " + target.string());
   }
 
-  repository_->refresh();
-  platform::host::files_written();
+  repository_->changed();
 
   // Selecting it is the browser's own path, so a container format lands on
   // the instrument inside it just as a click would. If the refreshed tree
@@ -243,8 +240,7 @@ SaveResult PatchSession::create_folder_in(const std::filesystem::path &parent,
     return SaveResult::error("Could not create \"" + name + "\".");
   }
 
-  repository_->refresh();
-  platform::host::files_written();
+  repository_->changed();
   return SaveResult::success(target);
 }
 

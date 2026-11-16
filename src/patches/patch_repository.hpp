@@ -92,6 +92,8 @@ public:
   bool sync_workspace();
 
   void refresh();
+  /// After a change on disk: list it, and have the host keep it.
+  void changed();
   const std::vector<PatchEntry> &tree() const;
   std::uint64_t revision() const { return revision_; }
 
@@ -197,8 +199,6 @@ public:
 private:
   static constexpr const char *kBuiltinRootName = "presets";
 
-  /// After a change on disk: list it, and on the web have it kept.
-  void changed();
   /// restore() for an entry in the system's Trash.
   bool restore_from_trash(const DeletedEntry &deleted);
 

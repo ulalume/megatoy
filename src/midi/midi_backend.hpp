@@ -12,7 +12,7 @@ struct MidiMessage {
     NoteOff,
     PitchBend,
     ControlChange,
-    /// The input went away; whatever it held is no longer held.
+    /// The input went away, and with it whatever it held.
     SourceClosed,
   } type = Type::NoteOff;
 
