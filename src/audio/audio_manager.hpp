@@ -4,7 +4,7 @@
 #include "audio/audio_transport.hpp"
 #include "audio/load_meter.hpp"
 #include "audio/scope_buffer.hpp"
-#include "channel_allocator.hpp"
+#include "audio/channel_allocator.hpp"
 #include "platform/platform_config.hpp"
 #include "ym2612/note.hpp"
 #include <cstdint>

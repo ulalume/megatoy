@@ -65,7 +65,7 @@ target_include_directories(megatoy_resampler PUBLIC ${CMAKE_SOURCE_DIR}/src)
 set(MEGATOY_PRESETS_SOURCE_DIR "${ym2612_patches_SOURCE_DIR}")
 
 set(MEGATOY_LOGIC_SOURCES
-  src/channel_allocator.cpp
+  src/audio/channel_allocator.cpp
   src/audio/audio_engine.cpp
   src/audio/scope_buffer.cpp
   src/audio/scope_trigger.cpp
@@ -468,7 +468,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/audio_worklet/worklet_engine.cpp
     src/audio/audio_engine.cpp
     src/audio/scope_buffer.cpp
-    src/channel_allocator.cpp
+    src/audio/channel_allocator.cpp
     src/ym2612/channel.cpp
     src/ym2612/device.cpp
     src/ym2612/operator.cpp

@@ -3,7 +3,7 @@
 #include "audio/audio_command.hpp"
 #include "audio/load_meter.hpp"
 #include "audio/scope_buffer.hpp"
-#include "channel_allocator.hpp"
+#include "audio/channel_allocator.hpp"
 #include "ym2612/device.hpp"
 #include "ym2612/patch.hpp"
 #include <atomic>

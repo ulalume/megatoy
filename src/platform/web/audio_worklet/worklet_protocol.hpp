@@ -1,6 +1,6 @@
 #pragma once
 
-#include "channel_allocator.hpp"
+#include "audio/channel_allocator.hpp"
 #include "ym2612/note.hpp"
 
 #include <array>
