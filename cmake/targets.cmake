@@ -216,6 +216,7 @@ else()
     src/audio/sdl_audio_transport.cpp
     src/midi/rtmidi_backend.cpp
     src/patches/background_folder_scan.cpp
+    src/patches/chosen_workspace_folder.cpp
     src/platform/native/desktop_platform_services.cpp
     src/platform/native/host.cpp
   )

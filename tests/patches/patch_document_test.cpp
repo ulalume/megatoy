@@ -1,6 +1,8 @@
 #include "../test_check.hpp"
 #include "audio/audio_manager.hpp"
 #include "audio/audio_transport.hpp"
+#include "patches/background_folder_scan.hpp"
+#include "patches/chosen_workspace_folder.hpp"
 #include "patches/patch_session.hpp"
 #include "patches/patch_write.hpp"
 #include "platform/std_file_system.hpp"
@@ -13,6 +15,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -557,7 +561,8 @@ void test_adding_a_chosen_folder_asks_before_merging() {
     ++asked;
     message = text;
   };
-  env.preferences.add_chosen_workspace_folder(env.patches_folder, {}, confirm);
+  patches::add_chosen_workspace_folder(env.preferences, env.patches_folder, {},
+                                       confirm);
   CHECK(asked == 1);
   CHECK(message.find("\"bass\"") != std::string::npos);
   // Nothing changes until the answer.
@@ -565,10 +570,38 @@ void test_adding_a_chosen_folder_asks_before_merging() {
 
   // A folder inside one already there is turned away without asking.
   env.preferences.workspace().set_paths({env.patches_folder});
-  env.preferences.add_chosen_workspace_folder(bass, {}, confirm);
+  patches::add_chosen_workspace_folder(env.preferences, bass, {}, confirm);
   CHECK(asked == 1);
   CHECK(env.preferences.workspace().paths() ==
         std::vector<fs::path>{env.patches_folder});
+}
+
+void test_a_chosen_folder_joins_once_its_scan_is_done() {
+  TestEnvironment env;
+  const auto bass = env.patches_folder / "bass";
+  fs::create_directories(bass);
+  env.preferences.workspace().set_paths({bass});
+
+  std::function<void()> proceed;
+  int changed = 0;
+  patches::add_chosen_workspace_folder(
+      env.preferences, env.patches_folder, [&changed]() { ++changed; },
+      [&proceed](const std::string &, std::function<void()> agreed) {
+        proceed = std::move(agreed);
+      });
+  CHECK(static_cast<bool>(proceed));
+  proceed();
+  CHECK(changed == 0);
+  CHECK(env.preferences.workspace().paths() == std::vector<fs::path>{bass});
+
+  namespace scan = patches::background_folder_scan;
+  while (scan::status().active) {
+    scan::poll_completion();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  CHECK(changed == 1);
+  CHECK(env.preferences.workspace().paths() ==
+        (std::vector<fs::path>{bass, env.patches_folder}));
 }
 
 void test_display_path_tells_same_named_folders_apart() {
@@ -1236,6 +1269,7 @@ int main() {
   test_a_nested_folder_is_folded_into_the_outer_one();
   test_nesting_saved_earlier_is_folded_when_a_session_starts();
   test_adding_a_chosen_folder_asks_before_merging();
+  test_a_chosen_folder_joins_once_its_scan_is_done();
   test_display_path_tells_same_named_folders_apart();
   test_open_entry_activates_open_document();
   test_modified_preview_is_kept();

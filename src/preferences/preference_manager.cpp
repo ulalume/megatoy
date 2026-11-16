@@ -5,12 +5,10 @@
 #include "platform/host.hpp"
 #include "platform/platform_config.hpp"
 #include "workspace/path_policy.hpp"
-#if !defined(MEGATOY_PLATFORM_WEB)
-#include "patches/background_folder_scan.hpp"
-#endif
 #include "preference_storage.hpp"
 #include <cstdlib>
 #include <system_error>
+#include <utility>
 
 PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
     : paths_(paths), directories_initialized(false),
@@ -85,13 +83,9 @@ bool PreferenceManager::folder_add_is_import() {
 }
 
 #if !defined(MEGATOY_PLATFORM_WEB)
-void PreferenceManager::add_chosen_workspace_folder(
-    const std::filesystem::path &chosen, std::function<void()> on_changed,
-    ConfirmReplace confirm) {
-  // Warm the parse cache on a worker before the folder joins the workspace:
-  // the sync that follows re-walks it on the UI thread, and for a folder of
-  // thousands of banks that first parse is a freeze measured in seconds.
-  // Warm the same path the workspace will store, or the cache keys miss.
+void PreferenceManager::check_chosen_workspace_folder(
+    const std::filesystem::path &chosen, ConfirmReplace confirm,
+    std::function<void(const std::filesystem::path &folder)> admitted) {
   const auto folder = megatoy::workspace::normalize_path(chosen);
   const std::string folder_name = folder.filename().string();
   if (const auto *outer = workspace_.enclosing(folder)) {
@@ -114,28 +108,8 @@ void PreferenceManager::add_chosen_workspace_folder(
     replaced += (replaced.empty() ? "\"" : ", \"") + inner->name + "\"";
   }
 
-  auto add = [this, folder, folder_name, on_changed]() {
-    const bool started = patches::background_folder_scan::begin(
-        folder, [this, folder, folder_name, on_changed](bool cancelled) {
-          if (cancelled) {
-            megatoy::status::info("Folder scan cancelled.");
-            return;
-          }
-          if (add_workspace_folder(folder)) {
-            if (on_changed) {
-              on_changed();
-            }
-          } else {
-            megatoy::status::warning("\"" + folder_name +
-                                     "\" is already in the workspace.");
-          }
-        });
-    if (!started) {
-      megatoy::status::warning("Another folder scan is in progress.");
-    }
-  };
   if (inside.empty()) {
-    add();
+    admitted(folder);
     return;
   }
   if (!confirm) {
@@ -148,7 +122,7 @@ void PreferenceManager::add_chosen_workspace_folder(
               ", already in the workspace. Merge " +
               (inside.size() == 1 ? "it" : "them") + " into \"" + folder_name +
               "\"?\n\nRatings and icons are kept.",
-          std::move(add));
+          [folder, admitted = std::move(admitted)]() { admitted(folder); });
 }
 #endif
 

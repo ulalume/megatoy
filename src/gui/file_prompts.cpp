@@ -7,6 +7,8 @@
 #include "platform/import_pipeline.hpp"
 #include "platform/web/web_folder_import.hpp"
 #include "system/path_service.hpp"
+#else
+#include "patches/chosen_workspace_folder.hpp"
 #endif
 
 #include <filesystem>
@@ -71,8 +73,9 @@ void request_add_workspace_folder(PreferenceManager &preferences,
       platform::file_dialog::DialogResult::Ok) {
     return;
   }
-  preferences.add_chosen_workspace_folder(chosen, std::move(on_changed),
-                                          std::move(confirm));
+  patches::add_chosen_workspace_folder(preferences, chosen,
+                                       std::move(on_changed),
+                                       std::move(confirm));
 #endif
 }
 

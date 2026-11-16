@@ -42,16 +42,17 @@ public:
                                             std::function<void()> proceed)>;
 #if !defined(MEGATOY_PLATFORM_WEB)
   /**
-   * Bring `chosen`, a folder on disk, into the workspace, read in place.
+   * Check that `chosen`, a folder on disk, may join the workspace, and hand
+   * it to `admitted` as the path add_workspace_folder() will store.
    *
    * A folder already inside one in the workspace is turned away. One holding
-   * folders in the workspace takes their place, once `confirm` has had the
-   * user agree to `message` and called `proceed`; without `confirm` it is
-   * turned away too.
+   * folders in the workspace takes their place once added, so `confirm` first
+   * has the user agree to `message` and call `proceed`; without `confirm` it
+   * is turned away too.
    */
-  void add_chosen_workspace_folder(const std::filesystem::path &chosen,
-                                   std::function<void()> on_changed,
-                                   ConfirmReplace confirm);
+  void check_chosen_workspace_folder(
+      const std::filesystem::path &chosen, ConfirmReplace confirm,
+      std::function<void(const std::filesystem::path &folder)> admitted);
 #endif
 
   /// True when adding a folder copies it rather than referencing it.
