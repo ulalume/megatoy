@@ -10,6 +10,7 @@
 #include "gui/input/history_shortcuts.hpp"
 #include "gui/ui_renderer.hpp"
 #include "gui/window_title.hpp"
+#include "midi/midi_commands.hpp"
 #include "midi/midi_input_manager.hpp"
 #include "platform/run_loop.hpp"
 #include "update/release_provider.hpp"
@@ -268,25 +269,8 @@ int main(int argc, char *argv[]) {
   // thread, so their timing no longer depends on how fast the UI is drawing.
   midi.set_note_sink([&services_ref](const MidiMessage &message) {
     auto &services = services_ref;
-    switch (message.type) {
-    case MidiMessage::Type::NoteOn:
-      services.audio_manager.submit_from_midi(
-          audio::AudioCommand::note_on(message.note, message.velocity));
-      break;
-    case MidiMessage::Type::NoteOff:
-      services.audio_manager.submit_from_midi(
-          audio::AudioCommand::note_off(message.note));
-      break;
-    case MidiMessage::Type::PitchBend:
-      services.audio_manager.submit_from_midi(
-          audio::AudioCommand::pitch_bend(message.pitch_bend));
-      break;
-    case MidiMessage::Type::ControlChange:
-      if (message.controller == 1) {
-        services.audio_manager.submit_from_midi(
-            audio::AudioCommand::mod_wheel(message.controller_value));
-      }
-      break;
+    for (const auto &command : midi_commands::from_message(message)) {
+      services.audio_manager.submit_from_midi(command);
     }
   });
   midi.init();

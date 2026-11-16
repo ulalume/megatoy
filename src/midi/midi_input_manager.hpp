@@ -33,7 +33,6 @@ public:
 
 private:
   std::unique_ptr<MidiBackend> backend_;
-  std::vector<MidiMessage> pending_events_;
   std::vector<std::string> available_ports_;
   bool ports_dirty_;
 };

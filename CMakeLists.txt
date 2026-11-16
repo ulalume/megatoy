@@ -143,6 +143,10 @@ add_executable(command_queue_test tests/audio/command_queue_test.cpp)
 target_include_directories(command_queue_test PRIVATE src)
 target_link_libraries(command_queue_test PRIVATE megatoy_core)
 add_test(NAME command_queue_test COMMAND command_queue_test)
+add_executable(midi_input_test tests/midi/midi_input_test.cpp)
+target_include_directories(midi_input_test PRIVATE src)
+target_link_libraries(midi_input_test PRIVATE megatoy_core)
+add_test(NAME midi_input_test COMMAND midi_input_test)
 add_executable(performance_test tests/audio/performance_test.cpp)
 target_include_directories(performance_test PRIVATE src)
 target_link_libraries(performance_test PRIVATE megatoy_core)
@@ -384,7 +388,7 @@ add_custom_target(check
   DEPENDS patch_registry_test patch_io_roundtrip_test random_utils_test scale_test
           session_audio_test patch_save_test current_patch_path_test
           ym2612_render_test analyzer_test command_queue_test
-          performance_test load_meter_test
+          performance_test load_meter_test midi_input_test
           ginpkg_history_test patch_write_test patch_lab_test status_test
           filename_utils_test utf8_utils_test
           patch_repository_delete_test patch_repository_rename_test
