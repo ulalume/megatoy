@@ -33,11 +33,18 @@ struct AudioCommand {
     ModWheel,
     SetChipType,
     SetCore,
+    ReleaseSource,
+    Sustain,
   };
 
   Type type = Type::AllNotesOff;
   ym2612::Note note{};
   uint8_t velocity = 0;
+  // Who plays: the app's own keyboards, or one MIDI input. Notes, the
+  // sustain pedal and ReleaseSource carry it.
+  uint8_t source = 0;
+  // Sustain only.
+  bool pedal_down = false;
   // Performance commands only. Pitch bend is raw MIDI 14-bit (8192 center),
   // while mod wheel is the MIDI CC1 value (0..127).
   uint16_t pitch_bend_value = 8192;
@@ -52,18 +59,37 @@ struct AudioCommand {
   ym2612::ChannelSettings channel{};
   ym2612::ChannelInstrument instrument{};
 
-  static AudioCommand note_on(ym2612::Note note, uint8_t velocity) {
+  static AudioCommand note_on(ym2612::Note note, uint8_t velocity,
+                              uint8_t source = 0) {
     AudioCommand command;
     command.type = Type::NoteOn;
     command.note = note;
     command.velocity = velocity;
+    command.source = source;
     return command;
   }
 
-  static AudioCommand note_off(ym2612::Note note) {
+  static AudioCommand note_off(ym2612::Note note, uint8_t source = 0) {
     AudioCommand command;
     command.type = Type::NoteOff;
     command.note = note;
+    command.source = source;
+    return command;
+  }
+
+  /// Everything `source` holds comes up, its pedal with it: it is gone.
+  static AudioCommand release_source(uint8_t source) {
+    AudioCommand command;
+    command.type = Type::ReleaseSource;
+    command.source = source;
+    return command;
+  }
+
+  static AudioCommand sustain(uint8_t source, bool pedal_down) {
+    AudioCommand command;
+    command.type = Type::Sustain;
+    command.source = source;
+    command.pedal_down = pedal_down;
     return command;
   }
 

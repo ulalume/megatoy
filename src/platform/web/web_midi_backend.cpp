@@ -13,47 +13,41 @@ platform::web::WebMidiBackend *g_active_backend = nullptr;
 
 extern "C" {
 
-EMSCRIPTEN_KEEPALIVE void megatoy_web_midi_message(int status, int data1,
-                                                   int data2) {
+EMSCRIPTEN_KEEPALIVE void megatoy_web_midi_message(int source, int status,
+                                                   int data1, int data2) {
   if (g_active_backend == nullptr) {
     return;
   }
-  g_active_backend->deliver(static_cast<unsigned char>(status),
+  g_active_backend->deliver(static_cast<unsigned char>(source),
+                            static_cast<unsigned char>(status),
                             static_cast<unsigned char>(data1),
                             static_cast<unsigned char>(data2));
+}
+
+EMSCRIPTEN_KEEPALIVE void megatoy_web_midi_closed(int source) {
+  if (g_active_backend != nullptr) {
+    g_active_backend->closed(static_cast<unsigned char>(source));
+  }
 }
 
 } // extern "C"
 
 namespace platform::web {
 
-void WebMidiBackend::deliver(unsigned char status, unsigned char data1,
-                             unsigned char data2) {
-  const unsigned char type = status & 0xF0;
+void WebMidiBackend::deliver(unsigned char source, unsigned char status,
+                             unsigned char data1, unsigned char data2) {
   MidiMessage message;
-  message.port_name = "MIDI";
-
-  if (type == 0x90 && data2 > 0) {
-    message.type = MidiMessage::Type::NoteOn;
-    message.note = ym2612::Note::from_midi_note(data1 & 0x7f);
-    message.velocity = data2 & 0x7f;
-    emit(message);
-  } else if (type == 0x80 || (type == 0x90 && data2 == 0)) {
-    message.type = MidiMessage::Type::NoteOff;
-    message.note = ym2612::Note::from_midi_note(data1 & 0x7f);
-    message.velocity = data2 & 0x7f;
-    emit(message);
-  } else if (type == 0xe0) {
-    message.type = MidiMessage::Type::PitchBend;
-    message.pitch_bend = static_cast<uint16_t>(
-        (data1 & 0x7f) | (static_cast<uint16_t>(data2 & 0x7f) << 7));
-    emit(message);
-  } else if (type == 0xb0) {
-    message.type = MidiMessage::Type::ControlChange;
-    message.controller = data1 & 0x7f;
-    message.controller_value = data2 & 0x7f;
+  message.source = source;
+  if (parse_midi_message(status, data1, data2, message)) {
     emit(message);
   }
+}
+
+void WebMidiBackend::closed(unsigned char source) {
+  MidiMessage message;
+  message.type = MidiMessage::Type::SourceClosed;
+  message.source = source;
+  emit(message);
 }
 
 namespace {
@@ -74,6 +68,22 @@ void request_access_js() {
 
     function installHandlers(access) {
       Module['megatoyMidiAccess'] = access;
+      // Each input plays as a source of its own, numbered from 1; those past
+      // the last number share it.
+      var sources = {};
+      function sourceOf(port) {
+        if (!sources[port.id]) {
+          var taken = Object.keys(sources).map(function(id) {
+            return sources[id];
+          });
+          var source = 1;
+          while (source < $0 && taken.indexOf(source) >= 0) {
+            source++;
+          }
+          sources[port.id] = source;
+        }
+        return sources[port.id];
+      }
       function refreshPorts() {
         Module['megatoyMidiPorts'] = [];
         access.inputs.forEach(function(input) {
@@ -94,16 +104,25 @@ void request_access_js() {
         if (type !== 0x80 && type !== 0x90 && type !== 0xb0 && type !== 0xe0) {
           return;
         }
-        Module['_megatoy_web_midi_message'](d[0], d[1], d.length > 2 ? d[2] : 0);
+        Module['_megatoy_web_midi_message'](sourceOf(event.target), d[0], d[1],
+                                            d.length > 2 ? d[2] : 0);
       }
 
       access.inputs.forEach(
           function(input) { input.onmidimessage = handleMessage; });
 
       access.onstatechange = function(event) {
-        if (event.port && event.port.type === 'input' &&
-            event.port.state === 'connected') {
-          event.port.onmidimessage = handleMessage;
+        var port = event.port;
+        if (port && port.type === 'input') {
+          if (port.state === 'connected') {
+            port.onmidimessage = handleMessage;
+          } else if (sources[port.id]) {
+            // What it held is let go, and its number is free again.
+            if (Module['_megatoy_web_midi_closed']) {
+              Module['_megatoy_web_midi_closed'](sources[port.id]);
+            }
+            delete sources[port.id];
+          }
         }
         refreshPorts();
       };
@@ -123,7 +142,7 @@ void request_access_js() {
           state.error =
               (err && err.message) ? err.message : "Failed to access WebMIDI.";
         });
-  });
+  }, MidiBackend::kLastSource);
   // clang-format on
 }
 #endif
@@ -137,7 +156,6 @@ void WebMidiBackend::setup_js_state() const {
       return;
     }
     Module['megatoyMidiSetup'] = true;
-    Module['megatoyMidiEvents'] = [];
     Module['megatoyMidiPorts'] = [];
     Module['megatoyMidiPortsChanged'] = false;
 
@@ -226,8 +244,7 @@ void WebMidiBackend::request_access() {
 #endif
 }
 
-void WebMidiBackend::poll(std::vector<MidiMessage> &events,
-                          std::vector<std::string> &available_ports,
+void WebMidiBackend::poll(std::vector<std::string> &available_ports,
                           bool &ports_changed) {
 #if defined(MEGATOY_PLATFORM_WEB)
   setup_js_state();
@@ -250,7 +267,6 @@ void WebMidiBackend::poll(std::vector<MidiMessage> &events,
 
   // Notes arrive through megatoy_web_midi_message, not from here.
 #else
-  (void)events;
   (void)available_ports;
   (void)ports_changed;
 #endif

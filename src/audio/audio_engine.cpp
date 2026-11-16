@@ -22,6 +22,14 @@ constexpr int kFullQueueRetries = 1000;
 constexpr uint32_t kDefaultFrameSize = sizeof(int16_t) * 2; // stereo s16
 constexpr size_t kReservedMixFrames = 8192;
 
+/// Whether losing the command would leave a note sounding.
+bool lets_notes_go(const audio::AudioCommand &command) {
+  using Type = audio::AudioCommand::Type;
+  return command.type == Type::NoteOff || command.type == Type::AllNotesOff ||
+         command.type == Type::ReleaseSource ||
+         (command.type == Type::Sustain && !command.pedal_down);
+}
+
 int16_t to_pcm16(float sample) {
   const float clamped = std::clamp(sample, -1.0f, 1.0f);
   return static_cast<int16_t>(clamped * 32767.0f);
@@ -187,9 +195,7 @@ bool AudioEngine::submit_from_midi(const audio::AudioCommand &command) {
     return false;
   }
 
-  const bool is_release =
-      command.type == audio::AudioCommand::Type::NoteOff ||
-      command.type == audio::AudioCommand::Type::AllNotesOff;
+  const bool is_release = lets_notes_go(command);
   bool queue_full = false;
   if (try_push_midi_command(command, queue_full)) {
     return true;
@@ -226,9 +232,7 @@ bool AudioEngine::try_push_midi_command(const audio::AudioCommand &command,
                                         bool &queue_full) {
   const std::lock_guard<std::mutex> guard(midi_push_mutex_);
   queue_full = false;
-  const bool is_release =
-      command.type == audio::AudioCommand::Type::NoteOff ||
-      command.type == audio::AudioCommand::Type::AllNotesOff;
+  const bool is_release = lets_notes_go(command);
   if (midi_release_recovery_pending_.load(std::memory_order_acquire)) {
     if (command.type == audio::AudioCommand::Type::NoteOn) {
       return false;
@@ -307,8 +311,8 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
     const bool steal = steal_oldest_.load(std::memory_order_relaxed);
     const uint8_t velocity = audio::performance::effective_velocity(
         use_velocity_.load(std::memory_order_relaxed), command.velocity);
-    auto claim =
-        allocator_.note_on(command.note, velocity, steal, command_sample_);
+    auto claim = allocator_.note_on(command.note, velocity, steal,
+                                    command_sample_, command.source);
     if (!claim) {
       break;
     }
@@ -338,7 +342,17 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
   }
 
   case Type::NoteOff:
-    allocator_.note_off(command.note, device_, command_sample_);
+    allocator_.note_off(command.note, device_, command_sample_,
+                        command.source);
+    break;
+
+  case Type::ReleaseSource:
+    allocator_.release_source(command.source, device_, command_sample_);
+    break;
+
+  case Type::Sustain:
+    allocator_.set_sustain(command.source, command.pedal_down, device_,
+                           command_sample_);
     break;
 
   case Type::AllNotesOff:

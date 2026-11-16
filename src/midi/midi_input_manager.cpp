@@ -3,8 +3,7 @@
 #include <iostream>
 
 MidiInputManager::MidiInputManager(std::unique_ptr<MidiBackend> backend)
-    : backend_(std::move(backend)), pending_events_(), available_ports_(),
-      ports_dirty_(false) {}
+    : backend_(std::move(backend)), available_ports_(), ports_dirty_(false) {}
 
 MidiInputManager::~MidiInputManager() { shutdown(); }
 
@@ -26,7 +25,6 @@ void MidiInputManager::shutdown() {
   if (backend_) {
     backend_->shutdown();
   }
-  pending_events_.clear();
   available_ports_.clear();
   ports_dirty_ = false;
 }
@@ -36,14 +34,12 @@ void MidiInputManager::poll() {
     return;
   }
 
-  pending_events_.clear();
   bool ports_changed = false;
-  backend_->poll(pending_events_, available_ports_, ports_changed);
+  backend_->poll(available_ports_, ports_changed);
   ports_dirty_ = ports_dirty_ || ports_changed;
 }
 
 std::optional<std::vector<std::string>> MidiInputManager::take_changed_ports() {
-  pending_events_.clear();
   if (!ports_dirty_) {
     return std::nullopt;
   }

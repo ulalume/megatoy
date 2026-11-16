@@ -16,7 +16,7 @@
 namespace web_audio {
 
 /// Bumped whenever a command or the snapshot changes shape.
-inline constexpr uint32_t kProtocolVersion = 1;
+inline constexpr uint32_t kProtocolVersion = 2;
 
 /// Frames the worklet renders between two reports to the page.
 inline constexpr uint32_t kReportFrames = 512;
