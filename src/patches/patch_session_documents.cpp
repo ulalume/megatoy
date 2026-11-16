@@ -1,14 +1,12 @@
 #include "patch_session.hpp"
 
 #include "formats/patch_loader.hpp"
+#include "platform/host.hpp"
 #include "platform/platform_config.hpp"
 #include <algorithm>
 #include <iterator>
 #include <utility>
 
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_url.hpp"
-#endif
 
 namespace patches {
 
@@ -18,11 +16,6 @@ namespace {
 bool same_sound(const ym2612::Patch &a, const ym2612::Patch &b) {
   return a.global == b.global && a.channel == b.channel &&
          a.instrument == b.instrument;
-}
-
-std::filesystem::path source_of(const PatchEntry &entry) {
-  return entry.source_relative_path.empty() ? entry.relative_path
-                                            : entry.source_relative_path;
 }
 
 } // namespace
@@ -80,11 +73,8 @@ std::optional<DocumentId> PatchSession::open_entry(const PatchEntry &entry,
   if (!repository_->load_patch(entry, patch)) {
     return std::nullopt;
   }
-  return open_document(patch,
-                       entry.source_relative_path.empty()
-                           ? entry.relative_path
-                           : entry.source_relative_path,
-                       entry.relative_path, pinned);
+  return open_document(patch, source_path_of(entry), entry.relative_path,
+                       pinned);
 }
 
 std::optional<DocumentId> PatchSession::preview_document_id() const {
@@ -136,9 +126,7 @@ PatchSession::place_document(const ym2612::Patch &patch,
   if (!selection_path.empty()) {
     set_document_selection_path(*target, selection_path);
   }
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(target->patch());
-#endif
+  platform::host::current_patch_changed(target->patch());
   return target->id();
 }
 
@@ -156,7 +144,7 @@ PatchSession::open_or_activate(const PatchEntry &entry, bool pinned,
   if (!repository_->load_patch(entry, patch)) {
     return std::nullopt;
   }
-  return place_document(patch, source_of(entry), entry.relative_path, pinned,
+  return place_document(patch, source_path_of(entry), entry.relative_path, pinned,
                         reuse_preview);
 }
 
@@ -247,7 +235,7 @@ bool PatchSession::restore_open_documents() {
     const bool pinned = records[i].pinned || have_preview;
     have_preview = have_preview || !pinned;
     const auto id = entry != nullptr
-                        ? open_document(patch, source_of(*entry),
+                        ? open_document(patch, source_path_of(*entry),
                                         entry->relative_path, pinned)
                         : open_document(patch, recorded, {}, pinned);
     if (!first) {
@@ -263,10 +251,7 @@ bool PatchSession::restore_open_documents() {
   activate(to_activate.value_or(*first));
   const auto *active_document = find_document(active_id_);
   preferences_.set_last_patch_path(active_document->path());
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(
-      active_document->patch());
-#endif
+  platform::host::current_patch_changed(active_document->patch());
   close_document(initial);
   return true;
 }

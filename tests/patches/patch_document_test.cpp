@@ -1,6 +1,8 @@
 #include "../test_check.hpp"
 #include "audio/audio_manager.hpp"
 #include "audio/audio_transport.hpp"
+#include "patches/background_folder_scan.hpp"
+#include "patches/chosen_workspace_folder.hpp"
 #include "patches/patch_session.hpp"
 #include "patches/patch_write.hpp"
 #include "platform/std_file_system.hpp"
@@ -13,6 +15,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -557,7 +561,8 @@ void test_adding_a_chosen_folder_asks_before_merging() {
     ++asked;
     message = text;
   };
-  env.preferences.add_chosen_workspace_folder(env.patches_folder, {}, confirm);
+  patches::add_chosen_workspace_folder(env.preferences, env.patches_folder, {},
+                                       confirm);
   CHECK(asked == 1);
   CHECK(message.find("\"bass\"") != std::string::npos);
   // Nothing changes until the answer.
@@ -565,10 +570,38 @@ void test_adding_a_chosen_folder_asks_before_merging() {
 
   // A folder inside one already there is turned away without asking.
   env.preferences.workspace().set_paths({env.patches_folder});
-  env.preferences.add_chosen_workspace_folder(bass, {}, confirm);
+  patches::add_chosen_workspace_folder(env.preferences, bass, {}, confirm);
   CHECK(asked == 1);
   CHECK(env.preferences.workspace().paths() ==
         std::vector<fs::path>{env.patches_folder});
+}
+
+void test_a_chosen_folder_joins_once_its_scan_is_done() {
+  TestEnvironment env;
+  const auto bass = env.patches_folder / "bass";
+  fs::create_directories(bass);
+  env.preferences.workspace().set_paths({bass});
+
+  std::function<void()> proceed;
+  int changed = 0;
+  patches::add_chosen_workspace_folder(
+      env.preferences, env.patches_folder, [&changed]() { ++changed; },
+      [&proceed](const std::string &, std::function<void()> agreed) {
+        proceed = std::move(agreed);
+      });
+  CHECK(static_cast<bool>(proceed));
+  proceed();
+  CHECK(changed == 0);
+  CHECK(env.preferences.workspace().paths() == std::vector<fs::path>{bass});
+
+  namespace scan = patches::background_folder_scan;
+  while (scan::status().active) {
+    scan::poll_completion();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  CHECK(changed == 1);
+  CHECK(env.preferences.workspace().paths() ==
+        (std::vector<fs::path>{bass, env.patches_folder}));
 }
 
 void test_display_path_tells_same_named_folders_apart() {
@@ -1034,6 +1067,78 @@ void test_creating_a_folder_keeps_edits_and_lists_the_folder() {
   CHECK(session.capture_snapshot() == snapshot);
 }
 
+void test_save_as_writes_where_the_prompt_answers() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  session.open_document(make_patch(4), {});
+  session.current_patch().name = "lead";
+  session.current_patch().instrument.feedback = 3;
+  CHECK(session.is_modified());
+
+  const auto target = env.root / "elsewhere";
+  fs::create_directories(target);
+  int asked = 0;
+  patches::SavePathRequest request;
+  auto answer = patches::SavePathAnswer{};
+  session.set_save_path_prompt([&](const patches::SavePathRequest &asked_for) {
+    ++asked;
+    request = asked_for;
+    return answer;
+  });
+
+  // Backing out of the dialog writes nothing.
+  CHECK(session.save_current_patch(".fui").is_cancelled());
+  CHECK(asked == 1);
+  CHECK(request.stem == "lead");
+  CHECK(request.extension == ".fui");
+  CHECK(request.start_directory == env.preferences.last_save_directory());
+  CHECK(!request.formats.empty());
+  CHECK(session.is_modified());
+
+  answer = {patches::SavePathAnswer::Status::Failed, {}};
+  CHECK(session.save_current_patch().is_error());
+  CHECK(session.is_modified());
+
+  // A name without a format takes the one that was offered, and the patch is
+  // named for its file.
+  answer = {patches::SavePathAnswer::Status::Chosen, target / "bass"};
+  const auto result = session.save_current_patch(".dmp");
+  CHECK(result.is_success());
+  CHECK(result.path == target / "bass.dmp");
+  CHECK(fs::exists(target / "bass.dmp"));
+  CHECK(!session.is_modified());
+  CHECK(session.current_patch().name == "bass");
+  CHECK(env.preferences.last_save_directory() == target);
+  const auto saved = formats::load_patch_from_file(target / "bass.dmp");
+  CHECK(saved.status == formats::PatchLoadStatus::Success);
+  CHECK(saved.patches[0].instrument.feedback == 3);
+
+  // The file is now the patch's own, so the next save does not ask.
+  session.current_patch().instrument.feedback = 5;
+  CHECK(session.save_current_patch().is_success());
+  CHECK(asked == 3);
+}
+
+void test_save_as_with_no_one_to_ask_writes_into_the_workspace() {
+  BrowserFixture fixture;
+  auto &session = fixture.env.session;
+  session.open_document(make_patch(4), {});
+  session.current_patch().instrument.feedback = 3;
+
+  // A name already taken is not overwritten unasked.
+  session.current_patch().name = "lead";
+  CHECK(session.save_current_patch().is_duplicated());
+  CHECK(session.is_modified());
+
+  session.current_patch().name = "solo";
+  const auto result = session.save_current_patch();
+  CHECK(result.is_success());
+  CHECK(result.path.filename() == "solo.dmp");
+  CHECK(result.path.parent_path() == fixture.env.patches_folder);
+  CHECK(!session.is_modified());
+}
+
 void test_failed_in_place_save_preserves_edits_and_the_clean_snapshot() {
   TestEnvironment env;
   auto &session = env.session;
@@ -1164,6 +1269,7 @@ int main() {
   test_a_nested_folder_is_folded_into_the_outer_one();
   test_nesting_saved_earlier_is_folded_when_a_session_starts();
   test_adding_a_chosen_folder_asks_before_merging();
+  test_a_chosen_folder_joins_once_its_scan_is_done();
   test_display_path_tells_same_named_folders_apart();
   test_open_entry_activates_open_document();
   test_modified_preview_is_kept();
@@ -1183,6 +1289,8 @@ int main() {
   test_failed_loads_preserve_unsaved_contents_and_paths();
   test_rejected_creation_preserves_the_active_document();
   test_creating_a_folder_keeps_edits_and_lists_the_folder();
+  test_save_as_writes_where_the_prompt_answers();
+  test_save_as_with_no_one_to_ask_writes_into_the_workspace();
   test_failed_in_place_save_preserves_edits_and_the_clean_snapshot();
   test_restore_skips_unreadable_records_and_keeps_only_one_preview();
   test_invalid_document_ids_do_not_replace_the_active_patch();

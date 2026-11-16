@@ -65,12 +65,13 @@ target_include_directories(megatoy_resampler PUBLIC ${CMAKE_SOURCE_DIR}/src)
 set(MEGATOY_PRESETS_SOURCE_DIR "${ym2612_patches_SOURCE_DIR}")
 
 set(MEGATOY_LOGIC_SOURCES
-  src/channel_allocator.cpp
+  src/audio/channel_allocator.cpp
   src/audio/audio_engine.cpp
   src/audio/scope_buffer.cpp
   src/audio/scope_trigger.cpp
   src/audio/spectrum_analyzer.cpp
   src/audio/audio_manager.cpp
+  src/core/file_replace.cpp
   src/core/random_utils.cpp
   src/core/status.cpp
   src/core/utf8_utils.cpp
@@ -156,6 +157,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/star_rating.cpp
   src/gui/components/view_patch_drop.cpp
   src/gui/areas.cpp
+  src/gui/file_prompts.cpp
   src/gui/patch_save_dialog.cpp
   src/gui/save_as_dialog.cpp
   src/gui/save_export_actions.cpp
@@ -187,6 +189,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   list(APPEND MEGATOY_LOGIC_SOURCES
     src/platform/web/web_audio_worklet.cpp
     src/platform/web/web_platform_services.cpp
+    src/platform/web/host.cpp
     src/platform/web/web_download.cpp
     src/platform/web/local_storage.cpp
     src/platform/web/web_folder_delete.cpp
@@ -213,7 +216,9 @@ else()
     src/audio/sdl_audio_transport.cpp
     src/midi/rtmidi_backend.cpp
     src/patches/background_folder_scan.cpp
+    src/patches/chosen_workspace_folder.cpp
     src/platform/native/desktop_platform_services.cpp
+    src/platform/native/host.cpp
   )
 endif()
 # Add platform-specific source files
@@ -467,7 +472,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/audio_worklet/worklet_engine.cpp
     src/audio/audio_engine.cpp
     src/audio/scope_buffer.cpp
-    src/channel_allocator.cpp
+    src/audio/channel_allocator.cpp
     src/ym2612/channel.cpp
     src/ym2612/device.cpp
     src/ym2612/operator.cpp

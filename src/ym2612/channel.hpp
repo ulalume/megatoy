@@ -4,8 +4,8 @@
 
 namespace ym2612 {
 
-class Device;   // Forward declaration
-class Operator; // Forward declaration
+class Device;
+class Operator;
 
 class Channel {
 public:

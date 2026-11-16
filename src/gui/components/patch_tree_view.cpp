@@ -3,6 +3,7 @@
 #include "gui/components/instrument_icon_picker.hpp"
 #include "gui/components/menu_rows.hpp"
 #include "gui/components/section_header.hpp"
+#include "gui/components/sharp_frame.hpp"
 #include "gui/fonts/megatoy_icons.hpp"
 #include "gui/os_file_drop.hpp"
 #include "gui/styles/megatoy_style.hpp"
@@ -301,9 +302,7 @@ void draw_rating(int stars, bool compact, float right, float centre_y) {
  * short.
  */
 bool patch_row_selectable(const patches::PatchEntry &item, bool selected) {
-  const std::string_view icon_id = item.metadata
-                                       ? std::string_view(item.metadata->icon)
-                                       : std::string_view();
+  const std::string_view icon_id = patches::icon_of(&item);
   const int stars =
       std::clamp(item.metadata ? item.metadata->star_rating : 0, 0, 5);
   const ImGuiStyle &style = ImGui::GetStyle();
@@ -641,18 +640,11 @@ DropAction row_drop_target(PatchSelectorContext &context,
   return held;
 }
 
-/// The frame around the folder taking a drop and everything listed under it,
-/// as four strips so its edges stay sharp.
+/// The frame around the folder taking a drop and everything listed under it.
 void draw_drop_frame(const ImVec2 &min, const ImVec2 &max) {
-  const float t = ImGui::GetStyle().DragDropTargetBorderSize;
-  const ImU32 color = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  draw_list->AddRectFilled(min, ImVec2(max.x, min.y + t), color);
-  draw_list->AddRectFilled(ImVec2(min.x, max.y - t), max, color);
-  draw_list->AddRectFilled(ImVec2(min.x, min.y + t),
-                           ImVec2(min.x + t, max.y - t), color);
-  draw_list->AddRectFilled(ImVec2(max.x - t, min.y + t),
-                           ImVec2(max.x, max.y - t), color);
+  draw_sharp_frame(ImGui::GetWindowDrawList(), min, max,
+                   ImGui::GetColorU32(ImGuiCol_DragDropTarget),
+                   ImGui::GetStyle().DragDropTargetBorderSize);
 }
 
 } // namespace

@@ -7,22 +7,18 @@
 #include "history/history_manager.hpp"
 #include "history/snapshot_entry.hpp"
 #include "patches/patch_session.hpp"
-#include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_url.hpp"
-#endif
+#include "platform/host.hpp"
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace patch_actions {
 namespace detail {
-/// The page's address follows the active patch in the browser.
-inline void sync_patch_url([[maybe_unused]] AppContext &context) {
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(
+inline void sync_patch_url(AppContext &context) {
+  platform::host::current_patch_changed(
       context.services.patch_session.current_patch());
-#endif
 }
 
 using Snapshot = patches::PatchSession::PatchSnapshot;
@@ -39,6 +35,22 @@ make_entry(const std::string &label, const std::string &merge_key,
         sync_patch_url(ctx);
       });
 }
+
+/// Makes the undo step for a change to `document` that began at `before`,
+/// once the change is over; none if the document has been closed.
+inline auto step_from(std::string label, std::string merge_key,
+                      patches::DocumentId document, Snapshot before) {
+  return [label = std::move(label), merge_key = std::move(merge_key), document,
+          before = std::move(before)](
+             AppContext &ctx) -> std::unique_ptr<history::HistoryEntry> {
+    const auto *open = ctx.services.patch_session.find_document(document);
+    if (open == nullptr) {
+      return nullptr;
+    }
+    return make_entry(label, merge_key, document, before,
+                      open->capture_snapshot());
+  };
+}
 } // namespace detail
 
 /**
@@ -52,15 +64,7 @@ inline void begin_change(AppContext &context, const std::string &label,
   auto before = session.capture_snapshot();
   context.services.history().begin_transaction(
       label, merge_key,
-      [label, merge_key, document, before = std::move(before)](
-          AppContext &ctx) -> std::unique_ptr<history::HistoryEntry> {
-        const auto *open = ctx.services.patch_session.find_document(document);
-        if (open == nullptr) {
-          return nullptr;
-        }
-        return detail::make_entry(label, merge_key, document, before,
-                                  open->capture_snapshot());
-      });
+      detail::step_from(label, merge_key, document, std::move(before)));
 }
 
 inline void commit_change(AppContext &context) {
@@ -97,18 +101,29 @@ inline void new_patch(AppContext &context) {
                   context.services.patch_session.open_new_document());
 }
 
+namespace detail {
+/// Opens a browser entry and shows it; says so when it cannot be read.
+inline std::optional<patches::DocumentId>
+open_and_reveal(AppContext &context, const patches::PatchEntry &entry,
+                bool pinned, bool reuse_preview) {
+  context.services.history().cancel_transaction();
+  const auto document = context.services.patch_session.open_or_activate(
+      entry, pinned, reuse_preview);
+  if (!document) {
+    megatoy::status::error("Failed to load \"" + entry.name + "\"");
+    return std::nullopt;
+  }
+  reveal_document(context, *document);
+  return document;
+}
+} // namespace detail
+
 /// Open a browser entry by the preview rules; `pinned` keeps it open.
 inline bool open_entry(AppContext &context, const patches::PatchEntry &entry,
                        bool pinned) {
-  context.services.history().cancel_transaction();
-  const auto document =
-      context.services.patch_session.open_or_activate(entry, pinned);
-  if (!document) {
-    megatoy::status::error("Failed to load \"" + entry.name + "\"");
-    return false;
-  }
-  reveal_document(context, *document);
-  return true;
+  return detail::open_and_reveal(context, entry, pinned,
+                                 /*reuse_preview=*/true)
+      .has_value();
 }
 
 /// Open a browser entry, kept open, in the dock node `dock_id`; 0 places it
@@ -116,14 +131,11 @@ inline bool open_entry(AppContext &context, const patches::PatchEntry &entry,
 inline bool open_entry_in_dock(AppContext &context,
                                const patches::PatchEntry &entry,
                                unsigned int dock_id) {
-  context.services.history().cancel_transaction();
-  const auto document = context.services.patch_session.open_or_activate(
-      entry, /*pinned=*/true, /*reuse_preview=*/false);
+  const auto document = detail::open_and_reveal(
+      context, entry, /*pinned=*/true, /*reuse_preview=*/false);
   if (!document) {
-    megatoy::status::error("Failed to load \"" + entry.name + "\"");
     return false;
   }
-  reveal_document(context, *document);
   context.state.ui_state().document_ui(*document).dock_target = dock_id;
   return true;
 }
@@ -147,16 +159,7 @@ inline void reload_from_disk(AppContext &context, patches::DocumentId document,
   auto &history = context.services.histories[document];
   history.begin_transaction(
       "Reload from Disk", {},
-      [document, before = std::move(before)](
-          AppContext &ctx) -> std::unique_ptr<history::HistoryEntry> {
-        const auto *reloaded =
-            ctx.services.patch_session.find_document(document);
-        if (reloaded == nullptr) {
-          return nullptr;
-        }
-        return detail::make_entry("Reload from Disk", {}, document, before,
-                                  reloaded->capture_snapshot());
-      });
+      detail::step_from("Reload from Disk", {}, document, std::move(before)));
   session.accept_disk_version(document, patch, /*replace=*/true);
   if (history.commit_transaction(context)) {
     detail::sync_patch_url(context);

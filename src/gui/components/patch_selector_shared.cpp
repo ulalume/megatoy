@@ -248,8 +248,7 @@ void render_icon_picker(PatchSelectorContext &context) {
     return;
   }
   if (const auto *entry = context.session.find_entry(picking)) {
-    const std::string icon =
-        entry->metadata ? entry->metadata->icon : std::string();
+    const std::string icon(patches::icon_of(entry));
     if (auto picked = instrument_icon_list(icon)) {
       context.pending_icon = PendingIcon{picking, std::move(*picked)};
       ImGui::CloseCurrentPopup();

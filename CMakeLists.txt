@@ -266,6 +266,10 @@ add_executable(patch_selector_menu_test tests/gui/patch_selector_menu_test.cpp)
 target_include_directories(patch_selector_menu_test PRIVATE src)
 target_link_libraries(patch_selector_menu_test PRIVATE megatoy_core)
 add_test(NAME patch_selector_menu_test COMMAND patch_selector_menu_test)
+add_executable(dialog_height_test tests/gui/dialog_height_test.cpp)
+target_include_directories(dialog_height_test PRIVATE src)
+target_link_libraries(dialog_height_test PRIVATE megatoy_core)
+add_test(NAME dialog_height_test COMMAND dialog_height_test)
 add_executable(snapshot_entry_test tests/history/snapshot_entry_test.cpp)
 target_include_directories(snapshot_entry_test PRIVATE src)
 add_test(NAME snapshot_entry_test COMMAND snapshot_entry_test)
@@ -408,7 +412,7 @@ add_custom_target(check
           note_test
           envelope_curve_test
           ui_scale_test layouts_test save_as_dialog_test
-          areas_test patch_selector_menu_test
+          areas_test patch_selector_menu_test dialog_height_test
           snapshot_entry_test document_history_test changelog_gate_test
           preference_manager_test
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

@@ -12,7 +12,7 @@ constexpr const char *kFallbackErrorMessage = "Unsupported file format.";
 } // namespace
 
 // Load failures are announced as status toasts; only the instrument picker
-// -- an actual decision -- still opens a dialog.
+// -- an actual decision -- opens a dialog.
 void render_patch_drop_feedback(PatchDropContext &context) {
   auto &drop = context.drop_state;
 

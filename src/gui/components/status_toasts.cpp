@@ -88,8 +88,8 @@ void render_status_toasts() {
                       viewport->WorkPos.y + viewport->WorkSize.y - margin);
 
   ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-  // NoBackground, not a transparent fill: the fill alone still left the
-  // host's own border drawn around the stack.
+  // NoBackground, not a transparent fill: a fill alone leaves the host's own
+  // border drawn around the stack.
   const ImGuiWindowFlags host_flags =
       ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |

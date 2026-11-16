@@ -46,6 +46,20 @@ struct PatchEntry {
   std::string container_item_id;
 };
 
+/// The file an entry's patch is in: the entry itself, or the bank or package
+/// it is listed out of.
+inline const std::string &source_path_of(const PatchEntry &entry) {
+  return entry.source_relative_path.empty() ? entry.relative_path
+                                            : entry.source_relative_path;
+}
+
+/// The instrument icon an entry carries, or "" for none or for no entry.
+inline std::string_view icon_of(const PatchEntry *entry) {
+  return entry != nullptr && entry->metadata
+             ? std::string_view(entry->metadata->icon)
+             : std::string_view();
+}
+
 /// A patch file or a folder as it stood before it was deleted, with the
 /// metadata that went with it, to put back.
 struct DeletedEntry {
@@ -92,6 +106,8 @@ public:
   bool sync_workspace();
 
   void refresh();
+  /// After a change on disk: list it, and have the host keep it.
+  void changed();
   const std::vector<PatchEntry> &tree() const;
   std::uint64_t revision() const { return revision_; }
 
@@ -114,7 +130,6 @@ public:
   std::filesystem::path
   to_absolute_path(const std::filesystem::path &path) const;
 
-  // Metadata operations
   bool update_patch_metadata(const std::string &relative_path,
                              const PatchMetadata &metadata);
 
@@ -197,8 +212,6 @@ public:
 private:
   static constexpr const char *kBuiltinRootName = "presets";
 
-  /// After a change on disk: list it, and on the web have it kept.
-  void changed();
   /// restore() for an entry in the system's Trash.
   bool restore_from_trash(const DeletedEntry &deleted);
 

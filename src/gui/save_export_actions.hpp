@@ -22,7 +22,15 @@ download_format_menu(const patches::PatchSession &session);
 /// Ask for the browser storage dialog from outside the editor's window.
 void request_save_to_storage(SaveExportState &state);
 
+/// `path` as the user knows it, not the absolute one.
+std::string saved_path_label(const patches::PatchSession &session,
+                             const std::filesystem::path &path);
+
 #if defined(MEGATOY_PLATFORM_WEB)
+/// Hand `patch` to the browser as a download named `stem`, and say how it
+/// went.
+void download_patch_as(const ym2612::Patch &patch, const std::string &extension,
+                       const std::string &stem);
 /// Serialize the editor's patch in one format and hand it to the browser.
 void download_current_patch(patches::PatchSession &session,
                             const std::string &extension);

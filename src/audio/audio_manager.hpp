@@ -4,7 +4,7 @@
 #include "audio/audio_transport.hpp"
 #include "audio/load_meter.hpp"
 #include "audio/scope_buffer.hpp"
-#include "channel_allocator.hpp"
+#include "audio/channel_allocator.hpp"
 #include "platform/platform_config.hpp"
 #include "ym2612/note.hpp"
 #include <cstdint>
@@ -18,8 +18,6 @@
 #endif
 
 /**
- * AudioManager - audio system management
- *
  * On the desktop the engine runs here, rendered by the transport's audio
  * thread. On the web it runs in an audio worklet on the browser's audio
  * thread (src/platform/web/web_audio_worklet.cpp), out of the page's reach:
@@ -32,17 +30,11 @@ public:
   explicit AudioManager(std::unique_ptr<AudioTransport> transport);
   ~AudioManager();
 
-  // Non-copyable, non-movable
   AudioManager(const AudioManager &) = delete;
   AudioManager &operator=(const AudioManager &) = delete;
   AudioManager(AudioManager &&) = delete;
   AudioManager &operator=(AudioManager &&) = delete;
 
-  /**
-   * Initialize and start the complete audio system
-   * @param sample_rate Target sample rate
-   * @return true on success, false on failure
-   */
   bool initialize(uint32_t sample_rate, int buffer_frames = 0);
 
   /**
@@ -77,9 +69,6 @@ public:
   /// where the size is not the app's to choose.
   int default_buffer_frames() const;
 
-  /**
-   * Shutdown and cleanup complete audio system
-   */
   void shutdown();
 
   /// Recent output, for the waveform.
@@ -119,14 +108,8 @@ public:
   /// The voices and the chip's clock, for the envelope graph's live cursor.
   VoiceActivityFrame voice_activity() const;
 
-  /**
-   * Check if audio system is running
-   */
   bool is_running() const;
 
-  /**
-   * Get current sample rate
-   */
   uint32_t sample_rate() const;
 
 #if defined(MEGATOY_PLATFORM_WEB)

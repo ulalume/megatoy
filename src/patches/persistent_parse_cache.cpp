@@ -1,5 +1,7 @@
 #include "patches/persistent_parse_cache.hpp"
 
+#include "core/file_replace.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -11,6 +13,15 @@
 namespace patches {
 
 namespace {
+
+/// Orders a path and its entry by when the entry was last used, the one
+/// used longest ago first.
+constexpr auto used_before = [](const auto &left, const auto &right) {
+  if (left.second->last_used != right.second->last_used) {
+    return left.second->last_used < right.second->last_used;
+  }
+  return left.second->access_order < right.second->access_order;
+};
 
 constexpr int kSchemaVersion = 1;
 
@@ -157,13 +168,7 @@ bool PersistentParseCache::save() {
   for (const auto &[path, entry] : entries_) {
     ordered_entries.emplace_back(path, &entry);
   }
-  std::sort(ordered_entries.begin(), ordered_entries.end(),
-            [](const auto &left, const auto &right) {
-              if (left.second->last_used != right.second->last_used) {
-                return left.second->last_used < right.second->last_used;
-              }
-              return left.second->access_order < right.second->access_order;
-            });
+  std::sort(ordered_entries.begin(), ordered_entries.end(), used_before);
 
   nlohmann::json serialized_entries = nlohmann::json::array();
   for (const auto &[path, entry] : ordered_entries) {
@@ -186,23 +191,13 @@ bool PersistentParseCache::save() {
     }
   }
 
-  auto temporary = file_path_;
-  temporary += ".tmp";
-  {
-    std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-    if (!output) {
-      return false;
-    }
-    output << root.dump() << '\n';
-    if (!output) {
-      return false;
-    }
-  }
-
-  std::filesystem::rename(temporary, file_path_, error);
-  if (error) {
-    std::error_code remove_error;
-    std::filesystem::remove(temporary, remove_error);
+  const bool written = megatoy::files::write_through_temporary(
+      file_path_, [&](const std::filesystem::path &temporary) {
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        output << root.dump() << '\n';
+        return static_cast<bool>(output);
+      });
+  if (!written) {
     return false;
   }
 
@@ -272,13 +267,7 @@ void PersistentParseCache::prune_locked() {
   for (auto &[path, entry] : entries_) {
     ordered_entries.emplace_back(path, &entry);
   }
-  std::sort(ordered_entries.begin(), ordered_entries.end(),
-            [](const auto &left, const auto &right) {
-              if (left.second->last_used != right.second->last_used) {
-                return left.second->last_used < right.second->last_used;
-              }
-              return left.second->access_order < right.second->access_order;
-            });
+  std::sort(ordered_entries.begin(), ordered_entries.end(), used_before);
 
   const auto remove_count = entries_.size() - kMaxEntries;
   for (std::size_t index = 0; index < remove_count; ++index) {

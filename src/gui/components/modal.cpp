@@ -6,6 +6,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <cfloat>
 #include <vector>
 
 namespace ui {
@@ -144,6 +145,41 @@ void align_buttons_right(std::initializer_list<float> widths) {
   const float offset = ImGui::GetContentRegionAvail().x - total;
   if (offset > 0.0f) {
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
+  }
+}
+
+void warning_line(std::string_view message) {
+  if (message.empty()) {
+    ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
+    return;
+  }
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::StatusWarning));
+  ImGui::TextUnformatted(message.data(), message.data() + message.size());
+  ImGui::PopStyleColor();
+}
+
+void progress_modal(const char *popup_id, bool finished, bool active,
+                    const char *title, const char *detail) {
+  if (finished && ImGui::IsPopupOpen(popup_id) &&
+      begin_modal(popup_id, ModalDismiss::None).visible) {
+    ImGui::CloseCurrentPopup();
+    end_modal();
+  }
+  if (!active) {
+    return;
+  }
+  // Open on the edge only: re-opening an already-open popup every frame
+  // resets popup state and can swallow clicks.
+  if (!ImGui::IsPopupOpen(popup_id)) {
+    ImGui::OpenPopup(popup_id);
+  }
+  if (begin_modal(popup_id, ModalDismiss::None).visible) {
+    ImGui::TextUnformatted(title);
+    ImGui::TextDisabled("%s", detail);
+    ImGui::ProgressBar(static_cast<float>(-1.0 * ImGui::GetTime()),
+                       ImVec2(-FLT_MIN, 0));
+    end_modal();
   }
 }
 

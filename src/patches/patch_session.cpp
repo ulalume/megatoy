@@ -5,10 +5,8 @@
 #include "formats/patch_loader.hpp"
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/patch_write.hpp"
+#include "platform/host.hpp"
 #include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_url.hpp"
-#endif
 #include <algorithm>
 #include <filesystem>
 #include <utility>
@@ -73,9 +71,7 @@ bool PatchSession::activate(DocumentId id) {
   }
   active_id_ = id;
   preferences_.set_last_patch_path(document->path());
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(document->patch());
-#endif
+  platform::host::current_patch_changed(document->patch());
   return true;
 }
 
@@ -241,9 +237,7 @@ bool PatchSession::load_patch_from_entry(const PatchEntry &entry) {
   if (!repository_->load_patch(entry, patch)) {
     return false;
   }
-  set_current_patch(patch, entry.source_relative_path.empty()
-                               ? entry.relative_path
-                               : entry.source_relative_path);
+  set_current_patch(patch, source_path_of(entry));
   set_current_patch_selection_path(entry.relative_path);
   mark_as_clean();
   return true;
@@ -283,9 +277,7 @@ void PatchSession::set_current_patch(const ym2612::Patch &patch,
                                      RememberPatchPath remember) {
   assign_patch(active_document(), patch, source_path, remember);
   apply_patch_to_audio();
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(current_patch());
-#endif
+  platform::host::current_patch_changed(current_patch());
 }
 
 void PatchSession::assign_patch(PatchDocument &document,
@@ -301,7 +293,7 @@ void PatchSession::assign_patch(PatchDocument &document,
       document.set_file_identity(source_path);
     }
   }
-  document.mark_as_clean(); // New patch loaded, not modified yet
+  document.mark_as_clean();
   remember_disk_time(document);
 }
 

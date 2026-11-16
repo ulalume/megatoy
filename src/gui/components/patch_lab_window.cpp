@@ -41,13 +41,6 @@ current_entries(PatchLabState &state,
   return state.entries;
 }
 
-/// The instrument icon of a browser entry, or "" for none.
-std::string_view entry_icon(const patches::PatchEntry *entry) {
-  return entry != nullptr && entry->metadata
-             ? std::string_view(entry->metadata->icon)
-             : std::string_view();
-}
-
 /// A row of the source list: the icon, then the label. Drawn only where it
 /// shows, as the list holds every patch.
 bool icon_selectable(std::string_view icon, const std::string &label,
@@ -88,7 +81,7 @@ bool resolve_source(const patches::PatchSession &session,
     return false;
   }
   if (icon != nullptr) {
-    *icon = entry_icon(entry);
+    *icon = patches::icon_of(entry);
   }
   if (label != nullptr) {
     *label = entry->name.empty()
@@ -135,7 +128,7 @@ bool render_source_list(const patches::PatchSession &session,
       if (item.kind == SourceRowKind::Document) {
         ImGui::PushID(static_cast<int>(item.document->id()));
         const std::string_view icon =
-            entry_icon(session.document_entry(*item.document));
+            patches::icon_of(session.document_entry(*item.document));
         if (icon_selectable(icon, item.label, false)) {
           source = {.patch = item.document->patch(),
                     .label = item.label,
@@ -149,7 +142,7 @@ bool render_source_list(const patches::PatchSession &session,
       const bool selected = source.entry_path == entry.relative_path;
       ImGui::PushID(entry.relative_path.c_str());
       const bool clicked =
-          icon_selectable(entry_icon(&entry), item.text(), selected);
+          icon_selectable(patches::icon_of(&entry), item.text(), selected);
       ImGui::PopID();
       if (clicked) {
         source = {.entry_path = entry.relative_path};

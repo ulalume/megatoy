@@ -6,24 +6,37 @@
 
 namespace patches {
 
+namespace {
+
+/// Where `relative` is on disk, when the repository can tell.
+std::optional<std::filesystem::path>
+absolute_of(const PatchRepository &repository, const std::string &relative) {
+  if (relative.empty()) {
+    return std::nullopt;
+  }
+  auto absolute = repository.to_absolute_path(relative);
+  if (!absolute.is_absolute()) {
+    return std::nullopt;
+  }
+  return absolute;
+}
+
+/// A document with where its file and its selection are on disk.
+struct DocumentPaths {
+  PatchDocument *document;
+  std::optional<std::filesystem::path> path;
+  std::optional<std::filesystem::path> selection;
+};
+
+} // namespace
+
 void PatchSession::sync_workspace() {
   // Resolved before the repository changes: a relabelled folder changes the
   // relative path a file is known by.
-  struct ResolvedDocument {
-    PatchDocument *document;
-    std::optional<std::filesystem::path> path;
-    std::optional<std::filesystem::path> selection;
+  const auto resolve = [this](const std::string &relative) {
+    return absolute_of(*repository_, relative);
   };
-  const auto resolve =
-      [this](
-          const std::string &relative) -> std::optional<std::filesystem::path> {
-    auto resolved = repository_->to_absolute_path(relative);
-    if (relative.empty() || !resolved.is_absolute()) {
-      return std::nullopt;
-    }
-    return resolved;
-  };
-  std::vector<ResolvedDocument> resolved_documents;
+  std::vector<DocumentPaths> resolved_documents;
   for (auto &document : documents_) {
     if (!document->path().empty()) {
       resolved_documents.push_back({document.get(), resolve(document->path()),
@@ -71,21 +84,8 @@ void PatchSession::absorb_nested_folders() {
 
   // These name files by the inner folders, so they are resolved while those
   // are still in the list.
-  using Resolved = std::optional<std::filesystem::path>;
-  const auto resolve = [this](const std::string &relative) -> Resolved {
-    if (relative.empty()) {
-      return std::nullopt;
-    }
-    auto absolute = repository_->to_absolute_path(relative);
-    if (!absolute.is_absolute()) {
-      return std::nullopt;
-    }
-    return absolute;
-  };
-  struct DocumentPaths {
-    PatchDocument *document;
-    std::optional<std::filesystem::path> path;
-    std::optional<std::filesystem::path> selection;
+  const auto resolve = [this](const std::string &relative) {
+    return absolute_of(*repository_, relative);
   };
   std::vector<DocumentPaths> document_paths;
   for (auto &document : documents_) {

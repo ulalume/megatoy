@@ -11,15 +11,13 @@
  *
  * Anything the user should see -- a failed import, a completed save, audio
  * refusing to start -- is post()ed here and shown as a toast by the UI.
- * Before this, such messages went to stderr, where nobody running a windowed
- * app (let alone the web build) ever saw them.
+ * Nobody running a windowed app (let alone the web build) sees stderr.
  *
  * A process-wide service rather than something threaded through AppServices,
  * deliberately: the call sites include MIDI driver threads, browser
- * callbacks and platform code, and having to plumb a reference everywhere is
- * exactly why fprintf spread in the first place. post() is thread-safe and
- * buffers, so messages posted before the UI exists (e.g. during storage
- * bootstrap) appear once the first frame renders.
+ * callbacks and platform code, too many to plumb a reference to each.
+ * post() is thread-safe and buffers, so messages posted before the UI exists
+ * (e.g. during storage bootstrap) appear once the first frame renders.
  *
  * The audio callback must NOT post -- this takes a lock and allocates.
  * Failures there are developer diagnostics and stay on stderr.

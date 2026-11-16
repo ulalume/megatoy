@@ -132,9 +132,9 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   // speaker -- the console AC-couples its audio output -- but shipping it to
   // a modern DAC means the "silent" signal is a nonzero constant. Amplifiers
   // that gate on signal energy then drop in and out of standby, and every
-  // transition is an audible pop; users reported exactly that, a tick every
-  // several seconds while the app sat idle. Blocking DC restores the coupling
-  // the hardware had: idle output decays to true digital silence.
+  // transition is an audible pop: a tick every several seconds while the app
+  // sits idle. Blocking DC restores the coupling the hardware had: idle
+  // output decays to true digital silence.
   remove_dc(mix_buffer_.data(), frames);
 
   scope_buffer_.write(mix_buffer_.data(), frames);
@@ -289,18 +289,12 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
     current_global_ = command.global;
     current_channel_ = command.channel;
     current_instrument_ = command.instrument;
-    const auto effective_global = audio::performance::compose_global_settings(
-        current_global_, mod_wheel_);
-    const auto effective_channel = audio::performance::compose_channel_settings(
-        current_channel_, current_global_.lfo_enable, mod_wheel_);
-    device_.write_settings(effective_global);
+    write_settings();
     const auto depth =
         velocity_sensitivity_depth_.load(std::memory_order_relaxed);
     for (ym2612::ChannelIndex index : ym2612::all_channel_indices) {
-      auto channel = device_.channel(index);
-      channel.write_settings(effective_channel);
       const auto velocity = allocator_.active_velocity(index);
-      channel.write_instrument(
+      device_.channel(index).write_instrument(
           velocity ? command.instrument.clone_with_velocity(*velocity, depth)
                    : command.instrument);
     }
@@ -375,13 +369,7 @@ void AudioEngine::apply(const audio::AudioCommand &command) {
     mod_wheel_ = mod_wheel_enabled_.load(std::memory_order_relaxed)
                      ? std::min<uint8_t>(command.mod_wheel_value, 127)
                      : 0;
-    device_.write_settings(audio::performance::compose_global_settings(
-        current_global_, mod_wheel_));
-    const auto channel_settings = audio::performance::compose_channel_settings(
-        current_channel_, current_global_.lfo_enable, mod_wheel_);
-    for (ym2612::ChannelIndex index : ym2612::all_channel_indices) {
-      device_.channel(index).write_settings(channel_settings);
-    }
+    write_settings();
     break;
   }
 
@@ -403,17 +391,17 @@ void AudioEngine::restore_chip_state() {
   apply(audio::AudioCommand::all_notes_off());
 }
 
-void AudioEngine::apply_patch_to_all_channels(const ym2612::Patch &patch) {
-  current_global_ = patch.global;
-  current_channel_ = patch.channel;
-  current_instrument_ = patch.instrument;
+void AudioEngine::write_settings() {
   device_.write_settings(
       audio::performance::compose_global_settings(current_global_, mod_wheel_));
   const auto channel_settings = audio::performance::compose_channel_settings(
       current_channel_, current_global_.lfo_enable, mod_wheel_);
-  for (ym2612::ChannelIndex channel_index : ym2612::all_channel_indices) {
-    auto channel = device_.channel(channel_index);
-    channel.write_settings(channel_settings);
-    channel.write_instrument(patch.instrument);
+  for (ym2612::ChannelIndex index : ym2612::all_channel_indices) {
+    device_.channel(index).write_settings(channel_settings);
   }
+}
+
+void AudioEngine::apply_patch_to_all_channels(const ym2612::Patch &patch) {
+  apply(audio::AudioCommand::apply_patch(patch.global, patch.channel,
+                                         patch.instrument));
 }

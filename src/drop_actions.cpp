@@ -4,6 +4,9 @@
 #include "core/status.hpp"
 #include "formats/patch_loader.hpp"
 #include "platform/platform_config.hpp"
+#if !defined(MEGATOY_PLATFORM_WEB)
+#include "patches/chosen_workspace_folder.hpp"
+#endif
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -67,7 +70,7 @@ void handle_drop(Environment &env, const std::filesystem::path &path) {
   auto &drop = env.ui_state.drop_state;
 
   // A dropped directory is a workspace addition, not a patch load: the same
-  // gesture as dragging a folder into an editor. Files keep the old behavior.
+  // gesture as dragging a folder into an editor.
   std::error_code ec;
   if (std::filesystem::is_directory(path, ec)) {
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -82,8 +85,8 @@ void handle_drop(Environment &env, const std::filesystem::path &path) {
 #else
     auto &services = env.services;
     auto &danger = env.ui_state.danger_confirmation_state;
-    services.preference_manager.add_chosen_workspace_folder(
-        path,
+    patches::add_chosen_workspace_folder(
+        services.preference_manager, path,
         [&services, name = path.filename().string()]() {
           services.patch_session.sync_workspace();
           megatoy::status::success("Added \"" + name +

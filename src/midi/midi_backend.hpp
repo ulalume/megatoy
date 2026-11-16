@@ -12,7 +12,7 @@ struct MidiMessage {
     NoteOff,
     PitchBend,
     ControlChange,
-    /// The input went away; whatever it held is no longer held.
+    /// The input went away, and with it whatever it held.
     SourceClosed,
   } type = Type::NoteOff;
 
@@ -69,8 +69,9 @@ public:
    * Called the moment a note arrives, on whatever thread the driver delivers
    * it on -- not once per rendered frame.
    *
-   * Polling for notes in the UI loop quantized their timing to the render
-   * rate and made input jitter with drawing. Set this before initialize().
+   * Polling for notes in the UI loop would quantize their timing to the
+   * render rate and make input jitter with drawing. Set this before
+   * initialize().
    */
   using NoteSink = std::function<void(const MidiMessage &)>;
 

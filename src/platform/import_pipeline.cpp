@@ -1,5 +1,6 @@
 #include "platform/import_pipeline.hpp"
 
+#include "core/ascii.hpp"
 #include "formats/ginpkg.hpp"
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/patch_metadata.hpp"
@@ -21,13 +22,6 @@ std::mutex g_warm_cache_mutex;
 std::unordered_map<std::filesystem::path,
                    std::shared_ptr<const WarmedContainer>>
     g_warm_cache;
-
-std::string lowercase(std::string value) {
-  std::transform(
-      value.begin(), value.end(), value.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return value;
-}
 
 std::string format_label(const std::string &extension) {
   std::string label = extension;
@@ -141,7 +135,7 @@ std::string import_summary(const std::string &folder_name, std::size_t imported,
 }
 
 bool supports_extension(std::string_view extension) {
-  auto normalized = lowercase(std::string(extension));
+  auto normalized = megatoy::ascii::lower(std::string(extension));
   if (!normalized.empty() && normalized.front() != '.') {
     normalized.insert(normalized.begin(), '.');
   }
@@ -155,7 +149,7 @@ bool needs_confirmation(std::size_t file_count, std::uint64_t byte_count) {
 }
 
 ValidationResult validate_file(const std::filesystem::path &path) {
-  const auto extension = lowercase(path.extension().string());
+  const auto extension = megatoy::ascii::lower(path.extension().string());
   if (!supports_extension(extension)) {
     return {.reason = "unsupported file type"};
   }

@@ -1,8 +1,8 @@
 #include "open_default_browser.hpp"
 
-#include <algorithm>
-#include <cctype>
-#include <iterator>
+#include "system/url_check.hpp"
+
+#include <utility>
 
 #include <AppKit/AppKit.h>
 #include <ApplicationServices/ApplicationServices.h>
@@ -13,32 +13,6 @@
 namespace megatoy {
 namespace system {
 namespace {
-
-// Validate that the URL is safe to open
-bool is_valid_url(std::string_view url) {
-  if (url.empty()) {
-    return false;
-  }
-
-  // Check for basic URL schemes we consider safe
-  const std::string url_str(url);
-  const std::string lower_url = [&]() {
-    std::string result;
-    result.reserve(url_str.size());
-    std::transform(url_str.begin(), url_str.end(), std::back_inserter(result),
-                   [](unsigned char c) { return std::tolower(c); });
-    return result;
-  }();
-
-  // Only allow http and https schemes for security
-  // Note: file:// excluded for security reasons - local file access
-  if (lower_url.substr(0, 7) == "http://" ||
-      lower_url.substr(0, 8) == "https://") {
-    return true;
-  }
-
-  return false;
-}
 
 OpenBrowserResult open_browser_macos(std::string_view url) {
   OpenBrowserResult result;
@@ -82,7 +56,7 @@ OpenBrowserResult open_browser_macos(std::string_view url) {
   if (!result.success) {
     // Properly escape URL for shell command
     std::string escaped_url;
-    escaped_url.reserve(url.size() + 10); // Reserve some extra space
+    escaped_url.reserve(url.size() + 10);
     for (char c : url) {
       if (c == '"' || c == '\\' || c == '$' || c == '`') {
         escaped_url += '\\';
@@ -111,24 +85,9 @@ OpenBrowserResult open_browser_macos(std::string_view url) {
 OpenBrowserResult open_default_browser(std::string_view url) {
   OpenBrowserResult result;
 
-  // Validate URL first
-  if (!is_valid_url(url)) {
+  if (auto problem = url_problem(url); !problem.empty()) {
     result.success = false;
-    result.error_message =
-        "Invalid or unsupported URL scheme. Only http:// and "
-        "https:// are allowed.";
-    return result;
-  }
-
-  // Check for dangerous characters that could be used for injection
-  const std::string url_str(url);
-  if (url_str.find('"') != std::string::npos ||
-      url_str.find('\'') != std::string::npos ||
-      url_str.find(';') != std::string::npos ||
-      url_str.find('&') != std::string::npos ||
-      url_str.find('|') != std::string::npos) {
-    result.success = false;
-    result.error_message = "URL contains potentially dangerous characters";
+    result.error_message = std::move(problem);
     return result;
   }
 

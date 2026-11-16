@@ -94,7 +94,6 @@ create_key_mappings(Scale scale, Key key, uint8_t selected_octave,
   return key_mappings;
 }
 
-// Static variables to track key states
 static std::map<ImGuiKey, bool> key_pressed_last_frame;
 
 void check_keyboard_typing(

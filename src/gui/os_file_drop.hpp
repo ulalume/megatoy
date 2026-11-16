@@ -23,8 +23,8 @@ void complete();
 void submit_source();
 
 /// The files let go of, for the place they were let go over, on the frame
-/// they are; or, at its end, for wherever a drop always went. Taking them
-/// leaves none.
+/// they are; or, at its end, for the editor, which opens what no place took.
+/// Taking them leaves none.
 std::vector<std::filesystem::path> take();
 
 } // namespace ui::os_file_drop

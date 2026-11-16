@@ -67,7 +67,6 @@ inline std::string patch_editor_window_title(const std::string &label,
   return label + "###" + patch_editor_window_id(slot);
 }
 
-/// The title of the application's own window.
 inline std::string app_window_title(const std::string &label,
                                     bool is_modified) {
   return label + (is_modified ? " * - megatoy" : " - megatoy");

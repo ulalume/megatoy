@@ -1,4 +1,3 @@
-// midi_input_manager.hpp
 #pragma once
 
 #include "midi/midi_backend.hpp"

@@ -3,7 +3,7 @@
 #include "audio/audio_command.hpp"
 #include "audio/load_meter.hpp"
 #include "audio/scope_buffer.hpp"
-#include "channel_allocator.hpp"
+#include "audio/channel_allocator.hpp"
 #include "ym2612/device.hpp"
 #include "ym2612/patch.hpp"
 #include <atomic>
@@ -114,6 +114,9 @@ private:
   /// Put the chip into the state the current patch describes, with nothing
   /// keyed on.
   void restore_chip_state();
+  /// Writes the global and channel settings the current patch and the mod
+  /// wheel make together.
+  void write_settings();
   void remove_dc(float *interleaved, uint32_t frames);
   bool try_push_midi_command(const audio::AudioCommand &command,
                              bool &queue_full);

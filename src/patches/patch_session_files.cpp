@@ -3,13 +3,8 @@
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/patch_write.hpp"
-#include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #include <utility>
-
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_storage_persistence.hpp"
-#endif
 
 namespace patches {
 
@@ -32,10 +27,10 @@ PatchSession::writable_source_folder(const PatchDocument &document) const {
   if (const auto *owner = preferences_.workspace().owner_of(folder)) {
     return owner->writable ? std::optional(folder) : std::nullopt;
   }
-#if defined(MEGATOY_PLATFORM_WEB)
-  // A file dropped on the page is a copy that goes away with it.
-  return std::nullopt;
-#else
+  if (megatoy::platform::is_web()) {
+    // A file dropped on the page is a copy that goes away with it.
+    return std::nullopt;
+  }
   // A file opened from elsewhere is the user's own; the presets are the app's.
   const auto inside_presets =
       folder.lexically_relative(directories_.paths().builtin_presets_root);
@@ -43,7 +38,6 @@ PatchSession::writable_source_folder(const PatchDocument &document) const {
     return std::nullopt;
   }
   return folder;
-#endif
 }
 
 SaveResult
@@ -60,10 +54,7 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
         current_patch().name = patch_to_write.name;
         mark_as_clean();
         remember_disk_time(active_document());
-        repository_->refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-        platform::web::request_storage_persist();
-#endif
+        repository_->changed();
         return SaveResult::success(absolute);
       }
       return SaveResult::error("Failed to write " + absolute.string());
@@ -71,6 +62,10 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
   }
 
   return save_current_patch_as(preferred_extension);
+}
+
+void PatchSession::set_save_path_prompt(SavePathPrompt prompt) {
+  save_path_prompt_ = std::move(prompt);
 }
 
 SaveResult
@@ -125,83 +120,67 @@ SaveResult PatchSession::save_current_patch_as_impl(
     source_metadata = source->metadata;
     source_file = source->full_path;
   }
-  const auto carry_metadata = [&](const std::filesystem::path &written) {
-    if (written != source_file) {
-      repository_->copy_patch_metadata(source_metadata, written);
-    }
-  };
 
-  if (megatoy::platform::is_web()) {
+  std::filesystem::path written;
+  if (!folder.empty() || !save_path_prompt_) {
     auto patch_to_write = written_patch();
     patch_to_write.name = sanitized_name;
-    auto result =
+    const auto result =
         folder.empty()
             ? repository_->save_patch(patch_to_write, sanitized_name, overwrite,
                                       extension)
             : repository_->save_patch_in(folder, patch_to_write, sanitized_name,
                                          overwrite, extension);
-    if (result.status == SavePatchResult::Status::Success) {
-      carry_metadata(result.path);
-      repository_->refresh();
-      auto loaded = formats::load_patch_from_file(result.path);
-      if (loaded.status == formats::PatchLoadStatus::Success &&
-          loaded.patches.size() == 1) {
-        set_current_patch(loaded.patches.front(), result.path);
-      } else {
-        current_patch().name = sanitized_name;
-        set_current_patch_path(result.path);
-        mark_as_clean();
-        remember_disk_time(active_document());
-      }
-      return SaveResult::success(result.path);
-    }
     if (result.status == SavePatchResult::Status::Duplicate) {
       return SaveResult::duplicated();
     }
-    return SaveResult::error(folder.empty()
-                                 ? "No writable patch folder is available."
-                                 : "Cannot write into \"" +
-                                       folder.filename().string() + "\".");
+    if (result.status != SavePatchResult::Status::Success) {
+      return SaveResult::error(folder.empty()
+                                   ? "No writable patch folder is available."
+                                   : "Cannot write into \"" +
+                                         folder.filename().string() + "\".");
+    }
+    written = result.path;
+  } else {
+    // Start in the folder the patch came from when that folder is writable,
+    // otherwise wherever the user last saved something.
+    const auto start_directory =
+        writable_source_folder().value_or(preferences_.last_save_directory());
+    const auto formats = save_formats();
+    auto answer = save_path_prompt_(
+        {start_directory, sanitized_name, formats, extension});
+    if (answer.status == SavePathAnswer::Status::Cancelled) {
+      return SaveResult::cancelled();
+    }
+    if (answer.status != SavePathAnswer::Status::Chosen) {
+      return SaveResult::error("Failed to save patch");
+    }
+
+    written = with_save_extension(std::move(answer.path), formats, extension);
+    auto patch_to_write = written_patch();
+    patch_to_write.name = written.stem().string();
+    if (!patches::write_patch(patch_to_write, written)) {
+      return SaveResult::error("Failed to write " + written.string());
+    }
+    preferences_.set_last_save_directory(written.parent_path());
   }
 
-  // Start in the folder the patch came from when that folder is writable,
-  // otherwise wherever the user last saved something.
-  const auto start_directory =
-      writable_source_folder().value_or(preferences_.last_save_directory());
-
-  const auto formats = save_formats();
-  std::filesystem::path selected;
-  const auto dialog = platform::file_dialog::save_file(
-      start_directory, sanitized_name, save_dialog_filters(formats, extension),
-      selected);
-  if (dialog == platform::file_dialog::DialogResult::Cancelled) {
-    return SaveResult::cancelled();
+  if (written != source_file) {
+    repository_->copy_patch_metadata(source_metadata, written);
   }
-  if (dialog != platform::file_dialog::DialogResult::Ok) {
-    return SaveResult::error("Failed to save patch");
-  }
-
-  selected = with_save_extension(std::move(selected), formats, extension);
-  auto patch_to_write = written_patch();
-  patch_to_write.name = selected.stem().string();
-  if (!patches::write_patch(patch_to_write, selected)) {
-    return SaveResult::error("Failed to write " + selected.string());
-  }
-
-  preferences_.set_last_save_directory(selected.parent_path());
-  carry_metadata(selected);
-  auto loaded = formats::load_patch_from_file(selected);
+  repository_->refresh();
+  // Read back, so the editor holds what the format kept.
+  const auto loaded = formats::load_patch_from_file(written);
   if (loaded.status == formats::PatchLoadStatus::Success &&
       loaded.patches.size() == 1) {
-    set_current_patch(loaded.patches.front(), selected);
+    set_current_patch(loaded.patches.front(), written);
   } else {
-    current_patch().name = selected.stem().string();
-    set_current_patch_path(selected);
+    current_patch().name = written.stem().string();
+    set_current_patch_path(written);
     mark_as_clean();
     remember_disk_time(active_document());
   }
-  repository_->refresh();
-  return SaveResult::success(selected);
+  return SaveResult::success(written);
 }
 
 bool PatchSession::can_create_patch_in(
@@ -231,10 +210,7 @@ SaveResult PatchSession::create_patch_in(const std::filesystem::path &folder,
     return SaveResult::error("Failed to write " + target.string());
   }
 
-  repository_->refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::request_storage_persist();
-#endif
+  repository_->changed();
 
   // Selecting it is the browser's own path, so a container format lands on
   // the instrument inside it just as a click would. If the refreshed tree
@@ -264,10 +240,7 @@ SaveResult PatchSession::create_folder_in(const std::filesystem::path &parent,
     return SaveResult::error("Could not create \"" + name + "\".");
   }
 
-  repository_->refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::request_storage_persist();
-#endif
+  repository_->changed();
   return SaveResult::success(target);
 }
 

@@ -7,11 +7,9 @@
 #include "patches/patch_write.hpp"
 #include "patches/persistent_parse_cache.hpp"
 #include "platform/import_pipeline.hpp"
+#include "platform/host.hpp"
 #include "platform/platform_config.hpp"
 #include "platform/trash.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_storage_persistence.hpp"
-#endif
 #include "ym2612/patch.hpp"
 #include <algorithm>
 #include <iostream>
@@ -130,9 +128,7 @@ void PatchRepository::refresh() {
 
   if (persistent_cache_ && persistent_cache_->dirty() &&
       persistent_cache_->save()) {
-#if defined(MEGATOY_PLATFORM_WEB)
-    platform::web::request_storage_persist();
-#endif
+    platform::host::files_written();
   }
 
   cache_initialized_ = true;
@@ -392,9 +388,6 @@ std::filesystem::path copy_path_into(const std::filesystem::path &source,
   return target;
 }
 
-/// The files of `source` a format reads, with their sidecars, copied into
-/// `target` with the folders they are in. How many, none leaving no
-/// `target` behind.
 /// Calls `visit` with each file in `folder` and the folders inside it, past
 /// hidden ones: the metadata's, and the system's such as .DS_Store. Stops
 /// when `visit` returns false, and then returns false.
@@ -428,6 +421,9 @@ bool is_system_file(const std::filesystem::path &file) {
          equals_case_insensitive(name, "desktop.ini");
 }
 
+/// The files of `source` a format reads, with their sidecars, copied into
+/// `target` with the folders they are in. How many, none leaving no
+/// `target` behind.
 std::size_t copy_readable_tree(const std::filesystem::path &source,
                                const std::filesystem::path &target) {
   std::size_t copied = 0;
@@ -722,9 +718,7 @@ PatchRepository::unlisted_files(const PatchEntry &folder,
 
 void PatchRepository::changed() {
   refresh();
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::request_storage_persist();
-#endif
+  platform::host::files_written();
 }
 
 bool PatchRepository::can_edit_metadata(const PatchEntry &entry) const {
@@ -771,11 +765,7 @@ bool PatchRepository::update_patch_metadata(const std::string &relative_path,
                                             const PatchMetadata &metadata) {
   for (const auto &storage : storages_) {
     if (storage->update_patch_metadata(relative_path, metadata)) {
-#if defined(MEGATOY_PLATFORM_WEB)
-      // Stars and icons write a sidecar like any other file, so they
-      // need the same flush any other write does.
-      platform::web::request_storage_persist();
-#endif
+      platform::host::files_written();
       return true;
     }
   }

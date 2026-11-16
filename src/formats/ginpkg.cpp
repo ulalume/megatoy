@@ -1,4 +1,6 @@
 #include "ginpkg.hpp"
+#include "core/ascii.hpp"
+#include "core/file_replace.hpp"
 
 #include <miniz.h>
 
@@ -265,53 +267,47 @@ bool GinPackage::Save(const std::filesystem::path &path) const {
     }
   }
 
-  // Written beside `path` and moved over it once whole, so a write that
-  // fails leaves the package there with its versions. Hidden, so a scan of
-  // the folder passes it by.
-  const auto temporary =
-      path.parent_path() / ("." + path.filename().string() + ".tmp");
-  mz_zip_archive archive;
-  std::memset(&archive, 0, sizeof(archive));
-  const std::string native_path = to_native_string(temporary);
-  if (!mz_zip_writer_init_file(&archive, native_path.c_str(), 0)) {
-    std::cerr << "Failed to open ginpkg for writing: " << path << std::endl;
-    return false;
-  }
+  // A write that fails leaves the package there with its versions.
+  const bool written = megatoy::files::write_through_temporary(
+      path, [&](const std::filesystem::path &temporary) {
+        mz_zip_archive archive;
+        std::memset(&archive, 0, sizeof(archive));
+        const std::string native_path = to_native_string(temporary);
+        if (!mz_zip_writer_init_file(&archive, native_path.c_str(), 0)) {
+          return false;
+        }
 
-  bool ok = write_zip_entry(archive, kCurrentFile, current_data_);
-  if (ok) {
-    nlohmann::json current_meta;
-    if (!current_timestamp_.empty()) {
-      current_meta["timestamp"] = current_timestamp_;
-    }
-    auto history_json = history_to_json(history_);
-    history_json["current"] = std::move(current_meta);
-    const auto history_text = history_json.dump(2);
-    ok = write_zip_entry(archive, kHistoryFile, history_text);
-  }
-  if (ok) {
-    for (const auto &entry : history_) {
-      auto it = snapshots_.find(entry.uuid);
-      if (it == snapshots_.end()) {
-        continue;
-      }
-      const std::string filename = entry.uuid + ".gin";
-      if (!write_zip_entry(archive, filename, it->second)) {
-        ok = false;
-        break;
-      }
-    }
-  }
+        bool ok = write_zip_entry(archive, kCurrentFile, current_data_);
+        if (ok) {
+          nlohmann::json current_meta;
+          if (!current_timestamp_.empty()) {
+            current_meta["timestamp"] = current_timestamp_;
+          }
+          auto history_json = history_to_json(history_);
+          history_json["current"] = std::move(current_meta);
+          const auto history_text = history_json.dump(2);
+          ok = write_zip_entry(archive, kHistoryFile, history_text);
+        }
+        if (ok) {
+          for (const auto &entry : history_) {
+            auto it = snapshots_.find(entry.uuid);
+            if (it == snapshots_.end()) {
+              continue;
+            }
+            const std::string filename = entry.uuid + ".gin";
+            if (!write_zip_entry(archive, filename, it->second)) {
+              ok = false;
+              break;
+            }
+          }
+        }
 
-  bool finalize_ok = mz_zip_writer_finalize_archive(&archive) != 0;
-  bool end_ok = mz_zip_writer_end(&archive) != 0;
-  std::error_code error;
-  if (ok && finalize_ok && end_ok) {
-    std::filesystem::rename(temporary, path, error);
-  }
-  if (!(ok && finalize_ok && end_ok) || error) {
-    std::filesystem::remove(temporary, error);
-    std::cerr << "Failed to finalize ginpkg: " << path << std::endl;
+        bool finalize_ok = mz_zip_writer_finalize_archive(&archive) != 0;
+        bool end_ok = mz_zip_writer_end(&archive) != 0;
+        return ok && finalize_ok && end_ok;
+      });
+  if (!written) {
+    std::cerr << "Failed to write ginpkg: " << path << std::endl;
     return false;
   }
 
@@ -322,10 +318,7 @@ std::filesystem::path
 build_package_path(const std::filesystem::path &patches_dir,
                    const std::string &filename) {
   std::string full_filename = filename;
-  std::string lower = full_filename;
-  std::transform(
-      lower.begin(), lower.end(), lower.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string lower = megatoy::ascii::lower(full_filename);
   if (!lower.ends_with(".ginpkg")) {
     full_filename += ".ginpkg";
   }

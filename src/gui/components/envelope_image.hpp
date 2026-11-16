@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app_state.hpp"
-#include "channel_allocator.hpp"
+#include "audio/channel_allocator.hpp"
 #include "gui/envelope/envelope_handles.hpp"
 #include "ym2612/types.hpp"
 #include <cstdint>

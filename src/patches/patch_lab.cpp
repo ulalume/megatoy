@@ -259,8 +259,7 @@ void mutate_operator(ym2612::OperatorSettings &op, std::mt19937 &rng,
   mutate_param(op.release_rate, kReleaseRate);
   mutate_param(op.sustain_level, kSustainLevel);
   mutate_param(op.total_level, kTotalLevel, 4);
-  mutate_param(op.key_scale, kKeyScale); // Amount ignored for key scale in
-                                         // original but we can generalize
+  mutate_param(op.key_scale, kKeyScale);
   mutate_param(op.multiple, kMultiple);
   mutate_param(op.detune, kDetune);
 

@@ -1,16 +1,20 @@
 #include "audio/load_meter.hpp"
-#include "platform/platform_config.hpp"
+#include "platform/host.hpp"
 #include "preference_storage.hpp"
 #include <algorithm>
-
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/local_storage.hpp"
-#endif
 #include <ios>
 #include <iostream>
 #include <nlohmann/json.hpp>
 
 namespace {
+
+/// `target` takes the `T` stored under `key`, when there is one.
+template <class T, class Target>
+void read(const nlohmann::json &j, const char *key, Target &target) {
+  if (j.contains(key)) {
+    target = j[key].get<T>();
+  }
+}
 
 class JsonPreferenceStorage : public PreferenceStorage {
 public:
@@ -21,14 +25,12 @@ public:
   bool load(PreferenceData &data) override {
     try {
       nlohmann::json j;
-      if (megatoy::platform::is_web()) {
-#if defined(MEGATOY_PLATFORM_WEB)
-        auto stored = platform::web::read_local_storage("megatoy_preferences");
+      if (platform::host::keeps_settings()) {
+        const auto stored = platform::host::read_settings();
         if (!stored.has_value()) {
           return true;
         }
         j = nlohmann::json::parse(stored.value());
-#endif
       } else {
         if (!std::filesystem::exists(path_)) {
           return true;
@@ -55,12 +57,8 @@ public:
         }
       }
 
-      if (j.contains("last_save_directory")) {
-        data.last_save_directory = j["last_save_directory"].get<std::string>();
-      }
-      if (j.contains("last_patch_path")) {
-        data.last_patch_path = j["last_patch_path"].get<std::string>();
-      }
+      read<std::string>(j, "last_save_directory", data.last_save_directory);
+      read<std::string>(j, "last_patch_path", data.last_patch_path);
       if (j.contains("open_patches") && j["open_patches"].is_array()) {
         data.open_patches.clear();
         for (const auto &item : j["open_patches"]) {
@@ -80,12 +78,8 @@ public:
           j["active_open_patch"].is_number_integer()) {
         data.active_open_patch = j["active_open_patch"].get<int>();
       }
-      if (j.contains("last_seen_version")) {
-        data.last_seen_version = j["last_seen_version"].get<std::string>();
-      }
-      if (j.contains("show_builtin_presets")) {
-        data.show_builtin_presets = j["show_builtin_presets"].get<bool>();
-      }
+      read<std::string>(j, "last_seen_version", data.last_seen_version);
+      read<bool>(j, "show_builtin_presets", data.show_builtin_presets);
 
       if (j.contains("theme")) {
         data.theme = ui::styles::theme_id_from_storage_key(
@@ -94,32 +88,16 @@ public:
 
       if (j.contains("ui")) {
         const auto &ui = j["ui"];
-        if (ui.contains("show_midi_keyboard")) {
-          data.ui_preferences.show_midi_keyboard =
-              ui["show_midi_keyboard"].get<bool>();
-        }
-        if (ui.contains("show_patch_selector")) {
-          data.ui_preferences.show_patch_selector =
-              ui["show_patch_selector"].get<bool>();
-        }
-        if (ui.contains("show_wave_viewer")) {
-          data.ui_preferences.show_waveform =
-              ui["show_wave_viewer"].get<bool>();
-        }
-        if (ui.contains("show_preferences")) {
-          data.ui_preferences.show_preferences =
-              ui["show_preferences"].get<bool>();
-        }
-        if (ui.contains("show_patch_lab")) {
-          data.ui_preferences.show_patch_lab = ui["show_patch_lab"].get<bool>();
-        }
-        if (ui.contains("show_quick_edit")) {
-          data.ui_preferences.show_quick_edit =
-              ui["show_quick_edit"].get<bool>();
-        }
-        if (ui.contains("show_mml")) {
-          data.ui_preferences.show_mml = ui["show_mml"].get<bool>();
-        }
+        read<bool>(ui, "show_midi_keyboard",
+                   data.ui_preferences.show_midi_keyboard);
+        read<bool>(ui, "show_patch_selector",
+                   data.ui_preferences.show_patch_selector);
+        read<bool>(ui, "show_wave_viewer", data.ui_preferences.show_waveform);
+        read<bool>(ui, "show_preferences",
+                   data.ui_preferences.show_preferences);
+        read<bool>(ui, "show_patch_lab", data.ui_preferences.show_patch_lab);
+        read<bool>(ui, "show_quick_edit", data.ui_preferences.show_quick_edit);
+        read<bool>(ui, "show_mml", data.ui_preferences.show_mml);
         if (ui.contains("ym2612_chip_type")) {
           data.ui_preferences.ym2612_chip_type =
               std::clamp(ui["ym2612_chip_type"].get<int>(), 0, 1);
@@ -128,59 +106,35 @@ public:
           data.ui_preferences.ym2612_core =
               std::clamp(ui["ym2612_core"].get<int>(), 0, 1);
         }
-        if (ui.contains("audio_buffer_frames")) {
-          data.ui_preferences.audio_buffer_frames =
-              ui["audio_buffer_frames"].get<int>();
-        }
+        read<int>(ui, "audio_buffer_frames",
+                  data.ui_preferences.audio_buffer_frames);
         if (ui.contains("audio_load_reading")) {
           data.ui_preferences.audio_load_reading =
               static_cast<int>(audio::load_reading_from_int(
                   ui["audio_load_reading"].get<int>()));
         }
-        if (ui.contains("ui_scale")) {
-          data.ui_preferences.ui_scale = ui["ui_scale"].get<float>();
-        }
-        if (ui.contains("use_velocity")) {
-          data.ui_preferences.use_velocity = ui["use_velocity"].get<bool>();
-        }
-        if (ui.contains("use_pitch_bend")) {
-          data.ui_preferences.use_pitch_bend = ui["use_pitch_bend"].get<bool>();
-        }
-        if (ui.contains("use_mod_wheel")) {
-          data.ui_preferences.use_mod_wheel = ui["use_mod_wheel"].get<bool>();
-        }
+        read<float>(ui, "ui_scale", data.ui_preferences.ui_scale);
+        read<bool>(ui, "use_velocity", data.ui_preferences.use_velocity);
+        read<bool>(ui, "use_pitch_bend", data.ui_preferences.use_pitch_bend);
+        read<bool>(ui, "use_mod_wheel", data.ui_preferences.use_mod_wheel);
         if (ui.contains("velocity_sensitivity_depth")) {
           data.ui_preferences.velocity_sensitivity_depth =
               std::clamp(ui["velocity_sensitivity_depth"].get<int>(), 0, 100);
         }
-        if (ui.contains("steal_oldest_note_when_full")) {
-          data.ui_preferences.steal_oldest_note_when_full =
-              ui["steal_oldest_note_when_full"].get<bool>();
-        }
-        if (ui.contains("multi_operator_edit_absolute")) {
-          data.ui_preferences.multi_operator_edit_absolute =
-              ui["multi_operator_edit_absolute"].get<bool>();
-        }
-        if (ui.contains("envelope_reference_midi_note")) {
-          data.ui_preferences.envelope_reference_midi_note =
-              ui["envelope_reference_midi_note"].get<int>();
-        }
-        if (ui.contains("midi_keyboard_scale")) {
-          data.ui_preferences.midi_keyboard_scale =
-              ui["midi_keyboard_scale"].get<int>();
-        }
-        if (ui.contains("midi_keyboard_key")) {
-          data.ui_preferences.midi_keyboard_key =
-              ui["midi_keyboard_key"].get<int>();
-        }
-        if (ui.contains("midi_keyboard_typing_octave")) {
-          data.ui_preferences.midi_keyboard_typing_octave =
-              ui["midi_keyboard_typing_octave"].get<int>();
-        }
-        if (ui.contains("midi_keyboard_layout")) {
-          data.ui_preferences.midi_keyboard_layout =
-              ui["midi_keyboard_layout"].get<int>();
-        }
+        read<bool>(ui, "steal_oldest_note_when_full",
+                   data.ui_preferences.steal_oldest_note_when_full);
+        read<bool>(ui, "multi_operator_edit_absolute",
+                   data.ui_preferences.multi_operator_edit_absolute);
+        read<int>(ui, "envelope_reference_midi_note",
+                  data.ui_preferences.envelope_reference_midi_note);
+        read<int>(ui, "midi_keyboard_scale",
+                  data.ui_preferences.midi_keyboard_scale);
+        read<int>(ui, "midi_keyboard_key",
+                  data.ui_preferences.midi_keyboard_key);
+        read<int>(ui, "midi_keyboard_typing_octave",
+                  data.ui_preferences.midi_keyboard_typing_octave);
+        read<int>(ui, "midi_keyboard_layout",
+                  data.ui_preferences.midi_keyboard_layout);
         if (ui.contains("custom_typing_layout_keys") &&
             ui["custom_typing_layout_keys"].is_array()) {
           const auto &custom = ui["custom_typing_layout_keys"];
@@ -197,14 +151,10 @@ public:
             data.ui_preferences.custom_typing_layout_keys.pop_back();
           }
         }
-        if (ui.contains("custom_typing_octave_down_key")) {
-          data.ui_preferences.custom_typing_octave_down_key =
-              ui["custom_typing_octave_down_key"].get<int>();
-        }
-        if (ui.contains("custom_typing_octave_up_key")) {
-          data.ui_preferences.custom_typing_octave_up_key =
-              ui["custom_typing_octave_up_key"].get<int>();
-        }
+        read<int>(ui, "custom_typing_octave_down_key",
+                  data.ui_preferences.custom_typing_octave_down_key);
+        read<int>(ui, "custom_typing_octave_up_key",
+                  data.ui_preferences.custom_typing_octave_up_key);
       }
 
       return true;
@@ -272,10 +222,8 @@ public:
           data.ui_preferences.custom_typing_octave_up_key;
       j["ui"] = ui;
 
-      if (megatoy::platform::is_web()) {
-#if defined(MEGATOY_PLATFORM_WEB)
-        platform::web::write_local_storage("megatoy_preferences", j.dump(2));
-#endif
+      if (platform::host::keeps_settings()) {
+        platform::host::write_settings(j.dump(2));
       } else {
         auto stream =
             vfs_.open_write(path_, std::ios::binary | std::ios::trunc);

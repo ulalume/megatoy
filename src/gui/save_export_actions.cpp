@@ -26,15 +26,14 @@ const char *save_label_for(const patches::PatchSession &session,
   return session.save_label_for(is_user_patch);
 }
 
-namespace {
-
-// The path as the user knows it, not the absolute one.
 std::string saved_path_label(const patches::PatchSession &session,
                              const std::filesystem::path &path) {
   const auto relative = session.repository().to_relative_path(path);
   return display_preset_path(
       session.repository().display_path(relative.generic_string()));
 }
+
+namespace {
 
 void announce_save(patches::PatchSession &session,
                    const patches::SaveResult &result) {
@@ -140,14 +139,19 @@ void clear_pending_save_as(SaveExportState &state) {
 } // namespace
 
 #if defined(MEGATOY_PLATFORM_WEB)
-void download_current_patch(patches::PatchSession &session,
-                            const std::string &extension) {
-  if (platform::web::download_patch(session.current_patch(), extension,
-                                    save_as_stem_suggestion(session))) {
+void download_patch_as(const ym2612::Patch &patch, const std::string &extension,
+                       const std::string &stem) {
+  if (platform::web::download_patch(patch, extension, stem)) {
     megatoy::status::success("Download started.");
   } else {
     megatoy::status::error("Failed to prepare " + extension + " download.");
   }
+}
+
+void download_current_patch(patches::PatchSession &session,
+                            const std::string &extension) {
+  download_patch_as(session.current_patch(), extension,
+                    save_as_stem_suggestion(session));
 }
 #endif
 

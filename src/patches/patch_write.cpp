@@ -1,5 +1,7 @@
 #include "patches/patch_write.hpp"
 
+#include "core/ascii.hpp"
+#include "core/file_replace.hpp"
 #include "formats/ginpkg.hpp"
 #include "formats/patch_registry.hpp"
 #include "formats/ym2612_format_adapter.hpp"
@@ -11,11 +13,7 @@
 namespace patches {
 
 std::string lowercase_extension(const std::filesystem::path &path) {
-  std::string ext = path.extension().string();
-  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-  return ext;
+  return megatoy::ascii::lower(path.extension().string());
 }
 
 bool can_overwrite_in_place(const std::filesystem::path &path) {
@@ -44,41 +42,30 @@ bool write_patch(const ym2612::Patch &patch,
     return formats::ginpkg::save_patch_at(path, patch).has_value();
   }
 
-  // Written beside `path` and moved over it once whole, so a write that
-  // fails leaves the file there as it was. Hidden, so a scan of the folder
-  // passes it by.
-  const auto temporary =
-      path.parent_path() / ("." + path.filename().string() + ".tmp");
   auto &registry = formats::PatchRegistry::instance();
   const auto formats = registry.save_formats();
   const bool text =
       std::any_of(formats.begin(), formats.end(), [&](const auto &format) {
         return format.extension == extension && format.is_text;
       });
-  std::error_code error;
-  if (text ? registry.write_text(extension, patch, temporary)
-           : registry.write(extension, patch, temporary)) {
-    std::filesystem::rename(temporary, path, error);
-    if (!error) {
-      return true;
-    }
-  }
-  std::filesystem::remove(temporary, error);
-  return false;
+  return megatoy::files::write_through_temporary(
+      path, [&](const std::filesystem::path &temporary) {
+        return text ? registry.write_text(extension, patch, temporary)
+                    : registry.write(extension, patch, temporary);
+      });
 }
 
-std::vector<platform::file_dialog::FileFilter>
-save_dialog_filters(const std::vector<formats::SaveFormatInfo> &formats,
+std::vector<formats::SaveFormatInfo>
+save_dialog_formats(const std::vector<formats::SaveFormatInfo> &formats,
                     std::string_view first) {
-  std::vector<platform::file_dialog::FileFilter> filters;
+  std::vector<formats::SaveFormatInfo> filters;
   const auto add = [&](const formats::SaveFormatInfo &format) {
-    const std::string extension = format.extension.substr(1);
     const bool listed =
         std::any_of(filters.begin(), filters.end(), [&](const auto &filter) {
-          return filter.extensions.front() == extension;
+          return filter.extension == format.extension;
         });
     if (!listed) {
-      filters.push_back({format.display_name(), {extension}});
+      filters.push_back(format);
     }
   };
   for (const auto &format : formats) {

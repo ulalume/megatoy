@@ -57,6 +57,19 @@ begin_modal(const char *title, ModalDismiss dismiss, float width = kDialogWidth,
 /// Only when the scope was visible.
 void end_modal();
 
+/// A dialog's warning under its fields. The line is there when there is
+/// nothing to say too, so the dialog keeps its height as a warning comes and
+/// goes.
+void warning_line(std::string_view message);
+
+/**
+ * A modal for work that cannot be stopped and reports only its end: `title`
+ * and `detail` over a bar that keeps moving. Closed on the frame `finished`
+ * is true, shown while `active`.
+ */
+void progress_modal(const char *popup_id, bool finished, bool active,
+                    const char *title, const char *detail);
+
 /// A dialog's prose: wrapped to the space left on the line, each wrapped line
 /// starting where the first did, and the lines spaced further apart than
 /// ImGui's, which sets them at the font's height.

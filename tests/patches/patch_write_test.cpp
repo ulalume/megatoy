@@ -96,11 +96,11 @@ int main() {
       {".fui", "Furnace Instrument", false},
       {".mml", "MML", true},
       {".dmp", "DefleMask Preset", true}};
-  const auto filters = patches::save_dialog_filters(formats, ".fui");
+  const auto filters = patches::save_dialog_formats(formats, ".fui");
   CHECK(filters.size() == 3);
-  CHECK(filters[0].extensions == std::vector<std::string>{"fui"});
-  CHECK(filters[1].extensions == std::vector<std::string>{"dmp"});
-  CHECK(filters[2].label == formats[2].display_name());
+  CHECK(filters[0].extension == ".fui");
+  CHECK(filters[1].extension == ".dmp");
+  CHECK(filters[2].display_name() == formats[2].display_name());
 
   // The format is the one the returned name has, or else the one offered.
   CHECK(patches::with_save_extension("lead.FUI", formats, ".dmp") ==

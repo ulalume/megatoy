@@ -298,8 +298,8 @@ extern "C" {
 /**
  * The whole supported-extension set as one comma-joined lowercase string, so
  * JavaScript can build a Set once and filter a million-entry selection with
- * pure JS lookups. The old per-file wasm roundtrip (a string allocation plus
- * a call each) froze the tab for minutes on a large folder.
+ * pure JS lookups. A wasm roundtrip per file (a string allocation plus a call
+ * each) freezes the tab for minutes on a large folder.
  */
 EMSCRIPTEN_KEEPALIVE const char *megatoy_folder_import_supported_extensions() {
   static const std::string joined = [] {
@@ -532,7 +532,7 @@ EM_JS(void, megatoy_install_folder_import_common_js, (), {
   var FILTER_CHUNK = 20000;
   var ENUMERATE_PROGRESS_INTERVAL = 500;
 
-  // Fetched once; the per-file alternative was two wasm calls per file.
+  // Fetched once; asking per file would be two wasm calls each.
   var extensionSet = new Set();
   (function() {
     var pointer = Module["_megatoy_folder_import_supported_extensions"]();
@@ -1075,8 +1075,8 @@ void install_drop_import(const std::filesystem::path &destination_root) {
 
 void import_folder(const std::filesystem::path &destination_root,
                    std::function<void(FolderImportResult)> on_complete) {
-  // A second picker behind a pending one is what made the original incident
-  // unrecoverable: the click looked like it did nothing at all.
+  // No second picker behind a pending one: its click would look like it did
+  // nothing at all.
   auto *selection = begin_pending_selection(false);
   if (selection == nullptr) {
     notify_import_busy();

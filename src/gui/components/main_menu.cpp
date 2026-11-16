@@ -14,6 +14,7 @@
 #include "gui/components/common.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/components/preferences.hpp"
+#include "gui/file_prompts.hpp"
 #include "gui/fonts/megatoy_icons.hpp"
 #include "gui/image/app_icon.hpp"
 #include "gui/save_export_actions.hpp"
@@ -161,8 +162,6 @@ void draw_load_graph(const Panel &panel, const LoadWindow &window) {
   panel.draw_list->PathStroke(run_color, ImDrawFlags_None, 1.0f);
 }
 
-/// The remedies for a high load. Each one that has nothing left to give is
-/// disabled and says so.
 /// The graph's readings in words, for its tooltip and the top of its menu.
 void render_load_status(const LoadWindow &window) {
   ImGui::TextUnformatted("Sound Processing Load");
@@ -172,6 +171,8 @@ void render_load_status(const LoadWindow &window) {
               static_cast<double>(window.average) * 100.0);
 }
 
+/// The remedies for a high load. Each one that has nothing left to give is
+/// disabled and says so.
 void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
   auto &ui_prefs = context.ui_prefs;
 
@@ -260,11 +261,6 @@ float render_audio_load(MainMenuContext &context, const LoadWindow &window,
 
 namespace {
 
-/**
- * The menu holding About and Quit, shown as the app's icon. The label is
- * blank space as wide as the icon, which is drawn over it afterwards so the
- * menu's hover highlight stays underneath.
- */
 /// A menu in the bar, highlighted from the bar's top to its bottom.
 bool begin_bar_menu(const char *label) {
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::bar_item_spacing());
@@ -317,6 +313,11 @@ std::string app_menu_label(bool logo) {
          "##megatoy";
 }
 
+/**
+ * The menu holding About and Quit, shown as the app's icon. The label is
+ * blank space as wide as the icon, which is drawn over it afterwards so the
+ * menu's hover highlight stays underneath.
+ */
 bool begin_app_menu(bool logo) {
   const ImTextureID icon = app_icon();
   const std::string label = app_menu_label(logo);
@@ -431,12 +432,12 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
            bar_menu_advance(kEditMenu.label(fit)) +
            bar_menu_advance(kViewMenu.label(fit));
   };
-  // The room the middle leaves before a load area `load_width` wide: it sits
-  // centred in the bar, but never over the menus.
   // The LFO menu and the operators' stand just left of the load area, the
   // LFO named in full.
   const float lfo_width =
       lfo_menu_advance(false) + bar_menu_advance(kOperatorMenuLabel);
+  // The room the middle leaves before a load area `load_width` wide: it sits
+  // centred in the bar, but never over the menus.
   const auto room = [&](BarCentreFit fit, float load_width, bool logo = false) {
     const float right_start =
         width - load_width - style.FramePadding.x * 2.0f - lfo_width;
@@ -586,37 +587,22 @@ void edit_menu_items(MainMenuContext &context) {
   const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
   const char *redo_shortcut = mac_behavior ? "Cmd+Shift+Z" : "Ctrl+Shift+Z";
 
-  std::string undo_label = ICON_MEGATOY_UNDO " Undo";
-  if (history.can_undo()) {
-    std::string_view change = history.undo_label();
-    if (!change.empty()) {
-      undo_label.append(" ");
-      undo_label.append(change);
+  // Named for the change it takes back or brings back, when there is one.
+  const auto history_item = [](std::string label, std::string_view change,
+                               const char *shortcut, bool enabled,
+                               const std::function<void()> &act) {
+    if (enabled && !change.empty()) {
+      label.append(" ");
+      label.append(change);
     }
-  }
-
-  if (ImGui::MenuItem(undo_label.c_str(), undo_shortcut, false,
-                      history.can_undo())) {
-    if (context.undo) {
-      context.undo();
+    if (ImGui::MenuItem(label.c_str(), shortcut, false, enabled) && act) {
+      act();
     }
-  }
-
-  std::string redo_label = ICON_MEGATOY_REDO " Redo";
-  if (history.can_redo()) {
-    std::string_view change = history.redo_label();
-    if (!change.empty()) {
-      redo_label.append(" ");
-      redo_label.append(change);
-    }
-  }
-
-  if (ImGui::MenuItem(redo_label.c_str(), redo_shortcut, false,
-                      history.can_redo())) {
-    if (context.redo) {
-      context.redo();
-    }
-  }
+  };
+  history_item(ICON_MEGATOY_UNDO " Undo", history.undo_label(), undo_shortcut,
+               history.can_undo(), context.undo);
+  history_item(ICON_MEGATOY_REDO " Redo", history.redo_label(), redo_shortcut,
+               history.can_redo(), context.redo);
 
   ImGui::Separator();
 
@@ -835,7 +821,8 @@ void render_main_menu(MainMenuContext &context) {
     if (context.open_add_folder_dialog) {
       context.open_add_folder_dialog = false;
       auto sync = context.sync_workspace;
-      context.preferences.request_add_workspace_folder(
+      request_add_workspace_folder(
+          context.preferences,
           [sync]() {
             if (sync) {
               sync();

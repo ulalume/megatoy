@@ -15,9 +15,8 @@ namespace audio {
  * Something to do to the chip, handed to the audio thread.
  *
  * Every chip write -- notes and patch edits alike -- goes through here, so
- * exactly one thread ever touches the chip. Before this, notes were applied
- * from the UI frame loop while rendering ran on the audio thread, which
- * quantized note timing to the render rate and raced with the renderer.
+ * exactly one thread ever touches the chip: nothing races the renderer, and
+ * note timing follows the audio buffer rather than the UI's frame rate.
  *
  * A note carries only pitch and velocity. The instrument to play it with is
  * whatever the engine last received, which keeps this small enough to fill in

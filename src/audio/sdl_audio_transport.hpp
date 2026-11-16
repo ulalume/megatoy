@@ -10,9 +10,8 @@
  *
  * Pull model: SDL's device thread calls back whenever the stream needs more
  * data, and the render callback fills exactly that much. There is no feeder
- * thread of our own -- the previous implementation kept one that polled
- * SDL_GetAudioStreamAvailable in a tight loop, which pinned a full core for
- * the lifetime of the app.
+ * thread of our own: one polling SDL_GetAudioStreamAvailable in a tight loop
+ * would pin a full core for the lifetime of the app.
  */
 class SdlAudioTransport : public AudioTransport {
 public:

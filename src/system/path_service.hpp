@@ -8,10 +8,10 @@ namespace megatoy::system {
 /**
  * The few paths megatoy owns.
  *
- * Patches no longer live in a directory the application manages -- they live
- * in whatever folders the user adds to the workspace (see
- * megatoy::workspace::Workspace). What remains here is configuration, which
- * belongs to the app, and the read-only presets shipped inside the bundle.
+ * Patches live in whatever folders the user adds to the workspace (see
+ * megatoy::workspace::Workspace), not in a directory the application
+ * manages. What is here is configuration, which belongs to the app, and the
+ * read-only presets shipped inside the bundle.
  */
 struct DirectoryPaths {
   std::filesystem::path builtin_presets_root;

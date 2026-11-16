@@ -22,8 +22,8 @@ class PersistentParseCache;
  * The worker shares no storage and no tree with the UI: all it does is warm
  * the persistent parse cache. Once it is done the folder is added normally
  * and the ordinary synchronous sync walks it again -- every container is a
- * cache hit by then, so that walk is cheap. Without this, adding a folder of
- * a few thousand banks froze the app for the whole first parse.
+ * cache hit by then, so that walk is cheap. Parsed on the UI thread, a
+ * folder of a few thousand banks freezes the app for the whole first parse.
  *
  * Desktop only: the browser has no folder to point at (it imports a copy
  * instead) and no threads to spare.

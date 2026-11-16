@@ -61,11 +61,8 @@ ImVec2 menu_anchor_below_last_item() {
 /// The glyph of the patch's instrument icon, or the none icon.
 const char *document_icon(const patches::PatchSession &session,
                           const patches::PatchDocument &document) {
-  const auto *entry = session.document_entry(document);
   return patches::instrument_icons::glyph(
-      entry != nullptr && entry->metadata
-          ? std::string_view(entry->metadata->icon)
-          : std::string_view());
+      patches::icon_of(session.document_entry(document)));
 }
 
 /// The document's name with its icon in front, as its tab shows it.
@@ -99,8 +96,7 @@ constexpr float kHeaderIconScale = 3.0f;
  */
 void render_header_icon(const patches::PatchEntry *entry, bool editable,
                         float size, MetadataEdit &edit) {
-  const std::string icon =
-      entry != nullptr && entry->metadata ? entry->metadata->icon : "";
+  const std::string icon(patches::icon_of(entry));
   const ImGuiID popup_id = ImGui::GetID("##icon_picker");
   if (editable) {
     // No fill at rest: the icon stands alone until the pointer is over it.
