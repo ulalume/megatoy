@@ -183,6 +183,27 @@ bool FilesystemPatchStorage::maps_to_own_path(const PatchEntry &entry) const {
          mapped->lexically_normal() == entry.full_path.lexically_normal();
 }
 
+namespace {
+
+/// Renames `from` to `to`, a file's sidecars with it, or leaves both where
+/// they were. A folder's sidecars are inside it and go with it.
+bool rename_with_sidecars(const std::filesystem::path &from,
+                          const std::filesystem::path &to) {
+  std::error_code ec;
+  std::filesystem::rename(from, to, ec);
+  if (ec) {
+    return false;
+  }
+  if (std::filesystem::is_regular_file(to, ec) && !sidecar::move(from, to)) {
+    std::error_code rollback_error;
+    std::filesystem::rename(to, from, rollback_error);
+    return false;
+  }
+  return true;
+}
+
+} // namespace
+
 bool FilesystemPatchStorage::can_move_patch(
     const PatchEntry &entry, const PatchEntry &destination) const {
   if (!can_rename_patch(entry) || entry.relative_path == root_label_) {
@@ -219,19 +240,7 @@ bool FilesystemPatchStorage::move_patch(const PatchEntry &entry,
     return false;
   }
 
-  std::filesystem::rename(entry.full_path, target, ec);
-  if (ec) {
-    return false;
-  }
-
-  // A folder's sidecars are inside it and go with it.
-  if (std::filesystem::is_regular_file(target, ec) &&
-      !sidecar::move(entry.full_path, target)) {
-    std::error_code rollback_error;
-    std::filesystem::rename(target, entry.full_path, rollback_error);
-    return false;
-  }
-  return true;
+  return rename_with_sidecars(entry.full_path, target);
 }
 
 bool FilesystemPatchStorage::can_delete_patch(const PatchEntry &entry) const {
@@ -284,18 +293,7 @@ bool FilesystemPatchStorage::rename_patch(const PatchEntry &entry,
     return false;
   }
 
-  std::filesystem::rename(entry.full_path, target, ec);
-  if (ec) {
-    return false;
-  }
-
-  // A folder's sidecars are inside it and go with it.
-  if (!is_directory && !sidecar::move(entry.full_path, target)) {
-    std::error_code rollback_error;
-    std::filesystem::rename(target, entry.full_path, rollback_error);
-    return false;
-  }
-  return true;
+  return rename_with_sidecars(entry.full_path, target);
 }
 
 bool FilesystemPatchStorage::can_edit_metadata(const PatchEntry &entry) const {

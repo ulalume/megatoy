@@ -93,27 +93,17 @@ PatchLoadResult PatchRegistry::load(const std::filesystem::path &path) const {
 bool PatchRegistry::write(const std::string &extension,
                           const ym2612::Patch &patch,
                           const std::filesystem::path &target) const {
-  auto handler = handler_for_extension(extension);
-  if (!handler) {
-    return false;
-  }
-  if (handler->write_single) {
-    return handler->write_single(patch, target);
-  }
-  return false;
+  const auto *handler = handler_for_extension(extension);
+  return handler != nullptr && handler->write_single &&
+         handler->write_single(patch, target);
 }
 
 bool PatchRegistry::write_text(const std::string &extension,
                                const ym2612::Patch &patch,
                                const std::filesystem::path &target) const {
-  auto handler = handler_for_extension(extension);
-  if (!handler) {
-    return false;
-  }
-  if (handler->write_text) {
-    return handler->write_text(patch, target);
-  }
-  return false;
+  const auto *handler = handler_for_extension(extension);
+  return handler != nullptr && handler->write_text &&
+         handler->write_text(patch, target);
 }
 
 std::optional<std::filesystem::path> PatchRegistry::save_package(
@@ -130,19 +120,12 @@ std::vector<SaveFormatInfo> PatchRegistry::save_formats() const {
   std::vector<SaveFormatInfo> formats;
   formats.reserve(handlers_.size());
   for (const auto &[ext, handler] : handlers_) {
+    const std::string &label = handler.label.empty() ? ext : handler.label;
     if (handler.write_single) {
-      SaveFormatInfo info;
-      info.extension = ext;
-      info.label = handler.label.empty() ? ext : handler.label;
-      info.is_text = false;
-      formats.push_back(std::move(info));
+      formats.push_back({ext, label, /*is_text=*/false});
     }
     if (handler.write_text) {
-      SaveFormatInfo info;
-      info.extension = ext;
-      info.label = handler.label.empty() ? ext : handler.label;
-      info.is_text = true;
-      formats.push_back(std::move(info));
+      formats.push_back({ext, label, /*is_text=*/true});
     }
   }
   static constexpr std::array<std::string_view, 6> kSaveOrder = {
