@@ -148,6 +148,17 @@ void align_buttons_right(std::initializer_list<float> widths) {
   }
 }
 
+void warning_line(std::string_view message) {
+  if (message.empty()) {
+    ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
+    return;
+  }
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        styles::color(styles::MegatoyCol::StatusWarning));
+  ImGui::TextUnformatted(message.data(), message.data() + message.size());
+  ImGui::PopStyleColor();
+}
+
 void progress_modal(const char *popup_id, bool finished, bool active,
                     const char *title, const char *detail) {
   if (finished && ImGui::IsPopupOpen(popup_id) &&

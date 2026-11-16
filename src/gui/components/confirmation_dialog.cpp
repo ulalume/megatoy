@@ -103,10 +103,8 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
     // The empty field the dialog opens with is not a mistake the user has
     // made yet -- its hint already says what belongs there. Create stays
     // disabled either way.
-    if (!validation_error.empty() && !prompt.name.empty()) {
-      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusWarning), "%s",
-                         validation_error.c_str());
-    }
+    warning_line(prompt.name.empty() ? std::string_view()
+                                     : std::string_view(validation_error));
     ImGui::Spacing();
 
     const auto answer = answer_buttons("Create", validation_error.empty());
@@ -273,10 +271,7 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
 
     const std::string validation_error =
         prompt.validator ? prompt.validator(prompt.buffer) : std::string{};
-    if (!validation_error.empty()) {
-      ImGui::TextColored(styles::color(styles::MegatoyCol::StatusWarning), "%s",
-                         validation_error.c_str());
-    }
+    warning_line(validation_error);
     ImGui::Spacing();
 
     const auto answer = answer_buttons(prompt.confirm_label.c_str(),

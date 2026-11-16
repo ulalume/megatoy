@@ -2,7 +2,6 @@
 #include "gui/components/menu_rows.hpp"
 #include "gui/components/modal.hpp"
 #include "gui/save_as_dialog.hpp"
-#include "gui/styles/megatoy_style.hpp"
 #include "patches/filename_utils.hpp"
 
 #include <algorithm>
@@ -138,14 +137,11 @@ void render_patch_save_dialog(
     overwrites = error.empty() && !state.folder.empty() &&
                  std::filesystem::exists(save_as_target_path(
                      state.folder, state.stem, state.extension));
-    const ImVec4 warning = styles::color(styles::MegatoyCol::StatusWarning);
-    if (!error.empty()) {
-      ImGui::TextColored(warning, "%s", error.c_str());
-    } else if (overwrites) {
-      ImGui::TextColored(warning, "%s",
-                         "A patch with this name exists and will be "
-                         "overwritten.");
-    }
+    warning_line(
+        !error.empty() ? std::string_view(error)
+        : overwrites
+            ? "A patch with this name exists and will be overwritten."
+            : std::string_view());
     save = entered && error.empty();
 
     ImGui::Spacing();
