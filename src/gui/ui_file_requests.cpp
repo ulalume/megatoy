@@ -630,12 +630,8 @@ writable_entry_folder(AppContext &ctx, const patches::PatchEntry &entry) {
 
 static void announce_saved_patch(AppContext &ctx,
                                  const std::filesystem::path &path) {
-  const auto relative =
-      ctx.services.patch_session.repository().to_relative_path(path);
   megatoy::status::success(
-      "Saved " +
-      display_preset_path(ctx.services.patch_session.repository().display_path(
-          relative.generic_string())));
+      "Saved " + saved_path_label(ctx.services.patch_session, path));
 }
 
 /// Open a copy just written, kept open. `patch` is what was written, for a
@@ -661,12 +657,7 @@ void download_patch_entry(AppContext &ctx, const patches::PatchEntry &entry,
     megatoy::status::error("Could not read \"" + entry.name + "\".");
     return;
   }
-  if (platform::web::download_patch(patch, extension,
-                                    patches::entry_stem(entry))) {
-    megatoy::status::success("Download started.");
-  } else {
-    megatoy::status::error("Failed to prepare " + extension + " download.");
-  }
+  download_patch_as(patch, extension, patches::entry_stem(entry));
 }
 #endif
 

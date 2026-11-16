@@ -587,37 +587,22 @@ void edit_menu_items(MainMenuContext &context) {
   const char *undo_shortcut = mac_behavior ? "Cmd+Z" : "Ctrl+Z";
   const char *redo_shortcut = mac_behavior ? "Cmd+Shift+Z" : "Ctrl+Shift+Z";
 
-  std::string undo_label = ICON_MEGATOY_UNDO " Undo";
-  if (history.can_undo()) {
-    std::string_view change = history.undo_label();
-    if (!change.empty()) {
-      undo_label.append(" ");
-      undo_label.append(change);
+  // Named for the change it takes back or brings back, when there is one.
+  const auto history_item = [](std::string label, std::string_view change,
+                               const char *shortcut, bool enabled,
+                               const std::function<void()> &act) {
+    if (enabled && !change.empty()) {
+      label.append(" ");
+      label.append(change);
     }
-  }
-
-  if (ImGui::MenuItem(undo_label.c_str(), undo_shortcut, false,
-                      history.can_undo())) {
-    if (context.undo) {
-      context.undo();
+    if (ImGui::MenuItem(label.c_str(), shortcut, false, enabled) && act) {
+      act();
     }
-  }
-
-  std::string redo_label = ICON_MEGATOY_REDO " Redo";
-  if (history.can_redo()) {
-    std::string_view change = history.redo_label();
-    if (!change.empty()) {
-      redo_label.append(" ");
-      redo_label.append(change);
-    }
-  }
-
-  if (ImGui::MenuItem(redo_label.c_str(), redo_shortcut, false,
-                      history.can_redo())) {
-    if (context.redo) {
-      context.redo();
-    }
-  }
+  };
+  history_item(ICON_MEGATOY_UNDO " Undo", history.undo_label(), undo_shortcut,
+               history.can_undo(), context.undo);
+  history_item(ICON_MEGATOY_REDO " Redo", history.redo_label(), redo_shortcut,
+               history.can_redo(), context.redo);
 
   ImGui::Separator();
 

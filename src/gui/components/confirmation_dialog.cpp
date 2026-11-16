@@ -14,6 +14,31 @@ namespace ui {
 
 namespace {
 
+enum class Answer { None, Cancel, Confirm };
+
+/// Cancel and the confirming button at a dialog's right edge, the popup
+/// closed by either. The confirming label is whatever the caller named the
+/// action, so it may outgrow the standard width rather than be clipped by it.
+Answer answer_buttons(const char *confirm_label, bool can_confirm) {
+  const float confirm_width =
+      std::max(dialog_button_width(), button_width(confirm_label));
+  align_buttons_right({dialog_button_width(), confirm_width});
+  Answer answer = Answer::None;
+  if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
+    answer = Answer::Cancel;
+  }
+  ImGui::SameLine();
+  ImGui::BeginDisabled(!can_confirm);
+  if (ImGui::Button(confirm_label, ImVec2(confirm_width, 0))) {
+    answer = Answer::Confirm;
+  }
+  ImGui::EndDisabled();
+  if (answer != Answer::None) {
+    ImGui::CloseCurrentPopup();
+  }
+  return answer;
+}
+
 /**
  * "New Patch": a name and one of the formats megatoy can write, on one row.
  *
@@ -84,20 +109,9 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
     }
     ImGui::Spacing();
 
-    const float create_width =
-        std::max(dialog_button_width(), button_width("Create"));
-    align_buttons_right({dialog_button_width(), create_width});
-    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
-      cancelled = true;
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!validation_error.empty());
-    if (ImGui::Button("Create", ImVec2(create_width, 0))) {
-      confirmed = true;
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndDisabled();
+    const auto answer = answer_buttons("Create", validation_error.empty());
+    cancelled = cancelled || answer == Answer::Cancel;
+    confirmed = answer == Answer::Confirm;
     end_modal();
   }
 
@@ -215,20 +229,9 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     dialog_text(danger.message);
     ImGui::Spacing();
 
-    // The confirm label is whatever the caller named the action, so it is
-    // allowed to outgrow the standard width rather than be clipped by it.
-    const float confirm_width = std::max(
-        dialog_button_width(), button_width(danger.confirm_label.c_str()));
-    align_buttons_right({dialog_button_width(), confirm_width});
-    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
-      cancel_danger = true;
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(danger.confirm_label.c_str(), ImVec2(confirm_width, 0))) {
-      confirm_danger = true;
-      ImGui::CloseCurrentPopup();
-    }
+    const auto answer = answer_buttons(danger.confirm_label.c_str(), true);
+    cancel_danger = cancel_danger || answer == Answer::Cancel;
+    confirm_danger = answer == Answer::Confirm;
     end_modal();
   }
 
@@ -276,21 +279,10 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     }
     ImGui::Spacing();
 
-    const float prompt_confirm_width = std::max(
-        dialog_button_width(), button_width(prompt.confirm_label.c_str()));
-    align_buttons_right({dialog_button_width(), prompt_confirm_width});
-    if (ImGui::Button("Cancel", ImVec2(dialog_button_width(), 0))) {
-      cancel_prompt = true;
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!validation_error.empty());
-    if (ImGui::Button(prompt.confirm_label.c_str(),
-                      ImVec2(prompt_confirm_width, 0))) {
-      confirm_prompt = true;
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndDisabled();
+    const auto answer = answer_buttons(prompt.confirm_label.c_str(),
+                                       validation_error.empty());
+    cancel_prompt = cancel_prompt || answer == Answer::Cancel;
+    confirm_prompt = answer == Answer::Confirm;
     end_modal();
   }
 
