@@ -39,27 +39,26 @@ public:
   bool reorder_workspace_folder(std::size_t from, std::size_t to);
   bool refresh_workspace_availability();
 
+  using ConfirmReplace = std::function<void(const std::string &message,
+                                            std::function<void()> proceed)>;
+#if defined(MEGATOY_PLATFORM_WEB)
   /**
-   * Bring a folder of patches into the workspace.
-   *
-   * On desktop this opens the native folder picker and the folder is read in
-   * place. The browser cannot reference a folder on disk that way -- Firefox
-   * and Safari ship no directory picker at all -- so there it imports a copy
-   * into persistent storage instead, and because the picker and the reads are
-   * asynchronous `on_changed` may run several frames later. It is not called
-   * if the user cancels.
+   * Has the user pick a folder and copies it into persistent storage: the
+   * browser cannot reference a folder on disk -- Firefox and Safari ship no
+   * directory picker at all. The picker and the reads are asynchronous, so
+   * `on_changed` may run several frames later. It is not called if the user
+   * cancels.
+   */
+  void import_workspace_folder(std::function<void()> on_changed);
+#else
+  /**
+   * Bring `chosen`, a folder on disk, into the workspace, read in place.
    *
    * A folder already inside one in the workspace is turned away. One holding
    * folders in the workspace takes their place, once `confirm` has had the
    * user agree to `message` and called `proceed`; without `confirm` it is
    * turned away too.
    */
-  using ConfirmReplace = std::function<void(const std::string &message,
-                                            std::function<void()> proceed)>;
-  void request_add_workspace_folder(std::function<void()> on_changed,
-                                    ConfirmReplace confirm = {});
-#if !defined(MEGATOY_PLATFORM_WEB)
-  /// The same for a folder already chosen, by the picker or by a drop.
   void add_chosen_workspace_folder(const std::filesystem::path &chosen,
                                    std::function<void()> on_changed,
                                    ConfirmReplace confirm);
@@ -91,9 +90,6 @@ public:
 
   const UIPreferences &ui_preferences() const;
   void set_ui_preferences(const UIPreferences &preferences);
-
-  // Prepare native file dialog system; safe to call multiple times
-  bool initialize_file_dialog();
 
   bool save_preferences();
   bool load_preferences();

@@ -14,6 +14,7 @@
 #include "gui/components/common.hpp"
 #include "gui/components/panel.hpp"
 #include "gui/components/preferences.hpp"
+#include "gui/file_prompts.hpp"
 #include "gui/fonts/megatoy_icons.hpp"
 #include "gui/image/app_icon.hpp"
 #include "gui/save_export_actions.hpp"
@@ -835,7 +836,8 @@ void render_main_menu(MainMenuContext &context) {
     if (context.open_add_folder_dialog) {
       context.open_add_folder_dialog = false;
       auto sync = context.sync_workspace;
-      context.preferences.request_add_workspace_folder(
+      request_add_workspace_folder(
+          context.preferences,
           [sync]() {
             if (sync) {
               sync();

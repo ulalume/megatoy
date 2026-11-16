@@ -4,6 +4,7 @@
 #include "changelog_gate.hpp"
 #include "core/status.hpp"
 #include "gui/components/changelog_dialog.hpp"
+#include "gui/file_prompts.hpp"
 #include "patches/background_folder_scan.hpp"
 #include "platform/platform_config.hpp"
 #include "project_info.hpp"
@@ -40,7 +41,9 @@ AppServices::AppServices(platform::PlatformServicesProvider &platform_services)
       persistent_parse_cache(load_persistent_parse_cache()),
       patch_session(path_service, preference_manager, audio_manager,
                     persistent_parse_cache.get()),
-      spectrum_analyzer(2048) {}
+      spectrum_analyzer(2048) {
+  patch_session.set_save_path_prompt(ui::ask_save_path);
+}
 
 namespace {
 

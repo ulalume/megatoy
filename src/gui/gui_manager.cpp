@@ -16,6 +16,7 @@
 #include "gui/ui_scale.hpp"
 #include "gui/window_title.hpp"
 #include "patches/instrument_icons.hpp"
+#include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #include <algorithm>
 #include <filesystem>
@@ -187,7 +188,7 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   ImGui_ImplOpenGL3_Init(glsl_version);
 
   // Initialize file dialog
-  if (!preferences_.initialize_file_dialog()) {
+  if (!platform::file_dialog::initialize()) {
     std::cerr << "Native File Dialog unavailable; directory picker disabled\n";
   }
 
@@ -209,6 +210,7 @@ void GuiManager::shutdown() {
   }
 
   // Cleanup
+  platform::file_dialog::shutdown();
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();

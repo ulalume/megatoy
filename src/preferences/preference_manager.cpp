@@ -2,7 +2,6 @@
 
 #include "core/status.hpp"
 
-#include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #include "workspace/path_policy.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -33,7 +32,7 @@ PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
 #endif
 }
 
-PreferenceManager::~PreferenceManager() { platform::file_dialog::shutdown(); }
+PreferenceManager::~PreferenceManager() = default;
 
 bool PreferenceManager::add_workspace_folder(
     const std::filesystem::path &path) {
@@ -101,9 +100,9 @@ bool PreferenceManager::folder_add_is_import() {
 #endif
 }
 
-void PreferenceManager::request_add_workspace_folder(
-    std::function<void()> on_changed, ConfirmReplace confirm) {
 #if defined(MEGATOY_PLATFORM_WEB)
+void PreferenceManager::import_workspace_folder(
+    std::function<void()> on_changed) {
   platform::web::import_folder(
       megatoy::system::PathService::web_storage_root(),
       [this, on_changed](platform::web::FolderImportResult result) {
@@ -126,19 +125,8 @@ void PreferenceManager::request_add_workspace_folder(
                                    "\" is already in the workspace.");
         }
       });
-#else
-  std::filesystem::path chosen;
-  const auto start = last_save_directory();
-  if (platform::file_dialog::pick_folder(start, chosen) !=
-      platform::file_dialog::DialogResult::Ok) {
-    return;
-  }
-  add_chosen_workspace_folder(chosen, std::move(on_changed),
-                              std::move(confirm));
-#endif
 }
-
-#if !defined(MEGATOY_PLATFORM_WEB)
+#else
 void PreferenceManager::add_chosen_workspace_folder(
     const std::filesystem::path &chosen, std::function<void()> on_changed,
     ConfirmReplace confirm) {
@@ -312,10 +300,6 @@ bool PreferenceManager::load_preferences() {
 
 bool PreferenceManager::is_initialized() const {
   return directories_initialized;
-}
-
-bool PreferenceManager::initialize_file_dialog() {
-  return platform::file_dialog::initialize();
 }
 
 void PreferenceManager::set_theme(ui::styles::ThemeId theme) {

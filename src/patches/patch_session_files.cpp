@@ -3,7 +3,6 @@
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
 #include "patches/patch_write.hpp"
-#include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #include <utility>
 
@@ -71,6 +70,10 @@ PatchSession::save_current_patch(std::string_view preferred_extension) {
   }
 
   return save_current_patch_as(preferred_extension);
+}
+
+void PatchSession::set_save_path_prompt(SavePathPrompt prompt) {
+  save_path_prompt_ = std::move(prompt);
 }
 
 SaveResult
@@ -170,18 +173,20 @@ SaveResult PatchSession::save_current_patch_as_impl(
       writable_source_folder().value_or(preferences_.last_save_directory());
 
   const auto formats = save_formats();
-  std::filesystem::path selected;
-  const auto dialog = platform::file_dialog::save_file(
-      start_directory, sanitized_name, save_dialog_filters(formats, extension),
-      selected);
-  if (dialog == platform::file_dialog::DialogResult::Cancelled) {
+  if (!save_path_prompt_) {
+    return SaveResult::error("Failed to save patch");
+  }
+  auto answer =
+      save_path_prompt_({start_directory, sanitized_name, formats, extension});
+  if (answer.status == SavePathAnswer::Status::Cancelled) {
     return SaveResult::cancelled();
   }
-  if (dialog != platform::file_dialog::DialogResult::Ok) {
+  if (answer.status != SavePathAnswer::Status::Chosen) {
     return SaveResult::error("Failed to save patch");
   }
 
-  selected = with_save_extension(std::move(selected), formats, extension);
+  const auto selected =
+      with_save_extension(std::move(answer.path), formats, extension);
   auto patch_to_write = written_patch();
   patch_to_write.name = selected.stem().string();
   if (!patches::write_patch(patch_to_write, selected)) {

@@ -5,6 +5,7 @@
 #include "core/utf8_utils.hpp"
 #include "gui/components/common.hpp"
 #include "gui/components/file_manager.hpp"
+#include "gui/file_prompts.hpp"
 #include "gui/library_undo.hpp"
 #include "gui/patch_save_dialog.hpp"
 #include "gui/save_as_dialog.hpp"
@@ -13,7 +14,6 @@
 #include "patches/filename_utils.hpp"
 #include "patches/patch_entry_actions.hpp"
 #include "patches/patch_write.hpp"
-#include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
 #include "platform/trash.hpp"
 #if defined(MEGATOY_PLATFORM_WEB)
@@ -700,20 +700,17 @@ void request_patch_duplicate(AppContext &ctx,
   const auto start_directory = default_save_as_folder(
       source_folder, ctx.services.preference_manager.last_save_directory());
   const auto formats = session.save_formats();
-  std::filesystem::path selected;
-  const auto dialog = platform::file_dialog::save_file(
-      start_directory, stem, patches::save_dialog_filters(formats, extension),
-      selected);
-  if (dialog == platform::file_dialog::DialogResult::Cancelled) {
+  auto answer = ask_save_path({start_directory, stem, formats, extension});
+  if (answer.status == patches::SavePathAnswer::Status::Cancelled) {
     return;
   }
-  if (dialog != platform::file_dialog::DialogResult::Ok) {
+  if (answer.status != patches::SavePathAnswer::Status::Chosen) {
     megatoy::status::error("Failed to save patch");
     return;
   }
 
-  selected =
-      patches::with_save_extension(std::move(selected), formats, extension);
+  const auto selected =
+      patches::with_save_extension(std::move(answer.path), formats, extension);
   patch.name = selected.stem().string();
   if (!patches::write_patch(patch, selected)) {
     megatoy::status::error("Failed to write " + selected.string());

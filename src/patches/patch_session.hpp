@@ -5,12 +5,14 @@
 #include "patch_document.hpp"
 #include "patch_repository.hpp"
 #include "patches/filename_utils.hpp"
+#include "patches/patch_write.hpp"
 #include "preferences/preference_manager.hpp"
 #include "system/path_service.hpp"
 #include "ym2612/note.hpp"
 #include "ym2612/patch.hpp"
 #include "ym2612/playback.hpp"
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -251,6 +253,10 @@ public:
    * dialog instead, so nothing is destroyed by a stray Ctrl+S.
    */
   SaveResult save_current_patch(std::string_view preferred_extension = {});
+  /// How Save As asks where to write, where the folder is the user's to
+  /// choose. Without one, such a save fails.
+  using SavePathPrompt = std::function<SavePathAnswer(const SavePathRequest &)>;
+  void set_save_path_prompt(SavePathPrompt prompt);
   SaveResult save_current_patch_as(std::string_view preferred_extension = {},
                                    std::string_view filename_stem = {});
   SaveResult
@@ -441,6 +447,7 @@ private:
   DocumentId active_id_ = 0;
   DocumentId next_id_ = 1;
   ym2612::PlaybackSettings playback_;
+  SavePathPrompt save_path_prompt_;
   /// What the chip has, whichever document it came from.
   ym2612::Patch last_applied_;
   bool has_applied_patch_ = false;

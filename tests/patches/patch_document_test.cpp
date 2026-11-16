@@ -1034,6 +1034,63 @@ void test_creating_a_folder_keeps_edits_and_lists_the_folder() {
   CHECK(session.capture_snapshot() == snapshot);
 }
 
+void test_save_as_writes_where_the_prompt_answers() {
+  BrowserFixture fixture;
+  auto &env = fixture.env;
+  auto &session = env.session;
+  session.open_document(make_patch(4), {});
+  session.current_patch().name = "lead";
+  session.current_patch().instrument.feedback = 3;
+  CHECK(session.is_modified());
+
+  // Nothing to ask: the save fails and the edits stay.
+  CHECK(session.save_current_patch().is_error());
+  CHECK(session.is_modified());
+
+  const auto target = env.root / "elsewhere";
+  fs::create_directories(target);
+  int asked = 0;
+  patches::SavePathRequest request;
+  auto answer = patches::SavePathAnswer{};
+  session.set_save_path_prompt([&](const patches::SavePathRequest &asked_for) {
+    ++asked;
+    request = asked_for;
+    return answer;
+  });
+
+  // Backing out of the dialog writes nothing.
+  CHECK(session.save_current_patch(".fui").is_cancelled());
+  CHECK(asked == 1);
+  CHECK(request.stem == "lead");
+  CHECK(request.extension == ".fui");
+  CHECK(request.start_directory == env.preferences.last_save_directory());
+  CHECK(!request.formats.empty());
+  CHECK(session.is_modified());
+
+  answer = {patches::SavePathAnswer::Status::Failed, {}};
+  CHECK(session.save_current_patch().is_error());
+  CHECK(session.is_modified());
+
+  // A name without a format takes the one that was offered, and the patch is
+  // named for its file.
+  answer = {patches::SavePathAnswer::Status::Chosen, target / "bass"};
+  const auto result = session.save_current_patch(".dmp");
+  CHECK(result.is_success());
+  CHECK(result.path == target / "bass.dmp");
+  CHECK(fs::exists(target / "bass.dmp"));
+  CHECK(!session.is_modified());
+  CHECK(session.current_patch().name == "bass");
+  CHECK(env.preferences.last_save_directory() == target);
+  const auto saved = formats::load_patch_from_file(target / "bass.dmp");
+  CHECK(saved.status == formats::PatchLoadStatus::Success);
+  CHECK(saved.patches[0].instrument.feedback == 3);
+
+  // The file is now the patch's own, so the next save does not ask.
+  session.current_patch().instrument.feedback = 5;
+  CHECK(session.save_current_patch().is_success());
+  CHECK(asked == 3);
+}
+
 void test_failed_in_place_save_preserves_edits_and_the_clean_snapshot() {
   TestEnvironment env;
   auto &session = env.session;
@@ -1183,6 +1240,7 @@ int main() {
   test_failed_loads_preserve_unsaved_contents_and_paths();
   test_rejected_creation_preserves_the_active_document();
   test_creating_a_folder_keeps_edits_and_lists_the_folder();
+  test_save_as_writes_where_the_prompt_answers();
   test_failed_in_place_save_preserves_edits_and_the_clean_snapshot();
   test_restore_skips_unreadable_records_and_keeps_only_one_preview();
   test_invalid_document_ids_do_not_replace_the_active_patch();

@@ -67,18 +67,17 @@ bool write_patch(const ym2612::Patch &patch,
   return false;
 }
 
-std::vector<platform::file_dialog::FileFilter>
-save_dialog_filters(const std::vector<formats::SaveFormatInfo> &formats,
+std::vector<formats::SaveFormatInfo>
+save_dialog_formats(const std::vector<formats::SaveFormatInfo> &formats,
                     std::string_view first) {
-  std::vector<platform::file_dialog::FileFilter> filters;
+  std::vector<formats::SaveFormatInfo> filters;
   const auto add = [&](const formats::SaveFormatInfo &format) {
-    const std::string extension = format.extension.substr(1);
     const bool listed =
         std::any_of(filters.begin(), filters.end(), [&](const auto &filter) {
-          return filter.extensions.front() == extension;
+          return filter.extension == format.extension;
         });
     if (!listed) {
-      filters.push_back({format.display_name(), {extension}});
+      filters.push_back(format);
     }
   };
   for (const auto &format : formats) {

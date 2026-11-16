@@ -156,6 +156,7 @@ set(MEGATOY_CORE_SOURCES
   src/gui/components/star_rating.cpp
   src/gui/components/view_patch_drop.cpp
   src/gui/areas.cpp
+  src/gui/file_prompts.cpp
   src/gui/patch_save_dialog.cpp
   src/gui/save_as_dialog.cpp
   src/gui/save_export_actions.cpp
