@@ -78,6 +78,32 @@ void announce_version_change(PreferenceManager &preferences) {
 
 } // namespace
 
+void apply_audio_preferences(AudioManager &audio,
+                             const PreferenceManager::UIPreferences &prefs,
+                             const PreferenceManager::UIPreferences *previous) {
+  const auto differs = [&](auto member) {
+    return previous == nullptr || prefs.*member != previous->*member;
+  };
+  using Prefs = PreferenceManager::UIPreferences;
+  if (differs(&Prefs::ym2612_core)) {
+    audio.set_core_type(
+        static_cast<ym2612::CoreType>(std::clamp(prefs.ym2612_core, 0, 1)));
+  }
+  if (differs(&Prefs::ym2612_chip_type)) {
+    audio.set_chip_type(static_cast<ym2612::ChipType>(
+        std::clamp(prefs.ym2612_chip_type, 0, 1)));
+  }
+  if (differs(&Prefs::use_velocity) ||
+      differs(&Prefs::velocity_sensitivity_depth) ||
+      differs(&Prefs::steal_oldest_note_when_full)) {
+    audio.set_note_options(prefs.use_velocity, prefs.velocity_sensitivity_depth,
+                           prefs.steal_oldest_note_when_full);
+  }
+  if (differs(&Prefs::use_pitch_bend) || differs(&Prefs::use_mod_wheel)) {
+    audio.set_performance_options(prefs.use_pitch_bend, prefs.use_mod_wheel);
+  }
+}
+
 void AppServices::initialize_app(AppState &state) {
   path_service.ensure_directories();
 #if defined(MEGATOY_PLATFORM_DESKTOP)
@@ -125,16 +151,7 @@ void AppServices::initialize_app(AppState &state) {
   announce_version_change(preference_manager);
 
   state.ui_state().prefs = preference_manager.ui_preferences();
-  audio_manager.set_core_type(static_cast<ym2612::CoreType>(
-      std::clamp(state.ui_state().prefs.ym2612_core, 0, 1)));
-  audio_manager.set_chip_type(static_cast<ym2612::ChipType>(
-      std::clamp(state.ui_state().prefs.ym2612_chip_type, 0, 1)));
-  audio_manager.set_note_options(
-      state.ui_state().prefs.use_velocity,
-      state.ui_state().prefs.velocity_sensitivity_depth,
-      state.ui_state().prefs.steal_oldest_note_when_full);
-  audio_manager.set_performance_options(state.ui_state().prefs.use_pitch_bend,
-                                        state.ui_state().prefs.use_mod_wheel);
+  apply_audio_preferences(audio_manager, state.ui_state().prefs);
 
   const auto &prefs = state.ui_state().prefs;
   auto &input = state.input_state();

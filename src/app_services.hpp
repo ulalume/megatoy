@@ -43,3 +43,9 @@ struct AppServices {
   /// Drop the histories of documents that are no longer open.
   void prune_histories();
 };
+
+/// Hands the core, chip, note and performance settings of `prefs` to the
+/// audio manager: all of them, or with `previous` those that differ from it.
+void apply_audio_preferences(
+    AudioManager &audio, const PreferenceManager::UIPreferences &prefs,
+    const PreferenceManager::UIPreferences *previous = nullptr);
