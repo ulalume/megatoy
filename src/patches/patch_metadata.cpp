@@ -1,5 +1,7 @@
 #include "patches/patch_metadata.hpp"
 
+#include "core/file_replace.hpp"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -10,10 +12,6 @@
 #include <sstream>
 #include <string_view>
 #include <system_error>
-
-#if defined(_WIN32)
-#include <windows.h>
-#endif
 
 namespace patches {
 
@@ -53,23 +51,6 @@ bool is_string_array(const nlohmann::json &j) {
          });
 }
 
-bool replace_file(const fs::path &source, const fs::path &destination,
-                  std::error_code &error) {
-#if defined(_WIN32)
-  if (::MoveFileExW(source.c_str(), destination.c_str(),
-                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-    error.clear();
-    return true;
-  }
-  error = std::error_code(static_cast<int>(::GetLastError()),
-                          std::system_category());
-  return false;
-#else
-  fs::rename(source, destination, error);
-  return !error;
-#endif
-}
-
 /// Write `j` through a temporary file, so an interrupted write cannot leave
 /// a truncated file behind.
 bool write_json_file(const fs::path &path, const nlohmann::json &j) {
@@ -80,25 +61,16 @@ bool write_json_file(const fs::path &path, const nlohmann::json &j) {
               << ec.message() << "\n";
     return false;
   }
-  auto temporary = path;
-  temporary += ".tmp";
-  {
-    std::ofstream file(temporary);
-    if (!file) {
-      std::cerr << "Failed to write " << temporary << "\n";
-      return false;
-    }
-    file << j.dump(2) << "\n";
-    if (!file) {
-      return false;
-    }
+  const bool written = megatoy::files::write_through_temporary(
+      path, [&](const fs::path &temporary) {
+        std::ofstream file(temporary);
+        file << j.dump(2) << "\n";
+        return static_cast<bool>(file);
+      });
+  if (!written) {
+    std::cerr << "Failed to write " << path << "\n";
   }
-  if (!replace_file(temporary, path, ec)) {
-    fs::remove(temporary, ec);
-    std::cerr << "Failed to replace " << path << ": " << ec.message() << "\n";
-    return false;
-  }
-  return true;
+  return written;
 }
 
 /// Remove `directory` if it is empty, and so on upwards to the sidecar
@@ -316,7 +288,7 @@ bool move(const fs::path &from, const fs::path &to) {
   if (ec) {
     return false;
   }
-  if (has_entry && !replace_file(from_entry, to_entry, ec)) {
+  if (has_entry && !megatoy::files::replace(from_entry, to_entry, ec)) {
     return false;
   }
   if (has_items) {
@@ -329,7 +301,7 @@ bool move(const fs::path &from, const fs::path &to) {
     if (ec) {
       if (has_entry) {
         std::error_code rollback;
-        replace_file(to_entry, from_entry, rollback);
+        megatoy::files::replace(to_entry, from_entry, rollback);
       }
       return false;
     }

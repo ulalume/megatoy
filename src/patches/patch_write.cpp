@@ -1,6 +1,7 @@
 #include "patches/patch_write.hpp"
 
 #include "core/ascii.hpp"
+#include "core/file_replace.hpp"
 #include "formats/ginpkg.hpp"
 #include "formats/patch_registry.hpp"
 #include "formats/ym2612_format_adapter.hpp"
@@ -41,27 +42,17 @@ bool write_patch(const ym2612::Patch &patch,
     return formats::ginpkg::save_patch_at(path, patch).has_value();
   }
 
-  // Written beside `path` and moved over it once whole, so a write that
-  // fails leaves the file there as it was. Hidden, so a scan of the folder
-  // passes it by.
-  const auto temporary =
-      path.parent_path() / ("." + path.filename().string() + ".tmp");
   auto &registry = formats::PatchRegistry::instance();
   const auto formats = registry.save_formats();
   const bool text =
       std::any_of(formats.begin(), formats.end(), [&](const auto &format) {
         return format.extension == extension && format.is_text;
       });
-  std::error_code error;
-  if (text ? registry.write_text(extension, patch, temporary)
-           : registry.write(extension, patch, temporary)) {
-    std::filesystem::rename(temporary, path, error);
-    if (!error) {
-      return true;
-    }
-  }
-  std::filesystem::remove(temporary, error);
-  return false;
+  return megatoy::files::write_through_temporary(
+      path, [&](const std::filesystem::path &temporary) {
+        return text ? registry.write_text(extension, patch, temporary)
+                    : registry.write(extension, patch, temporary);
+      });
 }
 
 std::vector<formats::SaveFormatInfo>

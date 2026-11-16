@@ -1,5 +1,7 @@
 #include "patches/persistent_parse_cache.hpp"
 
+#include "core/file_replace.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -189,23 +191,13 @@ bool PersistentParseCache::save() {
     }
   }
 
-  auto temporary = file_path_;
-  temporary += ".tmp";
-  {
-    std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-    if (!output) {
-      return false;
-    }
-    output << root.dump() << '\n';
-    if (!output) {
-      return false;
-    }
-  }
-
-  std::filesystem::rename(temporary, file_path_, error);
-  if (error) {
-    std::error_code remove_error;
-    std::filesystem::remove(temporary, remove_error);
+  const bool written = megatoy::files::write_through_temporary(
+      file_path_, [&](const std::filesystem::path &temporary) {
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        output << root.dump() << '\n';
+        return static_cast<bool>(output);
+      });
+  if (!written) {
     return false;
   }
 

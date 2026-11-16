@@ -71,6 +71,7 @@ set(MEGATOY_LOGIC_SOURCES
   src/audio/scope_trigger.cpp
   src/audio/spectrum_analyzer.cpp
   src/audio/audio_manager.cpp
+  src/core/file_replace.cpp
   src/core/random_utils.cpp
   src/core/status.cpp
   src/core/utf8_utils.cpp
