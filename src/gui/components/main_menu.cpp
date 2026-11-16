@@ -162,8 +162,6 @@ void draw_load_graph(const Panel &panel, const LoadWindow &window) {
   panel.draw_list->PathStroke(run_color, ImDrawFlags_None, 1.0f);
 }
 
-/// The remedies for a high load. Each one that has nothing left to give is
-/// disabled and says so.
 /// The graph's readings in words, for its tooltip and the top of its menu.
 void render_load_status(const LoadWindow &window) {
   ImGui::TextUnformatted("Sound Processing Load");
@@ -173,6 +171,8 @@ void render_load_status(const LoadWindow &window) {
               static_cast<double>(window.average) * 100.0);
 }
 
+/// The remedies for a high load. Each one that has nothing left to give is
+/// disabled and says so.
 void render_load_menu(MainMenuContext &context, const LoadWindow &window) {
   auto &ui_prefs = context.ui_prefs;
 
@@ -261,11 +261,6 @@ float render_audio_load(MainMenuContext &context, const LoadWindow &window,
 
 namespace {
 
-/**
- * The menu holding About and Quit, shown as the app's icon. The label is
- * blank space as wide as the icon, which is drawn over it afterwards so the
- * menu's hover highlight stays underneath.
- */
 /// A menu in the bar, highlighted from the bar's top to its bottom.
 bool begin_bar_menu(const char *label) {
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, ui::bar_item_spacing());
@@ -318,6 +313,11 @@ std::string app_menu_label(bool logo) {
          "##megatoy";
 }
 
+/**
+ * The menu holding About and Quit, shown as the app's icon. The label is
+ * blank space as wide as the icon, which is drawn over it afterwards so the
+ * menu's hover highlight stays underneath.
+ */
 bool begin_app_menu(bool logo) {
   const ImTextureID icon = app_icon();
   const std::string label = app_menu_label(logo);
@@ -432,12 +432,12 @@ BarFit fit_bar(const MainMenuContext &context, const char *reading) {
            bar_menu_advance(kEditMenu.label(fit)) +
            bar_menu_advance(kViewMenu.label(fit));
   };
-  // The room the middle leaves before a load area `load_width` wide: it sits
-  // centred in the bar, but never over the menus.
   // The LFO menu and the operators' stand just left of the load area, the
   // LFO named in full.
   const float lfo_width =
       lfo_menu_advance(false) + bar_menu_advance(kOperatorMenuLabel);
+  // The room the middle leaves before a load area `load_width` wide: it sits
+  // centred in the bar, but never over the menus.
   const auto room = [&](BarCentreFit fit, float load_width, bool logo = false) {
     const float right_start =
         width - load_width - style.FramePadding.x * 2.0f - lfo_width;

@@ -4,7 +4,7 @@
 
 namespace ym2612 {
 
-class Device; // Forward declaration
+class Device;
 
 class Operator {
 public:

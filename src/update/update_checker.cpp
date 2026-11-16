@@ -42,7 +42,6 @@ UpdateCheckResult check_for_updates(std::string_view current_version_tag) {
 namespace update {
 namespace {
 
-// Build GitHub API URL dynamically
 std::string build_github_api_url() {
   std::ostringstream oss;
   oss << "https://api.github.com/repos/" << megatoy::kGithubUser << "/"

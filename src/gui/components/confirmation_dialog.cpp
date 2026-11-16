@@ -119,8 +119,8 @@ void render_new_patch_prompt(UIState::NewPatchPromptState &prompt) {
 void render_confirmation_dialog(ConfirmationDialogContext &context) {
   auto &confirmation_state = context.state;
 
-  // Unsaved changes confirmation dialog. Escape or a click outside stands in
-  // for Cancel; keeping the changes is the answer that loses nothing.
+  // Escape or a click outside stands in for Cancel; keeping the changes is
+  // the answer that loses nothing.
   auto unsaved =
       begin_modal("Unsaved Changes", ModalDismiss::EscapeOrOutsideClick);
   if (unsaved.dismissed) {
@@ -192,7 +192,6 @@ void render_confirmation_dialog(ConfirmationDialogContext &context) {
     end_modal();
   }
 
-  // Open the dialog if requested
   if (confirmation_state.show_unsaved_changes_dialog) {
     ImGui::OpenPopup("Unsaved Changes");
   }

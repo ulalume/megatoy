@@ -19,13 +19,13 @@ namespace platform::web {
  * until a `FS.syncfs(false, ...)` transaction commits, IndexedDB still holds
  * every one of them. That flush is not fast -- measured at roughly 4.5s for
  * 10k files, and superlinear beyond that -- so the debounced fire-and-forget
- * persist used elsewhere left a window of tens of seconds in which a reload
- * aborted the transaction, IndexedDB kept the whole folder, and startup
- * re-adopted it. The folder came back.
+ * persist used elsewhere would leave a window of tens of seconds in which a
+ * reload aborts the transaction, IndexedDB keeps the whole folder, and
+ * startup re-adopts it: the folder comes back.
  *
- * So the deletion is awaited instead: `on_complete` runs on a later frame,
- * on the main thread, once the flush has actually committed (or failed).
- * Callers should not remove the folder from the workspace until then.
+ * So the deletion is awaited: `on_complete` runs on a later frame, on the
+ * main thread, once the flush has actually committed (or failed). Callers
+ * should not remove the folder from the workspace until then.
  *
  * Returns false -- without touching anything -- when a deletion is already
  * running; there is one flush in flight at a time.

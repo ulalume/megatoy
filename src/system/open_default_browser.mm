@@ -14,13 +14,11 @@ namespace megatoy {
 namespace system {
 namespace {
 
-// Validate that the URL is safe to open
 bool is_valid_url(std::string_view url) {
   if (url.empty()) {
     return false;
   }
 
-  // Check for basic URL schemes we consider safe
   const std::string url_str(url);
   const std::string lower_url = [&]() {
     std::string result;
@@ -30,8 +28,7 @@ bool is_valid_url(std::string_view url) {
     return result;
   }();
 
-  // Only allow http and https schemes for security
-  // Note: file:// excluded for security reasons - local file access
+  // Only http and https: file:// would give access to local files.
   if (lower_url.substr(0, 7) == "http://" ||
       lower_url.substr(0, 8) == "https://") {
     return true;
@@ -82,7 +79,7 @@ OpenBrowserResult open_browser_macos(std::string_view url) {
   if (!result.success) {
     // Properly escape URL for shell command
     std::string escaped_url;
-    escaped_url.reserve(url.size() + 10); // Reserve some extra space
+    escaped_url.reserve(url.size() + 10);
     for (char c : url) {
       if (c == '"' || c == '\\' || c == '$' || c == '`') {
         escaped_url += '\\';
@@ -111,7 +108,6 @@ OpenBrowserResult open_browser_macos(std::string_view url) {
 OpenBrowserResult open_default_browser(std::string_view url) {
   OpenBrowserResult result;
 
-  // Validate URL first
   if (!is_valid_url(url)) {
     result.success = false;
     result.error_message =

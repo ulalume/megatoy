@@ -19,7 +19,6 @@
 #include <string_view>
 #include <vector>
 
-// Forward declaration
 class AudioManager;
 
 namespace patches {

@@ -18,13 +18,11 @@ namespace megatoy {
 namespace system {
 namespace {
 
-// Validate that the URL is safe to open
 bool is_valid_url(std::string_view url) {
   if (url.empty()) {
     return false;
   }
 
-  // Check for basic URL schemes we consider safe
   const std::string url_str(url);
   const std::string lower_url = [&]() {
     std::string result;
@@ -34,8 +32,7 @@ bool is_valid_url(std::string_view url) {
     return result;
   }();
 
-  // Only allow http and https schemes for security
-  // Note: file:// excluded for security reasons - local file access
+  // Only http and https: file:// would give access to local files.
   if (lower_url.substr(0, 7) == "http://" ||
       lower_url.substr(0, 8) == "https://") {
     return true;
@@ -82,18 +79,14 @@ OpenBrowserResult open_browser_linux(std::string_view url) {
     char *args[] = {const_cast<char *>("xdg-open"),
                     const_cast<char *>(url_str.c_str()), nullptr};
 
-    // Try execvp first (uses PATH)
     execvp("xdg-open", args);
 
-    // If execvp fails, try specific paths
     execl("/usr/bin/xdg-open", "xdg-open", url_str.c_str(), nullptr);
     execl("/bin/xdg-open", "xdg-open", url_str.c_str(), nullptr);
     execl("/usr/local/bin/xdg-open", "xdg-open", url_str.c_str(), nullptr);
 
-    // If all fail, exit with error
     _exit(127);
   } else if (pid > 0) {
-    // Parent process
     int status;
     if (waitpid(pid, &status, 0) == pid) {
       if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
@@ -108,7 +101,6 @@ OpenBrowserResult open_browser_linux(std::string_view url) {
       result.error_message = "Failed to wait for child process";
     }
   } else {
-    // Fork failed
     result.success = false;
     result.error_message = "Failed to fork process";
   }
@@ -122,7 +114,6 @@ OpenBrowserResult open_browser_linux(std::string_view url) {
 OpenBrowserResult open_default_browser(std::string_view url) {
   OpenBrowserResult result;
 
-  // Validate URL first
   if (!is_valid_url(url)) {
     result.success = false;
     result.error_message =

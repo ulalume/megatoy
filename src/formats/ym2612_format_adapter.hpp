@@ -31,7 +31,6 @@ std::string extension_for(ym2612_format::Format format);
 std::optional<ym2612_format::Format>
 format_for_extension(const std::string &extension);
 
-/// Every format the library knows about.
 const std::vector<ym2612_format::FormatInfo> &known_formats();
 
 /// Readable extensions, with the leading dot, sorted.
@@ -52,9 +51,8 @@ bool is_multi_patch(ym2612_format::Format format);
  * megatoy stores and the linear -3..+3 scale that editors and most file
  * formats present.
  *
- * Conversion delegates to the library. Since ym2612_format v0.2.1 it decodes
- * the linear zero point as register 0, so a save/reload of a detune-0 patch
- * stays a no-op.
+ * Conversion delegates to the library, which decodes the linear zero point
+ * as register 0, so a save/reload of a detune-0 patch stays a no-op.
  */
 uint8_t detune_to_linear(uint8_t register_detune);
 uint8_t detune_from_linear(int linear);

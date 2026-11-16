@@ -24,7 +24,6 @@
 
 namespace ui {
 
-// Helper function to update slider state
 inline void
 update_slider_state(UIState::EnvelopeState::SliderState &slider_state) {
   if (ImGui::IsItemActive()) {
@@ -144,7 +143,7 @@ void draw_operator_frame(const ImVec2 &min, const ImVec2 &max, float gap_from_x,
 
 struct FieldLabels {
   const char *name;
-  /// Undo merge key; unchanged from before so drags still merge.
+  /// Undo merge key.
   const char *key;
 };
 
@@ -851,7 +850,6 @@ void render_operator_contents(PatchEditorContext &context, ym2612::Patch &patch,
   const float group_gap = style.ItemSpacing.y;
   ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, side_row_gap());
 
-  // SSG Type Envelope Control (0-7)
   // The diagram, as tall as a frame, takes what the checkbox leaves of the
   // row, down to twice its height; the checkbox is named while the name
   // fits as well, and the slider below names it anyway.

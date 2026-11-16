@@ -72,7 +72,6 @@ bool ResourceManager::has_resource(const std::filesystem::path &path) const {
 }
 
 void ResourceManager::register_embedded_resources() {
-  // Register all embedded resources from the generated registry
   for (const auto &entry : embedded_assets::resource_registry) {
     EmbeddedResource resource;
     resource.data = entry.second.data;

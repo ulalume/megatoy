@@ -129,7 +129,7 @@ void render_all(AppContext &ctx) {
   }
 
   render_save_export_popup_host(ctx);
-  // Files let go where nothing takes them open as a drop always did.
+  // Files let go where nothing takes them open in the editor.
   if (auto dropped = os_file_drop::take(); !dropped.empty()) {
     auto env = make_drop_environment(ctx);
     for (const auto &path : dropped) {

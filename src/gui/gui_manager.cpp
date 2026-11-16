@@ -162,7 +162,6 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   SDL_GetWindowSize(window_, &windowed_width_, &windowed_height_);
   window_id_ = SDL_GetWindowID(window_);
 
-  // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
@@ -179,23 +178,18 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   io.ConfigWindowsMoveFromTitleBarOnly = true;
 #endif
 
-  // Apply theme and scale from preferences
   theme_ = preferences_.theme();
   apply_ui_scale(preferences_.ui_preferences().ui_scale);
 
-  // Setup Platform/Renderer backends
   ImGui_ImplSDL3_InitForOpenGL(window_, gl_context_);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
-  // Initialize file dialog
   if (!platform::file_dialog::initialize()) {
     std::cerr << "Native File Dialog unavailable; directory picker disabled\n";
   }
 
-  // icon font
   ui::init_icon_font();
 
-  // Sync ImGui ini file
   sync_imgui_ini();
   sync_web_imgui_ini();
 
@@ -209,7 +203,6 @@ void GuiManager::shutdown() {
     return;
   }
 
-  // Cleanup
   platform::file_dialog::shutdown();
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
@@ -292,7 +285,6 @@ void GuiManager::begin_frame(bool waveform_shown) {
     return;
   }
 
-  // Start the Dear ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ui::touch::before_new_frame();
@@ -370,7 +362,6 @@ void GuiManager::end_frame() {
 
   ui::finish_tab_bars();
 
-  // Rendering
   ImGui::Render();
   int display_w = 0;
   int display_h = 0;

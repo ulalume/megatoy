@@ -24,9 +24,8 @@ struct Folder {
  * The set of patch folders the user is working with, in the order they should
  * appear in the browser.
  *
- * This replaces megatoy's old single ~/Documents/megatoy tree: folders live
- * wherever the user keeps them, several can be open at once, and the list
- * persists across sessions.
+ * Folders live wherever the user keeps them, several can be open at once,
+ * and the list persists across sessions.
  *
  * The built-in presets are deliberately *not* part of this list. They ship
  * inside the application bundle and are replaced on update, so a stored path

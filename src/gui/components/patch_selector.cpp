@@ -73,7 +73,7 @@ constexpr float kHeaderGap = 2.0f;
 
 void render_tree(PatchSelectorContext &context) {
   // Scrolls on its own, so the filter row above stays in place. It reaches
-  // the window's edges; its own padding keeps the rows where they were.
+  // the window's edges; its own padding keeps the rows in from them.
   ImGuiWindow *window = ImGui::GetCurrentWindow();
   const ImRect inner = window->InnerRect;
   const float top = ImGui::GetCursorScreenPos().y;

@@ -69,8 +69,9 @@ public:
    * Called the moment a note arrives, on whatever thread the driver delivers
    * it on -- not once per rendered frame.
    *
-   * Polling for notes in the UI loop quantized their timing to the render
-   * rate and made input jitter with drawing. Set this before initialize().
+   * Polling for notes in the UI loop would quantize their timing to the
+   * render rate and make input jitter with drawing. Set this before
+   * initialize().
    */
   using NoteSink = std::function<void(const MidiMessage &)>;
 

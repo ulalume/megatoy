@@ -295,7 +295,7 @@ void PatchSession::assign_patch(PatchDocument &document,
       document.set_file_identity(source_path);
     }
   }
-  document.mark_as_clean(); // New patch loaded, not modified yet
+  document.mark_as_clean();
   remember_disk_time(document);
 }
 

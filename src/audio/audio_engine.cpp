@@ -132,9 +132,9 @@ uint32_t AudioEngine::render(uint32_t buf_size, void *data) {
   // speaker -- the console AC-couples its audio output -- but shipping it to
   // a modern DAC means the "silent" signal is a nonzero constant. Amplifiers
   // that gate on signal energy then drop in and out of standby, and every
-  // transition is an audible pop; users reported exactly that, a tick every
-  // several seconds while the app sat idle. Blocking DC restores the coupling
-  // the hardware had: idle output decays to true digital silence.
+  // transition is an audible pop: a tick every several seconds while the app
+  // sits idle. Blocking DC restores the coupling the hardware had: idle
+  // output decays to true digital silence.
   remove_dc(mix_buffer_.data(), frames);
 
   scope_buffer_.write(mix_buffer_.data(), frames);

@@ -38,7 +38,6 @@ public:
    */
   virtual void write(uint8_t offset, uint8_t data) = 0;
 
-  /// Read from the chip's bus.
   virtual uint8_t read(uint8_t offset) = 0;
 
   /// Render `frames` samples into two separate 32-bit channel buffers.

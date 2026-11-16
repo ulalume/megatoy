@@ -25,7 +25,6 @@ public:
   explicit PreferenceManager(megatoy::system::PathService &paths);
   ~PreferenceManager();
 
-  // Workspace folders
   megatoy::workspace::Workspace &workspace() { return workspace_; }
   const megatoy::workspace::Workspace &workspace() const { return workspace_; }
 

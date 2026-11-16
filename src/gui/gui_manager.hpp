@@ -8,58 +8,33 @@
 #include <SDL3/SDL.h>
 
 /**
- * GuiManager - Unified GUI system management
- *
- * Consolidates GuiSubsystem, GuiRuntime, and GuiManager into a single
- * class that handles all GUI-related functionality including:
- * - SDL3 window management and initialization
- * - ImGui setup and rendering
- * - Theme management and preferences integration
- * - File dialog integration
+ * The GUI system: the SDL3 window and its events, ImGui setup and rendering,
+ * the theme and scale from the preferences, and the file dialog's lifetime.
  */
 class GuiManager {
 public:
   explicit GuiManager(PreferenceManager &preferences);
   ~GuiManager();
 
-  // Non-copyable, non-movable
   GuiManager(const GuiManager &) = delete;
   GuiManager &operator=(const GuiManager &) = delete;
   GuiManager(GuiManager &&) = delete;
   GuiManager &operator=(GuiManager &&) = delete;
 
-  /**
-   * Initialize and start the complete GUI system
-   * @param window_title Window title
-   * @param width Initial window width
-   * @param height Initial window height
-   * @return true on success, false on failure
-   */
+  /// Initialize and start the complete GUI system; false on failure.
   bool initialize(const std::string &window_title, int width = 800,
                   int height = 600);
 
-  /**
-   * Shutdown and cleanup complete GUI system
-   */
   void shutdown();
 
-  /**
-   * Check if window should close
-   */
   bool get_should_close() const;
 
-  /**
-   * Set the should close flag
-   */
   void set_should_close(bool value);
 
   /// Begin a new frame and apply any requested layout reset; the footer is
   /// fitted to `waveform_shown`, the waveform's preference.
   void begin_frame(bool waveform_shown);
 
-  /**
-   * End frame and render
-   */
   void end_frame();
 
   /**
@@ -87,24 +62,15 @@ public:
   /// The title of the application's window; unchanged titles cost nothing.
   void set_window_title(const std::string &title);
 
-  /**
-   * Fullscreen management
-   */
   bool is_fullscreen() const { return fullscreen_; }
   void set_fullscreen(bool enable);
 
   bool supports_fullscreen() const;
   bool supports_quit() const;
 
-  /**
-   * Theme management
-   */
   void set_theme(ui::styles::ThemeId theme);
   ui::styles::ThemeId theme() const { return theme_; }
 
-  /**
-   * Interface scale
-   */
   /// Rebuild the style for a scale preference; 0 follows the display.
   void apply_ui_scale(float preference);
   /// Enlargement the display asks content for; 1.0 when it cannot be read.
@@ -142,7 +108,6 @@ private:
   /// The arrangement just loaded is still to be checked against the areas.
   bool check_loaded_layout_ = true;
 
-  // Internal methods
   void set_imgui_ini_file(const std::string &path);
   void apply_imgui_ini_binding();
   void process_event(const SDL_Event &event);

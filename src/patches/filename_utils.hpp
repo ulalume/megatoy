@@ -7,7 +7,6 @@
 
 namespace patches {
 
-// Check whether a character is valid in filenames
 inline bool is_valid_filename_char(char c) {
   // Characters disallowed on Windows/Mac/Linux
   constexpr char invalid_chars[] = {'<',  '>', ':', '"', '/',
@@ -16,7 +15,6 @@ inline bool is_valid_filename_char(char c) {
   if (c < 32 || c == 127) {
     return false;
   }
-  // Check the invalid character list
   for (char invalid : invalid_chars) {
     if (c == invalid) {
       return false;

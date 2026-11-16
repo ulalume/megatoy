@@ -8,7 +8,7 @@
 
 namespace ym2612 {
 
-class Channel; // Forward declaration
+class Channel;
 
 /**
  * YM2612 device: an emulated chip running at its native rate, resampled to

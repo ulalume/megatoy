@@ -648,8 +648,7 @@ FilesystemPatchStorage::detect_format(const std::filesystem::path &file_path) {
   const std::string extension = lowercase_extension(file_path);
 
   // Derived from the format library rather than a local table, so a format
-  // added there is labelled here without another edit. A stale copy of this
-  // table is how .tfi files ended up listed as "unknown".
+  // added there is labelled here without another edit.
   if (extension == ".ginpkg") {
     return "ginpkg";
   }

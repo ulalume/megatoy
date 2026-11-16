@@ -83,7 +83,6 @@ struct PatchSelectorContext {
   std::function<void()> pending_drop;
 };
 
-// Function to render library panel
 void render_patch_selector(const char *title, PatchSelectorContext &context);
 
 } // namespace ui

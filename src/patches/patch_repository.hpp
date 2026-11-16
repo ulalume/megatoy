@@ -116,7 +116,6 @@ public:
   std::filesystem::path
   to_absolute_path(const std::filesystem::path &path) const;
 
-  // Metadata operations
   bool update_patch_metadata(const std::string &relative_path,
                              const PatchMetadata &metadata);
 
