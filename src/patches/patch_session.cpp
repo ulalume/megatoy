@@ -237,9 +237,7 @@ bool PatchSession::load_patch_from_entry(const PatchEntry &entry) {
   if (!repository_->load_patch(entry, patch)) {
     return false;
   }
-  set_current_patch(patch, entry.source_relative_path.empty()
-                               ? entry.relative_path
-                               : entry.source_relative_path);
+  set_current_patch(patch, source_path_of(entry));
   set_current_patch_selection_path(entry.relative_path);
   mark_as_clean();
   return true;

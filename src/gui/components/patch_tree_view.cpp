@@ -302,9 +302,7 @@ void draw_rating(int stars, bool compact, float right, float centre_y) {
  * short.
  */
 bool patch_row_selectable(const patches::PatchEntry &item, bool selected) {
-  const std::string_view icon_id = item.metadata
-                                       ? std::string_view(item.metadata->icon)
-                                       : std::string_view();
+  const std::string_view icon_id = patches::icon_of(&item);
   const int stars =
       std::clamp(item.metadata ? item.metadata->star_rating : 0, 0, 5);
   const ImGuiStyle &style = ImGui::GetStyle();

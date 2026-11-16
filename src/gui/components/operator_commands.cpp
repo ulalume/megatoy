@@ -8,6 +8,19 @@
 namespace ui {
 namespace {
 
+/// Makes `change` one undo step named `label`.
+template <class Change>
+void as_step(OperatorCommandContext &context, const std::string &label,
+             Change change) {
+  if (context.begin_history) {
+    context.begin_history(label);
+  }
+  change();
+  if (context.commit_history) {
+    context.commit_history();
+  }
+}
+
 std::string joined(const OperatorSelection &selection) {
   return operator_selection_label(selection);
 }
@@ -129,18 +142,14 @@ void paste_operator_command(OperatorCommandContext &context) {
       megatoy::status::warning("Select an operator to paste into.");
       return;
     }
-    if (context.begin_history) {
-      context.begin_history("Paste to " + joined(paste.targets));
-    }
-    for (const auto &target : paste.targets) {
-      ym2612::OperatorClipboard row;
-      row.has_value = true;
-      row.op = paste.rows[target.row];
-      ym2612::paste_operator(context.instrument, target.slot, row);
-    }
-    if (context.commit_history) {
-      context.commit_history();
-    }
+    as_step(context, "Paste to " + joined(paste.targets), [&]() {
+      for (const auto &target : paste.targets) {
+        ym2612::OperatorClipboard row;
+        row.has_value = true;
+        row.op = paste.rows[target.row];
+        ym2612::paste_operator(context.instrument, target.slot, row);
+      }
+    });
     if (paste.rows.size() == 1) {
       megatoy::status::success("Pasted into " + joined(paste.targets) + ".");
     } else {
@@ -163,16 +172,11 @@ void paste_operator_command(OperatorCommandContext &context) {
     return;
   }
 
-  const std::string label = paste_operator_label(state);
-  if (context.begin_history) {
-    context.begin_history(label);
-  }
-  for (int slot : targets) {
-    ym2612::paste_operator(context.instrument, slot, context.clipboard);
-  }
-  if (context.commit_history) {
-    context.commit_history();
-  }
+  as_step(context, paste_operator_label(state), [&]() {
+    for (int slot : targets) {
+      ym2612::paste_operator(context.instrument, slot, context.clipboard);
+    }
+  });
 
   megatoy::status::success("Pasted into " + joined(state.selection) + ".");
 }
@@ -185,14 +189,9 @@ void swap_operators_command(OperatorCommandContext &context) {
   }
 
   const auto slots = state.selection.slots();
-  const std::string label = swap_operators_label(state);
-  if (context.begin_history) {
-    context.begin_history(label);
-  }
-  ym2612::swap_operators(context.instrument, slots[0], slots[1]);
-  if (context.commit_history) {
-    context.commit_history();
-  }
+  as_step(context, swap_operators_label(state), [&]() {
+    ym2612::swap_operators(context.instrument, slots[0], slots[1]);
+  });
 
   megatoy::status::success("Swapped " + operator_slot_label(slots[0]) +
                            " and " + operator_slot_label(slots[1]) + ".");

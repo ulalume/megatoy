@@ -188,6 +188,28 @@ static void report_done(const std::string &message,
   }
 }
 
+/// report_done(), at once for files and, when a folder is among what was
+/// touched, once browser storage has the change. The rest is as
+/// after_storage_has() takes it.
+static void report_done_once_stored(bool folder, const std::string &progress,
+                                    const std::string &message,
+                                    std::vector<std::filesystem::path> touched,
+                                    std::function<void()> undo,
+                                    const std::string &failure,
+                                    const std::string &undone = {},
+                                    std::function<void()> failed = {}) {
+  if (!folder) {
+    report_done(message, std::move(touched), std::move(undo));
+    return;
+  }
+  after_storage_has(
+      progress,
+      [message, touched = std::move(touched), undo = std::move(undo)]() {
+        report_done(message, touched, undo);
+      },
+      failure, undone, std::move(failed));
+}
+
 /// A folder moved or renamed to `new_path` that storage could not keep:
 /// IndexedDB still has it at `old_path`, so a workspace folder registered
 /// there has to point back or a reload finds it missing.
@@ -264,17 +286,10 @@ static void perform_patch_deletion(AppContext &ctx,
   auto undo =
       kept ? restoring(ctx, std::move(*kept), std::move(detached), entry.name)
            : std::function<void()>();
-  const bool folder = entry.is_directory && entry.format.empty();
-  if (!folder) {
-    report_done(message, {entry.full_path}, std::move(undo));
-    return;
-  }
-  after_storage_has(
-      "Deleting \"" + entry.name + "\"...",
-      [message, path = entry.full_path, undo]() {
-        report_done(message, {path}, undo);
-      },
-      "Could not save the deletion");
+  report_done_once_stored(entry.is_directory && entry.format.empty(),
+                          "Deleting \"" + entry.name + "\"...", message,
+                          {entry.full_path}, std::move(undo),
+                          "Could not save the deletion");
 }
 
 void request_patch_deletion(AppContext &ctx, const patches::PatchEntry &entry) {
@@ -352,14 +367,10 @@ static void perform_patch_rename(AppContext &ctx,
     };
   }
   const std::string message = "Renamed to \"" + new_stem + "\".";
-  if (!entry.is_directory) {
-    report_done(message, {renamed}, std::move(undo));
-    return;
-  }
-  after_storage_has(
-      "Renaming \"" + entry.name + "\"...",
-      [message, renamed, undo]() { report_done(message, {renamed}, undo); },
-      "Could not save the rename", "the old name comes back after a reload.",
+  report_done_once_stored(
+      entry.is_directory, "Renaming \"" + entry.name + "\"...", message,
+      {renamed}, std::move(undo), "Could not save the rename",
+      "the old name comes back after a reload.",
       workspace_rollback(ctx, entry.full_path, renamed));
 }
 
@@ -392,14 +403,10 @@ static void perform_patch_move(AppContext &ctx,
   }
   const std::string message =
       "Moved \"" + entry.name + "\" to \"" + destination.name + "\".";
-  if (!entry.is_directory) {
-    report_done(message, {target}, std::move(undo));
-    return;
-  }
-  after_storage_has(
-      "Moving \"" + entry.name + "\"...",
-      [message, target, undo]() { report_done(message, {target}, undo); },
-      "Could not save the move", "it moves back after a reload.",
+  report_done_once_stored(
+      entry.is_directory, "Moving \"" + entry.name + "\"...", message, {target},
+      std::move(undo), "Could not save the move",
+      "it moves back after a reload.",
       workspace_rollback(ctx, entry.full_path, target));
 }
 
@@ -450,15 +457,11 @@ undo_copies(AppContext &ctx, std::vector<std::filesystem::path> copies) {
 static void report_copies(AppContext &ctx, const std::string &message,
                           const std::vector<std::filesystem::path> &copies,
                           const std::string &destination) {
-  auto undo = undo_copies(ctx, copies);
-  if (!any_folder(copies)) {
-    report_done(message, copies, std::move(undo));
-    return;
-  }
-  after_storage_has(
-      "Copying to \"" + destination + "\"...",
-      [message, copies, undo]() { report_done(message, copies, undo); },
-      "Could not save the copy", "it is gone after a reload.");
+  report_done_once_stored(any_folder(copies),
+                          "Copying to \"" + destination + "\"...", message,
+                          copies, undo_copies(ctx, copies),
+                          "Could not save the copy",
+                          "it is gone after a reload.");
 }
 
 static void perform_patch_copy(AppContext &ctx,
