@@ -54,6 +54,10 @@ struct VoiceActivityFrame {
 /**
  * Decides which of the chip's six channels a note plays on.
  *
+ * A note is held by every source that has its key down -- the app's own
+ * keyboards are one, each MIDI input another -- and comes up when the last of
+ * them lets go, or stays until the sustain pedal does while one is down.
+ *
  * Only the audio thread touches the allocation state. What the UI needs --
  * which keys to light up, which notes to feed the chord display -- is
  * published separately as plain atomics, so drawing a frame never reads the
@@ -75,13 +79,25 @@ public:
   /// output frames; it is published for the graph and nothing else. There is
   /// no default: a caller that left it out would stamp its voice at t = 0 and
   /// the graph would draw a confident, wrong cursor with nothing to say so.
+  /// Nothing is claimed for a note a key already holds down: `source` holds
+  /// it too. One only the pedal holds is struck again, on its own channel.
   std::optional<ChannelClaim> note_on(const ym2612::Note &note,
                                       uint8_t velocity, bool allow_voice_steal,
-                                      uint64_t sample_position);
+                                      uint64_t sample_position,
+                                      uint8_t source = 0);
   std::optional<ym2612::Note> active_note(ym2612::ChannelIndex channel) const;
   std::optional<uint8_t> active_velocity(ym2612::ChannelIndex channel) const;
+  /// True when the note came up: no other source and no pedal holds it.
   bool note_off(const ym2612::Note &note, ym2612::Device &device,
-                uint64_t sample_position);
+                uint64_t sample_position, uint8_t source = 0);
+  /// `source` lets go of every note and of its pedal.
+  void release_source(uint8_t source, ym2612::Device &device,
+                      uint64_t sample_position);
+  /// `source`'s sustain pedal. The notes no key holds come up with the last
+  /// pedal.
+  void set_sustain(uint8_t source, bool pedal_down, ym2612::Device &device,
+                   uint64_t sample_position);
+  /// Every note comes up and every pedal counts as up.
   void release_all(ym2612::Device &device, uint64_t sample_position);
 
   // --- readable from any thread ---
@@ -108,10 +124,16 @@ private:
   void release_channel(uint8_t index, uint64_t sample_position);
   void publish_voice(std::size_t index, const VoiceActivity &voice);
   VoiceActivity published_voice(std::size_t index) const;
+  /// The notes neither a key nor a pedal holds come up.
+  void release_unheld(ym2612::Device &device, uint64_t sample_position);
 
   std::array<bool, 6> channel_key_on_;
   std::array<std::optional<ym2612::Note>, 6> channel_to_note_;
   std::array<uint8_t, 6> channel_velocity_{};
+  /// A bit for each source with the channel's key down.
+  std::array<uint32_t, 6> channel_holders_{};
+  /// A bit for each source with its pedal down.
+  uint32_t sustaining_ = 0;
   std::array<uint64_t, 6> channel_order_{};
   uint64_t allocation_counter_ = 0;
   /// Never reset, unlike allocation_counter_: the UI orders voices by it and

@@ -16,6 +16,11 @@ namespace {
  */
 constexpr int kSeqlockAttempts = 64;
 
+/// The bit a source holds with. Sources past the last bit share it.
+uint32_t holder_bit(uint8_t source) {
+  return uint32_t{1} << std::min<uint8_t>(source, 31);
+}
+
 } // namespace
 
 ChannelAllocator::ChannelAllocator() : channel_key_on_{} { publish(); }
@@ -125,9 +130,17 @@ bool ChannelAllocator::is_note_active(const ym2612::Note &note) const {
 
 std::optional<ChannelAllocator::ChannelClaim>
 ChannelAllocator::note_on(const ym2612::Note &note, uint8_t velocity,
-                          bool allow_voice_steal, uint64_t sample_position) {
-  if (is_note_active(note))
-    return std::nullopt;
+                          bool allow_voice_steal, uint64_t sample_position,
+                          uint8_t source) {
+  std::optional<size_t> sounding_index;
+  if (const auto it = note_to_channel_.find(note);
+      it != note_to_channel_.end()) {
+    sounding_index = static_cast<size_t>(it->second);
+    if (channel_holders_[*sounding_index] != 0) {
+      channel_holders_[*sounding_index] |= holder_bit(source);
+      return std::nullopt;
+    }
+  }
 
   std::optional<size_t> free_index;
   for (size_t idx = 0; idx < channel_key_on_.size(); ++idx) {
@@ -141,7 +154,10 @@ ChannelAllocator::note_on(const ym2612::Note &note, uint8_t velocity,
   size_t selected_index;
   std::optional<ym2612::Note> replaced_note;
 
-  if (free_index) {
+  if (sounding_index) {
+    selected_index = *sounding_index;
+    replaced_note = note;
+  } else if (free_index) {
     selected_index = *free_index;
     replaced_note.reset();
   } else {
@@ -160,6 +176,7 @@ ChannelAllocator::note_on(const ym2612::Note &note, uint8_t velocity,
   channel_key_on_[selected_index] = true;
   channel_to_note_[selected_index] = note;
   channel_velocity_[selected_index] = velocity;
+  channel_holders_[selected_index] = holder_bit(source);
   note_to_channel_[note] = channel;
   channel_order_[selected_index] = ++allocation_counter_;
 
@@ -201,6 +218,7 @@ void ChannelAllocator::release_channel(uint8_t index,
   channel_key_on_[index] = false;
   channel_to_note_[index].reset();
   channel_velocity_[index] = 0;
+  channel_holders_[index] = 0;
 
   // The voice keeps its record: it is releasing, not gone.
   VoiceActivity &voice = voice_state_[index];
@@ -213,13 +231,18 @@ void ChannelAllocator::release_channel(uint8_t index,
 
 bool ChannelAllocator::note_off(const ym2612::Note &note,
                                 ym2612::Device &device,
-                                uint64_t sample_position) {
+                                uint64_t sample_position, uint8_t source) {
   auto it = note_to_channel_.find(note);
   if (it == note_to_channel_.end()) {
     return false;
   }
 
   ym2612::ChannelIndex channel = it->second;
+  uint32_t &holders = channel_holders_[static_cast<uint8_t>(channel)];
+  holders &= ~holder_bit(source);
+  if (holders != 0 || sustaining_ != 0) {
+    return false;
+  }
   device.channel(channel).write_key_off();
 
   release_channel(static_cast<uint8_t>(channel), sample_position);
@@ -227,6 +250,48 @@ bool ChannelAllocator::note_off(const ym2612::Note &note,
 
   publish();
   return true;
+}
+
+void ChannelAllocator::release_unheld(ym2612::Device &device,
+                                      uint64_t sample_position) {
+  if (sustaining_ != 0) {
+    return;
+  }
+  bool released = false;
+  for (auto it = note_to_channel_.begin(); it != note_to_channel_.end();) {
+    const auto index = static_cast<uint8_t>(it->second);
+    if (channel_holders_[index] != 0) {
+      ++it;
+      continue;
+    }
+    device.channel(it->second).write_key_off();
+    release_channel(index, sample_position);
+    it = note_to_channel_.erase(it);
+    released = true;
+  }
+  if (released) {
+    publish();
+  }
+}
+
+void ChannelAllocator::release_source(uint8_t source, ym2612::Device &device,
+                                      uint64_t sample_position) {
+  for (uint32_t &holders : channel_holders_) {
+    holders &= ~holder_bit(source);
+  }
+  sustaining_ &= ~holder_bit(source);
+  release_unheld(device, sample_position);
+}
+
+void ChannelAllocator::set_sustain(uint8_t source, bool pedal_down,
+                                   ym2612::Device &device,
+                                   uint64_t sample_position) {
+  if (pedal_down) {
+    sustaining_ |= holder_bit(source);
+    return;
+  }
+  sustaining_ &= ~holder_bit(source);
+  release_unheld(device, sample_position);
 }
 
 void ChannelAllocator::release_all(ym2612::Device &device,
@@ -242,6 +307,7 @@ void ChannelAllocator::release_all(ym2612::Device &device,
   }
   note_to_channel_.clear();
   allocation_counter_ = 0;
+  sustaining_ = 0;
 
   publish();
 }
