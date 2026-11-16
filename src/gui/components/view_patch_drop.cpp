@@ -1,6 +1,7 @@
 #include "view_patch_drop.hpp"
 
 #include "patch_selector.hpp"
+#include "sharp_frame.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <utility>
@@ -27,20 +28,12 @@ void view_patch_drop_target() {
       kPatchEntryPayload, ImGuiDragDropFlags_AcceptBeforeDelivery |
                               ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
   if (payload != nullptr && payload->IsPreview()) {
-    // Four strips rather than a stroked rectangle, which is antialiased and
-    // so bleeds a pixel either side of the edge.
     const ImVec2 min(window->Pos.x, window->InnerRect.Min.y);
     const ImVec2 max(window->Pos.x + window->Size.x,
                      window->Pos.y + window->Size.y);
-    const float t = ImGui::GetStyle().DragDropTargetBorderSize;
-    const ImU32 color = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
-    ImDrawList *draw_list = ImGui::GetForegroundDrawList(window->Viewport);
-    draw_list->AddRectFilled(min, ImVec2(max.x, min.y + t), color);
-    draw_list->AddRectFilled(ImVec2(min.x, max.y - t), max, color);
-    draw_list->AddRectFilled(ImVec2(min.x, min.y + t),
-                             ImVec2(min.x + t, max.y - t), color);
-    draw_list->AddRectFilled(ImVec2(max.x - t, min.y + t),
-                             ImVec2(max.x, max.y - t), color);
+    draw_sharp_frame(ImGui::GetForegroundDrawList(window->Viewport), min, max,
+                     ImGui::GetColorU32(ImGuiCol_DragDropTarget),
+                     ImGui::GetStyle().DragDropTargetBorderSize);
   }
   if (payload != nullptr && payload->IsDelivery()) {
     pending_drop = ViewPatchDrop{

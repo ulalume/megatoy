@@ -1,5 +1,6 @@
 #include "patches/patch_write.hpp"
 
+#include "core/ascii.hpp"
 #include "formats/ginpkg.hpp"
 #include "formats/patch_registry.hpp"
 #include "formats/ym2612_format_adapter.hpp"
@@ -11,11 +12,7 @@
 namespace patches {
 
 std::string lowercase_extension(const std::filesystem::path &path) {
-  std::string ext = path.extension().string();
-  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-  return ext;
+  return megatoy::ascii::lower(path.extension().string());
 }
 
 bool can_overwrite_in_place(const std::filesystem::path &path) {

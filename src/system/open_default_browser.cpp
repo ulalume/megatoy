@@ -1,8 +1,8 @@
 #include "open_default_browser.hpp"
 
-#include <algorithm>
-#include <cctype>
-#include <iterator>
+#include "system/url_check.hpp"
+
+#include <utility>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -17,29 +17,6 @@
 namespace megatoy {
 namespace system {
 namespace {
-
-bool is_valid_url(std::string_view url) {
-  if (url.empty()) {
-    return false;
-  }
-
-  const std::string url_str(url);
-  const std::string lower_url = [&]() {
-    std::string result;
-    result.reserve(url_str.size());
-    std::transform(url_str.begin(), url_str.end(), std::back_inserter(result),
-                   [](unsigned char c) { return std::tolower(c); });
-    return result;
-  }();
-
-  // Only http and https: file:// would give access to local files.
-  if (lower_url.substr(0, 7) == "http://" ||
-      lower_url.substr(0, 8) == "https://") {
-    return true;
-  }
-
-  return false;
-}
 
 #ifdef _WIN32
 OpenBrowserResult open_browser_windows(std::string_view url) {
@@ -114,23 +91,9 @@ OpenBrowserResult open_browser_linux(std::string_view url) {
 OpenBrowserResult open_default_browser(std::string_view url) {
   OpenBrowserResult result;
 
-  if (!is_valid_url(url)) {
+  if (auto problem = url_problem(url); !problem.empty()) {
     result.success = false;
-    result.error_message =
-        "Invalid or unsupported URL scheme. Only http:// and "
-        "https:// are allowed.";
-    return result;
-  }
-
-  // Check for dangerous characters that could be used for injection
-  const std::string url_str(url);
-  if (url_str.find('"') != std::string::npos ||
-      url_str.find('\'') != std::string::npos ||
-      url_str.find(';') != std::string::npos ||
-      url_str.find('&') != std::string::npos ||
-      url_str.find('|') != std::string::npos) {
-    result.success = false;
-    result.error_message = "URL contains potentially dangerous characters";
+    result.error_message = std::move(problem);
     return result;
   }
 

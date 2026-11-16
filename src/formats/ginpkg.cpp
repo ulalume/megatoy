@@ -1,4 +1,5 @@
 #include "ginpkg.hpp"
+#include "core/ascii.hpp"
 
 #include <miniz.h>
 
@@ -322,10 +323,7 @@ std::filesystem::path
 build_package_path(const std::filesystem::path &patches_dir,
                    const std::string &filename) {
   std::string full_filename = filename;
-  std::string lower = full_filename;
-  std::transform(
-      lower.begin(), lower.end(), lower.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string lower = megatoy::ascii::lower(full_filename);
   if (!lower.ends_with(".ginpkg")) {
     full_filename += ".ginpkg";
   }

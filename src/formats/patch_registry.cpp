@@ -1,5 +1,6 @@
 #include "patch_registry.hpp"
 
+#include "core/ascii.hpp"
 #include "ginpkg.hpp"
 #include "ym2612_format_adapter.hpp"
 #include <algorithm>
@@ -28,19 +29,13 @@ PatchRegistry::PatchRegistry() { register_defaults(); }
 
 void PatchRegistry::register_format(const std::string &extension,
                                     PatchFormatHandler handler) {
-  std::string ext_lower = extension;
-  std::transform(
-      ext_lower.begin(), ext_lower.end(), ext_lower.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string ext_lower = megatoy::ascii::lower(extension);
   handlers_[ext_lower] = std::move(handler);
 }
 
 const PatchFormatHandler *
 PatchRegistry::handler_for_extension(const std::string &extension) const {
-  std::string ext_lower = extension;
-  std::transform(
-      ext_lower.begin(), ext_lower.end(), ext_lower.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string ext_lower = megatoy::ascii::lower(extension);
   auto it = handlers_.find(ext_lower);
   if (it != handlers_.end()) {
     return &it->second;
@@ -58,10 +53,8 @@ PatchLoadResult PatchRegistry::load(const std::filesystem::path &path) const {
     return result;
   }
 
-  std::string ext = path.extension().string();
-  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
+  const std::string ext =
+      megatoy::ascii::lower(path.extension().string());
 
   auto handler = handler_for_extension(ext);
   if (!handler || !handler->read_file) {

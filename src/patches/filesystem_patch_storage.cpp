@@ -1,5 +1,6 @@
 #include "patches/filesystem_patch_storage.hpp"
 
+#include "core/ascii.hpp"
 #include "formats/ginpkg.hpp"
 #include "formats/patch_loader.hpp"
 #include "formats/patch_registry.hpp"
@@ -135,10 +136,8 @@ FilesystemPatchStorage::save_patch(const ym2612::Patch &patch,
   auto patch_to_write = patch;
   patch_to_write.name = sanitized;
 
-  std::string pref_ext(preferred_extension);
-  std::transform(
-      pref_ext.begin(), pref_ext.end(), pref_ext.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::string pref_ext =
+      megatoy::ascii::lower(std::string(preferred_extension));
   if (pref_ext.empty()) {
     pref_ext = ".dmp";
   }

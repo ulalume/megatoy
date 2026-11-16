@@ -1,4 +1,5 @@
 #include "formats/ym2612_format_adapter.hpp"
+#include "core/ascii.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -27,13 +28,6 @@ bool write_bytes(const std::filesystem::path &path,
   file.write(reinterpret_cast<const char *>(bytes.data()),
              static_cast<std::streamsize>(bytes.size()));
   return static_cast<bool>(file);
-}
-
-std::string to_lower(std::string value) {
-  std::transform(
-      value.begin(), value.end(), value.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return value;
 }
 
 } // namespace
@@ -117,7 +111,7 @@ std::string extension_for(ym2612_format::Format format) {
 
 std::optional<ym2612_format::Format>
 format_for_extension(const std::string &extension) {
-  std::string normalized = to_lower(extension);
+  std::string normalized = megatoy::ascii::lower(extension);
   if (!normalized.empty() && normalized.front() == '.') {
     normalized.erase(normalized.begin());
   }

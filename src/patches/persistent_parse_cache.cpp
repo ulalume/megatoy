@@ -12,6 +12,15 @@ namespace patches {
 
 namespace {
 
+/// Orders a path and its entry by when the entry was last used, the one
+/// used longest ago first.
+constexpr auto used_before = [](const auto &left, const auto &right) {
+  if (left.second->last_used != right.second->last_used) {
+    return left.second->last_used < right.second->last_used;
+  }
+  return left.second->access_order < right.second->access_order;
+};
+
 constexpr int kSchemaVersion = 1;
 
 nlohmann::json subtree_to_json(const PatchEntry &entry) {
@@ -157,13 +166,7 @@ bool PersistentParseCache::save() {
   for (const auto &[path, entry] : entries_) {
     ordered_entries.emplace_back(path, &entry);
   }
-  std::sort(ordered_entries.begin(), ordered_entries.end(),
-            [](const auto &left, const auto &right) {
-              if (left.second->last_used != right.second->last_used) {
-                return left.second->last_used < right.second->last_used;
-              }
-              return left.second->access_order < right.second->access_order;
-            });
+  std::sort(ordered_entries.begin(), ordered_entries.end(), used_before);
 
   nlohmann::json serialized_entries = nlohmann::json::array();
   for (const auto &[path, entry] : ordered_entries) {
@@ -272,13 +275,7 @@ void PersistentParseCache::prune_locked() {
   for (auto &[path, entry] : entries_) {
     ordered_entries.emplace_back(path, &entry);
   }
-  std::sort(ordered_entries.begin(), ordered_entries.end(),
-            [](const auto &left, const auto &right) {
-              if (left.second->last_used != right.second->last_used) {
-                return left.second->last_used < right.second->last_used;
-              }
-              return left.second->access_order < right.second->access_order;
-            });
+  std::sort(ordered_entries.begin(), ordered_entries.end(), used_before);
 
   const auto remove_count = entries_.size() - kMaxEntries;
   for (std::size_t index = 0; index < remove_count; ++index) {

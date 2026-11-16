@@ -1,5 +1,6 @@
 #include "ssg_preview.hpp"
 
+#include "gui/components/sharp_frame.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/ui_scale.hpp"
 
@@ -36,17 +37,6 @@ constexpr std::array<Shape, 8> kShapes = {{
     {{{{0, 0}, {1, 1}, {1, 0}, {4, 0}}}, 4},
 }};
 
-/// The frame, as four strips so its edges stay sharp.
-void draw_frame(ImDrawList *draw_list, ImVec2 min, ImVec2 max, ImU32 color) {
-  const float width = ui::scale::px(1.0f);
-  draw_list->AddRectFilled(min, ImVec2(max.x, min.y + width), color);
-  draw_list->AddRectFilled(ImVec2(min.x, max.y - width), max, color);
-  draw_list->AddRectFilled(ImVec2(min.x, min.y + width),
-                           ImVec2(min.x + width, max.y - width), color);
-  draw_list->AddRectFilled(ImVec2(max.x - width, min.y + width),
-                           ImVec2(max.x, max.y - width), color);
-}
-
 } // namespace
 
 void ssg_diagram(bool enabled, int envelope_type, ImVec2 size) {
@@ -54,8 +44,9 @@ void ssg_diagram(bool enabled, int envelope_type, ImVec2 size) {
   const ImVec2 min = ImGui::GetItemRectMin();
   const ImVec2 max = ImGui::GetItemRectMax();
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  draw_frame(draw_list, min, max,
-             styles::color_u32(styles::MegatoyCol::PreviewBorder));
+  draw_sharp_frame(draw_list, min, max,
+                   styles::color_u32(styles::MegatoyCol::PreviewBorder),
+                   ui::scale::px(1.0f));
 
   if (!enabled) {
     const char *label = "OFF";

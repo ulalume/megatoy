@@ -8,7 +8,6 @@
 
 namespace patches {
 
-std::string to_lower(const std::string &value);
 /// What a search box's text is matched as: lower case, without the spaces
 /// around it.
 std::string search_key(const std::string &query);
