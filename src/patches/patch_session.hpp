@@ -253,8 +253,8 @@ public:
    * dialog instead, so nothing is destroyed by a stray Ctrl+S.
    */
   SaveResult save_current_patch(std::string_view preferred_extension = {});
-  /// How Save As asks where to write, where the folder is the user's to
-  /// choose. Without one, such a save fails.
+  /// How Save As asks where to write. Without one it writes into the
+  /// workspace, as it does when a folder is named.
   using SavePathPrompt = std::function<SavePathAnswer(const SavePathRequest &)>;
   void set_save_path_prompt(SavePathPrompt prompt);
   SaveResult save_current_patch_as(std::string_view preferred_extension = {},

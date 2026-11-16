@@ -5,10 +5,8 @@
 #include "formats/patch_loader.hpp"
 #include "formats/ym2612_format_adapter.hpp"
 #include "patches/patch_write.hpp"
+#include "platform/host.hpp"
 #include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_url.hpp"
-#endif
 #include <algorithm>
 #include <filesystem>
 #include <utility>
@@ -73,9 +71,7 @@ bool PatchSession::activate(DocumentId id) {
   }
   active_id_ = id;
   preferences_.set_last_patch_path(document->path());
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(document->patch());
-#endif
+  platform::host::current_patch_changed(document->patch());
   return true;
 }
 
@@ -283,9 +279,7 @@ void PatchSession::set_current_patch(const ym2612::Patch &patch,
                                      RememberPatchPath remember) {
   assign_patch(active_document(), patch, source_path, remember);
   apply_patch_to_audio();
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(current_patch());
-#endif
+  platform::host::current_patch_changed(current_patch());
 }
 
 void PatchSession::assign_patch(PatchDocument &document,

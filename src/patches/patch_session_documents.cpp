@@ -1,14 +1,12 @@
 #include "patch_session.hpp"
 
 #include "formats/patch_loader.hpp"
+#include "platform/host.hpp"
 #include "platform/platform_config.hpp"
 #include <algorithm>
 #include <iterator>
 #include <utility>
 
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_url.hpp"
-#endif
 
 namespace patches {
 
@@ -136,9 +134,7 @@ PatchSession::place_document(const ym2612::Patch &patch,
   if (!selection_path.empty()) {
     set_document_selection_path(*target, selection_path);
   }
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(target->patch());
-#endif
+  platform::host::current_patch_changed(target->patch());
   return target->id();
 }
 
@@ -263,10 +259,7 @@ bool PatchSession::restore_open_documents() {
   activate(to_activate.value_or(*first));
   const auto *active_document = find_document(active_id_);
   preferences_.set_last_patch_path(active_document->path());
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(
-      active_document->patch());
-#endif
+  platform::host::current_patch_changed(active_document->patch());
   close_document(initial);
   return true;
 }

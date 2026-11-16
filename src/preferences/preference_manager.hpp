@@ -41,16 +41,7 @@ public:
 
   using ConfirmReplace = std::function<void(const std::string &message,
                                             std::function<void()> proceed)>;
-#if defined(MEGATOY_PLATFORM_WEB)
-  /**
-   * Has the user pick a folder and copies it into persistent storage: the
-   * browser cannot reference a folder on disk -- Firefox and Safari ship no
-   * directory picker at all. The picker and the reads are asynchronous, so
-   * `on_changed` may run several frames later. It is not called if the user
-   * cancels.
-   */
-  void import_workspace_folder(std::function<void()> on_changed);
-#else
+#if !defined(MEGATOY_PLATFORM_WEB)
   /**
    * Bring `chosen`, a folder on disk, into the workspace, read in place.
    *

@@ -188,6 +188,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   list(APPEND MEGATOY_LOGIC_SOURCES
     src/platform/web/web_audio_worklet.cpp
     src/platform/web/web_platform_services.cpp
+    src/platform/web/host.cpp
     src/platform/web/web_download.cpp
     src/platform/web/local_storage.cpp
     src/platform/web/web_folder_delete.cpp
@@ -215,6 +216,7 @@ else()
     src/midi/rtmidi_backend.cpp
     src/patches/background_folder_scan.cpp
     src/platform/native/desktop_platform_services.cpp
+    src/platform/native/host.cpp
   )
 endif()
 # Add platform-specific source files

@@ -42,7 +42,9 @@ AppServices::AppServices(platform::PlatformServicesProvider &platform_services)
       patch_session(path_service, preference_manager, audio_manager,
                     persistent_parse_cache.get()),
       spectrum_analyzer(2048) {
-  patch_session.set_save_path_prompt(ui::ask_save_path);
+  if (megatoy::platform::is_desktop()) {
+    patch_session.set_save_path_prompt(ui::ask_save_path);
+  }
 }
 
 namespace {

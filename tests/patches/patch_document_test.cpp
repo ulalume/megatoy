@@ -1043,10 +1043,6 @@ void test_save_as_writes_where_the_prompt_answers() {
   session.current_patch().instrument.feedback = 3;
   CHECK(session.is_modified());
 
-  // Nothing to ask: the save fails and the edits stay.
-  CHECK(session.save_current_patch().is_error());
-  CHECK(session.is_modified());
-
   const auto target = env.root / "elsewhere";
   fs::create_directories(target);
   int asked = 0;
@@ -1089,6 +1085,25 @@ void test_save_as_writes_where_the_prompt_answers() {
   session.current_patch().instrument.feedback = 5;
   CHECK(session.save_current_patch().is_success());
   CHECK(asked == 3);
+}
+
+void test_save_as_with_no_one_to_ask_writes_into_the_workspace() {
+  BrowserFixture fixture;
+  auto &session = fixture.env.session;
+  session.open_document(make_patch(4), {});
+  session.current_patch().instrument.feedback = 3;
+
+  // A name already taken is not overwritten unasked.
+  session.current_patch().name = "lead";
+  CHECK(session.save_current_patch().is_duplicated());
+  CHECK(session.is_modified());
+
+  session.current_patch().name = "solo";
+  const auto result = session.save_current_patch();
+  CHECK(result.is_success());
+  CHECK(result.path.filename() == "solo.dmp");
+  CHECK(result.path.parent_path() == fixture.env.patches_folder);
+  CHECK(!session.is_modified());
 }
 
 void test_failed_in_place_save_preserves_edits_and_the_clean_snapshot() {
@@ -1241,6 +1256,7 @@ int main() {
   test_rejected_creation_preserves_the_active_document();
   test_creating_a_folder_keeps_edits_and_lists_the_folder();
   test_save_as_writes_where_the_prompt_answers();
+  test_save_as_with_no_one_to_ask_writes_into_the_workspace();
   test_failed_in_place_save_preserves_edits_and_the_clean_snapshot();
   test_restore_skips_unreadable_records_and_keeps_only_one_preview();
   test_invalid_document_ids_do_not_replace_the_active_patch();

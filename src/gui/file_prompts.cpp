@@ -1,7 +1,13 @@
 #include "file_prompts.hpp"
 
+#include "core/status.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/platform_config.hpp"
+#if defined(MEGATOY_PLATFORM_WEB)
+#include "platform/import_pipeline.hpp"
+#include "platform/web/web_folder_import.hpp"
+#include "system/path_service.hpp"
+#endif
 
 #include <filesystem>
 #include <utility>
@@ -35,7 +41,29 @@ void request_add_workspace_folder(PreferenceManager &preferences,
                                   PreferenceManager::ConfirmReplace confirm) {
 #if defined(MEGATOY_PLATFORM_WEB)
   (void)confirm;
-  preferences.import_workspace_folder(std::move(on_changed));
+  platform::web::import_folder(
+      megatoy::system::PathService::web_storage_root(),
+      [&preferences, on_changed = std::move(on_changed)](
+          platform::web::FolderImportResult result) {
+        if (result.cancelled) {
+          return;
+        }
+        if (!result.ok) {
+          megatoy::status::error("Folder import failed: " + result.error);
+          return;
+        }
+        if (!preferences.add_workspace_folder(result.path)) {
+          megatoy::status::warning("\"" + result.folder_name +
+                                   "\" is already in the workspace.");
+          return;
+        }
+        megatoy::status::success(platform::import_pipeline::import_summary(
+            result.folder_name, result.file_count,
+            result.filtered_count + result.validation_failures.size()));
+        if (on_changed) {
+          on_changed();
+        }
+      });
 #else
   std::filesystem::path chosen;
   if (platform::file_dialog::pick_folder(preferences.last_save_directory(),

@@ -2,12 +2,10 @@
 
 #include "core/status.hpp"
 
+#include "platform/host.hpp"
 #include "platform/platform_config.hpp"
 #include "workspace/path_policy.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_folder_import.hpp"
-#include "platform/web/web_storage_bootstrap.hpp"
-#else
+#if !defined(MEGATOY_PLATFORM_WEB)
 #include "patches/background_folder_scan.hpp"
 #endif
 #include "preference_storage.hpp"
@@ -22,14 +20,9 @@ PreferenceManager::PreferenceManager(megatoy::system::PathService &paths)
   ensure_directories_exist();
   load_preferences();
 
-#if defined(MEGATOY_PLATFORM_WEB)
-  // The browser has no folder for the user to point at, so the workspace is
-  // seeded with a writable one inside persistent storage.
-  if (platform::web::bootstrap_workspace(
-          workspace_, megatoy::system::PathService::web_storage_root())) {
+  if (platform::host::seed_workspace(workspace_)) {
     save_preferences();
   }
-#endif
 }
 
 PreferenceManager::~PreferenceManager() = default;
@@ -70,13 +63,8 @@ bool PreferenceManager::rename_workspace_folder(
 
 bool PreferenceManager::workspace_folder_is_protected(
     const std::filesystem::path &path) const {
-#if defined(MEGATOY_PLATFORM_WEB)
-  return megatoy::workspace::paths_equal(
-      path, platform::web::default_workspace_folder());
-#else
-  (void)path;
-  return false;
-#endif
+  const auto required = platform::host::required_workspace_folder();
+  return !required.empty() && megatoy::workspace::paths_equal(path, required);
 }
 
 bool PreferenceManager::reorder_workspace_folder(std::size_t from,
@@ -93,40 +81,10 @@ bool PreferenceManager::refresh_workspace_availability() {
 }
 
 bool PreferenceManager::folder_add_is_import() {
-#if defined(MEGATOY_PLATFORM_WEB)
-  return true;
-#else
-  return false;
-#endif
+  return megatoy::platform::is_web();
 }
 
-#if defined(MEGATOY_PLATFORM_WEB)
-void PreferenceManager::import_workspace_folder(
-    std::function<void()> on_changed) {
-  platform::web::import_folder(
-      megatoy::system::PathService::web_storage_root(),
-      [this, on_changed](platform::web::FolderImportResult result) {
-        if (result.cancelled) {
-          return;
-        }
-        if (!result.ok) {
-          megatoy::status::error("Folder import failed: " + result.error);
-          return;
-        }
-        if (add_workspace_folder(result.path)) {
-          megatoy::status::success(platform::import_pipeline::import_summary(
-              result.folder_name, result.file_count,
-              result.filtered_count + result.validation_failures.size()));
-          if (on_changed) {
-            on_changed();
-          }
-        } else {
-          megatoy::status::warning("\"" + result.folder_name +
-                                   "\" is already in the workspace.");
-        }
-      });
-}
-#else
+#if !defined(MEGATOY_PLATFORM_WEB)
 void PreferenceManager::add_chosen_workspace_folder(
     const std::filesystem::path &chosen, std::function<void()> on_changed,
     ConfirmReplace confirm) {

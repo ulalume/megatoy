@@ -1,11 +1,7 @@
 #include "audio/load_meter.hpp"
-#include "platform/platform_config.hpp"
+#include "platform/host.hpp"
 #include "preference_storage.hpp"
 #include <algorithm>
-
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/local_storage.hpp"
-#endif
 #include <ios>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -21,14 +17,12 @@ public:
   bool load(PreferenceData &data) override {
     try {
       nlohmann::json j;
-      if (megatoy::platform::is_web()) {
-#if defined(MEGATOY_PLATFORM_WEB)
-        auto stored = platform::web::read_local_storage("megatoy_preferences");
+      if (platform::host::keeps_settings()) {
+        const auto stored = platform::host::read_settings();
         if (!stored.has_value()) {
           return true;
         }
         j = nlohmann::json::parse(stored.value());
-#endif
       } else {
         if (!std::filesystem::exists(path_)) {
           return true;
@@ -272,10 +266,8 @@ public:
           data.ui_preferences.custom_typing_octave_up_key;
       j["ui"] = ui;
 
-      if (megatoy::platform::is_web()) {
-#if defined(MEGATOY_PLATFORM_WEB)
-        platform::web::write_local_storage("megatoy_preferences", j.dump(2));
-#endif
+      if (platform::host::keeps_settings()) {
+        platform::host::write_settings(j.dump(2));
       } else {
         auto stream =
             vfs_.open_write(path_, std::ios::binary | std::ios::trunc);

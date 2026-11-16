@@ -7,22 +7,16 @@
 #include "history/history_manager.hpp"
 #include "history/snapshot_entry.hpp"
 #include "patches/patch_session.hpp"
-#include "platform/platform_config.hpp"
-#if defined(MEGATOY_PLATFORM_WEB)
-#include "platform/web/web_patch_url.hpp"
-#endif
+#include "platform/host.hpp"
 #include <filesystem>
 #include <memory>
 #include <string>
 
 namespace patch_actions {
 namespace detail {
-/// The page's address follows the active patch in the browser.
-inline void sync_patch_url([[maybe_unused]] AppContext &context) {
-#if defined(MEGATOY_PLATFORM_WEB)
-  platform::web::patch_url::sync_patch_to_url_if_needed(
+inline void sync_patch_url(AppContext &context) {
+  platform::host::current_patch_changed(
       context.services.patch_session.current_patch());
-#endif
 }
 
 using Snapshot = patches::PatchSession::PatchSnapshot;
