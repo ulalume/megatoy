@@ -23,6 +23,12 @@ constexpr std::string_view kPlaybackDetails[] = {
     "macOS: about 9 ms to the device, from about 35",
     "Web: no more crackling while the page is busy",
 };
+
+constexpr ChangelogItem kItems_0_10_1[] = {
+    {"Play two keyboards at once on the computer keyboard", {}},
+    {"Small UI adjustments", {}},
+};
+
 constexpr ChangelogItem kItems_0_10_0[] = {
     {"Easier to use on phones and in narrow windows", {}},
     {"Open several patches at once, each in its own tab", {}},
@@ -100,12 +106,12 @@ constexpr ChangelogItem kItems_0_6_0[] = {
 };
 
 constexpr ChangelogEntry kEntries[] = {
-    {"v0.10.0", kItems_0_10_0}, {"v0.9.3", kItems_0_9_3},
-    {"v0.9.2", kItems_0_9_2},   {"v0.9.1", kItems_0_9_1},
-    {"v0.9.0", kItems_0_9_0},   {"v0.8.4", kItems_0_8_4},
-    {"v0.8.3", kItems_0_8_3},   {"v0.8.2", kItems_0_8_2},
-    {"v0.8.1", kItems_0_8_1},   {"v0.8.0", kItems_0_8_0},
-    {"v0.6.0", kItems_0_6_0},
+    {"v0.10.1", kItems_0_10_1}, {"v0.10.0", kItems_0_10_0},
+    {"v0.9.3", kItems_0_9_3},   {"v0.9.2", kItems_0_9_2},
+    {"v0.9.1", kItems_0_9_1},   {"v0.9.0", kItems_0_9_0},
+    {"v0.8.4", kItems_0_8_4},   {"v0.8.3", kItems_0_8_3},
+    {"v0.8.2", kItems_0_8_2},   {"v0.8.1", kItems_0_8_1},
+    {"v0.8.0", kItems_0_8_0},   {"v0.6.0", kItems_0_6_0},
 };
 
 } // namespace
