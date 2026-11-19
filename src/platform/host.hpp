@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace megatoy::workspace {
 class Workspace;
@@ -34,5 +35,20 @@ std::filesystem::path required_workspace_folder();
 bool keeps_settings();
 std::optional<std::string> read_settings();
 bool write_settings(const std::string &text);
+
+/// A key of the keyboard's layout: its place by the name browsers give it
+/// ("KeyA"), and the character it types.
+struct LayoutKey {
+  std::string place;
+  char32_t typed = 0;
+};
+
+/// True when SDL has the keyboard's layout from the system. Where it has
+/// not, the layout is come to know of key by key.
+bool has_keyboard_layout();
+
+/// The keys of the keyboard's layout the host has come to know of since the
+/// last call. A host that leaves the layout to SDL gives none.
+std::vector<LayoutKey> take_keyboard_layout();
 
 } // namespace platform::host

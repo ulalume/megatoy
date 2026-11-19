@@ -167,6 +167,8 @@ void AppServices::initialize_app(AppState &state) {
   input.midi_keyboard_settings.key = clamp_key(prefs.midi_keyboard_key);
   input.keyboard_typing_octave =
       static_cast<uint8_t>(std::clamp(prefs.midi_keyboard_typing_octave, 0, 7));
+  input.keyboard_typing_upper_octave = static_cast<uint8_t>(
+      std::clamp(prefs.midi_keyboard_typing_upper_octave, 0, 7));
   histories.clear();
 }
 

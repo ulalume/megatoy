@@ -5,6 +5,7 @@
 #include "gui/components/menu_rows.hpp"
 #include "gui/envelope/envelope_curve.hpp"
 #include "gui/input/key_name_utils.hpp"
+#include "gui/input/keyboard_typing.hpp"
 #include "gui/input/typing_keyboard_layout.hpp"
 #include "gui/styles/megatoy_style.hpp"
 #include "gui/styles/theme.hpp"
@@ -28,106 +29,86 @@ namespace ui {
 
 namespace {
 
-struct CustomLayoutEditorState {
-  enum class OctaveCaptureTarget { None, Down, Up };
-  int slot_capture_index = -1;
-  OctaveCaptureTarget octave_capture_target = OctaveCaptureTarget::None;
+/// The custom keys editor: the key in it that waits for a press.
+struct CustomKeysEditorState {
+  enum class Part { None, Slot, OctaveDown, OctaveUp };
+  Part waiting = Part::None;
+  /// Which keyboard's key waits, and for a slot which one.
+  std::size_t keyboard = 0;
+  std::size_t slot = 0;
+  /// The places held when the editor last looked, to tell a key going down.
+  std::array<bool, SDL_SCANCODE_COUNT> held{};
+
+  bool waits_for(Part part, std::size_t on_keyboard,
+                 std::size_t on_slot = 0) const {
+    return waiting == part && keyboard == on_keyboard &&
+           (part != Part::Slot || slot == on_slot);
+  }
+
+  /// Starts waiting for that key, or stops when it is the one waiting.
+  void toggle(Part part, std::size_t on_keyboard, std::size_t on_slot = 0) {
+    if (waits_for(part, on_keyboard, on_slot)) {
+      waiting = Part::None;
+      return;
+    }
+    waiting = part;
+    keyboard = on_keyboard;
+    slot = on_slot;
+  }
 };
 
-CustomLayoutEditorState &custom_layout_editor_state() {
-  static CustomLayoutEditorState state;
+CustomKeysEditorState &custom_keys_editor_state() {
+  static CustomKeysEditorState state;
   return state;
 }
 
-void normalize_custom_layout(UIPreferences &prefs) {
-  auto &keys = prefs.custom_typing_layout_keys;
-  if (keys.empty()) {
-    keys.resize(ui::typing_layout_min_custom_slots,
-                static_cast<int>(ImGuiKey_None));
+/// Puts the key that has gone down since the editor last looked on the key
+/// that waits for one. Escape stops the waiting and changes nothing.
+void poll_custom_keys_capture(
+    CustomKeysEditorState &state,
+    const std::vector<TypingKeysPreference *> &keyboards) {
+  SDL_Scancode pressed = SDL_SCANCODE_UNKNOWN;
+  int count = 0;
+  const bool *held = SDL_GetKeyboardState(&count);
+  for (int code = SDL_SCANCODE_UNKNOWN + 1;
+       code < std::min<int>(count, SDL_SCANCODE_COUNT); ++code) {
+    if (held[code] && !state.held[code] && pressed == SDL_SCANCODE_UNKNOWN) {
+      pressed = static_cast<SDL_Scancode>(code);
+    }
+    state.held[code] = held[code];
   }
-  if (keys.size() < ui::typing_layout_min_custom_slots) {
-    keys.resize(ui::typing_layout_min_custom_slots,
-                static_cast<int>(ImGuiKey_None));
-  } else if (keys.size() > ui::typing_layout_max_custom_slots) {
-    keys.resize(ui::typing_layout_max_custom_slots);
+
+  using Part = CustomKeysEditorState::Part;
+  // The key that waited may have gone with its keyboard or its slot.
+  if (state.keyboard >= keyboards.size() ||
+      (state.waiting == Part::Slot &&
+       state.slot >= keyboards[state.keyboard]->places.size())) {
+    state.waiting = Part::None;
   }
-  const auto defaults = keyboard_octave_keys();
-  prefs.custom_typing_octave_down_key = static_cast<int>(
-      key_from_preference(prefs.custom_typing_octave_down_key, defaults.first));
-  prefs.custom_typing_octave_up_key = static_cast<int>(
-      key_from_preference(prefs.custom_typing_octave_up_key, defaults.second));
-}
-
-/// The custom layout made again from the places of the keyboard in use, as
-/// Auto has it.
-void reset_to_keyboard(UIPreferences &prefs) {
-  copy_layout_to_preferences(prefs.custom_typing_layout_keys,
-                             keyboard_typing_layout());
-  const auto [down, up] = keyboard_octave_keys();
-  prefs.custom_typing_octave_down_key = static_cast<int>(down);
-  prefs.custom_typing_octave_up_key = static_cast<int>(up);
-  normalize_custom_layout(prefs);
-}
-
-void clamp_capture_state(CustomLayoutEditorState &state,
-                         const UIPreferences &prefs) {
-  if (state.slot_capture_index >=
-      static_cast<int>(prefs.custom_typing_layout_keys.size())) {
-    state.slot_capture_index = -1;
-  }
-}
-
-void poll_custom_layout_capture(CustomLayoutEditorState &state,
-                                UIPreferences &prefs) {
-  if (state.slot_capture_index < 0 &&
-      state.octave_capture_target ==
-          CustomLayoutEditorState::OctaveCaptureTarget::None) {
+  if (state.waiting == Part::None || pressed == SDL_SCANCODE_UNKNOWN) {
     return;
   }
-  if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-    state.slot_capture_index = -1;
-    state.octave_capture_target =
-        CustomLayoutEditorState::OctaveCaptureTarget::None;
-    return;
-  }
-  // Keyboard keys only: the click on Cancel, or any other, is a key to
-  // ImGui too.
-  for (int key = ImGuiKey_Keyboard_BEGIN; key < ImGuiKey_Keyboard_END; ++key) {
-    ImGuiKey imgui_key = static_cast<ImGuiKey>(key);
-    if (ImGui::IsKeyPressed(imgui_key)) {
-      if (state.slot_capture_index >= 0 &&
-          static_cast<std::size_t>(state.slot_capture_index) <
-              prefs.custom_typing_layout_keys.size()) {
-        prefs.custom_typing_layout_keys[static_cast<std::size_t>(
-            state.slot_capture_index)] = key;
-        state.slot_capture_index = -1;
-      } else if (state.octave_capture_target ==
-                 CustomLayoutEditorState::OctaveCaptureTarget::Down) {
-        prefs.custom_typing_octave_down_key = key;
-        state.octave_capture_target =
-            CustomLayoutEditorState::OctaveCaptureTarget::None;
-      } else if (state.octave_capture_target ==
-                 CustomLayoutEditorState::OctaveCaptureTarget::Up) {
-        prefs.custom_typing_octave_up_key = key;
-        state.octave_capture_target =
-            CustomLayoutEditorState::OctaveCaptureTarget::None;
-      }
-      break;
+  if (pressed != SDL_SCANCODE_ESCAPE) {
+    auto &keys = *keyboards[state.keyboard];
+    if (state.waiting == Part::Slot) {
+      keys.places[state.slot] = pressed;
+    } else if (state.waiting == Part::OctaveDown) {
+      keys.octave_down = pressed;
+    } else {
+      keys.octave_up = pressed;
     }
   }
+  state.waiting = Part::None;
 }
 
-/// A key's name as it is shown on the piano: short, and a dash for none.
-std::string key_caption(ImGuiKey key) {
-  if (key == ImGuiKey_None) {
-    return "-";
+/// A key's name as it is shown on the piano: short, and nothing for none.
+std::string key_caption(SDL_Scancode place) {
+  if (place == SDL_SCANCODE_UNKNOWN) {
+    return "";
   }
-  std::string label = short_key_name(key);
-  if (label.empty() || label == "??") {
-    const char *fallback = ImGui::GetKeyName(key);
-    label = fallback ? fallback : "??";
-  }
-  return label;
+  const std::string name = place_name(place);
+  // A key put on by its press is seen even while its character is unknown.
+  return name.empty() ? SDL_GetScancodeName(place) : name;
 }
 
 bool is_black_slot(std::size_t slot) {
@@ -151,13 +132,13 @@ bool clear_requested() {
 
 /**
  * The layout's slots as piano keys from C, each showing the keyboard key that
- * plays it: "?" while it waits for one, a dash for none, and in the warning
- * colour when another slot has the same key. A click starts or stops waiting;
+ * plays it: "?" while it waits for one, nothing for none, and in the warning
+ * colour when another key has the same one. A click starts or stops waiting;
  * a right click (a long press on a touch screen) clears the slot.
  */
-void render_layout_piano(CustomLayoutEditorState &state,
+void render_layout_piano(CustomKeysEditorState &state, std::size_t keyboard,
                          std::vector<int> &slots,
-                         const std::map<ImGuiKey, int> &usage) {
+                         const std::map<SDL_Scancode, int> &usage) {
   const std::size_t count = slots.size();
   std::size_t whites = 0;
   for (std::size_t slot = 0; slot < count; ++slot) {
@@ -211,14 +192,10 @@ void render_layout_piano(CustomLayoutEditorState &state,
       }
     }
     if (hit != nullptr) {
-      const int index = static_cast<int>(hit->index);
       if (clearing) {
-        slots[hit->index] = static_cast<int>(ImGuiKey_None);
+        slots[hit->index] = ui::typing_place_none;
       } else {
-        state.slot_capture_index =
-            state.slot_capture_index == index ? -1 : index;
-        state.octave_capture_target =
-            CustomLayoutEditorState::OctaveCaptureTarget::None;
+        state.toggle(CustomKeysEditorState::Part::Slot, keyboard, hit->index);
       }
     }
   }
@@ -226,9 +203,10 @@ void render_layout_piano(CustomLayoutEditorState &state,
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   const ImU32 border = styles::color_u32(styles::MegatoyCol::PianoKeyBorder);
   const auto draw_slot = [&](const Slot &slot) {
-    const bool waiting =
-        state.slot_capture_index == static_cast<int>(slot.index);
-    const ImGuiKey key = key_from_preference(slots[slot.index], ImGuiKey_None);
+    const bool waiting = state.waits_for(CustomKeysEditorState::Part::Slot,
+                                         keyboard, slot.index);
+    const SDL_Scancode key =
+        place_from_preference(slots[slot.index], SDL_SCANCODE_UNKNOWN);
     const auto used = usage.find(key);
     const bool duplicate = used != usage.end() && used->second > 1;
     using Col = styles::MegatoyCol;
@@ -274,88 +252,125 @@ void render_layout_piano(CustomLayoutEditorState &state,
   }
 }
 
-/// An octave key's button: its key, "?" while waiting for one. A click starts
-/// or stops waiting; a right click clears it.
+/// An octave key's button: its key, "?" while waiting for one, and in the
+/// warning colour when another key has the same one. A click starts or stops
+/// waiting; a right click clears it.
 void octave_key_button(const char *id, int &stored_key,
-                       CustomLayoutEditorState &state,
-                       CustomLayoutEditorState::OctaveCaptureTarget target) {
-  const bool waiting = state.octave_capture_target == target;
-  const std::string caption =
-      waiting ? "?"
-              : key_caption(key_from_preference(stored_key, ImGuiKey_None));
+                       CustomKeysEditorState &state,
+                       CustomKeysEditorState::Part part, std::size_t keyboard,
+                       const std::map<SDL_Scancode, int> &usage) {
+  const bool waiting = state.waits_for(part, keyboard);
+  const SDL_Scancode key =
+      place_from_preference(stored_key, SDL_SCANCODE_UNKNOWN);
+  const auto used = usage.find(key);
+  const bool duplicate = used != usage.end() && used->second > 1;
+  const std::string caption = waiting ? "?" : key_caption(key);
   if (waiting) {
     ImGui::PushStyleColor(ImGuiCol_Button,
                           ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
   }
+  if (duplicate) {
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          styles::color(styles::MegatoyCol::StatusWarning));
+  }
   const bool clicked =
       ImGui::Button((caption + "##" + id).c_str(),
                     ImVec2(ImGui::GetFrameHeight() * 1.6f, 0.0f));
-  if (waiting) {
-    ImGui::PopStyleColor();
-  }
+  ImGui::PopStyleColor((waiting ? 1 : 0) + (duplicate ? 1 : 0));
   if (clicked) {
-    state.octave_capture_target =
-        waiting ? CustomLayoutEditorState::OctaveCaptureTarget::None : target;
-    state.slot_capture_index = -1;
+    state.toggle(part, keyboard);
   }
   if (clear_requested()) {
-    stored_key = static_cast<int>(ImGuiKey_None);
+    stored_key = ui::typing_place_none;
   }
 }
 
-void render_custom_layout_editor(UIPreferences &prefs) {
-  auto &state = custom_layout_editor_state();
-  normalize_custom_layout(prefs);
-  clamp_capture_state(state, prefs);
-  poll_custom_layout_capture(state, prefs);
+/// The user's keys for the keyboards of `layout`, each as a piano with its
+/// octave keys under it, the upper keyboard over the lower one.
+void render_custom_keys_editor(UIPreferences &prefs,
+                               TypingKeyboardLayout layout) {
+  using Part = CustomKeysEditorState::Part;
+  auto &state = custom_keys_editor_state();
+  adopt_legacy_typing_keys(prefs);
+  const auto standard = standard_typing_keys(layout);
+  const auto keyboards = custom_typing_keys(prefs, layout);
+  for (std::size_t i = 0; i < keyboards.size(); ++i) {
+    fill_custom_typing_keys(*keyboards[i], standard[i]);
+  }
+  if (state.waiting != Part::None) {
+    keep_typing_quiet();
+  }
+  poll_custom_keys_capture(state, keyboards);
 
   ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted),
                      "Click a key, then press the keyboard key to put on it. "
                      "Right-click clears it.");
 
-  auto &slots = prefs.custom_typing_layout_keys;
-  std::map<ImGuiKey, int> usage;
-  for (const auto value : slots) {
-    if (const ImGuiKey key = key_from_preference(value, ImGuiKey_None);
-        key != ImGuiKey_None) {
+  std::map<SDL_Scancode, int> usage;
+  const auto count_use = [&usage](int stored) {
+    if (const auto key = place_from_preference(stored, SDL_SCANCODE_UNKNOWN);
+        key != SDL_SCANCODE_UNKNOWN) {
       ++usage[key];
     }
+  };
+  for (const auto *keys : keyboards) {
+    std::for_each(keys->places.begin(), keys->places.end(), count_use);
+    count_use(keys->octave_down);
+    count_use(keys->octave_up);
   }
 
-  render_layout_piano(state, slots, usage);
-
-  // Slots are added and taken away at the top end.
-  ImGui::SameLine();
-  ImGui::BeginGroup();
   const ImVec2 square(ImGui::GetFrameHeight(), ImGui::GetFrameHeight());
-  ImGui::BeginDisabled(slots.size() >= ui::typing_layout_max_custom_slots);
-  if (ImGui::Button("+", square)) {
-    slots.push_back(static_cast<int>(ImGuiKey_None));
-  }
-  ImGui::EndDisabled();
-  ImGui::BeginDisabled(slots.size() <= ui::typing_layout_min_custom_slots);
-  if (ImGui::Button("-", square)) {
-    slots.pop_back();
-    clamp_capture_state(state, prefs);
-  }
-  ImGui::EndDisabled();
-  ImGui::EndGroup();
+  for (std::size_t i = keyboards.size(); i-- > 0;) {
+    auto &keys = *keyboards[i];
+    ImGui::PushID(static_cast<int>(i));
+    if (keyboards.size() > 1) {
+      if (i + 1 < keyboards.size()) {
+        ImGui::Spacing();
+      }
+      ImGui::TextUnformatted(i == 0 ? "Lower" : "Upper");
+    }
 
-  ImGui::AlignTextToFramePadding();
-  ImGui::TextUnformatted("Octave");
-  ImGui::SameLine();
-  ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "Down");
-  ImGui::SameLine();
-  octave_key_button("octave_down", prefs.custom_typing_octave_down_key, state,
-                    CustomLayoutEditorState::OctaveCaptureTarget::Down);
-  ImGui::SameLine();
-  ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "Up");
-  ImGui::SameLine();
-  octave_key_button("octave_up", prefs.custom_typing_octave_up_key, state,
-                    CustomLayoutEditorState::OctaveCaptureTarget::Up);
+    render_layout_piano(state, i, keys.places, usage);
 
-  if (ImGui::Button("Reset to This Keyboard")) {
-    reset_to_keyboard(prefs);
+    // Slots are added and taken away at the top end.
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+    ImGui::BeginDisabled(keys.places.size() >=
+                         ui::typing_layout_max_custom_slots);
+    if (ImGui::Button("+", square)) {
+      keys.places.push_back(ui::typing_place_none);
+    }
+    ImGui::EndDisabled();
+    ImGui::BeginDisabled(keys.places.size() <=
+                         ui::typing_layout_min_custom_slots);
+    if (ImGui::Button("-", square)) {
+      keys.places.pop_back();
+    }
+    ImGui::EndDisabled();
+    ImGui::EndGroup();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Octave");
+    ImGui::SameLine();
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "Down");
+    ImGui::SameLine();
+    octave_key_button("octave_down", keys.octave_down, state, Part::OctaveDown,
+                      i, usage);
+    ImGui::SameLine();
+    ImGui::TextColored(styles::color(styles::MegatoyCol::TextMuted), "Up");
+    ImGui::SameLine();
+    octave_key_button("octave_up", keys.octave_up, state, Part::OctaveUp, i,
+                      usage);
+    ImGui::PopID();
+  }
+
+  ImGui::Spacing();
+  if (ImGui::Button("Reset")) {
+    for (std::size_t i = 0; i < keyboards.size(); ++i) {
+      *keyboards[i] = {};
+      fill_custom_typing_keys(*keyboards[i], standard[i]);
+    }
+    state.waiting = Part::None;
   }
 
   std::string duplicates;
@@ -587,7 +602,7 @@ void render_sound_page(PreferencesContext &context) {
 
   section_title("Emulation", true);
   static constexpr const char *cores[] = {"Nuked-OPN2 (accurate)",
-                                         "ymfm (fast)"};
+                                          "ymfm (fast)"};
   ui_prefs.ym2612_core = std::clamp(ui_prefs.ym2612_core, 0, 1);
   ui::combo("Core", &ui_prefs.ym2612_core, cores,
             static_cast<int>(std::size(cores)));
@@ -695,31 +710,29 @@ void render_input_page(PreferencesContext &context) {
 
   section_title("Typing Keyboard");
 
-  static constexpr const char *kLayouts[] = {"Auto", "Custom"};
+  static constexpr const char *kLayouts[] = {"One Keyboard", "Two Keyboards"};
   constexpr TypingKeyboardLayout kLayoutValues[] = {
-      TypingKeyboardLayout::Auto, TypingKeyboardLayout::Custom};
+      TypingKeyboardLayout::OneKeyboard, TypingKeyboardLayout::TwoKeyboards};
   const auto stored = clamp_layout_pref(ui_prefs.midi_keyboard_layout);
   ui_prefs.midi_keyboard_layout = static_cast<int>(stored);
-  int current_layout = stored == TypingKeyboardLayout::Custom ? 1 : 0;
+  int current_layout = static_cast<int>(
+      std::find(std::begin(kLayoutValues), std::end(kLayoutValues), stored) -
+      std::begin(kLayoutValues));
+  // A key waiting for a press stops waiting when its keyboard goes.
+  auto &editor = custom_keys_editor_state();
   if (ui::combo("Layout", &current_layout, kLayouts,
                 static_cast<int>(std::size(kLayouts)))) {
-    const auto chosen = kLayoutValues[current_layout];
-    // A custom layout never touched starts from this keyboard rather than
-    // from the US one it is stored as.
-    const bool untouched =
-        std::equal(ui_prefs.custom_typing_layout_keys.begin(),
-                   ui_prefs.custom_typing_layout_keys.end(),
-                   ui::default_typing_layout_keys.begin(),
-                   ui::default_typing_layout_keys.end());
-    if (chosen == TypingKeyboardLayout::Custom && untouched) {
-      reset_to_keyboard(ui_prefs);
-    }
-    ui_prefs.midi_keyboard_layout = static_cast<int>(chosen);
+    ui_prefs.midi_keyboard_layout =
+        static_cast<int>(kLayoutValues[current_layout]);
+    editor.waiting = CustomKeysEditorState::Part::None;
   }
-  const auto selected_layout = clamp_layout_pref(ui_prefs.midi_keyboard_layout);
-  if (selected_layout == TypingKeyboardLayout::Custom) {
+  if (ImGui::Checkbox("Use custom keys", &ui_prefs.midi_keyboard_custom_keys)) {
+    editor.waiting = CustomKeysEditorState::Part::None;
+  }
+  if (ui_prefs.midi_keyboard_custom_keys) {
     ImGui::Spacing();
-    render_custom_layout_editor(ui_prefs);
+    render_custom_keys_editor(ui_prefs,
+                              clamp_layout_pref(ui_prefs.midi_keyboard_layout));
   }
 }
 
@@ -727,7 +740,6 @@ void render_input_page(PreferencesContext &context) {
 
 void render_preferences_window(const char *title, PreferencesContext &context) {
   auto &ui_prefs = context.ui_prefs;
-  normalize_custom_layout(ui_prefs);
   const bool open_sound_tab = std::exchange(context.open_sound_tab, false);
   if (open_sound_tab) {
     ui_prefs.show_preferences = true;
@@ -747,9 +759,8 @@ void render_preferences_window(const char *title, PreferencesContext &context) {
     static constexpr const char *kPages[] = {"General", "Patches", "Sound",
                                              "Input"};
     constexpr int kSoundPage = 2;
-    const int page =
-        side_list("##preference_pages", kPages,
-                  open_sound_tab ? kSoundPage : -1);
+    const int page = side_list("##preference_pages", kPages,
+                               open_sound_tab ? kSoundPage : -1);
     // Each page scrolls on its own, beside the list, and keeps its own place.
     // Input in particular is taller than the window once a few devices show
     // up.

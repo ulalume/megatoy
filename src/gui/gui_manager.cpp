@@ -4,6 +4,7 @@
 #include "gui/app_window.hpp"
 #include "gui/areas.hpp"
 #include "gui/imgui_ini_bridge.hpp"
+#include "gui/input/key_positions.hpp"
 #include "gui/input/touch.hpp"
 #include "gui/layouts.hpp"
 #include "gui/os_file_drop.hpp"
@@ -17,6 +18,7 @@
 #include "gui/window_title.hpp"
 #include "patches/instrument_icons.hpp"
 #include "platform/file_dialog.hpp"
+#include "platform/host.hpp"
 #include "platform/platform_config.hpp"
 #include <algorithm>
 #include <filesystem>
@@ -182,6 +184,9 @@ bool GuiManager::initialize(const std::string &window_title, int width,
   apply_ui_scale(preferences_.ui_preferences().ui_scale);
 
   ImGui_ImplSDL3_InitForOpenGL(window_, gl_context_);
+  if (!platform::host::has_keyboard_layout()) {
+    ui::typed_characters().start_from_a_guess();
+  }
   ImGui_ImplOpenGL3_Init(glsl_version);
 
   if (!platform::file_dialog::initialize()) {
@@ -385,6 +390,16 @@ void GuiManager::process_event(const SDL_Event &event) {
   ImGui_ImplSDL3_ProcessEvent(&event);
 
   switch (event.type) {
+  case SDL_EVENT_KEY_DOWN:
+    // Not while text is typed, where a key may go to an input method
+    // instead of typing its character.
+    if (!ImGui::GetIO().WantTextInput) {
+      ui::typed_characters().learn(event.key);
+    }
+    break;
+  case SDL_EVENT_KEYMAP_CHANGED:
+    ui::typed_characters().forget();
+    break;
   case SDL_EVENT_KEY_UP:
     // Apple's systems, and the browsers there, tell no key's release while
     // Command is held, so a key let go before it would stay held: each is
@@ -463,6 +478,11 @@ void GuiManager::process_event(const SDL_Event &event) {
 bool GuiManager::poll_events(int timeout_ms) {
   if (!initialized_) {
     return false;
+  }
+
+  for (const auto &key : platform::host::take_keyboard_layout()) {
+    ui::typed_characters().learn(ui::place_named(key.place),
+                                 static_cast<SDL_Keycode>(key.typed));
   }
 
   SDL_Event event;

@@ -6,6 +6,7 @@
 #include "preferences/typing_keyboard_layout.hpp"
 #include "ym2612/chip.hpp"
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -58,12 +59,20 @@ struct UIPreferences {
   int midi_keyboard_scale = static_cast<int>(Scale::CHROMATIC);
   int midi_keyboard_key = static_cast<int>(Key::C);
   int midi_keyboard_typing_octave = 4;
-  int midi_keyboard_layout = static_cast<int>(ui::TypingKeyboardLayout::Auto);
-  ui::TypingLayoutPreference custom_typing_layout_keys =
-      ui::TypingLayoutPreference(ui::default_typing_layout_keys.begin(),
-                                 ui::default_typing_layout_keys.end());
-  int custom_typing_octave_down_key = ui::default_typing_octave_down_key;
-  int custom_typing_octave_up_key = ui::default_typing_octave_up_key;
+  /// The upper keyboard's octave, where typing plays two.
+  int midi_keyboard_typing_upper_octave = 5;
+  int midi_keyboard_layout =
+      static_cast<int>(ui::TypingKeyboardLayout::OneKeyboard);
+  /// Whether typing plays the keys below in place of its layout's own.
+  bool midi_keyboard_custom_keys = false;
+  /// The user's keys for One Keyboard's keyboard, and for Two Keyboards'
+  /// lower and upper ones.
+  ui::TypingKeysPreference custom_typing_keys;
+  ui::TypingKeysPreference custom_typing_lower_keys;
+  ui::TypingKeysPreference custom_typing_upper_keys;
+  /// A custom layout read from an older file, until the GUI has turned it
+  /// into places.
+  std::optional<ui::LegacyTypingKeys> legacy_custom_typing_keys;
 
   friend bool operator==(const UIPreferences &lhs, const UIPreferences &rhs) {
     // Search and star filters are session-scoped. Excluding them prevents
@@ -92,11 +101,14 @@ struct UIPreferences {
            lhs.midi_keyboard_scale == rhs.midi_keyboard_scale &&
            lhs.midi_keyboard_key == rhs.midi_keyboard_key &&
            lhs.midi_keyboard_typing_octave == rhs.midi_keyboard_typing_octave &&
+           lhs.midi_keyboard_typing_upper_octave ==
+               rhs.midi_keyboard_typing_upper_octave &&
            lhs.midi_keyboard_layout == rhs.midi_keyboard_layout &&
-           lhs.custom_typing_layout_keys == rhs.custom_typing_layout_keys &&
-           lhs.custom_typing_octave_down_key ==
-               rhs.custom_typing_octave_down_key &&
-           lhs.custom_typing_octave_up_key == rhs.custom_typing_octave_up_key;
+           lhs.midi_keyboard_custom_keys == rhs.midi_keyboard_custom_keys &&
+           lhs.custom_typing_keys == rhs.custom_typing_keys &&
+           lhs.custom_typing_lower_keys == rhs.custom_typing_lower_keys &&
+           lhs.custom_typing_upper_keys == rhs.custom_typing_upper_keys &&
+           lhs.legacy_custom_typing_keys == rhs.legacy_custom_typing_keys;
   }
 
   friend bool operator!=(const UIPreferences &lhs, const UIPreferences &rhs) {

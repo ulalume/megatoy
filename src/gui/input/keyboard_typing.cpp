@@ -1,9 +1,10 @@
 #include "keyboard_typing.hpp"
 #include "typing_keyboard_layout.hpp"
+#include <algorithm>
 #include <array>
 #include <cstring>
-#include <imgui.h>
 #include <map>
+#include <utility>
 #include <vector>
 
 namespace ui {
@@ -31,134 +32,134 @@ std::vector<size_t> non_chromatic_indices(size_t max_notes) {
   return indices;
 }
 
-std::vector<ImGuiKey> keys_for_scale(Scale scale,
-                                     const TypingLayout &base_layout) {
+/// The places the scale's notes go on, in order: the keyboard's for the
+/// chromatic scale, else those of its white notes, in either case up to the
+/// first with no key.
+TypingLayout places_for_scale(Scale scale, const TypingLayout &keyboard) {
+  TypingLayout places;
+  const auto take = [&](std::size_t index) {
+    if (keyboard[index] == SDL_SCANCODE_UNKNOWN) {
+      return false;
+    }
+    places.push_back(keyboard[index]);
+    return true;
+  };
   if (scale == Scale::CHROMATIC) {
-    return base_layout;
+    for (std::size_t index = 0; index < keyboard.size() && take(index);
+         ++index) {
+    }
+    return places;
   }
-
-  std::vector<ImGuiKey> filtered;
-  if (base_layout.empty()) {
-    return filtered;
-  }
-
-  const size_t playable_keys = base_layout.back() == ImGuiKey_None
-                                   ? base_layout.size() - 1
-                                   : base_layout.size();
-  const auto indices = non_chromatic_indices(playable_keys);
-  filtered.reserve(indices.size() + 1);
-  for (const auto idx : indices) {
-    if (idx >= base_layout.size()) {
+  for (const auto index : non_chromatic_indices(keyboard.size())) {
+    if (!take(index)) {
       break;
     }
-    auto key = base_layout[idx];
-    if (key == ImGuiKey_None) {
-      break;
-    }
-    filtered.push_back(key);
   }
-  filtered.push_back(ImGuiKey_None);
-  return filtered;
+  return places;
+}
+
+/// The places held when typing was last checked.
+std::map<SDL_Scancode, bool> key_pressed_last_frame;
+
+/// Set by keep_typing_quiet() until typing is next checked.
+bool quiet_at_next_check = false;
+
+/// Moves `octave` a step, within 0..7, as either of its keys goes down. Kept
+/// `quiet`, it only sees the keys go down.
+void step_octave(const std::function<bool(SDL_Scancode)> &is_down,
+                 SDL_Scancode down, SDL_Scancode up, uint8_t &octave,
+                 bool quiet) {
+  const auto went_down = [&is_down](SDL_Scancode place) {
+    if (place == SDL_SCANCODE_UNKNOWN) {
+      return false;
+    }
+    const bool pressed_now = is_down(place);
+    const bool was_pressed =
+        std::exchange(key_pressed_last_frame[place], pressed_now);
+    return pressed_now && !was_pressed;
+  };
+  if (went_down(down) && !quiet && octave > 0) {
+    octave--;
+  }
+  if (went_down(up) && !quiet && octave < 7) {
+    octave++;
+  }
+}
+
+bool held_in_sdl(SDL_Scancode place) {
+  int count = 0;
+  const bool *held = SDL_GetKeyboardState(&count);
+  return place < count && held[place];
 }
 
 } // namespace
 
-const std::map<ImGuiKey, ym2612::Note>
+std::map<SDL_Scancode, ym2612::Note>
 create_key_mappings(Scale scale, Key key, uint8_t selected_octave,
-                    TypingKeyboardLayout layout,
-                    const TypingLayout &custom_layout) {
-  const auto base_layout = layout == TypingKeyboardLayout::Custom
-                               ? custom_layout
-                               : keyboard_typing_layout();
-  const auto keyboard_keys = keys_for_scale(scale, base_layout);
+                    const TypingLayout &keyboard) {
+  const auto places = places_for_scale(scale, keyboard);
+  const auto notes = keys_from_scale_and_key(scale, key);
 
-  auto keys = keys_from_scale_and_key(scale, key);
-  std::map<ImGuiKey, ym2612::Note> key_mappings;
-  auto i = 0;
-  auto old_key = 1000;
-  while (true) {
-    if (i >= static_cast<int>(keyboard_keys.size())) {
-      break;
-    }
-    auto keyboard_key = keyboard_keys[i];
-    if (keyboard_key == ImGuiKey_None)
-      break;
-    auto key = keys[i % keys.size()];
-    if (old_key > static_cast<int>(key) && i != 0) {
+  std::map<SDL_Scancode, ym2612::Note> key_mappings;
+  for (std::size_t i = 0; i < places.size(); ++i) {
+    const Key note = notes[i % notes.size()];
+    // The scale has come round to a lower note: the next octave begins.
+    if (i != 0 && notes[(i - 1) % notes.size()] > note) {
       selected_octave++;
     }
-    key_mappings.insert({keyboard_key, {selected_octave, key}});
-    i++;
-    old_key = static_cast<int>(key);
+    key_mappings.insert({places[i], {selected_octave, note}});
   }
   return key_mappings;
 }
 
-static std::map<ImGuiKey, bool> key_pressed_last_frame;
+void keep_typing_quiet() { quiet_at_next_check = true; }
 
 void check_keyboard_typing(
     KeyboardTypingContext &context,
-    const std::map<ImGuiKey, ym2612::Note> key_mappings) {
+    const std::map<SDL_Scancode, ym2612::Note> &key_mappings) {
   auto &input = context.input_state;
+  auto &held = input.active_keyboard_notes;
+  const std::function<bool(SDL_Scancode)> is_down =
+      context.is_down ? context.is_down : held_in_sdl;
 
-  const ImGuiKey octave_down = context.octave_down_key;
-  const ImGuiKey octave_up = context.octave_up_key;
+  const bool quiet = std::exchange(quiet_at_next_check, false);
 
-  // Handle octave changes with configured keys
-  bool down_pressed_now =
-      octave_down != ImGuiKey_None ? ImGui::IsKeyDown(octave_down) : false;
-  bool down_was_pressed = octave_down != ImGuiKey_None
-                              ? key_pressed_last_frame[octave_down]
-                              : false;
-  bool up_pressed_now =
-      octave_up != ImGuiKey_None ? ImGui::IsKeyDown(octave_up) : false;
-  bool up_was_pressed =
-      octave_up != ImGuiKey_None ? key_pressed_last_frame[octave_up] : false;
+  step_octave(is_down, context.octave_down_key, context.octave_up_key,
+              input.keyboard_typing_octave, quiet);
+  step_octave(is_down, context.upper_octave_down_key,
+              context.upper_octave_up_key, input.keyboard_typing_upper_octave,
+              quiet);
 
-  if (down_pressed_now && !down_was_pressed) {
-    if (input.keyboard_typing_octave > 0) {
-      input.keyboard_typing_octave--;
-    }
-  }
+  const auto another_key_holds = [&held](const ym2612::Note &note) {
+    return std::any_of(held.begin(), held.end(), [&note](const auto &entry) {
+      return entry.second == note;
+    });
+  };
 
-  if (up_pressed_now && !up_was_pressed) {
-    if (input.keyboard_typing_octave < 7) {
-      input.keyboard_typing_octave++;
-    }
-  }
-
-  if (octave_down != ImGuiKey_None) {
-    key_pressed_last_frame[octave_down] = down_pressed_now;
-  }
-  if (octave_up != ImGuiKey_None) {
-    key_pressed_last_frame[octave_up] = up_pressed_now;
-  }
-
-  for (auto it = input.active_keyboard_notes.begin();
-       it != input.active_keyboard_notes.end();) {
-    const auto key = static_cast<ImGuiKey>(it->first);
-    if (!ImGui::IsKeyDown(key)) {
-      if (context.key_off) {
-        context.key_off(it->second);
-      }
-      key_pressed_last_frame[key] = false;
-      it = input.active_keyboard_notes.erase(it);
-    } else {
+  for (auto it = held.begin(); it != held.end();) {
+    const auto place = static_cast<SDL_Scancode>(it->first);
+    if (is_down(place)) {
       ++it;
+      continue;
+    }
+    const ym2612::Note note = it->second;
+    key_pressed_last_frame[place] = false;
+    it = held.erase(it);
+    if (context.key_off && !another_key_holds(note)) {
+      context.key_off(note);
     }
   }
 
-  for (auto &[imgui_key, note] : key_mappings) {
-    bool key_pressed_now = ImGui::IsKeyDown(imgui_key);
-    bool key_was_pressed = key_pressed_last_frame[imgui_key];
-
-    if (key_pressed_now && !key_was_pressed) {
-      if (context.key_on) {
+  for (const auto &[place, note] : key_mappings) {
+    const bool pressed_now = is_down(place);
+    const bool was_pressed =
+        std::exchange(key_pressed_last_frame[place], pressed_now);
+    if (pressed_now && !was_pressed && !quiet) {
+      if (context.key_on && !another_key_holds(note)) {
         context.key_on(note, 127);
       }
-      input.active_keyboard_notes[static_cast<int>(imgui_key)] = note;
+      held[static_cast<int>(place)] = note;
     }
-    key_pressed_last_frame[imgui_key] = key_pressed_now;
   }
 }
 
