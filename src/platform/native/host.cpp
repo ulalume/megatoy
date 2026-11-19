@@ -16,4 +16,8 @@ std::optional<std::string> read_settings() { return std::nullopt; }
 
 bool write_settings(const std::string &) { return false; }
 
+bool has_keyboard_layout() { return true; }
+
+std::vector<LayoutKey> take_keyboard_layout() { return {}; }
+
 } // namespace platform::host

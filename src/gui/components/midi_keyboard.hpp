@@ -20,8 +20,8 @@ struct MidiKeyboardState {
   Scale cached_scale = Scale::CHROMATIC;
   Key cached_key = Key::C;
   uint8_t cached_octave = 0;
-  TypingKeyboardLayout cached_layout = TypingKeyboardLayout::Auto;
-  TypingLayout cached_custom_layout;
+  uint8_t cached_upper_octave = 0;
+  std::vector<TypingKeys> cached_keyboards;
   struct PlaybackState {
     bool playing = false;
     float timer = 0.0f;
@@ -37,11 +37,19 @@ struct MidiKeyboardState {
   /// is what lets it play.
   std::map<std::uint64_t, bool> fingers_on_keyboard;
 
-  std::map<ImGuiKey, ym2612::Note> key_mappings;
-  std::map<ym2612::Note, ImGuiKey> reverse_mappings;
+  /// One keyboard typing plays, as the screen shows it.
+  struct TypedKeyboard {
+    std::map<ym2612::Note, SDL_Scancode> keys;
+    /// Its lowest and highest notes, "C4-E5", or nothing without keys.
+    std::string range;
+  };
+
+  /// Every key typing plays, of all its keyboards.
+  std::map<SDL_Scancode, ym2612::Note> key_mappings;
+  /// The keyboards typing plays, the lowest first.
+  std::vector<TypedKeyboard> typed_keyboards;
   std::vector<Key> scale_keys;
   std::vector<ym2612::Note> display_notes;
-  std::string typing_range_label;
   /// Set when the keys typing plays change, so the keyboard scrolls to show
   /// them.
   bool typing_range_moved = false;

@@ -15,28 +15,50 @@
   "ui": {
     "audio_buffer_frames": 1024,
     "audio_load_reading": 1,
-    "custom_typing_layout_keys": [
-      571,
-      569,
-      548
-    ],
-    "custom_typing_octave_down_key": 603,
-    "custom_typing_octave_up_key": 605,
+    "custom_typing_keys": {
+      "octave_down": 45,
+      "octave_up": 46,
+      "places": [
+        29,
+        27,
+        6,
+        0
+      ]
+    },
+    "custom_typing_lower_keys": {
+      "octave_down": 58,
+      "octave_up": 59,
+      "places": [
+        30,
+        31,
+        0,
+        32
+      ]
+    },
+    "custom_typing_upper_keys": {
+      "octave_down": 60,
+      "octave_up": 61,
+      "places": [
+        33
+      ]
+    },
     "envelope_reference_midi_note": 72,
+    "midi_keyboard_custom_keys": true,
     "midi_keyboard_key": 2,
-    "midi_keyboard_layout": 2,
+    "midi_keyboard_layout": 3,
     "midi_keyboard_scale": 1,
     "midi_keyboard_typing_octave": 3,
+    "midi_keyboard_typing_upper_octave": 6,
     "multi_operator_edit_absolute": true,
     "show_audio_controls": false,
     "show_midi_keyboard": false,
+    "show_mml": true,
     "show_mml_console": false,
     "show_patch_editor": false,
     "show_patch_lab": false,
-    "show_quick_edit": true,
-    "show_mml": true,
     "show_patch_selector": false,
     "show_preferences": false,
+    "show_quick_edit": true,
     "show_wave_viewer": false,
     "steal_oldest_note_when_full": false,
     "ui_scale": 1.5,

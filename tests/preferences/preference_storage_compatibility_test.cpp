@@ -96,10 +96,13 @@ int main(int argc, char **argv) {
   expected.theme = ui::styles::ThemeId::ImGuiLight;
   expected.ui_preferences.show_waveform = false;
   expected.ui_preferences.ui_scale = 1.5f;
-  expected.ui_preferences.midi_keyboard_layout = 2;
-  expected.ui_preferences.custom_typing_layout_keys = {571, 569, 548, 0};
-  expected.ui_preferences.custom_typing_octave_down_key = 603;
-  expected.ui_preferences.custom_typing_octave_up_key = 605;
+  // An older file's custom layout is One Keyboard with custom keys. Its keys
+  // are kept as they were, for the GUI to turn into places, and saved beside
+  // the places until then.
+  expected.ui_preferences.midi_keyboard_custom_keys = true;
+  expected.ui_preferences.legacy_custom_typing_keys =
+      ui::LegacyTypingKeys{{571, 569, 548, 0}, 603, 605};
+  check_fixture(fixtures, output, "older_custom.json", "custom.json", expected);
   check_fixture(fixtures, output, "custom.json", "custom.json", expected);
   check_every_field_survives(fixtures, output);
   check_unknown_keys_are_ignored(fixtures, output);

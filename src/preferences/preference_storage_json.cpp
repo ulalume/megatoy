@@ -16,6 +16,26 @@ void read(const nlohmann::json &j, const char *key, Target &target) {
   }
 }
 
+/// A keyboard's custom keys, as the object stored under `key`.
+void read_typing_keys(const nlohmann::json &j, const char *key,
+                      ui::TypingKeysPreference &keys) {
+  if (!j.contains(key) || !j[key].is_object()) {
+    return;
+  }
+  const auto &stored = j[key];
+  if (stored.contains("places") && stored["places"].is_array()) {
+    stored["places"].get_to(keys.places);
+  }
+  read<int>(stored, "octave_down", keys.octave_down);
+  read<int>(stored, "octave_up", keys.octave_up);
+}
+
+nlohmann::json typing_keys_json(const ui::TypingKeysPreference &keys) {
+  return {{"places", keys.places},
+          {"octave_down", keys.octave_down},
+          {"octave_up", keys.octave_up}};
+}
+
 class JsonPreferenceStorage : public PreferenceStorage {
 public:
   JsonPreferenceStorage(std::filesystem::path path,
@@ -133,28 +153,40 @@ public:
                   data.ui_preferences.midi_keyboard_key);
         read<int>(ui, "midi_keyboard_typing_octave",
                   data.ui_preferences.midi_keyboard_typing_octave);
+        read<int>(ui, "midi_keyboard_typing_upper_octave",
+                  data.ui_preferences.midi_keyboard_typing_upper_octave);
         read<int>(ui, "midi_keyboard_layout",
                   data.ui_preferences.midi_keyboard_layout);
+        read<bool>(ui, "midi_keyboard_custom_keys",
+                   data.ui_preferences.midi_keyboard_custom_keys);
+        if (data.ui_preferences.midi_keyboard_layout ==
+            ui::typing_layout_once_custom) {
+          data.ui_preferences.midi_keyboard_layout =
+              static_cast<int>(ui::TypingKeyboardLayout::OneKeyboard);
+          data.ui_preferences.midi_keyboard_custom_keys = true;
+        }
+        read_typing_keys(ui, "custom_typing_keys",
+                         data.ui_preferences.custom_typing_keys);
+        read_typing_keys(ui, "custom_typing_lower_keys",
+                         data.ui_preferences.custom_typing_lower_keys);
+        read_typing_keys(ui, "custom_typing_upper_keys",
+                         data.ui_preferences.custom_typing_upper_keys);
         if (ui.contains("custom_typing_layout_keys") &&
             ui["custom_typing_layout_keys"].is_array()) {
-          const auto &custom = ui["custom_typing_layout_keys"];
-          data.ui_preferences.custom_typing_layout_keys.clear();
-          for (const auto &entry : custom) {
-            data.ui_preferences.custom_typing_layout_keys.push_back(
-                entry.get<int>());
+          ui::LegacyTypingKeys legacy;
+          ui["custom_typing_layout_keys"].get_to(legacy.layout);
+          // The built-in layout was once kept with a key for none at its end.
+          if (!legacy.layout.empty() &&
+              legacy.layout.back() == ui::typing_key_none &&
+              legacy.layout.size() == ui::typing_layout_builtin_entry_count) {
+            legacy.layout.pop_back();
           }
-          if (!data.ui_preferences.custom_typing_layout_keys.empty() &&
-              data.ui_preferences.custom_typing_layout_keys.back() ==
-                  ui::typing_key_none &&
-              data.ui_preferences.custom_typing_layout_keys.size() ==
-                  ui::typing_layout_builtin_entry_count) {
-            data.ui_preferences.custom_typing_layout_keys.pop_back();
+          read<int>(ui, "custom_typing_octave_down_key", legacy.octave_down);
+          read<int>(ui, "custom_typing_octave_up_key", legacy.octave_up);
+          if (!legacy.untouched()) {
+            data.ui_preferences.legacy_custom_typing_keys = std::move(legacy);
           }
         }
-        read<int>(ui, "custom_typing_octave_down_key",
-                  data.ui_preferences.custom_typing_octave_down_key);
-        read<int>(ui, "custom_typing_octave_up_key",
-                  data.ui_preferences.custom_typing_octave_up_key);
       }
 
       return true;
@@ -213,13 +245,22 @@ public:
       ui["midi_keyboard_key"] = data.ui_preferences.midi_keyboard_key;
       ui["midi_keyboard_typing_octave"] =
           data.ui_preferences.midi_keyboard_typing_octave;
+      ui["midi_keyboard_typing_upper_octave"] =
+          data.ui_preferences.midi_keyboard_typing_upper_octave;
       ui["midi_keyboard_layout"] = data.ui_preferences.midi_keyboard_layout;
-      ui["custom_typing_layout_keys"] =
-          data.ui_preferences.custom_typing_layout_keys;
-      ui["custom_typing_octave_down_key"] =
-          data.ui_preferences.custom_typing_octave_down_key;
-      ui["custom_typing_octave_up_key"] =
-          data.ui_preferences.custom_typing_octave_up_key;
+      ui["midi_keyboard_custom_keys"] =
+          data.ui_preferences.midi_keyboard_custom_keys;
+      ui["custom_typing_keys"] =
+          typing_keys_json(data.ui_preferences.custom_typing_keys);
+      ui["custom_typing_lower_keys"] =
+          typing_keys_json(data.ui_preferences.custom_typing_lower_keys);
+      ui["custom_typing_upper_keys"] =
+          typing_keys_json(data.ui_preferences.custom_typing_upper_keys);
+      if (const auto &legacy = data.ui_preferences.legacy_custom_typing_keys) {
+        ui["custom_typing_layout_keys"] = legacy->layout;
+        ui["custom_typing_octave_down_key"] = legacy->octave_down;
+        ui["custom_typing_octave_up_key"] = legacy->octave_up;
+      }
       j["ui"] = ui;
 
       if (platform::host::keeps_settings()) {

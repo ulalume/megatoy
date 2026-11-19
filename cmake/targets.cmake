@@ -191,6 +191,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     src/platform/web/web_platform_services.cpp
     src/platform/web/host.cpp
     src/platform/web/web_download.cpp
+    src/platform/web/web_keyboard_layout.cpp
     src/platform/web/local_storage.cpp
     src/platform/web/web_folder_delete.cpp
     src/platform/web/web_folder_import.cpp
