@@ -295,6 +295,40 @@ void draw_rating(int stars, bool compact, float right, float centre_y) {
 }
 
 /**
+ * A row's name with a muted note after it, such as a file's format. The note
+ * keeps its place after the name, which is cut short to give way to it, and
+ * neither passes `limit`.
+ */
+void draw_name_and_note(ImDrawList *draw_list, ImVec2 pos, float limit,
+                        const std::string &name, ImU32 name_color,
+                        const std::string &note) {
+  const float gap = ImGui::GetStyle().ItemSpacing.x;
+  ImVec2 name_size = ImGui::CalcTextSize(name.c_str());
+  const float note_room =
+      note.empty() ? 0.0f : gap + ImGui::CalcTextSize(note.c_str()).x;
+  const float name_room = std::max(limit - note_room - pos.x, 0.0f);
+  if (name_size.x <= name_room) {
+    draw_list->AddText(pos, name_color, name.c_str());
+  } else {
+    ImGui::PushStyleColor(ImGuiCol_Text, name_color);
+    ImGui::RenderTextEllipsis(
+        draw_list, pos, ImVec2(pos.x + name_room, pos.y + name_size.y),
+        pos.x + name_room, name.c_str(), nullptr, &name_size);
+    ImGui::PopStyleColor();
+  }
+  if (note.empty()) {
+    return;
+  }
+  const float note_x = pos.x + std::min(name_size.x, name_room) + gap;
+  draw_list->PushClipRect(ImVec2(note_x, pos.y),
+                          ImVec2(limit, pos.y + name_size.y), true);
+  draw_list->AddText(ImVec2(note_x, pos.y),
+                     styles::color_u32(styles::MegatoyCol::TextMuted),
+                     note.c_str());
+  draw_list->PopClipRect();
+}
+
+/**
  * A patch's row, one selectable spanning it: the instrument icon, larger
  * than the text, the name and the dimmed format, and the rating at the
  * right end. A rating whose stars leave the name and format no room is one
@@ -347,25 +381,8 @@ bool patch_row_selectable(const patches::PatchEntry &item, bool selected) {
     draw_rating(stars, compact, right, centre_y);
   }
 
-  // The format keeps its place after the name, which gives way to it.
-  const float name_room = std::max(limit - gap - format_width - name_x, 0.0f);
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  if (name_size.x <= name_room) {
-    draw_list->AddText(ImVec2(name_x, text_y),
-                       ImGui::GetColorU32(ImGuiCol_Text), item.name.c_str());
-  } else {
-    ImGui::RenderTextEllipsis(draw_list, ImVec2(name_x, text_y),
-                              ImVec2(name_x + name_room, text_y + name_size.y),
-                              name_x + name_room, item.name.c_str(), nullptr,
-                              &name_size);
-  }
-  const float format_x = name_x + std::min(name_size.x, name_room) + gap;
-  draw_list->PushClipRect(ImVec2(format_x, pos.y),
-                          ImVec2(limit, pos.y + height), true);
-  draw_list->AddText(ImVec2(format_x, text_y),
-                     styles::color_u32(styles::MegatoyCol::TextMuted),
-                     item.format.c_str());
-  draw_list->PopClipRect();
+  draw_name_and_note(ImGui::GetWindowDrawList(), ImVec2(name_x, text_y), limit,
+                     item.name, ImGui::GetColorU32(ImGuiCol_Text), item.format);
   return clicked;
 }
 
@@ -422,6 +439,9 @@ void render_directory_row(PatchSelectorContext &context,
   // A folder's name stands where a patch's does past its larger icon, so it
   // is drawn here rather than by the node.
   const ImVec2 row_min = ImGui::GetCursorScreenPos();
+  // Where a patch's row ends its text.
+  const float row_right = row_min.x + ImGui::GetContentRegionAvail().x -
+                          ImGui::GetStyle().FramePadding.x;
   const bool open =
       ImGui::TreeNodeEx("##folder", ImGuiTreeNodeFlags_SpanFullWidth |
                                         ImGuiTreeNodeFlags_FramePadding |
@@ -448,22 +468,9 @@ void render_directory_row(PatchSelectorContext &context,
           ImVec2(icon_min.x + ImGui::GetFontSize(), row_min.y + row_height()),
           color);
     }
-    draw_list->AddText(ImVec2(name_x, text_y), color, display_name.c_str());
-    if (file) {
-      draw_list->AddText(
-          ImVec2(name_x + ImGui::CalcTextSize(display_name.c_str()).x +
-                     style.ItemSpacing.x,
-                 text_y),
-          muted, item.format.c_str());
-    }
-    if (!item.telling_parents.empty()) {
-      draw_list->AddText(
-          ImVec2(name_x + ImGui::CalcTextSize(display_name.c_str()).x +
-                     style.ItemSpacing.x,
-                 text_y),
-          styles::color_u32(styles::MegatoyCol::TextMuted),
-          item.telling_parents.c_str());
-    }
+    draw_name_and_note(draw_list, ImVec2(name_x, text_y), row_right,
+                       display_name, color,
+                       file ? item.format : item.telling_parents);
   }
   if (heading) {
     draw_list->ChannelsSetCurrent(0);
